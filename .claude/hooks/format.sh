@@ -5,7 +5,7 @@
 # Runs ruff in the `tools` compose service - the container is the single source of truth
 # for the ruff version, shared with `make fmt`. Exit codes (PostToolUse never blocks; exit 2
 # feeds stderr back to Claude):
-#   0  not a project .py file, or formatted and clean - prints nothing
+#   0  not a file a formatter service mounts, or formatted and clean - prints nothing
 #   2  ruff findings it could not fix, or the hook itself failed to run
 set -uo pipefail
 
@@ -39,18 +39,21 @@ fi
 
 [[ "$file" == *.py ]] || exit 0
 
-# The tools service mounts only these directories (see compose.override.yaml). Anything
-# else would not exist in the container - say so instead of passing silently.
+# The service that mounts the file writable (see compose.override.yaml): `tools` for the
+# application code, `scripts-tools-fmt` for the harness scripts (as make scripts-fmt). A
+# Python file no service mounts (.claude/hooks/, ops/) is not formatted here and is not an
+# error: the hook has nothing to say about it.
 case "$rel" in
-  app/* | bss_mcp/* | tests/* | alembic/*) ;;
-  *) fail "$rel is outside the tools service mounts (app/, bss_mcp/, tests/, alembic/) - not formatted" ;;
+  app/* | bss_mcp/* | tests/* | alembic/* | loadtest/*) service=tools ;;
+  scripts/*) service=scripts-tools-fmt ;;
+  *) exit 0 ;;
 esac
 
 cd "$project" || fail "cannot cd to $project"
 
 # --force-exclude: honour extend-exclude (alembic/versions) even for explicit paths.
 # One container start: format, then fix what ruff check can.
-out="$(./scripts/task-compose run --rm -T -e f="$rel" tools \
+out="$(./scripts/task-compose run --rm -T --no-deps -e f="$rel" "$service" \
   sh -c 'ruff format --quiet --force-exclude "$f" &&
          ruff check --fix --quiet --output-format concise --force-exclude "$f"' 2>&1)"
 rc=$?

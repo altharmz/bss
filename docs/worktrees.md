@@ -74,8 +74,9 @@ check-pr ready -> `make merge-task`, merge-task -> `make finish-task SLOT=<slot>
 ready-to-copy form: `Human approval needed for PR <n> at <sha>; after approval: make
 merge-task HUMAN_APPROVAL=<n>:<sha>`.
 
-A commit that touches the harness runs the hook for 1.5 to 3 minutes, longer than a typical
-tool call limit. Run `make commit` in the background and read its exit status from the task
+The commit hook runs 2 to 12 minutes
+([what it runs and how long](decisions/harness.md#development-cycle-and-gates)), longer than a
+typical tool call limit. Run `make commit` in the background and read its exit status from the task
 itself, never through a pipe (a pipe hides the status, which hid a failed commit once);
 `make commit` prints its final status line even when the hook output is long.
 
@@ -182,8 +183,8 @@ worktree's `scripts/pre-commit.sh` and `scripts/pre-push.sh`. Details of the gat
 - **pre-commit** refuses a commit unless the tree is exactly what is committed, then runs
   `make lint`, the smoke tests and the tests the change affects (the full suite when a data
   file, `app/worker/` or a migration changes), `make docs-check`, `web-lint`/`web-test` for
-  UI changes, and the harness script tests plus guard cases when `scripts/`, `Makefile` or
-  `.claude/` change. Markdown-only commits skip everything. One run at a time per repository.
+  UI changes, and the harness script tests plus guard cases when `scripts/`, `Makefile`,
+  `.claude/` or `.codex/` change. Markdown-only commits skip everything. One run at a time per repository.
 - **pre-push** refuses bcrypt hashes, `.env*` paths, branch deletions and non-fast-forwards.
 - `make format` formats backend and, if `frontend/` or `spec/` changed (or the base is
   unknown), the UI (never stages). `make review-task` prints JSON about

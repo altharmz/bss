@@ -394,30 +394,13 @@ docs-check: docs ## Fail if the committed docs/api/ or docs/db/ differ from a fr
 docs-links: ## Check Markdown links, anchors and the make targets and scripts the agent docs name (no Docker)
 	python3 -B scripts/docs_links.py
 
-runtime-check: ## The harness script tests (scripts/test_*.py, run in parallel, ~1.5 min), no Docker or secrets; the commit hook runs them when scripts/, Makefile or .claude/ change
-	python3 -B scripts/run_suites.py \
-		scripts/test_workflow_lifecycle.py \
-		scripts/test_task_finish.py \
-		scripts/test_task_pr.py \
-		scripts/test_task_git.py \
-		scripts/test_task_quality.py \
-		scripts/test_task_runtime.py \
-		scripts/test_diagnostics.py \
-		scripts/test_task_cleanup.py \
-		scripts/test_start_task.py \
-		scripts/test_task_telemetry.py \
-		scripts/test_task_usage.py \
-		scripts/test_task_collect.py \
-		scripts/test_agent_telemetry_hook.py \
-		scripts/test_task_facts.py \
-		scripts/test_task_summary.py \
-		scripts/test_script_quality.py \
-		scripts/test_docs_links.py \
-		scripts/test_progress_generate.py \
-		scripts/test_compose_prod.py \
-		scripts/test_deploy_rollback.py \
-		scripts/test_mcp_oauth_smoke.py \
-		scripts/test_audit_gate.py
+# Every scripts/test_*.py is a suite: a new file cannot be forgotten (test_smoke_retry.py
+# was, while the list was kept by hand). test_telemetry_database.py needs the running
+# telemetry database and is `make telemetry-test`.
+RUNTIME_SUITES := $(filter-out scripts/test_telemetry_database.py,$(sort $(wildcard scripts/test_*.py)))
+
+runtime-check: ## The harness script tests (every scripts/test_*.py, run in parallel, about 2.5 min), no Docker or secrets; the commit hook runs them when scripts/, Makefile, .claude/ or .codex/ change
+	python3 -B scripts/run_suites.py $(RUNTIME_SUITES)
 
 .PHONY: telemetry-collect telemetry-probe telemetry-watch
 telemetry-watch: export BSS_COLLECT_TASK = $(TASK)
