@@ -1,8 +1,15 @@
 import { submitDialogPrimary } from '../ui/kit';
 import { NetworkCommands } from './NetworkCommands';
 import { useState } from 'react';
-import { loadNumbers } from '../api/numbers';
-import { loadProduct, loadProducts, PRODUCT_STATES, type InventoryProduct } from '../api/products';
+import {
+  loadNumberValues,
+  loadProduct,
+  loadProductPage,
+  PRODUCT_PAGE,
+  PRODUCT_STATES,
+  type InventoryProduct,
+} from '../api/products';
+import { PageFooter, usePageOffset, useSettled } from '../ui/paging';
 import { useResource } from '../api/useResource';
 import { useSetCrumbs, useSystemContext } from '../app/context';
 import { hrefOf, Link } from '../app/router';
@@ -58,19 +65,30 @@ export function ProductsScreen() {
   const context = useSystemContext();
   const [status, setStatus] = useState('');
   const [account, setAccount] = useState<string | null>(accountFromUrl);
-  const [offering, setOffering] = useState('');
   const [number, setNumber] = useState('');
+  const settledNumber = useSettled(number).replace(/\D/g, '');
   const [open, setOpen] = useState<InventoryProduct | null>(null);
-  const list = useResource(`products:${status}:${account ?? ''}`, (signal) =>
-    loadProducts({ status: status === '' ? null : status, account }, signal),
+  const filterKey = `${status}:${account ?? ''}:${settledNumber}`;
+  const [offset, setOffset] = usePageOffset(filterKey);
+  const list = useResource(`products:${filterKey}:${offset}`, (signal) =>
+    loadProductPage(
+      { status: status === '' ? null : status, account, number: settledNumber || null },
+      offset,
+      signal,
+    ),
   );
-  // the product carries the number's id only; its digits come from the inventory
-  const numbers = useResource('product-numbers', loadNumbers);
+  // the product carries the number's id only; its digits come from the inventory, read
+  // for this page's products only
+  const pageProducts = list.status === 'ok' ? list.data.items : [];
+  const numbers = useResource(
+    `product-numbers:${pageProducts.map((p) => p.id).join(',')}`,
+    (signal) => loadNumberValues(pageProducts, signal),
+  );
   const digits = (p: InventoryProduct): string => {
     const id = p.realizingResource?.[0]?.id;
     if (id === undefined) return '';
     if (numbers.status !== 'ok') return '…';
-    return numbers.data.find((n) => n.id === id)?.value ?? shortId(id);
+    return numbers.data[id] || shortId(id);
   };
 
   const dropAccount = () => {
@@ -79,11 +97,12 @@ export function ProductsScreen() {
   };
   const name =
     list.status === 'ok'
-      ? (list.data.find((p) => p.billingAccount?.id === account)?.billingAccount?.name ?? null)
+      ? (list.data.items.find((p) => p.billingAccount?.id === account)?.billingAccount?.name ??
+        null)
       : null;
+  const filtered = status !== '' || account !== null || number !== '';
   const reset = () => {
     setStatus('');
-    setOffering('');
     setNumber('');
     if (account !== null) dropAccount();
   };
@@ -92,7 +111,6 @@ export function ProductsScreen() {
     <div className="bss-screen" data-ui="ui.products">
       <PageHeader
         title="Products"
-        count={list.status === 'ok' ? list.data.length : undefined}
         meta="Every product, in every status"
         filters={
           <>
@@ -110,14 +128,8 @@ export function ProductsScreen() {
               ))}
             </SelectField>
             <TextInput
-              aria-label="Filter by offering"
-              placeholder="Offering"
-              value={offering}
-              onChange={(e) => setOffering(e.target.value)}
-            />
-            <TextInput
               aria-label="Filter by number"
-              placeholder="Number"
+              placeholder="Number (exact)"
               value={number}
               onChange={(e) => setNumber(e.target.value)}
             />
@@ -147,48 +159,51 @@ export function ProductsScreen() {
             title: 'No products',
             text: 'Products appear here once an order adds one.',
           }}
-          count={(data) => data.length}
-          rows={(data) =>
-            data.filter(
-              (p) =>
-                (p.productOffering?.name ?? '')
-                  .toLowerCase()
-                  .includes(offering.trim().toLowerCase()) &&
-                (number.trim() === '' || digits(p).includes(number.trim())),
-            )
-          }
+          // filtered on the server: an empty filtered page is "no matches", not "no products"
+          count={(data) => (filtered ? 1 : data.items.length)}
+          rows={(data) => data.items}
           onResetFilters={reset}
         >
-          {(rows) =>
-            rows.map((p) => (
-              <TableRow
-                key={p.id}
-                columns={COLUMNS}
-                onClick={() => setOpen(p)}
-                cells={{
-                  id: p.id !== undefined ? <Id prefix="PRD-" id={p.id} /> : '—',
-                  offering: p.productOffering?.name ?? p.name ?? '—',
-                  account:
-                    p.billingAccount?.id !== undefined ? (
-                      <span className="ellipsis" onClick={(event) => event.stopPropagation()}>
-                        <Link
-                          className="bss-link"
-                          href={hrefOf({ name: 'subscriber', accountId: p.billingAccount.id })}
-                        >
-                          {p.billingAccount.name ?? accountLabel(p.billingAccount.id)}
-                        </Link>
-                      </span>
-                    ) : (
-                      '—'
-                    ),
-                  status: <StatusPill kind="product" status={p.status ?? ''} />,
-                  start: day(p.startDate, context.timeZone),
-                  end: day(p.terminationDate, context.timeZone),
-                  number: digits(p) || '—',
-                }}
+          {(rows, data) => (
+            <>
+              {rows.map((p) => (
+                <TableRow
+                  key={p.id}
+                  columns={COLUMNS}
+                  onClick={() => setOpen(p)}
+                  cells={{
+                    id: p.id !== undefined ? <Id prefix="PRD-" id={p.id} /> : '—',
+                    offering: p.productOffering?.name ?? p.name ?? '—',
+                    account:
+                      p.billingAccount?.id !== undefined ? (
+                        <span className="ellipsis" onClick={(event) => event.stopPropagation()}>
+                          <Link
+                            className="bss-link"
+                            href={hrefOf({ name: 'subscriber', accountId: p.billingAccount.id })}
+                          >
+                            {p.billingAccount.name ?? accountLabel(p.billingAccount.id)}
+                          </Link>
+                        </span>
+                      ) : (
+                        '—'
+                      ),
+                    status: <StatusPill kind="product" status={p.status ?? ''} />,
+                    start: day(p.startDate, context.timeZone),
+                    end: day(p.terminationDate, context.timeZone),
+                    number: digits(p) || '—',
+                  }}
+                />
+              ))}
+              <PageFooter
+                offset={data.offset}
+                shown={rows.length}
+                more={data.more}
+                size={PRODUCT_PAGE}
+                onOffset={setOffset}
+                ui="ui.products"
               />
-            ))
-          }
+            </>
+          )}
         </ListState>
       </div>
       {open !== null && <ProductDetail product={open} onClose={() => setOpen(null)} />}

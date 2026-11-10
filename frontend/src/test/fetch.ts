@@ -12,7 +12,8 @@ export function takeUnexpectedRequests(): string[] {
   return unexpected.splice(0);
 }
 
-export type Handler = () => Response | Promise<Response>;
+/** An answer to one request; a prefix route (`'GET /path?*'`) gets the request URL. */
+export type Handler = (url?: string) => Response | Promise<Response>;
 
 /** A JSON answer. `total` describes a list: the rows the server holds beyond this page
  * make it send `Link: rel="next"` (the app sends no total, #312); `more` says so directly. */
@@ -80,12 +81,19 @@ export function stubFetch(routes: Record<string, Handler>) {
     const url = typeof input === 'string' ? input : input.toString();
     const key = `${init?.method ?? 'GET'} ${url}`;
     calls.push(key);
-    const handler = routes[key] ?? paymentPanelDefault(key) ?? networkDefault(key);
+    const prefix = Object.keys(routes).find(
+      (route) => route.endsWith('*') && key.startsWith(route.slice(0, -1)),
+    );
+    const handler =
+      routes[key] ??
+      (prefix ? routes[prefix] : undefined) ??
+      paymentPanelDefault(key) ??
+      networkDefault(key);
     if (!handler) {
       unexpected.push(key);
       throw new Error(`unexpected request in test: ${key}`);
     }
-    return handler();
+    return handler(url);
   });
   vi.stubGlobal('fetch', fetchMock);
   return { calls, fetchMock };

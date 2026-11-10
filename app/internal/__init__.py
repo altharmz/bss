@@ -27,6 +27,7 @@ from app.internal import (
     prepaid_commands,
     security,
     sims,
+    subscribers,
     usage,
     users,
 )
@@ -46,6 +47,7 @@ def install(app: FastAPI) -> None:
         notifications,
         security,
         sims,
+        subscribers,
         ports,
         usage,
         payments,

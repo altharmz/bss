@@ -363,6 +363,7 @@ items:
   - {id: api.internal.accountSettlement.get, area: api, stage: 5, method: GET, path: "/internal/v1/billingAccount/{account_id}/settlement", title: "An account's bills owed, unused credit, overdue and on hold"}
   - {id: api.internal.billDetail.get, area: api, stage: 5, method: GET, path: "/internal/v1/customerBill/{bill_id}", title: "A bill with charges, sources, history and allowed states"}
   - {id: api.internal.priceChange.create, area: api, stage: 5, method: POST, path: "/internal/v1/productOffering/{offering_id}/priceChange", title: "Atomic price change of a live offering (D-W21)"}
+  - {id: api.internal.subscriber.search, area: api, stage: 5, method: GET, path: /internal/v1/subscriber, title: "Search subscribers by prefix, paged (the Subscribers list)"}
   - {id: api.internal.billingRun.list, area: api, stage: 4, method: GET, path: /internal/v1/billingRun, title: "List billing runs (newest first)"}
   - {id: api.internal.billingRun.get, area: api, stage: 4, method: GET, path: "/internal/v1/billingRun/{run_id}", title: "Get a billing run"}
   - {id: api.internal.billingRunAccounts.list, area: api, stage: 4, method: GET, path: "/internal/v1/billingRun/{run_id}/accounts", title: "A run's per-account outcomes"}
@@ -408,6 +409,8 @@ items:
   - {id: ui.logging.settings, area: ui, stage: 5, title: "Logging settings: base level and temporary debug"}
   - {id: ui.shell, area: ui, stage: 5, title: "Shell: sidebar, top bar with business date and zone"}
   - {id: ui.subscribers.list, area: ui, stage: 5, title: "Subscribers list"}
+  - {id: ui.subscribers.previous, area: ui, stage: 5, title: "Subscribers: previous page"}
+  - {id: ui.subscribers.next, area: ui, stage: 5, title: "Subscribers: next page"}
   - {id: ui.subscribers.prepaid, area: ui, stage: 5, title: "Subscribers prepaid account mode"}
   - {id: ui.products, area: ui, stage: 5, title: "Products screen: every status, filters, rows"}
   - {id: ui.products.status, area: ui, stage: 5, title: "Products status filter"}
@@ -415,8 +418,12 @@ items:
   - {id: ui.products.detail, area: ui, stage: 5, title: "Product detail dialog"}
   - {id: ui.products.orderItems, area: ui, stage: 5, title: "Product order items with Orders link"}
   - {id: ui.products.resource, area: ui, stage: 5, title: "Product realizing resource"}
+  - {id: ui.products.previous, area: ui, stage: 5, title: "Products: previous page"}
+  - {id: ui.products.next, area: ui, stage: 5, title: "Products: next page"}
   - {id: ui.numbers.delete, area: ui, stage: 5, title: "Delete a never-assigned number"}
   - {id: ui.numbers.list, area: ui, stage: 5, title: "Subscriber-number inventory and search"}
+  - {id: ui.numbers.previous, area: ui, stage: 5, title: "Numbers: previous page"}
+  - {id: ui.numbers.next, area: ui, stage: 5, title: "Numbers: next page"}
   - {id: ui.numbers.create, area: ui, stage: 5, title: "Create an inventory number"}
   - {id: ui.numbers.detail, area: ui, stage: 5, title: "Number details, assignments and lock/unlock"}
   - {id: ui.numbers.pool, area: ui, stage: 5, title: "Request numbers from the carrier pool by area code"}

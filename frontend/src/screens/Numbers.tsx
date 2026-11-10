@@ -8,9 +8,12 @@ import {
   iccidOf,
   kindOf,
   type ResourceKind,
+  loadAvailableNumbers,
   loadNumber,
-  loadNumbers,
+  loadNumberPage,
   lockNumber,
+  NUMBER_PAGE,
+  numberDigits,
   loadNumberProducts,
   type SubscriberNumber,
 } from '../api/numbers';
@@ -34,6 +37,7 @@ import { Footer, useWrite } from './FinancialForms';
 import { PoolDialog } from './PoolDialog';
 import { ErrorBlock, ListState } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
+import { PageFooter, usePageOffset, useSettled } from '../ui/paging';
 
 const COLUMNS: Column[] = [
   { key: 'value', label: 'Number', width: '1fr', mono: true },
@@ -45,9 +49,14 @@ const COLUMNS: Column[] = [
 
 export function NumbersScreen() {
   useSetCrumbs([{ label: 'Numbers' }], 'numbers');
-  const numbers = useResource('numbers', loadNumbers);
   const [query, setQuery] = useState('');
+  const value = numberDigits(useSettled(query));
   const [kind, setKind] = useState<'' | ResourceKind>('');
+  const filterKey = `${value}:${kind}`;
+  const [offset, setOffset] = usePageOffset(filterKey);
+  const numbers = useResource(`numbers:${filterKey}:${offset}`, (signal) =>
+    loadNumberPage({ value: value || null, kind: kind || null }, offset, signal),
+  );
   const [creating, setCreating] = useState(false);
   const [pooling, setPooling] = useState(false);
   const [selected, setSelected] = useState<SubscriberNumber | null>(null);
@@ -55,7 +64,6 @@ export function NumbersScreen() {
     <div className="bss-screen" data-ui="ui.numbers.list">
       <PageHeader
         title="Numbers"
-        count={numbers.status === 'ok' ? numbers.data.length : undefined}
         actions={
           <>
             <Button data-ui="ui.numbers.pool" onClick={() => setPooling(true)}>
@@ -68,7 +76,7 @@ export function NumbersScreen() {
           <>
             <TextInput
               aria-label="Search numbers"
-              placeholder="Search numbers"
+              placeholder="Number (exact)"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -91,32 +99,39 @@ export function NumbersScreen() {
           columns={COLUMNS}
           errorTitle="Failed to load numbers"
           empty={{ title: 'No numbers yet', text: 'Add an E.164 number to the inventory.' }}
-          count={(data) => data.length}
-          rows={(data) =>
-            data.filter(
-              (n) => (n.value ?? '').includes(query.trim()) && (!kind || kindOf(n) === kind),
-            )
-          }
+          // filtered on the server: an empty filtered page is "no matches", not an empty inventory
+          count={(data) => (query !== '' || kind !== '' ? 1 : data.items.length)}
+          rows={(data) => data.items}
           onResetFilters={() => {
             setQuery('');
             setKind('');
           }}
         >
-          {(rows) =>
-            rows.map((n) => (
-              <TableRow
-                key={n.id}
-                columns={COLUMNS}
-                cells={{
-                  value: <Button onClick={() => setSelected(n)}>{n.value}</Button>,
-                  kind: <Tag>{kindOf(n) === 'imsi' ? 'IMSI' : 'MSISDN'}</Tag>,
-                  allocation: n.allocationStatus && <Tag>{n.allocationStatus}</Tag>,
-                  usage: n.usageState && <Tag>{n.usageState}</Tag>,
-                  admin: n.administrativeState && <Tag>{n.administrativeState}</Tag>,
-                }}
+          {(rows, data) => (
+            <>
+              {rows.map((n) => (
+                <TableRow
+                  key={n.id}
+                  columns={COLUMNS}
+                  cells={{
+                    value: <Button onClick={() => setSelected(n)}>{n.value}</Button>,
+                    kind: <Tag>{kindOf(n) === 'imsi' ? 'IMSI' : 'MSISDN'}</Tag>,
+                    allocation: n.allocationStatus && <Tag>{n.allocationStatus}</Tag>,
+                    usage: n.usageState && <Tag>{n.usageState}</Tag>,
+                    admin: n.administrativeState && <Tag>{n.administrativeState}</Tag>,
+                  }}
+                />
+              ))}
+              <PageFooter
+                offset={data.offset}
+                shown={rows.length}
+                more={data.more}
+                size={NUMBER_PAGE}
+                onOffset={setOffset}
+                ui="ui.numbers"
               />
-            ))
-          }
+            </>
+          )}
         </ListState>
       </div>
       {pooling && (
@@ -382,7 +397,14 @@ export function NumberPicker({
   onChange: (id: string) => void;
   kind?: ResourceKind;
 }) {
-  const numbers = useResource('number-picker', loadNumbers);
+  const [typed, setTyped] = useState('');
+  const digits = numberDigits(useSettled(typed));
+  // the previous options stay while a typed number is looked up
+  const numbers = useResource(
+    `number-picker:${kind}:${digits}`,
+    (signal) => loadAvailableNumbers(kind, digits, signal),
+    true,
+  );
   const label = kind === 'imsi' ? 'IMSI' : 'Subscriber number';
   if (numbers.status === 'error')
     return (
@@ -390,17 +412,7 @@ export function NumberPicker({
     );
   const options =
     numbers.status === 'ok'
-      ? numbers.data
-          .filter(
-            (n) =>
-              kindOf(n) === kind &&
-              n.administrativeState === 'unlocked' &&
-              n.allocationStatus === 'available',
-          )
-          .map((n) => ({
-            value: n.id,
-            label: numberLabel(n),
-          }))
+      ? numbers.data.map((n) => ({ value: n.id, label: numberLabel(n) }))
       : [];
   return (
     <Field label={label}>
@@ -410,11 +422,17 @@ export function NumberPicker({
         value={value}
         options={options}
         onChange={onChange}
+        onQueryChange={setTyped}
+        // "+1 202 555 0123" finds 12025550123; a name still matches as text
+        match={(text, typedText) =>
+          text.toLowerCase().includes(typedText.trim().toLowerCase()) ||
+          (numberDigits(typedText) !== '' && numberDigits(text).includes(numberDigits(typedText)))
+        }
         disabled={numbers.status !== 'ok'}
       />
       <Note tone="info">
-        The order checks availability for the requested dates, including future claims and
-        quarantine.
+        The list shows the first {NUMBER_PAGE} available; type a full number to find any other. The
+        order checks availability for the requested dates, including future claims and quarantine.
       </Note>
     </Field>
   );

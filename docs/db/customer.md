@@ -41,6 +41,7 @@ SID Customer (TMF629 customer): the role a party plays towards us. The party is 
 |---|---|---|
 | `customer_created_at_id_idx` | `CREATE INDEX customer_created_at_id_idx ON customer USING btree (created_at, id)` | no |
 | `customer_name_idx` | `CREATE INDEX customer_name_idx ON customer USING btree (name)` | no |
+| `customer_name_prefix_idx` | `CREATE INDEX customer_name_prefix_idx ON customer USING btree (lower(name) text_pattern_ops)` | no |
 | `customer_party_id_idx` | `CREATE INDEX customer_party_id_idx ON customer USING btree (party_id)` | no |
 | `customer_pkey` | `CREATE UNIQUE INDEX customer_pkey ON customer USING btree (id)` | yes |
 

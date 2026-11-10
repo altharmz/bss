@@ -679,6 +679,18 @@ OPERATIONS: dict[str, Op] = {
         " preserving its charge interval.",
         body=PriceChange,
     ),
+    "search_subscribers": Op(
+        "Billing accounts with their customer, oldest first, paged: the Subscribers list. q"
+        " matches by prefix a customer or account name, a subscriber number or a short id"
+        " (BA-1F3A9C2B, or its first characters); state and ratingType filter. Each row has"
+        " the balance, active products and how many accounts the customer has.",
+        query=PAGE,
+        extra={
+            "q": {"type": "string", "maxLength": 200},
+            "state": {"type": "string", "enum": ["Active", "Suspended", "Closed"]},
+            "ratingType": {"type": "string", "enum": ["prepaid", "postpaid"]},
+        },
+    ),
     "list_runs": Op(
         "Billing runs, newest first, with status, account counts and charges.", query=PAGE
     ),

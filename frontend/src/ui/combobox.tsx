@@ -13,6 +13,8 @@ export function Combobox({
   disabled,
   ui,
   ariaLabel,
+  onQueryChange,
+  match = (label, query) => label.toLowerCase().includes(query.trim().toLowerCase()),
 }: {
   options: ComboboxOption[];
   value: string;
@@ -21,6 +23,10 @@ export function Combobox({
   disabled?: boolean;
   ui?: string;
   ariaLabel?: string;
+  /** The typed text, for options searched on the server (the list still filters locally). */
+  onQueryChange?: (query: string) => void;
+  /** Whether an option's label matches the typed text (default: contains, any case). */
+  match?: (label: string, query: string) => boolean;
 }) {
   const id = useId();
   const selected = options.find((option) => option.value === value);
@@ -28,13 +34,12 @@ export function Combobox({
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const query = open && draft !== null ? draft : (selected?.label ?? '');
-  const matches = options.filter((option) =>
-    option.label.toLowerCase().includes(query.trim().toLowerCase()),
-  );
+  const matches = options.filter((option) => match(option.label, query));
 
   const close = () => {
     setOpen(false);
     setDraft(null);
+    onQueryChange?.('');
   };
   const choose = (option: ComboboxOption) => {
     onChange(option.value);
@@ -70,6 +75,7 @@ export function Combobox({
         }}
         onChange={(event) => {
           setDraft(event.target.value);
+          onQueryChange?.(event.target.value);
           setActive(0);
           setOpen(true);
         }}

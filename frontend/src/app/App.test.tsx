@@ -26,9 +26,7 @@ function backend(
     // the billing runs screen: no runs (the screen has its own tests)
     'GET /internal/v1/billingRun?offset=0&limit=20': empty,
     // the subscribers list: no accounts
-    [`GET ${TMF}/accountManagement/v5/billingAccount?offset=0&limit=100`]: empty,
-    [`GET ${TMF}/productInventory/v5/product?status=active&fields=billingAccount&offset=0&limit=100`]:
-      empty,
+    'GET /internal/v1/subscriber?offset=0&limit=50': empty,
     // the catalog: empty
     [`GET ${TMF}/productCatalogManagement/v5/productOffering?offset=0&limit=100`]: empty,
     [`GET ${TMF}/productCatalogManagement/v5/productOfferingPrice?priceType=recurring&offset=0&limit=100`]:

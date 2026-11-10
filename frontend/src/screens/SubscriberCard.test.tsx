@@ -770,18 +770,19 @@ describe('add product', () => {
           ),
       'GET /tmf-api/productCatalogManagement/v5/productSpecification/number-spec': () =>
         json({ resourceSpecification: [{ id: 'msisdn' }] }),
-      'GET /tmf-api/resourceInventory/v5/resource?offset=0&limit=100': () =>
-        json(
-          [
-            {
-              id: numberId,
-              value: '12025550123',
-              administrativeState: 'unlocked',
-              allocationStatus: 'available',
-            },
-          ],
-          { total: 1 },
-        ),
+      'GET /tmf-api/resourceInventory/v5/resource?resourceSpecification.id=msisdn&administrativeState=unlocked&allocationStatus=available&offset=0&limit=50':
+        () =>
+          json(
+            [
+              {
+                id: numberId,
+                value: '12025550123',
+                administrativeState: 'unlocked',
+                allocationStatus: 'available',
+              },
+            ],
+            { total: 1 },
+          ),
       [preview('2026-10-01')]: () => json(FIRST_CHARGE),
       [`POST ${ORDERS}`]: () =>
         json({
@@ -825,7 +826,8 @@ describe('add product', () => {
           ),
       'GET /tmf-api/productCatalogManagement/v5/productSpecification/number-spec': () =>
         json({ resourceSpecification: [{ id: 'msisdn' }] }),
-      'GET /tmf-api/resourceInventory/v5/resource?offset=0&limit=100': () => json([], { total: 0 }),
+      'GET /tmf-api/resourceInventory/v5/resource?resourceSpecification.id=msisdn&administrativeState=unlocked&allocationStatus=available&offset=0&limit=50':
+        () => json([], { total: 0 }),
       [preview('2026-10-01')]: () => json(FIRST_CHARGE),
       'POST /internal/v1/port/in': () =>
         json({ id: 'port1', resource: { id: portedId }, state: 'submitted' }, { status: 201 }),
@@ -1501,7 +1503,7 @@ describe('delete a billing account', () => {
     [`GET ${INTERNAL}/charges?limit=20`]: () => json([], { total: 0 }),
     [`GET ${INTERNAL}/transactions?limit=20`]: () => json([], { total: 0 }),
   };
-  const LIST = '/tmf-api/accountManagement/v5/billingAccount?offset=0&limit=100';
+  const LIST = '/internal/v1/subscriber?offset=0&limit=50';
   const DELETE_KEY = `DELETE ${ACCOUNT_URL}`;
   const deleteButton = () => screen.queryByRole('menuitem', { name: 'Delete…' });
   const deletes = (calls: string[]) => calls.filter((c) => c.startsWith('DELETE'));
@@ -1511,8 +1513,6 @@ describe('delete a billing account', () => {
       ...EMPTY,
       [DELETE_KEY]: () => new Response(null, { status: 204 }),
       [`GET ${LIST}`]: () => json([], { total: 0 }),
-      'GET /tmf-api/productInventory/v5/product?status=active&fields=billingAccount&offset=0&limit=100':
-        () => json([], { total: 0 }),
     });
     await open();
     await screen.findByText('No active products');

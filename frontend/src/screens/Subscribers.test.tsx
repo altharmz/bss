@@ -15,9 +15,6 @@ import { expectUi } from '../test/expectUi';
 import { accountBody } from '../test/fixtures';
 import { mockWidth } from '../test/matchMedia';
 
-const ACCOUNTS = '/tmf-api/accountManagement/v5/billingAccount';
-const PRODUCTS = '/tmf-api/productInventory/v5/product';
-
 const balance = (value: number) => [
   { balanceType: 'currentBalance', amount: { unit: 'USD', value }, '@type': 'AccountBalance' },
 ];
@@ -36,30 +33,75 @@ const ROWS = [
   accountBody(A3, ROMASHKA, { name: 'Romashka HQ', billCycleDay: 15 }),
   accountBody(A4, ROMASHKA, { name: 'Romashka branch', state: 'Closed', billCycleDay: 15 }),
 ];
+const ACCOUNTS = '/tmf-api/accountManagement/v5/billingAccount';
 const ACTIVE_PRODUCTS = [
   { id: 'p1', billingAccount: { id: A1 } },
   { id: 'p2', billingAccount: { id: A1 } },
   { id: 'p3', billingAccount: { id: A3 } },
 ];
 
-function backend(
-  accounts: Handler = () => json(ROWS, { total: ROWS.length }),
-  extra: Record<string, Handler> = {},
-) {
+type Body = ReturnType<typeof accountBody>;
+
+/** A row of GET /internal/v1/subscriber, made from an account body. */
+const customerOf = (body: Body) => {
+  const party = body.relatedParty[0];
+  if (!party) throw new Error('an account body without its customer');
+  return party.partyOrPartyRole;
+};
+
+function subscriberRow(body: Body, all: Body[]) {
+  const customer = customerOf(body);
+  const amount = body.accountBalance[0]?.amount;
+  return {
+    id: body.id,
+    name: body.name,
+    state: body.state,
+    ratingType: body.ratingType ?? 'postpaid',
+    customer: { id: customer.id, name: customer.name },
+    currency: body.currency,
+    balance: amount,
+    creditLimit: (body as { creditLimit?: unknown }).creditLimit ?? null,
+    cycleDay: body.billCycleDay,
+    financialAccount: null,
+    activeProducts: ACTIVE_PRODUCTS.filter((p) => p.billingAccount.id === body.id).length,
+    customerAccounts: all.filter((other) => customerOf(other).id === customer.id).length,
+  };
+}
+
+/** The server's list (#314): prefix search, filters and paging over `rows`. */
+function subscribers(rows: Body[]): Handler {
+  return (url) => {
+    const query = new URL(url ?? '', 'http://test').searchParams;
+    const q = (query.get('q') ?? '').toLowerCase();
+    const hex = q.replace(/^ba-/, '');
+    const offset = Number(query.get('offset') ?? 0);
+    const limit = Number(query.get('limit') ?? 20);
+    const found = rows
+      .map((body) => subscriberRow(body, rows))
+      .filter(
+        (row) =>
+          (!q ||
+            row.customer.name.toLowerCase().startsWith(q) ||
+            row.name.toLowerCase().startsWith(q) ||
+            (/^[0-9a-f]{1,8}$/.test(hex) &&
+              (row.id.startsWith(hex) || row.customer.id.startsWith(hex)))) &&
+          (!query.get('state') || row.state === query.get('state')) &&
+          (!query.get('ratingType') || row.ratingType === query.get('ratingType')),
+      );
+    return json(found.slice(offset, offset + limit), {
+      more: found.length > offset + limit,
+    });
+  };
+}
+
+function backend(list: Handler = subscribers(ROWS), extra: Record<string, Handler> = {}) {
   return stubFetch({
-    'GET /tmf-api/accountManagement/v5/financialAccount?limit=1&fields=id': () =>
-      json([], { total: 23 }),
     ...extra,
     [NAV_RUNS]: noRuns,
     'GET /internal/v1/context': () => json(CONTEXT),
     'GET /internal/v1/session': () =>
       json({ username: 'i.petrova', role: 'admin', mustChangePassword: false }),
-    [`GET ${ACCOUNTS}?limit=1&fields=id`]: () => json([], { total: ROWS.length }),
-    'GET /tmf-api/productCatalogManagement/v5/productOffering?limit=1&fields=id': () =>
-      json([], { total: 3 }),
-    [`GET ${ACCOUNTS}?offset=0&limit=100`]: accounts,
-    [`GET ${PRODUCTS}?status=active&fields=billingAccount&offset=0&limit=100`]: () =>
-      json(ACTIVE_PRODUCTS, { total: ACTIVE_PRODUCTS.length }),
+    'GET /internal/v1/subscriber?*': list,
   });
 }
 
@@ -73,6 +115,11 @@ const dataRows = () =>
   screen.getAllByRole('row').filter((row) => within(row).queryAllByRole('cell').length === 7);
 const rowOf = (name: RegExp) => dataRows().find((row) => name.test(row.textContent ?? ''));
 
+const LIST = '/internal/v1/subscriber';
+const requested = (fetchMock: ReturnType<typeof stubFetch>['fetchMock']) =>
+  fetchMock.mock.calls.map(([url]) => String(url)).filter((url) => url.startsWith(LIST));
+const names = () => dataRows().map((r) => within(r).getAllByRole('cell')[0]?.textContent);
+
 describe('subscribers list', () => {
   it('names a shared loaded currency in the header and every amount', async () => {
     backend();
@@ -83,9 +130,10 @@ describe('subscribers list', () => {
       expect(within(row).getAllByRole('cell')[6]?.textContent).toContain('USD');
   });
 
-  it('omits the currency in a mixed header while retaining each row currency through filtering', async () => {
+  // TEST-CHANGE (#314): the search runs on the server, so the header follows the page shown.
+  it('omits the currency in a mixed header and names it again for a single-currency page', async () => {
     const rows = ROWS.map((row, index) => ({ ...row, currency: index === 0 ? 'EUR' : 'USD' }));
-    backend(() => json(rows, { total: rows.length }));
+    backend(subscribers(rows));
     await open();
     await screen.findByText('Ivan Petrov');
     expect(screen.getByRole('columnheader', { name: 'Balance' })).toBeTruthy();
@@ -98,9 +146,10 @@ describe('subscribers list', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'Search subscribers' }), {
       target: { value: 'Ivan' },
     });
-    expect(screen.getByRole('columnheader', { name: 'Balance' })).toBeTruthy();
+    expect(await screen.findByRole('columnheader', { name: 'Balance EUR' })).toBeTruthy();
   });
 
+  // TEST-CHANGE (#314): no counts (#312); the footer names the rows shown, not a total.
   it('shows one row per billing account with balance, products and cycle day', async () => {
     backend();
     await open();
@@ -126,13 +175,14 @@ describe('subscribers list', () => {
     // a customer with two accounts is two rows, told apart by the account name
     expect(rowOf(/Romashka HQ/)).toBeTruthy();
     expect(rowOf(/Romashka branch/)).toBeTruthy();
-    expect(screen.getByText('Showing 4 of 4')).toBeTruthy();
-    expect(screen.getByText('Amounts in billing account currency')).toBeTruthy();
-    expect(screen.getByText('Negative balance').textContent).toContain('1');
+    expect(within(rowOf(/Ivan Petrov/) as HTMLElement).queryByText(/·/)).toBeNull();
+    expect(screen.getByText('Showing 1–4 · amounts in billing account currency')).toBeTruthy();
+    expect(screen.queryByText('Negative balance')).toBeNull();
   });
 
-  it('filters by the real account state, with counts', async () => {
-    backend();
+  // TEST-CHANGE (#314): the state filter is a server query and shows no counts (#312).
+  it('filters by the real account state on the server, without counts', async () => {
+    const { fetchMock } = backend();
     await open();
     await screen.findByText('Ivan Petrov');
     const group = screen.getByRole('group', { name: 'Account state' });
@@ -140,15 +190,15 @@ describe('subscribers list', () => {
       within(group)
         .getAllByRole('button')
         .map((b) => b.textContent),
-    ).toEqual(['All4', 'Active2', 'Suspended1', 'Closed1']);
-    fireEvent.click(within(group).getByRole('button', { name: /^Suspended/ }));
-    expect(dataRows().map((r) => within(r).getAllByRole('cell')[0]?.textContent)).toEqual([
-      'Anna Smirnova',
-    ]);
-    expect(screen.getByText('Showing 1 of 4')).toBeTruthy();
+    ).toEqual(['All', 'Active', 'Suspended', 'Closed']);
+    fireEvent.click(within(group).getByRole('button', { name: 'Suspended' }));
+    await screen.findByText('Showing 1–1 · amounts in billing account currency');
+    expect(names()).toEqual(['Anna Smirnova']);
+    expect(requested(fetchMock)).toContain(`${LIST}?state=Suspended&offset=0&limit=50`);
   });
 
-  it('shows the account mode and filters by it, with counts', async () => {
+  // TEST-CHANGE (#314): the mode filter is a server query and shows no counts (#312).
+  it('shows the account mode and filters by it on the server, without counts', async () => {
     const rows = [
       ...ROWS,
       accountBody(
@@ -157,7 +207,7 @@ describe('subscribers list', () => {
         { ratingType: 'prepaid' },
       ),
     ];
-    backend(() => json(rows, { total: rows.length }));
+    const { fetchMock } = backend(subscribers(rows));
     await open();
     await screen.findByText('Ivan Petrov');
     expect(within(rowOf(/Dmitri Sokolov/) as HTMLElement).getByText('Prepaid')).toBeTruthy();
@@ -167,30 +217,79 @@ describe('subscribers list', () => {
       within(group)
         .getAllByRole('button')
         .map((b) => b.textContent),
-    ).toEqual(['All5', 'Postpaid4', 'Prepaid1']);
-    fireEvent.click(within(group).getByRole('button', { name: /^Prepaid/ }));
-    expect(dataRows()).toHaveLength(1);
+    ).toEqual(['All', 'Postpaid', 'Prepaid']);
+    fireEvent.click(within(group).getByRole('button', { name: 'Prepaid' }));
+    await screen.findByText('Showing 1–1 · amounts in billing account currency');
     expect(rowOf(/Dmitri Sokolov/)?.textContent).toContain('Prepaid');
-    fireEvent.click(within(group).getByRole('button', { name: /^Postpaid/ }));
-    expect(dataRows()).toHaveLength(4);
-    expect(screen.getByText('Showing 4 of 5')).toBeTruthy();
+    fireEvent.click(within(group).getByRole('button', { name: 'Postpaid' }));
+    await screen.findByText('Showing 1–4 · amounts in billing account currency');
+    expect(requested(fetchMock)).toContain(`${LIST}?ratingType=postpaid&offset=0&limit=50`);
   });
 
-  it('searches names and subscriber numbers, and resets when nothing matches', async () => {
-    backend();
+  // TEST-CHANGE (#314): the search is a prefix search on the server (decided 2026-11-10).
+  it('searches by prefix on the server, and resets when nothing matches', async () => {
+    const { fetchMock } = backend();
     await open();
     await screen.findByText('Ivan Petrov');
     const search = screen.getByRole('textbox', { name: 'Search subscribers' });
-    fireEvent.change(search, { target: { value: 'smirn' } });
-    expect(dataRows()).toHaveLength(1);
-    fireEvent.change(search, { target: { value: 'aaaa 11' } }); // spaces ignored
-    expect(rowOf(/Ivan Petrov/)).toBeTruthy();
-    expect(dataRows()).toHaveLength(1);
+    fireEvent.change(search, { target: { value: 'anna' } });
+    await screen.findByText('Showing 1–1 · amounts in billing account currency');
+    expect(names()).toEqual(['Anna Smirnova']);
+    expect(requested(fetchMock)).toContain(`${LIST}?q=anna&offset=0&limit=50`);
+    fireEvent.change(search, { target: { value: 'BA-11111111' } }); // a short account id
+    await screen.findByText('Ivan Petrov');
+    expect(names()).toEqual(['Ivan Petrov']);
     fireEvent.change(search, { target: { value: 'nobody' } });
-    expect(screen.getByText('Nothing matches “nobody”')).toBeTruthy();
+    expect(await screen.findByText('Nothing matches “nobody”')).toBeTruthy();
     fireEvent.click(screen.getAllByRole('button', { name: 'Reset filters' })[0] as HTMLElement);
-    expect(dataRows()).toHaveLength(4);
+    await screen.findByText('Showing 1–4 · amounts in billing account currency');
     expect((search as HTMLInputElement).value).toBe('');
+  });
+
+  it('waits for the typing to settle before it asks the server', async () => {
+    const { fetchMock } = backend();
+    await open();
+    await screen.findByText('Ivan Petrov');
+    const search = screen.getByRole('textbox', { name: 'Search subscribers' });
+    for (const value of ['r', 'ro', 'rom']) fireEvent.change(search, { target: { value } });
+    await screen.findByText('Showing 1–2 · amounts in billing account currency');
+    expect(requested(fetchMock).filter((url) => url.includes('q='))).toEqual([
+      `${LIST}?q=rom&offset=0&limit=50`,
+    ]);
+  });
+
+  it('pages with Next and Previous, and new filters start at the first page', async () => {
+    const many = Array.from({ length: 52 }, (_, i) =>
+      accountBody(
+        `${String(i).padStart(8, '0')}-0000-4000-8000-000000000000`,
+        { id: `${String(i).padStart(8, '0')}-1111-4000-8000-000000000000`, name: `Client ${i}` },
+        {},
+      ),
+    );
+    const { fetchMock } = backend(subscribers(many));
+    await open();
+    await screen.findByText('Client 0');
+    expect(dataRows()).toHaveLength(50);
+    expectUi('ui.subscribers.previous');
+    expectUi('ui.subscribers.next');
+    const previous = screen.getByRole('button', { name: 'Previous' }) as HTMLButtonElement;
+    expect(previous.disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    await screen.findByText('Showing 51–52 · amounts in billing account currency');
+    expect(names()).toEqual(['Client 50', 'Client 51']);
+    expect(requested(fetchMock)).toContain(`${LIST}?offset=50&limit=50`);
+    expect((screen.getByRole('button', { name: 'Next' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Previous' }));
+    await screen.findByText('Showing 1–50 · amounts in billing account currency');
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    await screen.findByText('Showing 51–52 · amounts in billing account currency');
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Account state' })).getByRole('button', {
+        name: 'Active',
+      }),
+    );
+    await screen.findByText('Showing 1–50 · amounts in billing account currency');
+    expect(requested(fetchMock)).toContain(`${LIST}?state=Active&offset=0&limit=50`);
   });
 
   it('flags only balances strictly below the credit limit', async () => {
@@ -205,7 +304,7 @@ describe('subscribers list', () => {
       }),
       accountBody(A3, ROMASHKA, { accountBalance: balance(-500) }),
     ];
-    backend(() => json(rows, { total: rows.length }));
+    backend(subscribers(rows));
     await open();
     await screen.findByText('Ivan Petrov');
     expect(within(rowOf(/Ivan Petrov/) as HTMLElement).queryByText('Over limit')).toBeNull();
@@ -217,7 +316,7 @@ describe('subscribers list', () => {
     backend();
     await open();
     await screen.findByText('Ivan Petrov'); // the list has loaded: the search input is final
-    const search = screen.getByPlaceholderText('Name, BA id or subscriber no.');
+    const search = screen.getByRole('textbox', { name: 'Search subscribers' });
     fireEvent.keyDown(document.body, { key: '/' });
     expect(document.activeElement).toBe(search);
     const input = document.createElement('input');
@@ -228,29 +327,29 @@ describe('subscribers list', () => {
     input.remove();
   });
 
-  it('shows the filtered header count and query with active filters in no results', async () => {
+  // TEST-CHANGE (#314): the header shows no count (#312).
+  it('shows no header count, and the query with active filters in no results', async () => {
     backend();
     await open();
     await screen.findByText('Ivan Petrov');
     const heading = screen.getByRole('heading', { name: 'Subscribers' })
       .parentElement as HTMLElement;
-    expect(heading.querySelector('.count')?.textContent).toBe('4');
+    expect(heading.querySelector('.count')).toBeNull();
     fireEvent.click(
       within(screen.getByRole('group', { name: 'Account state' })).getByRole('button', {
-        name: /^Suspended/,
+        name: 'Suspended',
       }),
     );
-    expect(heading.querySelector('.count')?.textContent).toBe('1');
     fireEvent.click(
       within(screen.getByRole('group', { name: 'Account mode' })).getByRole('button', {
-        name: /^Prepaid/,
+        name: 'Prepaid',
       }),
     );
     fireEvent.change(screen.getByRole('textbox', { name: 'Search subscribers' }), {
       target: { value: 'nobody' },
     });
-    expect(heading.querySelector('.count')?.textContent).toBe('0');
-    expect(screen.getByText('Nothing matches “nobody”')).toBeTruthy();
+    expect(await screen.findByText('Nothing matches “nobody”')).toBeTruthy();
+    expect(heading.querySelector('.count')).toBeNull();
     expect(screen.getByText('with Status')).toHaveProperty('textContent', 'with Status Suspended');
     expect(screen.getByText('with Mode')).toHaveProperty('textContent', 'with Mode Prepaid');
   });
@@ -272,12 +371,12 @@ describe('subscribers list', () => {
     const alert = await screen.findByRole('alert');
     expect(within(alert).getByText('Failed to load subscribers')).toBeTruthy();
     expect(
-      within(alert).getByText(`GET ${ACCOUNTS}?offset=0&limit=100 → 503 Service Unavailable`),
+      within(alert).getByText(`GET ${LIST}?offset=0&limit=50 → 503 Service Unavailable`),
     ).toBeTruthy();
   });
 
   it('explains an empty system', async () => {
-    backend(() => json([], { total: 0 }));
+    backend(() => json([]));
     await open();
     expect(await screen.findByText('No subscribers yet')).toBeTruthy();
     expect(screen.getByText('Create one with New subscriber.')).toBeTruthy();

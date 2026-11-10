@@ -2568,12 +2568,26 @@ def test_product_inventory_reads_and_number_delete_as_the_ui_sends_them(api):
     )
     assert placed.status_code == 201, placed.text
     product = apidata.product_of(api, placed.json())
-    page = "offset=0&limit=100"
+    page = "offset=0&limit=50"
     everything = api.get(f"{apidata.PRODUCT}?{page}")
     assert everything.status_code == 200 and product["id"] in [p["id"] for p in everything.json()]
+    # the number filter (#314): the number by its exact value, then the products it realizes
+    found = api.get(f"{url}?value=12025550132&limit=1").json()
+    assert [n["id"] for n in found] == [used["id"]]
+    # the Numbers screen and the number picker (#314): exact value, kind, available today
+    listed = api.get(f"{url}?value=12025550131&resourceSpecification.id=msisdn&offset=0&limit=50")
+    assert [n["id"] for n in listed.json()] == [spare["id"]]
+    available = (
+        "resourceSpecification.id=msisdn&administrativeState=unlocked&allocationStatus=available"
+    )
+    offered = [n["id"] for n in api.get(f"{url}?{available}&offset=0&limit=50").json()]
+    assert spare["id"] in offered and used["id"] not in offered
+    typed = api.get(f"{url}?{available}&value=12025550131&limit=1").json()
+    assert [n["id"] for n in typed] == [spare["id"]]
     for query in (
         f"status={product['status']}&{page}",
         f"billingAccount.id={account['id']}&{page}",
+        f"realizingResource.id={used['id']}&{page}",
     ):
         listed = api.get(f"{apidata.PRODUCT}?{query}")
         assert listed.status_code == 200, query

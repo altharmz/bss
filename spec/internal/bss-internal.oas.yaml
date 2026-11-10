@@ -6,7 +6,8 @@ info:
     Ours, not TMF. Served by the app under /internal/v1 for the admin UI (stage 5): what
     the TMF APIs cannot answer without the UI re-implementing billing rules. Same
     conventions as the TMF surface - TMF Error bodies, Money as {unit, value} with exact
-    2-decimal values, offset/limit paging with X-Total-Count / X-Result-Count - except
+    2-decimal values, offset/limit paging with X-Result-Count and Link rel=next (no
+    X-Total-Count, #312) - except
     that dates are plain business dates (YYYY-MM-DD in BILLING_TZ). Every response in the
     test suite is validated against this file (tests/apiclient.py), and the UI's
     TypeScript types are generated from it. Schemas are strict (additionalProperties:
@@ -282,6 +283,35 @@ paths:
         '409': {$ref: '#/components/responses/Error'}
         '415': {$ref: '#/components/responses/Error'}
         '422': {$ref: '#/components/responses/Error'}
+  /subscriber:
+    get:
+      summary: The Subscribers screen's list - billing accounts with their customer, oldest first.
+      description: >-
+        Paged with Link rel=next, no count (#312). q matches by prefix: a customer or
+        account name (case-insensitive), a subscriber number on a line today, or a short id
+        (a prefix of the account or customer id; BA- optional); a full uuid is the account
+        (#314). activeProducts and customerAccounts are computed for the page.
+      parameters:
+        - {$ref: '#/components/parameters/Offset'}
+        - {$ref: '#/components/parameters/Limit'}
+        - name: q
+          in: query
+          schema: {type: string, maxLength: 200}
+        - name: state
+          in: query
+          schema: {type: string, enum: [Active, Suspended, Closed]}
+        - name: ratingType
+          in: query
+          schema: {type: string, enum: [prepaid, postpaid]}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/SubscriberRow'}
+        '400': {$ref: '#/components/responses/Error'}
   /billingRun:
     get:
       summary: Billing runs, newest run date first (stage 4).
@@ -1418,6 +1448,37 @@ components:
       type: string
       format: date
       pattern: '^\d{4}-\d{2}-\d{2}$'
+    SubscriberRow:
+      type: object
+      additionalProperties: false
+      required: [id, name, state, ratingType, customer, currency, balance, creditLimit, cycleDay,
+                 financialAccount, activeProducts, customerAccounts]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        state: {type: string, enum: [Active, Suspended, Closed]}
+        ratingType: {type: string, enum: [prepaid, postpaid]}
+        customer:
+          type: object
+          additionalProperties: false
+          required: [id, name]
+          properties:
+            id: {type: string, format: uuid}
+            name: {type: string}
+        currency: {type: string, pattern: '^[A-Z]{3}$'}
+        balance: {$ref: '#/components/schemas/Money'}
+        creditLimit: {$ref: '#/components/schemas/NullableMoney'}
+        cycleDay: {type: integer, minimum: 1, maximum: 28}
+        financialAccount:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [id, name]
+          properties:
+            id: {type: string, format: uuid}
+            name: {type: string}
+        activeProducts: {type: integer, minimum: 0}
+        customerAccounts: {type: integer, minimum: 1}
     Money:
       type: object
       additionalProperties: false
