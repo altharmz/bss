@@ -111,9 +111,9 @@ if grep -qE '^(app|alembic|spec|scripts/docs)/|^tests/docs_collect' <<<"$staged"
   run make docs-check || fail "generated docs are out of date - git add docs/api docs/db and commit again"
 fi
 
-# The harness script tests (~3 min), only when the commit touches the harness. `make test`
-# (so the nightly run) includes them too.
-if grep -qE '^(scripts/|\.claude/|Makefile$)' <<<"$staged"; then
+# The harness script tests, only when the commit touches the harness (the same paths as the
+# CI harness job). `make test` (so the nightly run) includes them too.
+if grep -qE '^(scripts/|\.claude/|\.codex/|Makefile$)' <<<"$staged"; then
   run make runtime-check || fail "make runtime-check"
 fi
 
@@ -121,7 +121,8 @@ fi
 if grep -q '^\.claude/' <<<"$staged"; then
   run .claude/hooks/test-guard.sh || fail "guard regression cases (.claude/hooks/test-guard.sh)"
 fi
-# The Codex guard's cases, only when the commit touches .codex/ or the shared guard.
+# The Codex guards' cases (shell and apply_patch), only when the commit touches .codex/ or
+# the shared guard.
 if grep -qE '^(\.codex/|\.claude/hooks/)' <<<"$staged"; then
   run .codex/test-guard.sh || fail "Codex guard regression cases (.codex/test-guard.sh)"
 fi
