@@ -42,15 +42,10 @@ standalone command, with its required variables.
    returned issue, branch, slot and worktree; do not inspect the board or claim items first.
    If it fails or finds nothing, stop and report.
 
-   **Human-approved issue selection:** when the human explicitly requests a particular
-   issue, use `make start-task BSS_TASK_OWNER=<client> ISSUE=<n> HUMAN_APPROVAL=<n>`.
-   The approval must name that issue in the current conversation; an agent must never
-   supply the marker on its own initiative. The matching marker records the caller's
-   assertion of approval; the script cannot verify the conversation. Without `ISSUE`,
-   selection still follows priority and board order. With it, only that issue is
-   considered: it must still be open, Ready, unclaimed, unblocked, without an existing
-   task branch/worktree or open PR, and not `needs-human`. An ineligible or missing issue
-   fails without selecting a different one. This does not change priorities or board order.
+   **A specific issue:** only when the human names it in the current conversation, add
+   `ISSUE=<n> HUMAN_APPROVAL=<n>`. Never supply the marker on your own initiative. Only that
+   issue is considered and every eligibility check still applies; an ineligible issue fails
+   without selecting another ([why](decisions/harness.md#human-approved-task-selection)).
 2. **Work** in the returned worktree. `make format` skips the UI formatter when the branch has
    no changes under `frontend/` or `spec/`; run `make web-install` once before it formats UI
    files. After another task merged, `make sync-task` merges `master` into the branch.
@@ -74,11 +69,21 @@ check-pr ready -> `make merge-task`, merge-task -> `make finish-task SLOT=<slot>
 ready-to-copy form: `Human approval needed for PR <n> at <sha>; after approval: make
 merge-task HUMAN_APPROVAL=<n>:<sha>`.
 
-The commit hook runs 2 to 12 minutes
-([what it runs and how long](decisions/harness.md#development-cycle-and-gates)), longer than a
-typical tool call limit. Run `make commit` in the background and read its exit status from the task
-itself, never through a pipe (a pipe hides the status, which hid a failed commit once);
-`make commit` prints its final status line even when the hook output is long.
+**Long targets outlive a tool call.** `make commit` (the hook runs 2 to 12 minutes:
+[what it runs](decisions/harness.md#development-cycle-and-gates)), `make sync-task`,
+`make test`, `make web-shots` and `make check` take longer than one call. Run them in the
+background or a persistent session and read the exit status from the task itself, never
+through a pipe (a pipe hides the status, which hid a failed commit once); `make commit` prints
+its final status line even when the hook output is long. If a call was killed, run
+`make review-task` before trying again, and never start a second copy while one runs.
+
+**After `make sync-task` pulls in UI changes**, run `make web-install` before committing, or
+the hook stops at `web-lint`. If `master` moves while the hook runs, `create-pr` asks for
+another `make sync-task`; run it and go straight on to `make push` and `make check-pr`.
+
+**Subagents** work in the returned task worktree only, with the same targets. Give them the
+full task and check back at most every few minutes; do not poll in a loop. The main agent
+runs `make review-task` and reads the diff itself before `make commit`.
 
 Commands for issue comments (`gh issue comment`) are always allowed: add a short note when
 something meaningful happens (a decision, a blocker, waiting on the human). Do not log every
@@ -104,6 +109,8 @@ status, and whether the slot was released. Deployment is outside this workflow.
 Keep the tree unchanged while checks run; batch fixes; do not kill and restart a long check
 merely because it is slow. Long text (issue bodies, commit messages, file lists) can be passed
 as a file: `BODY_FILE=`, `MESSAGE_FILE=`, `FILES_FILE=`, `PR_BODY_FILE=` (absolute paths).
+Keep such files outside the worktree (`/tmp` or the client's scratch directory):
+`make finish-task` refuses unknown files, even under `.task/`.
 Editor tools require reading a file before rewriting it.
 
 ## Persistent worker slots
@@ -138,9 +145,8 @@ primary `master` is accepted: no staged, tracked or untracked changes, no local 
 of or diverging from `origin/master` (no stash, reset or rebase). Tracked secret paths are
 refused.
 
-Selection follows [board.md](board.md): open Ready issues, P0 before P3, then board order.
-`ISSUE=<n> HUMAN_APPROVAL=<n>` restricts selection to a human-approved issue while retaining
-all eligibility checks; a missing or mismatched approval is refused before startup.
+Selection follows [board.md](board.md): open Ready issues, P0 before P3, then board order
+(or the one human-approved issue, step 1 above).
 `blocked`, `needs-human`, any `agent:` label and open GitHub blockers exclude an issue, as do
 existing task branches, worktrees, linked branches and open PRs. The helper claims by adding
 the owner label, verifies, moves Ready to Doing and verifies again. GitHub has no atomic
@@ -181,10 +187,9 @@ worktree's `scripts/pre-commit.sh` and `scripts/pre-push.sh`. Details of the gat
 [decisions/harness.md](decisions/harness.md). In short:
 
 - **pre-commit** refuses a commit unless the tree is exactly what is committed, then runs
-  `make lint`, the smoke tests and the tests the change affects (the full suite when a data
-  file, `app/worker/` or a migration changes), `make docs-check`, `web-lint`/`web-test` for
-  UI changes, and the harness script tests plus guard cases when `scripts/`, `Makefile`,
-  `.claude/` or `.codex/` change. Markdown-only commits skip everything. One run at a time per repository.
+  lint and the tests the change needs; Markdown-only commits skip the tests. One run at a
+  time per repository. What runs when, and how long it takes:
+  [harness.md](decisions/harness.md#development-cycle-and-gates).
 - **pre-push** refuses bcrypt hashes, `.env*` paths, branch deletions and non-fast-forwards.
 - `make format` formats backend and, if `frontend/` or `spec/` changed (or the base is
   unknown), the UI (never stages). `make review-task` prints JSON about

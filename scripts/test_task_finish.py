@@ -513,7 +513,7 @@ if a[0] == 'ps' and any(x.startswith('ancestor=') for x in a):
         other.write_text("preserve me")
         self.secret.unlink()
         self.secret.symlink_to(other)
-        with self.assertRaises(lifecycle.start_task.StartupError):
+        with self.assertRaises(lifecycle.task_repo.StartupError):
             self.finish()
         self.assertEqual(other.read_text(), "preserve me")
         self.assertTrue(self.work.exists())

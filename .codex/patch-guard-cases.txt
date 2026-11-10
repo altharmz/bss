@@ -1,5 +1,5 @@
 # .codex/patch-guard.sh cases: <expect>\t<operation>\t<path>\t<cwd>; expect = allow|block.
-# <cwd> is relative to the repository (. = its root). Run by .codex/test-guard.sh.
+# <cwd> is relative to the repository (. = its root). Run by scripts/test_guard.py.
 allow	Update File	app/main.py	.
 allow	Add File	docs/new.md	.
 allow	Update File	.env.example	.

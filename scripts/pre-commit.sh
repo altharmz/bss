@@ -117,14 +117,10 @@ if grep -qE '^(scripts/|\.claude/|\.codex/|Makefile$)' <<<"$staged"; then
   run make runtime-check || fail "make runtime-check"
 fi
 
-# The agent guard's cases, only when the commit touches .claude/.
-if grep -q '^\.claude/' <<<"$staged"; then
-  run .claude/hooks/test-guard.sh || fail "guard regression cases (.claude/hooks/test-guard.sh)"
-fi
-# The Codex guards' cases (shell and apply_patch), only when the commit touches .codex/ or
-# the shared guard.
-if grep -qE '^(\.codex/|\.claude/hooks/)' <<<"$staged"; then
-  run .codex/test-guard.sh || fail "Codex guard regression cases (.codex/test-guard.sh)"
+# The deploy script's tests, only when the commit touches what they run: the deploy and
+# smoke scripts, the compose files, the suite itself, its runner or the Makefile.
+if grep -qE '^(scripts/(deploy\.sh|test_deploy_rollback\.py|run_suites\.py|task-compose|billing-status-check\.sh|[a-z-]*smoke[a-z-]*\.(sh|py))|compose[a-z.]*\.yaml|Makefile)$' <<<"$staged"; then
+  run make deploy-check || fail "make deploy-check"
 fi
 
 # The admin UI, only when the commit touches it or the specs its types come from. These

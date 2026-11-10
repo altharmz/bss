@@ -59,7 +59,8 @@ def check_stages(names):
     stages = ["check-preflight", "lint", "test", "docs-check"]
     if needs_ui(names):
         stages.extend(("web-lint", "web-test", "web-e2e"))
-    return [*stages, "guard-check"]
+    # The guard cases are a runtime-check suite, which `test` runs.
+    return stages
 
 
 def run_stages(root, stages):

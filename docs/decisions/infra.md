@@ -516,7 +516,7 @@ VPS) keeps the last two releases and goes back one by itself. Operator view:
   that needs a schema downgrade adds a new drill-only migration the same way.
 - **Tests:** `scripts/test_deploy_rollback.py` runs the real script with fake `ssh`,
   `rsync`, `docker`, `timeout` and `curl` that log their argv and answer from a rules file,
-  and asserts on the order of the remote commands (in `make runtime-check`).
+  and asserts on the order of the remote commands (in `make deploy-check`).
 
 ## Smoke retries (2026-11-08)
 
@@ -586,3 +586,58 @@ dedicated VPS on 2026-11-09. How to use it: [loadtest.md](../loadtest.md).
   - What stays per process, accepted: the DB pools, the log-level poller (one cheap query
     every 15 s), the metrics database collector's 30 s cache, and the in-memory stub
     adapters (deterministic per call).
+
+## Supply-chain scanning (2026-11-08)
+
+Issue #241. Known vulnerabilities in what we ship, with free tooling only: CodeQL, dependency
+review and secret scanning are paid on a private repository.
+
+- **A separate workflow**, `.github/workflows/security.yml`. It runs on pull requests that
+  change the dependency files, the `Dockerfile`, the ignore files, the gate or the workflow
+  itself. It also runs nightly at 01:45 UTC, after CI, and on `workflow_dispatch`, with
+  `contents: read`. It is not a required check, because a required check with a path filter
+  would hang on every other PR. On a PR it blocks through `make check-pr`. A red nightly run is
+  the signal for a new vulnerability ([operations.md](../operations.md#security-scan)).
+- **Three jobs, each fails on a finding.** `python`: pip-audit (pinned in
+  `requirements-security.txt`, CI only) checks `constraints.txt` and `constraints-dev.txt`,
+  and every finding blocks, since pip-audit reports no severity. `ui`: `npm audit --json` in
+  the pinned Node image (lockfile only, no install) blocks at `high` for production packages
+  and `critical` for dev-only ones. `image`: Trivy scans the `runtime` image for fixable HIGH
+  and CRITICAL findings. Trivy runs from its official image pinned by digest, not from a
+  third-party action, which keeps the supply-chain surface small. The image build reads CI's
+  layer cache and writes its own cache scope, so it does not evict the cache of CI's dev image.
+- **The gate**, `scripts/audit_gate.py`, is stdlib only and tested in `make runtime-check`.
+  It reads the tool's JSON on stdin. Exit 0: nothing blocks. Exit 1: a finding or an
+  ignore-file problem blocks. Exit 2: the input is JSON the gate doesn't understand (it never
+  passes silently). npm audit's report has no dev-only flag, so the gate reads `dev` from
+  `frontend/package-lock.json`. A finding counts as dev-only when every installed copy of the
+  package has the flag. A copy missing from the lockfile counts as production (decided on the
+  issue).
+- **Accepting a finding is explicit and expires.** For pip and npm, an entry in
+  `ops/security/audit-ignore.txt` has the form `<id> <review-by> <reason>`. The gate fails on
+  an entry whose date has passed, on a date more than 60 days ahead, and on a malformed line.
+  For the image, `.trivyignore` uses Trivy's own `exp:` date, with a reason comment above each
+  entry.
+- **Dependabot version updates cover the GitHub Actions only** (`.github/dependabot.yml`):
+  one grouped PR a month that keeps the SHA pins. Python and UI pins change only
+  deliberately ("Dependencies are pinned", above), so there are no routine
+  pip, npm or docker version PRs. A fixable OS finding is handled by bumping the base image
+  through its documented procedure.
+- **Dependabot alerts and security updates are on** (repository settings, enabled by the
+  human; checked 2026-11-08, #268). When an advisory hits a dependency GitHub knows,
+  Dependabot raises an alert and opens a fix PR. GitHub's dependency graph reads
+  `requirements*.txt`, `pyproject.toml` and `frontend/package*.json`, **not
+  `constraints*.txt`**: a vulnerable transitive Python package (like `opentelemetry-api` and
+  `certifi` in #263) gets no alert and no PR. The `Security` workflow's pip-audit, which
+  reads the constraints files, is the check for those. Trivy covers the image.
+- **A Dependabot security PR is a signal, never merged as it is**, like a red nightly
+  `Security` run. It touches only the manifest, so a Python bump leaves `constraints*.txt`
+  at the old version and the `-c` install cannot resolve. Handle it as a task: an issue that
+  links the PR, the fix in a task branch (Python: the documented pin change with
+  constraints regenerated from `pip freeze`; npm: Dependabot's `frontend/package*.json`
+  change may be taken over as is, checked with `make web-install` and the UI checks), and
+  the Dependabot PR closed with a link to the task PR.
+- **The first run's findings** were not upgraded in #241. They were accepted with review-by
+  2026-12-08, and #263 fixed them: Python pins bumped, pip removed from the runtime venv
+  ("No pip in the runtime venv", above), base image digest bumped. Only
+  the two zlib1g CVEs remain accepted, renewed, because no base image ships the fix yet.

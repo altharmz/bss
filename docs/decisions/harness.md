@@ -54,13 +54,13 @@ in the invoking worktree):
   agent-facing docs must exist (`scripts/docs_links.py`; it runs before the Markdown-only
   exit, so documentation-only commits are checked too);
 - `make runtime-check` (the harness script tests: every `scripts/test_*.py` except
-  `test_telemetry_database.py`, which needs the running telemetry database; run in parallel
-  by `scripts/run_suites.py`) and the guard cases, only when `scripts/`, `Makefile`,
-  `.claude/` or `.codex/` change (the guard cases only for `.claude/` and `.codex/`). This
-  is the one place that states the duration: 151 s on 2026-11-10, set by the longest suite
-  (`test_deploy_rollback.py`, 135 s), so a commit that touches the harness adds about
-  2.5 minutes to the hook. The suites are found by name because a hand-kept list in the
-  Makefile once left `test_smoke_retry.py` out of every run;
+  `test_telemetry_database.py`, which needs the running telemetry database, and the deploy
+  suite), only when `scripts/`, `Makefile`, `.claude/` or `.codex/` change. The guard cases
+  are one of its suites (`scripts/test_guard.py`). The suites are found by name because a
+  hand-kept list in the Makefile once left `test_smoke_retry.py` out of every run;
+- `make deploy-check` (`scripts/test_deploy_rollback.py`), only when the deploy or smoke
+  scripts, the compose files, the suite, its runner or the `Makefile` change. It tests the
+  human's deploy, not the agents' workflow, and was the longest suite of every harness commit;
 - `make web-lint` and `make web-test` when `frontend/` or `spec/` change;
 - the full output of each run is in `.git/pre-commit-logs/` (last 10).
 
@@ -69,17 +69,35 @@ bcrypt hash (unless the line carries `pre-push: allow-dummy-hash`), an added or 
 `.env*` path (except `.env.example`), a branch deletion and a non-fast-forward. It names the
 commit and file, never the value.
 
+**Script test durations** (stated here only). `scripts/run_suites.py` runs the suites in
+parallel and each suite in parts: a suite's tests are dealt out over up to as many
+processes as there are jobs (one per CPU, 16 at most), each started as
+`python test_x.py Class.test ...`, so the longest suite no longer sets the wall time. The
+tests of a suite must therefore not depend on each other. Measured on 2026-11-11 (12 CPUs):
+`make runtime-check` 68 s and `make deploy-check` 45 s. Before (2026-11-10): 151 s for both
+in one target, set by the deploy suite (135 s), and 3 min 2 s when the suites ran one after
+another. With 8 jobs the parts gave no gain (135 s against 125 s whole, single runs), so the
+default follows the CPU count.
+
 `make test` takes about 7 minutes. Timing-based tests (`test_worker_heartbeat.py`, the thread
 tests in `test_order_concurrency.py` and `test_billing_db.py`) can fail under full load: rerun
 once before suspecting a regression.
 
 ## The guard
 
-`.claude/hooks/guard.sh` (PreToolUse on Bash; Codex runs it through `.codex/guard.sh`) blocks
+`.claude/hooks/guard.py` (PreToolUse on Bash; Codex runs the same file with `--codex`) blocks
 only slips that cannot be undone: reading `.env*` files, `docker compose config` without
 `--quiet`, destructive docker cleanup (system, volume, network, builder), force, delete,
 mirror and prune pushes, and skipping the git hooks (`--no-verify`, `commit -n`, overriding
-`core.hooksPath`). Cases: `.claude/hooks/guard-cases.txt`, run by `.claude/hooks/test-guard.sh`.
+`core.hooksPath`). Cases: `.claude/hooks/guard-cases.txt` and `.codex/guard-cases.txt`, run by
+`scripts/test_guard.py`, a `make runtime-check` suite.
+
+One implementation serves both clients (#317). Until then the guard was a shell script that
+started Python to strip the command and `grep` for each rule, and `.codex/guard.sh` carried a
+second, weaker copy of the stripping for the Codex-only rule: it ignored every heredoc, so
+`bash <<EOF` with a bare `git push` inside passed. Now the rules and the stripping exist
+once, the Codex rule sees shell heredocs and `sh -c` scripts, and a payload Codex cannot
+read is blocked (Claude's passes, as before).
 
 It is a pattern matcher, not a security boundary. It matches the executable part of the
 command: quoted prose (quoted text containing whitespace), data heredocs and the like are
@@ -102,7 +120,7 @@ task's containers; it strips imports that are not used yet. Application code goe
 (`.claude/hooks/`) passes silently, where the hook used to report a failure on every such
 edit (`scripts/test_format_hook.py`). `.codex/patch-guard.sh` applies the same file denies
 to Codex's `apply_patch` (cases: `.codex/patch-guard-cases.txt`, run by
-`.codex/test-guard.sh` with the Codex shell cases).
+`scripts/test_guard.py` with the shell cases).
 
 The second PreToolUse hook, `agent-telemetry.py`, gives usage telemetry the subagent
 identity ([telemetry-usage.md](../telemetry-usage.md#collecting-usage)). It rewrites a
@@ -156,6 +174,21 @@ and `system` cleanup by agents. `make clean-tasks` (list by default, `CONFIRM=1`
 applies the same function to earlier leftovers of finished tasks and reports abandoned work
 as kept.
 
+## Script modules
+
+`start_task.py` is an entry point, not a library. What other lifecycle scripts need from it
+lives in two modules (#317): `task_repo.py` (running Git and `gh` without inherited `GIT_*`
+selectors and with sanitized errors, the primary checkout's checks, worktrees, the external
+secret path) and `task_board.py` (the board read in board order, item status, adding an
+issue). `task_finish.py` and `task_cleanup.py` imported `start_task` for these, while
+`start_task` imported `task_finish` back for slot recovery.
+
+Not merged, on purpose: `task_runtime.git` (text, the caller's directory),
+`task_quality.query` (bytes, for NUL-separated paths), `task_pr.gh` (JSON reads with a retry)
+and `task_repo.run`. They differ in error type and return value, every caller depends on
+those, and one helper with flags for each difference would be harder to read than four
+short functions.
+
 ## Stale primary scripts
 
 The primary checkout runs old scripts until `master` is fast-forwarded (a fix in #140 once
@@ -192,70 +225,19 @@ exists for, and keep the set near two minutes of summed time.
 `.github/workflows/ci.yml`, GitHub Actions on `ubuntu-latest` (private repository, Free plan,
 so cost shapes what runs). Pull requests to `master` and pushes to `master`: `make lint`,
 `make docs-check`, `make test-smoke`. Nightly (01:30 UTC) and `workflow_dispatch`: `make lint`,
-`make docs-check` and the whole `make test` (including `make runtime-check`). A PR run is
+`make docs-check` and the whole `make test` (including `make runtime-check` and
+`make deploy-check`). A PR run is
 cancelled by a newer push; runs on `master` never are. The workflow uses a disposable
 database password, reads no repository secret (`contents: read`), never touches the VPS, and
 pins actions to commit SHAs. The dev image is built with the Actions layer cache. A second job, `harness` (no
 Docker, 15 minutes at most), runs `make docs-links` on every pull request and push and
-`make runtime-check` on pull requests that change `scripts/`, `.claude/`,
+`make runtime-check` and `make deploy-check` on pull requests that change `scripts/`, `.claude/`,
 `.codex/` or the `Makefile` (a changed-files step); it is the backstop for the local commit
 hook, and the nightly full run covers the harness tests through `make test`. The web
 checks (`web-lint`, `web-test`, `web-e2e`) are not in CI. Branch protection is the human's.
 
-### Supply-chain scanning (2026-11-08)
-
-Issue #241. Known vulnerabilities in what we ship, with free tooling only: CodeQL, dependency
-review and secret scanning are paid on a private repository.
-
-- **A separate workflow**, `.github/workflows/security.yml`. It runs on pull requests that
-  change the dependency files, the `Dockerfile`, the ignore files, the gate or the workflow
-  itself. It also runs nightly at 01:45 UTC, after CI, and on `workflow_dispatch`, with
-  `contents: read`. It is not a required check, because a required check with a path filter
-  would hang on every other PR. On a PR it blocks through `make check-pr`. A red nightly run is
-  the signal for a new vulnerability ([operations.md](../operations.md#security-scan)).
-- **Three jobs, each fails on a finding.** `python`: pip-audit (pinned in
-  `requirements-security.txt`, CI only) checks `constraints.txt` and `constraints-dev.txt`,
-  and every finding blocks, since pip-audit reports no severity. `ui`: `npm audit --json` in
-  the pinned Node image (lockfile only, no install) blocks at `high` for production packages
-  and `critical` for dev-only ones. `image`: Trivy scans the `runtime` image for fixable HIGH
-  and CRITICAL findings. Trivy runs from its official image pinned by digest, not from a
-  third-party action, which keeps the supply-chain surface small. The image build reads CI's
-  layer cache and writes its own cache scope, so it does not evict the cache of CI's dev image.
-- **The gate**, `scripts/audit_gate.py`, is stdlib only and tested in `make runtime-check`.
-  It reads the tool's JSON on stdin. Exit 0: nothing blocks. Exit 1: a finding or an
-  ignore-file problem blocks. Exit 2: the input is JSON the gate doesn't understand (it never
-  passes silently). npm audit's report has no dev-only flag, so the gate reads `dev` from
-  `frontend/package-lock.json`. A finding counts as dev-only when every installed copy of the
-  package has the flag. A copy missing from the lockfile counts as production (decided on the
-  issue).
-- **Accepting a finding is explicit and expires.** For pip and npm, an entry in
-  `ops/security/audit-ignore.txt` has the form `<id> <review-by> <reason>`. The gate fails on
-  an entry whose date has passed, on a date more than 60 days ahead, and on a malformed line.
-  For the image, `.trivyignore` uses Trivy's own `exp:` date, with a reason comment above each
-  entry.
-- **Dependabot version updates cover the GitHub Actions only** (`.github/dependabot.yml`):
-  one grouped PR a month that keeps the SHA pins. Python and UI pins change only
-  deliberately ([infra.md](infra.md), "Dependencies are pinned"), so there are no routine
-  pip, npm or docker version PRs. A fixable OS finding is handled by bumping the base image
-  through its documented procedure.
-- **Dependabot alerts and security updates are on** (repository settings, enabled by the
-  human; checked 2026-11-08, #268). When an advisory hits a dependency GitHub knows,
-  Dependabot raises an alert and opens a fix PR. GitHub's dependency graph reads
-  `requirements*.txt`, `pyproject.toml` and `frontend/package*.json`, **not
-  `constraints*.txt`**: a vulnerable transitive Python package (like `opentelemetry-api` and
-  `certifi` in #263) gets no alert and no PR. The `Security` workflow's pip-audit, which
-  reads the constraints files, is the check for those. Trivy covers the image.
-- **A Dependabot security PR is a signal, never merged as it is**, like a red nightly
-  `Security` run. It touches only the manifest, so a Python bump leaves `constraints*.txt`
-  at the old version and the `-c` install cannot resolve. Handle it as a task: an issue that
-  links the PR, the fix in a task branch (Python: the documented pin change with
-  constraints regenerated from `pip freeze`; npm: Dependabot's `frontend/package*.json`
-  change may be taken over as is, checked with `make web-install` and the UI checks), and
-  the Dependabot PR closed with a link to the task PR.
-- **The first run's findings** were not upgraded in #241. They were accepted with review-by
-  2026-12-08, and #263 fixed them: Python pins bumped, pip removed from the runtime venv
-  ([infra.md](infra.md), "No pip in the runtime venv"), base image digest bumped. Only
-  the two zlib1g CVEs remain accepted, renewed, because no base image ships the fix yet.
+The supply-chain scan (`.github/workflows/security.yml`, the `Security` workflow) is an
+infrastructure decision: [infra.md](infra.md#supply-chain-scanning-2026-11-08).
 
 ## Codex
 
@@ -269,10 +251,9 @@ include the primary checkout and the worker root.
 
 Decisions from the #59 session review (#144, #157):
 
-- **Bare `git add/commit/push` is blocked for Codex** by `.codex/guard.sh` (cases in
-  `.codex/guard-cases.txt`, run by `.codex/test-guard.sh` from the pre-commit hook when
-  `.codex/` or `.claude/hooks/` change). Claude's shared guard still allows them; the Make
-  targets are the supported path for both.
+- **Bare `git add/commit/push` is blocked for Codex** by the guard's `--codex` rule (cases
+  in `.codex/guard-cases.txt`, [the guard](#the-guard)). Claude's run of the guard still
+  allows them; the Make targets are the supported path for both.
 - **`.codex/rules/default.rules` is tracked** and installed by copying; it allows `make`, issue
   comments and `gh pr checks` only. The earlier user-level rules allowed bare Git writes and
   carried one-off entries.

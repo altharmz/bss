@@ -162,7 +162,7 @@ class PrTests(unittest.TestCase):
             "CLAUDE.md",
             "AGENTS.md",
             ".claude/settings.json",
-            ".claude/hooks/guard.sh",
+            ".claude/hooks/guard.py",
             ".claude/hooks/guard-cases.txt",
             ".codex/hooks.json",
             ".codex/rules/commit.rules",
@@ -205,7 +205,7 @@ class PrTests(unittest.TestCase):
                 self.assertTrue(self.outcome("blocked", 3)["human_approval_required"])
 
     def test_rename_from_protected_path_requires_human(self):
-        for previous in ("CLAUDE.md", ".claude/hooks/guard.sh", ".codex/guard.sh"):
+        for previous in ("CLAUDE.md", ".claude/hooks/guard.py", ".codex/guard.sh"):
             with self.subTest(previous=previous):
                 self.state["files"] = [
                     [{"filename": "archived/old-file.md", "previous_filename": previous}]
