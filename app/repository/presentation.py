@@ -57,6 +57,32 @@ def preferences(conn, account_id):
     }
 
 
+def preferences_of(conn, account_ids):
+    """preferences() for a page of accounts in two statements (#285)."""
+    if not account_ids:
+        return {}
+    ids = list(set(account_ids))
+    formats = {
+        row["account_id"]: {k: row[k] for k in ("id", "name", "description")}
+        for row in fetch_all(
+            conn,
+            "SELECT a.id AS account_id, f.id, f.name, f.description FROM bill_format f"
+            " JOIN billing_account a ON a.bill_format_id = f.id WHERE a.id = ANY(%s)",
+            (ids,),
+        )
+    }
+    media: dict = {uid: [] for uid in account_ids}
+    for row in fetch_all(
+        conn,
+        "SELECT a.billing_account_id, m.id, m.name, m.description FROM bill_presentation_media m"
+        " JOIN account_presentation_media a ON a.media_id = m.id"
+        " WHERE a.billing_account_id = ANY(%s) ORDER BY a.created_at, m.id",
+        (ids,),
+    ):
+        media[row["billing_account_id"]].append({k: row[k] for k in ("id", "name", "description")})
+    return {uid: {"format": formats.get(uid), "media": media[uid]} for uid in account_ids}
+
+
 def set_preferences(conn, uid, data):
     from app.api.errors import unprocessable
 

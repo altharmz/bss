@@ -60,6 +60,31 @@ def select_by_id(
     return fetch_one(conn, query + sql.SQL(LOCK_CLAUSE[lock]), (row_id,))
 
 
+def rows_by_id(conn: psycopg.Connection, table: str, ids: list[Any]) -> dict[Any, Row]:
+    """Rows of `table` by id, for a whole page in one query (#285)."""
+    if not ids:
+        return {}
+    query = sql.SQL("SELECT * FROM {} WHERE id = ANY(%s)").format(sql.Identifier(table))
+    return {row["id"]: row for row in fetch_all(conn, query, (list(set(ids)),))}
+
+
+def rows_grouped_by(
+    conn: psycopg.Connection, table: str, column: str, keys: list[Any], order: str
+) -> dict[Any, list[Row]]:
+    """Rows of `table` whose `column` is one of `keys`, grouped by it, each group in
+    `order` (the single-row query's ORDER BY, so nested arrays keep their order): one
+    query for a whole page (#285). `table`, `column` and `order` come from code."""
+    if not keys:
+        return {}
+    query = sql.SQL("SELECT * FROM {} WHERE {} = ANY(%s) ORDER BY " + order).format(  # noqa: S608 - order is code
+        sql.Identifier(table), sql.Identifier(column)
+    )
+    groups: dict[Any, list[Row]] = {key: [] for key in keys}
+    for row in fetch_all(conn, query, (list(set(keys)),)):
+        groups[row[column]].append(row)
+    return groups
+
+
 def money(value: Decimal) -> Decimal:
     """Refuse floats at the boundary: a float amount is a bug, not a rounding choice."""
     if not isinstance(value, Decimal):

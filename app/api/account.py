@@ -87,13 +87,13 @@ from app.api.deletes import delete_row, refuse_if_referenced
 from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
 from app.api.errors import bad_request, conflict, not_found, problems_error, unprocessable
 from app.api.guards import authorize_contact
-from app.api.presentation import BillStructure, structure_body
+from app.api.presentation import BillStructure, structure_from
 from app.api.tmfjson import TmfJSONResponse
 from app.billing.engine_tax import service_address_of
 from app.config import settings
 from app.events import emit
 from app.repository import accounts, billing, cycles, parties, presentation
-from app.repository._sql import Row, count_references, jsonb
+from app.repository._sql import Row, count_references, jsonb, rows_by_id
 
 API = "TMF666"
 BASE = "/tmf-api/accountManagement/v5"
@@ -533,9 +533,72 @@ def linked_financial(conn: psycopg.Connection, row: Row) -> Row | None:
     return accounts.get_financial(conn, row["financial_account_id"])
 
 
+def account_bodies(conn: psycopg.Connection, rows: list[Row]) -> list[dict[str, Any]]:
+    """The bodies of a page of accounts: customers, financial accounts, bill structures,
+    cycle specifications and balances are read for the whole page at once, so a list costs
+    the same queries for 1 or 100 rows (#285)."""
+    ids = [row["id"] for row in rows]
+    customers = rows_by_id(conn, "customer", [row["customer_id"] for row in rows])
+    financials = rows_by_id(
+        conn,
+        accounts.FINANCIAL,
+        [r["financial_account_id"] for r in rows if r["financial_account_id"]],
+    )
+    specs = rows_by_id(
+        conn,
+        cycles.TABLE,
+        [r["cycle_specification_id"] for r in rows if r["cycle_specification_id"]],
+    )
+    prefs = presentation.preferences_of(conn, ids)
+    balances = billing.account_balances(conn, ids)
+    return [
+        _account_body(
+            row,
+            customers[row["customer_id"]],
+            financials.get(row["financial_account_id"]),
+            specs.get(row["cycle_specification_id"]),
+            prefs[row["id"]],
+            balances[row["id"]],
+        )
+        for row in rows
+    ]
+
+
 def account_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
-    financial = linked_financial(conn, row)
-    anchor = customer_party(conn, row)
+    return account_bodies(conn, [row])[0]
+
+
+def _cycle_ref(spec: Row | None) -> dict[str, Any]:
+    if spec is None:
+        return ref(
+            "BillingCycleSpecification", f"{CYCLE_BASE}/{CYCLE_ID}", CYCLE_ID, "Monthly billing"
+        )
+    return ref("BillingCycleSpecification", f"{CYCLE_BASE}/{spec['id']}", spec["id"], spec["name"])
+
+
+def _customer_party(customer: Row) -> dict[str, Any]:
+    return {
+        "role": CUSTOMER_ROLE,
+        "partyOrPartyRole": ref(
+            "Customer",
+            customer_href(customer["id"]),
+            customer["id"],
+            customer["name"],
+            ref_type="PartyRoleRef",
+        ),
+        "@type": "RelatedPartyRefOrPartyRoleRef",
+    }
+
+
+def _account_body(
+    row: Row,
+    customer: Row,
+    financial: Row | None,
+    spec: Row | None,
+    pref: dict[str, Any],
+    balance: Any,
+) -> dict[str, Any]:
+    anchor = _customer_party(customer)
     return {
         "id": str(row["id"]),
         "href": account_href(row["id"]),
@@ -544,9 +607,9 @@ def account_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
         "ratingType": row["rating_type"],
         "state": row["state"],
         "billStructure": {
-            **structure_body(conn, row["id"]),
+            **structure_from(pref),
             "@type": "BillStructure",
-            "cycleSpecification": cycle_ref(conn, row["cycle_specification_id"]),
+            "cycleSpecification": _cycle_ref(spec),
         },
         "relatedParty": related_body(row, CUSTOMER_ROLE, anchor),
         **details_body(row),
@@ -554,9 +617,7 @@ def account_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
             {
                 "id": balance_id(row["currency"]),
                 "balanceType": BALANCE_TYPE,
-                "amount": money(
-                    billing.account_balance(conn, row["id"]).quantize(CENT), row["currency"]
-                ),
+                "amount": money(balance.quantize(CENT), row["currency"]),
                 "@type": "AccountBalance",
             }
         ],
@@ -597,7 +658,7 @@ def list_accounts(request: Request, tx: Tx) -> TmfJSONResponse:
         rows, total = parties.list_billing_accounts(
             conn, where=query.where, offset=query.offset, limit=query.limit
         )
-        items = [account_body(conn, row) for row in rows]
+        items = account_bodies(conn, rows)
     return listing.list_response(items, total, query)
 
 

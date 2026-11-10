@@ -37,7 +37,7 @@ from app.api.party import party_href, party_name
 from app.api.tmfjson import TmfJSONResponse
 from app.events import emit
 from app.repository import parties
-from app.repository._sql import Row, count_references
+from app.repository._sql import Row, count_references, rows_by_id, rows_grouped_by
 
 API = "TMF629"
 BASE = "/tmf-api/customer/v5"
@@ -87,9 +87,21 @@ def customer_href(customer_id: Any) -> str:
     return f"{BASE}/customer/{customer_id}"
 
 
+def customer_bodies(conn: psycopg.Connection, rows: list[Row]) -> list[dict[str, Any]]:
+    """The bodies of a page of customers: their parties and accounts are read for the whole
+    page at once, so a list costs the same queries for 1 or 100 rows (#285)."""
+    party = rows_by_id(conn, "party", [row["party_id"] for row in rows])
+    accounts = rows_grouped_by(
+        conn, "billing_account", "customer_id", [row["id"] for row in rows], "created_at, id"
+    )
+    return [_customer_body(row, party[row["party_id"]], accounts[row["id"]]) for row in rows]
+
+
 def customer_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
-    party = parties.get_party(conn, row["party_id"])
-    assert party is not None  # foreign key
+    return customer_bodies(conn, [row])[0]
+
+
+def _customer_body(row: Row, party: Row, accounts: list[Row]) -> dict[str, Any]:
     return {
         "id": str(row["id"]),
         "href": customer_href(row["id"]),
@@ -110,7 +122,7 @@ def customer_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
                 a["name"],
                 ref_type="AccountRef",
             )
-            for a in parties.accounts_of_customer(conn, row["id"])
+            for a in accounts
         ],
         **row["details"],
         "@type": "Customer",
@@ -133,7 +145,7 @@ def list_customers(request: Request, tx: Tx) -> TmfJSONResponse:
         rows, total = parties.list_customers(
             conn, where=query.where, offset=query.offset, limit=query.limit
         )
-        items = [customer_body(conn, row) for row in rows]
+        items = customer_bodies(conn, rows)
     return listing.list_response(items, total, query)
 
 
