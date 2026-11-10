@@ -84,7 +84,7 @@ jobs:
       # A few seconds: every relative link and the commands the docs name must exist.
       - run: make docs-links
 
-      # About 100 s, so only when the harness itself changed (the nightly full run covers
+      # A few minutes, so only when the harness itself changed (the nightly full run covers
       # it through make test).
       - name: Detect harness changes
         id: harness

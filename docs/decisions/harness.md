@@ -53,10 +53,14 @@ in the invoking worktree):
   must resolve, and the `make` targets and `scripts/` files named in code in the
   agent-facing docs must exist (`scripts/docs_links.py`; it runs before the Markdown-only
   exit, so documentation-only commits are checked too);
-- `make runtime-check` (the harness script tests, run in parallel by
-  `scripts/run_suites.py`, about 70-100 s; they took 3 min 2 s when run one after another)
-  and the guard cases, only when `scripts/`, `Makefile` or `.claude/` change (the guard
-  cases only for `.claude/`);
+- `make runtime-check` (the harness script tests: every `scripts/test_*.py` except
+  `test_telemetry_database.py`, which needs the running telemetry database; run in parallel
+  by `scripts/run_suites.py`) and the guard cases, only when `scripts/`, `Makefile`,
+  `.claude/` or `.codex/` change (the guard cases only for `.claude/` and `.codex/`). This
+  is the one place that states the duration: 151 s on 2026-11-10, set by the longest suite
+  (`test_deploy_rollback.py`, 135 s), so a commit that touches the harness adds about
+  2.5 minutes to the hook. The suites are found by name because a hand-kept list in the
+  Makefile once left `test_smoke_retry.py` out of every run;
 - `make web-lint` and `make web-test` when `frontend/` or `spec/` change;
 - the full output of each run is in `.git/pre-commit-logs/` (last 10).
 
@@ -88,10 +92,17 @@ guidance, not enforcement: the Make-owned workflow guard and the VPS/VPN, host-N
 deploy-record checks were removed in #137.
 
 `settings.json` allows `make` and read-only Git/GitHub commands, and denies reading or
-editing `.env*` and editing `design-ref/` (the read-only design handoff). The PostToolUse
+editing `.env*` and the task secret directory (`~/.config/bss/`, where the development
+secrets are: the guard only stops shell readers such as `cat`, not the Read tool), and
+editing `design-ref/` (the read-only design handoff) and `.deployed` (written only by
+`scripts/deploy.sh`). The PostToolUse
 hook `format.sh` runs ruff (Python) or prettier (frontend) on every edited file inside the
-task's containers; it strips imports that are not used yet. `.codex/patch-guard.sh` applies
-the same file denies to Codex's `apply_patch`.
+task's containers; it strips imports that are not used yet. Application code goes to the
+`tools` service and `scripts/` to `scripts-tools-fmt`; a Python file that no service mounts
+(`.claude/hooks/`) passes silently, where the hook used to report a failure on every such
+edit (`scripts/test_format_hook.py`). `.codex/patch-guard.sh` applies the same file denies
+to Codex's `apply_patch` (cases: `.codex/patch-guard-cases.txt`, run by
+`.codex/test-guard.sh` with the Codex shell cases).
 
 The second PreToolUse hook, `agent-telemetry.py`, gives usage telemetry the subagent
 identity ([telemetry-usage.md](../telemetry-usage.md#collecting-usage)). It rewrites a
@@ -186,7 +197,7 @@ cancelled by a newer push; runs on `master` never are. The workflow uses a dispo
 database password, reads no repository secret (`contents: read`), never touches the VPS, and
 pins actions to commit SHAs. The dev image is built with the Actions layer cache. A second job, `harness` (no
 Docker, 15 minutes at most), runs `make docs-links` on every pull request and push and
-`make runtime-check` (about 100 s) on pull requests that change `scripts/`, `.claude/`,
+`make runtime-check` on pull requests that change `scripts/`, `.claude/`,
 `.codex/` or the `Makefile` (a changed-files step); it is the backstop for the local commit
 hook, and the nightly full run covers the harness tests through `make test`. The web
 checks (`web-lint`, `web-test`, `web-e2e`) are not in CI. Branch protection is the human's.

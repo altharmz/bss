@@ -1,0 +1,17 @@
+# .codex/patch-guard.sh cases: <expect>\t<operation>\t<path>\t<cwd>; expect = allow|block.
+# <cwd> is relative to the repository (. = its root). Run by .codex/test-guard.sh.
+allow	Update File	app/main.py	.
+allow	Add File	docs/new.md	.
+allow	Update File	.env.example	.
+allow	Update File	frontend/src/App.tsx	.
+allow	Update File	main.py	app
+block	Update File	.env	.
+block	Add File	.env.prod	.
+block	Delete File	.env.smoke	.
+block	Update File	../.env	app
+block	Update File	app/../.env	.
+block	Update File	design-ref/design_handoff_bss_admin_v2/README.md	.
+block	Move to	design-ref/x.md	.
+block	Update File	.deployed	.
+block	Update File	~/.config/bss/tasks/issue-1-x/.env	.
+block	Add File	$CONFIG/bss/loadtest/operator-password	.
