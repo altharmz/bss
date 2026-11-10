@@ -18,7 +18,7 @@ from app.api.common import parse_id, utc
 from app.api.deps import ClockDep, Tx
 from app.api.errors import bad_request, conflict, not_found
 from app.api.inventory import order_href, product_href
-from app.api.listing import parse_page
+from app.api.listing import page_response, parse_page
 from app.api.tmfjson import TmfJSONResponse
 from app.internal.context import no_query
 from app.repository import prepaid_command_views as views
@@ -91,14 +91,12 @@ def list_prepaid_commands(request: Request, tx: Tx) -> TmfJSONResponse:
     except ValueError:
         raise bad_request("billingAccount.id must be a UUID") from None
     with tx() as conn:
-        rows, total = views.page(
+        rows, more = views.page(
             conn, account_id=account_id, state=state, offset=offset, limit=limit
         )
         linked = views.links(conn, rows)
     items = [command_body(row, linked[row["id"]]) for row in rows]
-    return TmfJSONResponse(
-        items, headers={"X-Total-Count": str(total), "X-Result-Count": str(len(items))}
-    )
+    return page_response(request, items, more, offset, limit)
 
 
 @router.get("/{command_id}")

@@ -21,7 +21,7 @@ from app.api.account import account_href
 from app.api.common import Money, Ref, TmfModel, money, parse, parse_id, utc
 from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
 from app.api.errors import bad_request, conflict, not_found, unprocessable
-from app.api.listing import parse_page
+from app.api.listing import page_response, parse_page
 from app.api.payment_method import method_href
 from app.api.tmfjson import TmfJSONResponse
 from app.internal.context import no_query
@@ -163,13 +163,11 @@ def list_card_topups(account_id: str, request: Request, tx: Tx) -> TmfJSONRespon
     offset, limit = parse_page(request)
     with tx() as conn:
         account = _account(conn, account_id)
-        rows, total = repo.page(
+        rows, more = repo.page(
             conn, account_id=account["id"], state=None, offset=offset, limit=limit
         )
     items = [command_body(row) for row in rows]
-    return TmfJSONResponse(
-        items, headers={"X-Total-Count": str(total), "X-Result-Count": str(len(items))}
-    )
+    return page_response(request, items, more, offset, limit)
 
 
 def auto_body(conn, account: Row) -> dict[str, Any]:
@@ -261,11 +259,9 @@ def list_payment_commands(request: Request, tx: Tx) -> TmfJSONResponse:
     if state is not None and state not in STATES:
         raise bad_request(f"state must be one of {', '.join(STATES)}")
     with tx() as conn:
-        rows, total = repo.page(conn, account_id=account, state=state, offset=offset, limit=limit)
+        rows, more = repo.page(conn, account_id=account, state=state, offset=offset, limit=limit)
     items = [command_body(row) for row in rows]
-    return TmfJSONResponse(
-        items, headers={"X-Total-Count": str(total), "X-Result-Count": str(len(items))}
-    )
+    return page_response(request, items, more, offset, limit)
 
 
 @router.get("/{command_id}")

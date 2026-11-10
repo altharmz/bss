@@ -133,7 +133,7 @@ export function ListState<T, R>({
   columns,
   errorTitle,
   empty,
-  total,
+  count,
   rows,
   onResetFilters,
   query,
@@ -146,7 +146,7 @@ export function ListState<T, R>({
   columns: Column[];
   errorTitle: string;
   empty: EmptyCopy;
-  total: (data: T) => number;
+  count: (data: T) => number; // rows on this page: 0 shows the empty state
   rows: (data: T) => R[];
   onResetFilters: () => void;
   children: (rows: R[], data: T) => ReactNode;
@@ -155,7 +155,7 @@ export function ListState<T, R>({
   if (resource.status === 'error') {
     return <ErrorBlock title={errorTitle} error={resource.error} onRetry={resource.retry} />;
   }
-  if (total(resource.data) === 0) return <EmptyBlock {...empty} />;
+  if (count(resource.data) === 0) return <EmptyBlock {...empty} />;
   const visible = rows(resource.data);
   if (visible.length === 0)
     return <NoResults onReset={onResetFilters} query={query} filters={filters} />;

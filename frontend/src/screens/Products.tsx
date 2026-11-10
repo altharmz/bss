@@ -147,7 +147,7 @@ export function ProductsScreen() {
             title: 'No products',
             text: 'Products appear here once an order adds one.',
           }}
-          total={(data) => data.length}
+          count={(data) => data.length}
           rows={(data) =>
             data.filter(
               (p) =>

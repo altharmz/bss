@@ -143,7 +143,7 @@ export function PrepaidCommandsScreen() {
             title: 'No prepaid commands',
             text: 'Prepaid orders, renewals and transfers appear here once they are accepted.',
           }}
-          total={(data) => data.total}
+          count={(data) => data.items.length}
           rows={(data) => data.items}
           onResetFilters={reset}
         >
@@ -189,7 +189,7 @@ export function PrepaidCommandsScreen() {
                 />
               ))}
               <TableFooter
-                left={`Showing ${formatInt(offset + 1)}–${formatInt(offset + rows.length)} of ${formatInt(data.total)}`}
+                left={`Showing ${formatInt(offset + 1)}–${formatInt(offset + rows.length)}`}
                 right={
                   <span className="bss-toolbar">
                     <Button
@@ -203,7 +203,7 @@ export function PrepaidCommandsScreen() {
                     <Button
                       small
                       data-ui="ui.prepaidCommands.next"
-                      disabled={offset + COMMAND_PAGE >= data.total}
+                      disabled={!data.more}
                       onClick={() => setOffset(offset + COMMAND_PAGE)}
                     >
                       Next

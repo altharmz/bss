@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 
 from app.repository import prepaid_commands as commands
 from app.worker import db as worker_db
-from tests.apiclient import decimals
+from tests.apiclient import decimals, total
 from tests.factories import NOW
 from tests.test_prepaid_dispatch import dispatch
 from tests.test_prepaid_orders import purchase, shop
@@ -68,11 +68,11 @@ def test_a_completed_order_command_with_its_links_and_filters(api, db_conn):
     assert [b["id"] for b in body["bills"]] == bills and len(bills) == 2
 
     listed = api.get(f"{BASE}?billingAccount.id={acc['id']}")
-    assert listed.status_code == 200 and listed.headers["X-Total-Count"] == "1"
+    assert listed.status_code == 200 and total(listed, api) == "1"
     assert listed.json() == [body]
     assert api.get(f"{BASE}?state=failedTechnical").json() == []
     empty = api.get(f"{BASE}?billingAccount.id={uuid4()}")
-    assert empty.json() == [] and empty.headers["X-Total-Count"] == "0"
+    assert empty.json() == [] and total(empty, api) == "0"
 
 
 def test_paging_newest_first_and_query_errors(api, db_conn):
@@ -88,7 +88,7 @@ def test_paging_newest_first_and_query_errors(api, db_conn):
     )
     db_conn.commit()
     page = api.get(f"{BASE}?limit=1")
-    assert page.headers["X-Total-Count"] == "2" and page.headers["X-Result-Count"] == "1"
+    assert total(page, api) == "2" and page.headers["X-Result-Count"] == "1"
     assert [c["id"] for c in page.json()] == [str(second["id"])]
     assert [c["id"] for c in api.get(f"{BASE}?offset=1").json()] == [str(first["id"])]
     for query in (

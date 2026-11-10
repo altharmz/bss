@@ -3,6 +3,7 @@
 import pytest
 
 from tests import apidata
+from tests.apiclient import total
 
 BASE = "/tmf-api/accountManagement/v5/billingCycleSpecification"
 
@@ -10,7 +11,7 @@ BASE = "/tmf-api/accountManagement/v5/billingCycleSpecification"
 def test_monthly_policy_is_discoverable_and_accounts_link_to_it(api):
     response = api.get(BASE)
     assert response.status_code == 200
-    assert response.headers["X-Total-Count"] == "1"
+    assert total(response, api) == "1"
     assert response.headers["X-Result-Count"] == "1"
     [policy] = response.json()
     assert policy["id"] == "monthly"
@@ -33,11 +34,11 @@ def test_monthly_policy_is_discoverable_and_accounts_link_to_it(api):
 def test_cycle_policy_paging_filtering_and_projection(api):
     page = api.get(f"{BASE}?offset=1&limit=1")
     assert page.json() == []
-    assert page.headers["X-Total-Count"] == "1"
+    assert total(page, api) == "1"
     assert page.headers["X-Result-Count"] == "0"
     missing = api.get(f"{BASE}?frequency=weekly")
     assert missing.json() == []
-    assert missing.headers["X-Total-Count"] == "0"
+    assert total(missing, api) == "0"
     projected = api.get(f"{BASE}?frequency=monthly&billingPeriod=monthly&fields=frequency")
     [policy] = projected.json()
     assert set(policy) == {"id", "href", "@type", "frequency"}

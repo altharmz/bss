@@ -205,22 +205,20 @@ _FILTERS = {
 
 def audit_page(
     conn: psycopg.Connection, where: dict[str, Any], offset: int, limit: int
-) -> tuple[list[Row], int]:
+) -> tuple[list[Row], bool]:
     conditions = sql.SQL(" AND ").join(
         sql.SQL("{} = %s").format(sql.Identifier(_FILTERS[key])) for key in where
     )
     clause = sql.SQL(" WHERE ") + conditions if where else sql.SQL("")
     params = list(where.values())
-    total = fetch_one(conn, sql.SQL("SELECT count(*) AS n FROM account_audit") + clause, params)
-    assert total is not None
     rows = fetch_all(
         conn,
         sql.SQL("SELECT * FROM account_audit")
         + clause
         + sql.SQL(" ORDER BY at DESC, seq DESC OFFSET %s LIMIT %s"),
-        [*params, offset, limit],
+        [*params, offset, limit + 1],
     )
-    return rows, total["n"]
+    return rows[:limit], len(rows) > limit
 
 
 def audit_since(conn: psycopg.Connection, since: datetime) -> list[Row]:

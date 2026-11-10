@@ -194,17 +194,15 @@ export async function getJson<T>(path: string, signal?: AbortSignal): Promise<T>
 
 export interface Page<T> {
   items: T[];
-  total: number; // X-Total-Count: all matching rows, not just this page
+  // Whether rows follow this page: the app sends `Link: <...>; rel="next"`. Lists carry no
+  // total (#312, decided 2026-11-10), so screens page with Next/Previous only.
+  more: boolean;
 }
 
 export async function getPage<T>(path: string, signal?: AbortSignal): Promise<Page<T>> {
   const response = await request('GET', path, signal ? { signal } : {});
-  const header = response.headers.get('X-Total-Count');
-  const total = header === null || header.trim() === '' ? Number.NaN : Number(header);
-  if (!Number.isSafeInteger(total) || total < 0) {
-    throw new ApiError('GET', path, response.status, 'missing X-Total-Count');
-  }
-  return { items: (await response.json()) as T[], total };
+  const more = /;\s*rel="next"/.test(response.headers.get('Link') ?? '');
+  return { items: (await response.json()) as T[], more };
 }
 
 /** Every row of a paged list, 100 at a time. Stops at MAX_PAGES rather than loop on a
@@ -217,7 +215,7 @@ export async function getAll<T>(path: string, signal?: AbortSignal): Promise<T[]
   for (let page = 0; page < MAX_PAGES; page++) {
     const result = await getPage<T>(`${path}${join}offset=${items.length}&limit=100`, signal);
     items.push(...result.items);
-    if (result.items.length === 0 || items.length >= result.total) return items;
+    if (result.items.length === 0 || !result.more) return items;
   }
   throw new ApiError('GET', path, 200, `more than ${MAX_PAGES * 100} rows`);
 }

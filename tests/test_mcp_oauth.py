@@ -14,6 +14,7 @@ import pytest
 
 from bss_mcp.operations import OPERATIONS
 from bss_mcp.passwords import hash_password
+from tests.apiclient import total
 
 PASSWORD = "correct horse battery"
 USERS = {"demo": PASSWORD, "ops": "another password!"}
@@ -216,7 +217,7 @@ def test_read_consent_gives_a_read_token(api, oauth):
     assert all(t["annotations"]["readOnlyHint"] for t in listed.values())
     response = oauth.call(issued["access_token"], "create_individual", {"body": GIVEN})
     assert response.status_code == 403
-    assert int(api.get("/tmf-api/partyManagement/v5/individual").headers["x-total-count"]) == 0
+    assert int(total(api.get("/tmf-api/partyManagement/v5/individual"), api)) == 0
 
 
 def test_a_client_asking_for_read_cannot_be_given_write(oauth):

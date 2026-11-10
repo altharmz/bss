@@ -23,7 +23,7 @@ export const ORDER_STATES: OrderState[] = [
 ];
 export const ORDER_PAGE = 50;
 
-/** One page of orders; `total` is every matching row (X-Total-Count). */
+/** One page of orders, newest first; `more` says whether older ones follow. */
 export function loadOrderPage(
   filter: { state: OrderState | null; account: string | null },
   offset: number,
@@ -38,28 +38,13 @@ export function loadOrderPage(
   return getPage<Order>(`${PATHS.orders}?${query.join('&')}`, signal);
 }
 
-/** Offset counts displayed newest rows, while the API serves oldest first. */
-export async function loadNewestOrderPage(
+/** The API serves orders newest first (#312), so the newest page is the first page. */
+export function loadNewestOrderPage(
   filter: { state: OrderState | null; account: string | null },
   offset: number,
   signal: AbortSignal,
 ) {
-  const query = [
-    ...(filter.account !== null ? [`billingAccount.id=${filter.account}`] : []),
-    ...(filter.state !== null ? [`state=${filter.state}`] : []),
-  ];
-  const prefix = query.length ? `${query.join('&')}&` : '';
-  const { total } = await getPage<Order>(
-    `${PATHS.orders}?${prefix}offset=0&limit=1&fields=id`,
-    signal,
-  );
-  const limit = Math.min(ORDER_PAGE, Math.max(0, total - offset));
-  if (limit === 0) return { items: [], total };
-  const page = await getPage<Order>(
-    `${PATHS.orders}?${prefix}offset=${Math.max(0, total - offset - ORDER_PAGE)}&limit=${limit}`,
-    signal,
-  );
-  return { items: [...page.items].reverse(), total: page.total };
+  return loadOrderPage(filter, offset, signal);
 }
 
 export function loadOrder(id: string) {

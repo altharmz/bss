@@ -7,6 +7,7 @@ import psycopg
 import pytest
 
 from app.api.classification import CategoryPatch, save
+from tests.apiclient import total
 from tests.test_api_catalog import BASE, NIL, make_offering
 from tests.timeline import START, iso
 
@@ -106,7 +107,7 @@ def test_organization_validation_fields_and_lifecycle(api, path, typ, links):
     assert api.delete(path).status_code == 405
     assert api.get(f"{path}?unknown=1").status_code == 400
     assert api.post(f"{path}?unknown=1", {"name": "x"}).status_code == 400
-    assert api.get(f"{path}?name=x&fields=name&limit=1").headers["X-Total-Count"] == "1"
+    assert total(api.get(f"{path}?name=x&fields=name&limit=1"), api) == "1"
     assert api.get(f"{path}?offset=1").json() == []
     assert api.get(f"{path}?fields=unknown").status_code == 400
 

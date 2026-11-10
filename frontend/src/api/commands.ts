@@ -31,7 +31,7 @@ export type CommandState = PrepaidCommand['state'];
 export const COMMAND_STATES: CommandState[] = ['pending', 'completed', 'failedTechnical'];
 export const COMMAND_PAGE = 50;
 
-/** One page of the journal, newest first as served; `total` is every matching row. */
+/** One page of the journal, newest first as served; `more` says whether rows follow. */
 export function loadCommandPage(
   filter: { state: CommandState | null; account: string | null },
   offset: number,
@@ -46,10 +46,11 @@ export function loadCommandPage(
   return getPage<PrepaidCommand>(`${COMMANDS}?${query.join('&')}`, signal);
 }
 
-/** The sidebar badge: how many commands wait for an operator (failedTechnical). */
+/** The sidebar badge: whether any command waits for an operator (failedTechnical). One row
+ * is enough; lists carry no total (#312). */
 export function countFailedCommands(signal: AbortSignal): Promise<number> {
   return getPage<PrepaidCommand>(`${COMMANDS}?state=failedTechnical&limit=1`, signal).then(
-    (page) => page.total,
+    (page) => page.items.length,
   );
 }
 

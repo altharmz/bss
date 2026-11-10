@@ -6,7 +6,7 @@ import pytest
 
 from app.api import payment as payment_api
 from tests import apidata
-from tests.apiclient import decimals
+from tests.apiclient import decimals, total
 from tests.apidata import NIL, PAYMENT
 from tests.timeline import NOW, z
 
@@ -176,7 +176,7 @@ def test_payment_list_filters(api):
     apidata.payment(api, ivan, 200)
     apidata.payment(api, anna, 300)
     listed = api.get(f"{PAYMENT}?account.id={ivan['id']}")
-    assert listed.headers["X-Total-Count"] == "2"
+    assert total(listed, api) == "2"
     values = [p["totalAmount"]["value"] for p in decimals(listed)]
     assert values == [Decimal("100.00"), Decimal("200.00")]
     assert len(api.get(f"{PAYMENT}?status=done").json()) == 3

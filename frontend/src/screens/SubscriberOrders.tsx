@@ -19,7 +19,7 @@ async function loadOrders(account: string, signal: AbortSignal) {
         const page = await loadOrderPage({ account, state }, offset, signal);
         items.push(...page.items);
         offset += page.items.length;
-        if (offset >= page.total || page.items.length === 0) return items;
+        if (!page.more || page.items.length === 0) return items;
       }
     }),
   );
@@ -89,7 +89,7 @@ export function SubscriberOrders({
               title: 'No draft or in-progress orders.',
               text: 'Saved drafts and accepted orders appear here.',
             }}
-            total={(data) => data.length}
+            count={(data) => data.length}
             rows={(data) => data}
             onResetFilters={() => {}}
           >

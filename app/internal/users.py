@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from app.api.common import parse
 from app.api.deps import ClockDep, JsonBody, Tx
 from app.api.errors import TmfError, conflict, not_found, unprocessable
+from app.api.listing import page_response, parse_page, split_page
 from app.api.tmfjson import TmfJSONResponse
 from app.auth import COOKIE, CSRF_HEADER, digest, require_admin
 from app.config import settings
@@ -223,14 +224,19 @@ def change_password(request: Request, body: JsonBody, tx: Tx, clock: ClockDep):
 
 @router.get("/users", dependencies=[Depends(require_admin)])
 def list_users(request: Request, tx: Tx):
-    no_query(request)
+    offset, limit = parse_page(request)
     with tx() as conn:
-        users = (
+        users, more = split_page(
             conn.cursor(row_factory=dict_row)
-            .execute("SELECT * FROM app_user ORDER BY username")
-            .fetchall()
+            .execute(
+                "SELECT * FROM app_user ORDER BY username OFFSET %s LIMIT %s", (offset, limit + 1)
+            )
+            .fetchall(),
+            limit,
         )
-    return TmfJSONResponse([view(user) for user in users], headers={"Cache-Control": "no-store"})
+    response = page_response(request, [view(user) for user in users], more, offset, limit)
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @router.post("/users", dependencies=[Depends(require_admin)])

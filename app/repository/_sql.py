@@ -131,10 +131,13 @@ def select_page(
     where: dict[str, Any],
     offset: int,
     limit: int,
-) -> tuple[list[Row], int]:
+    newest_first: bool = False,
+) -> tuple[list[Row], bool]:
     """One page of `table` matching every `column = value` in `where` (a value may also
-    be IS_NULL or NOT_NULL), plus the total number of matching rows. Ordered by creation,
-    so pages are stable (the `(created_at, id)` indexes of migration 0070 serve it).
+    be IS_NULL or NOT_NULL), and whether more rows follow it: no total is counted (#312;
+    it reads limit + 1 rows). Ordered by creation,
+    so pages are stable (the `(created_at, id)` indexes of migration 0070 serve it, read
+    backwards for `newest_first`).
 
     `table` and the column names are identifiers chosen by the caller's code, never user
     input. Values are compared with the column's own type, so the filter indexes apply
@@ -155,7 +158,7 @@ def select_page(
             data_type, udt = types.get(column, ("text", "text"))
             labels = _enum_labels(conn, udt) if data_type == "USER-DEFINED" else None
             if labels is not None and value not in labels:
-                return [], 0
+                return [], False
             typed = labels is not None or data_type in TEXT_TYPES
             conds.append(sql.SQL("{} = %s" if typed else "{}::text = %s").format(ident))
             params.append(value)
@@ -164,16 +167,18 @@ def select_page(
             params.append(value)
     clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conds) if conds else sql.SQL("")
     ident = sql.Identifier(table)
-    total = fetch_one(conn, sql.SQL("SELECT count(*) AS n FROM {}").format(ident) + clause, params)
     rows = fetch_all(
         conn,
         sql.SQL("SELECT * FROM {}").format(ident)
         + clause
-        + sql.SQL(" ORDER BY created_at, id OFFSET %s LIMIT %s"),
-        [*params, offset, limit],
+        + sql.SQL(
+            " ORDER BY created_at DESC, id DESC OFFSET %s LIMIT %s"
+            if newest_first
+            else " ORDER BY created_at, id OFFSET %s LIMIT %s"
+        ),
+        [*params, offset, limit + 1],
     )
-    assert total is not None
-    return rows, total["n"]
+    return rows[:limit], len(rows) > limit
 
 
 def count_references(

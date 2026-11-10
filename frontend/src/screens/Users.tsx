@@ -60,7 +60,7 @@ function UsersList() {
           columns={columns}
           errorTitle="Failed to load users"
           empty={{ title: 'No users', text: 'Create a user to grant access.' }}
-          total={(data) => data.length}
+          count={(data) => data.length}
           rows={(data) => data}
           onResetFilters={() => {}}
         >

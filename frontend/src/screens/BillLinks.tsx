@@ -110,7 +110,7 @@ function Rates({ billId }: { billId: string }) {
         columns={RATE_COLUMNS}
         errorTitle="Failed to load rates"
         empty={{ title: 'No rates', text: 'This bill has no applied rates.' }}
-        total={(data) => data.length}
+        count={(data) => data.length}
         rows={(data) => data}
         onResetFilters={() => {}}
       >

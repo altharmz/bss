@@ -10,7 +10,7 @@ from fastapi import APIRouter, Request
 from app.api.common import utc
 from app.api.deps import Tx
 from app.api.errors import bad_request
-from app.api.listing import parse_page
+from app.api.listing import page_response, parse_page
 from app.api.tmfjson import TmfJSONResponse
 from app.events.types import BASES
 from app.repository import hubs
@@ -60,8 +60,6 @@ def list_event_subscriptions(request: Request, tx: Tx) -> TmfJSONResponse:
     if api is not None and api not in BASES:
         raise bad_request(f"api must be one of {', '.join(sorted(BASES))}")
     with tx() as conn:
-        rows, total = hubs.page(conn, api=api, offset=offset, limit=limit)
+        rows, more = hubs.page(conn, api=api, offset=offset, limit=limit)
     items = [subscription_body(row) for row in rows]
-    return TmfJSONResponse(
-        items, headers={"X-Total-Count": str(total), "X-Result-Count": str(len(items))}
-    )
+    return page_response(request, items, more, offset, limit)

@@ -33,7 +33,7 @@ def get(conn: psycopg.Connection, kind: Kind, job_id: UUID) -> Row | None:
 
 def page(
     conn: psycopg.Connection, kind: Kind, *, where: dict[str, Any], offset: int, limit: int
-) -> tuple[list[Row], int]:
+) -> tuple[list[Row], bool]:
     return select_page(
         conn, "catalog_job", where={"kind": kind, **where}, offset=offset, limit=limit
     )

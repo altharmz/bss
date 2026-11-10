@@ -237,8 +237,9 @@ class TmfClient:
             f"{method} {spec_path} answered {response.status_code}, spec declares {declared}"
         )
         if isinstance(body, list):
-            if path != INTERNAL_BASE + "/users":
-                assert "X-Total-Count" in response.headers and "X-Result-Count" in response.headers
+            # lists page without counts (#312): X-Result-Count, never X-Total-Count
+            assert "X-Result-Count" in response.headers, f"list without X-Result-Count: {path}"
+            assert "X-Total-Count" not in response.headers, f"a list counted its rows: {path}"
             for item in body:
                 self._validate(api, schema, item, partial)
         else:
@@ -302,3 +303,19 @@ class TmfClient:
         # outside every API (unknown route): only an error can come back; any spec's
         # Error schema will do
         return "TMF620", None, None, path
+
+
+def total(response: Response, client: Any) -> str:
+    """Every row a list matches, as the old X-Total-Count header said it: the rows before
+    this page (its offset), this page, and every page after it, followed through
+    `Link: rel="next"` with `client`. Tests only: the app counts nothing (#312)."""
+    from urllib.parse import parse_qs, urlsplit
+
+    query = parse_qs(urlsplit(str(response.request.url)).query)
+    count = int(query.get("offset", ["0"])[0]) + int(response.headers["X-Result-Count"])
+    page = response
+    while 'rel="next"' in page.headers.get("Link", ""):
+        target = page.headers["Link"].split(">")[0].lstrip("<")
+        page = client.get(target)
+        count += int(page.headers["X-Result-Count"])
+    return str(count)

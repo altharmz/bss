@@ -115,7 +115,7 @@ export function PortRequestsScreen() {
             title: 'No port requests yet',
             text: 'A port-in is created from Add product; a port-out arrives from the carrier.',
           }}
-          total={(data) => data.length}
+          count={(data) => data.length}
           rows={(data) => data}
           onResetFilters={() => {
             setNumber('');

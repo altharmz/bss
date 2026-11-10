@@ -165,7 +165,7 @@ fraction anywhere in the arguments is refused: an MCP client's JSON parser turns
 into binary floats, and an amount must never pass through one. The string becomes an
 exact JSON number on its way to the app.
 
-The answer is the app's: `{"status", "totalCount"/"resultCount" (lists), "body"}`, amounts
+The answer is the app's: `{"status", "resultCount"/"hasMore" (lists: no total is counted, #312; `hasMore` comes from the app's `Link: rel="next"`), "body"}`, amounts
 exact. A 4xx/5xx from the app is a tool error (`isError`), not an MCP error.
 
 ## Client setup

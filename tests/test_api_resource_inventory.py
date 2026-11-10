@@ -6,6 +6,7 @@ from uuid import uuid4
 import pytest
 
 from app.config import settings
+from tests.apiclient import total
 from tests.factories import world
 from tests.test_events import stored, subscribe
 from tests.test_number_persistence import assignment
@@ -212,10 +213,10 @@ def test_fields_filters_and_pagination(api):
         result = api.get(URL + f"?{field}={value}")
         assert result.status_code == 200, result.text
         assert result.json() == expected
-        assert int(result.headers["X-Total-Count"]) == len(expected)
+        assert int(total(result, api)) == len(expected)
     response = api.get(URL + "?offset=1&limit=1&fields=value")
     assert response.json() == [{key: ordered[1][key] for key in ("id", "href", "@type", "value")}]
-    assert response.headers["X-Total-Count"] == "3"
+    assert total(response, api) == "3"
     assert response.headers["X-Result-Count"] == "1"
     assert set(api.get(first["href"] + "?fields=value").json()) == {"id", "href", "@type", "value"}
     for query in (
@@ -254,7 +255,7 @@ def test_effective_dates_quarantine_future_claims_and_retained_history(api, db_c
     ]:
         api.clock.set(midnight(date))
         response = api.get(URL + f"?allocationStatus={state}&limit=1")
-        assert response.headers["X-Total-Count"] == "1", response.text
+        assert total(response, api) == "1", response.text
         assert response.json()[0] == api.get(created["href"]).json()
     assert api.delete(created["href"]).status_code == 409
     db_conn.execute(

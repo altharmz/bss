@@ -142,9 +142,9 @@ def list_payment_methods(request: Request, tx: Tx) -> TmfJSONResponse:
         attributes=ATTRIBUTES,
     )
     with tx() as conn:
-        rows, total = repo.page(conn, query.where, query.offset, query.limit)
+        rows, more = repo.page(conn, query.where, query.offset, query.limit)
         items = [method_body(conn, row) for row in rows]
-    return listing.list_response(items, total, query)
+    return listing.list_response(items, more, query)
 
 
 @router.get(f"/{RESOURCE}/{{method_id}}")

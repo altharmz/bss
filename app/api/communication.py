@@ -204,9 +204,9 @@ FILTERS = {
 def list_communication_messages(request: Request, tx: Tx) -> TmfJSONResponse:
     query = listing.parse_list_query(request, filters=FILTERS, attributes=ATTRIBUTES)
     with tx() as conn:
-        rows, total = repo.page(conn, query.where, query.offset, query.limit)
+        rows, more = repo.page(conn, query.where, query.offset, query.limit)
         bodies = [message_body(conn, row) for row in rows]
-    return listing.list_response(bodies, total, query)
+    return listing.list_response(bodies, more, query)
 
 
 @router.get(f"/{RESOURCE}/{{message_id}}")

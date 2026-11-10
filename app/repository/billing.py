@@ -230,18 +230,16 @@ _RUN_VIEW = """
 
 def page_runs(
     conn: psycopg.Connection, *, offset: int, limit: int, tz: str | None = None
-) -> tuple[list[Row], int]:
+) -> tuple[list[Row], bool]:
     """Runs newest first, each with its member count (accounts opened before 00:00 of its
     date), its outcome counts and whether it is the latest - derived, not stored."""
     rows = fetch_all(
         conn,
         _RUN_VIEW
         + " WHERE r.kind = 'daily' ORDER BY r.run_date DESC OFFSET %(offset)s LIMIT %(limit)s",
-        {"tz": tz or settings.billing_tz, "offset": offset, "limit": limit},
+        {"tz": tz or settings.billing_tz, "offset": offset, "limit": limit + 1},
     )
-    total = fetch_one(conn, "SELECT count(*) AS n FROM billing_run WHERE kind = 'daily'")
-    assert total is not None
-    return rows, total["n"]
+    return rows[:limit], len(rows) > limit
 
 
 def run_view(conn: psycopg.Connection, run_id: UUID, tz: str | None = None) -> Row | None:
@@ -272,10 +270,10 @@ def run_charges(conn: psycopg.Connection, run_ids: list[UUID]) -> dict[UUID, lis
 
 def page_run_outcomes(
     conn: psycopg.Connection, run_id: UUID, *, status: str | None, offset: int, limit: int
-) -> tuple[list[Row], int]:
+) -> tuple[list[Row], bool]:
     """A run's per-account outcomes (optionally of one status), with the account's name
     and the date a blocked row waits for; in account id order."""
-    params = {"run": run_id, "status": status, "offset": offset, "limit": limit}
+    params = {"run": run_id, "status": status, "offset": offset, "limit": limit + 1}
     rows = fetch_all(
         conn,
         """
@@ -289,17 +287,7 @@ def page_run_outcomes(
         """,
         params,
     )
-    total = fetch_one(
-        conn,
-        """
-        SELECT count(*) AS n FROM billing_run_account o
-         WHERE o.run_id = %(run)s
-           AND (%(status)s::text IS NULL OR o.status::text = %(status)s)
-        """,
-        params,
-    )
-    assert total is not None
-    return rows, total["n"]
+    return rows[:limit], len(rows) > limit
 
 
 def touch_run(conn: psycopg.Connection, run_id: UUID, now: datetime) -> None:
@@ -670,7 +658,7 @@ def get_abr(conn: psycopg.Connection, abr_id: UUID) -> Row | None:
 
 def page_abrs(
     conn: psycopg.Connection, *, where: dict[str, Any], offset: int, limit: int
-) -> tuple[list[Row], int]:
+) -> tuple[list[Row], bool]:
     return select_page(
         conn, "applied_customer_billing_rate", where=where, offset=offset, limit=limit
     )
@@ -682,7 +670,7 @@ def get_bill(conn: psycopg.Connection, bill_id: UUID) -> Row | None:
 
 def page_bills(
     conn: psycopg.Connection, *, where: dict[str, Any], offset: int, limit: int
-) -> tuple[list[Row], int]:
+) -> tuple[list[Row], bool]:
     return select_page(conn, "customer_bill", where=where, offset=offset, limit=limit)
 
 
@@ -1434,7 +1422,7 @@ def bill_state_history(conn: psycopg.Connection, bill_id: UUID) -> list[Row]:
 
 def page_account_charges(
     conn: psycopg.Connection, account_id: UUID, *, offset: int, limit: int
-) -> tuple[list[Row], int]:
+) -> tuple[list[Row], bool]:
     """The account's ABRs, newest run first, with the run date and the offering."""
     rows = fetch_all(
         conn,
@@ -1450,15 +1438,9 @@ def page_account_charges(
         ORDER BY r.run_date DESC, lower(a.period) DESC, a.charge_type, a.id DESC
         OFFSET %s LIMIT %s
         """,
-        (account_id, offset, limit),
+        (account_id, offset, limit + 1),
     )
-    total = fetch_one(
-        conn,
-        "SELECT count(*) AS n FROM applied_customer_billing_rate WHERE billing_account_id = %s",
-        (account_id,),
-    )
-    assert total is not None
-    return rows, total["n"]
+    return rows[:limit], len(rows) > limit
 
 
 # The balance-action arms of the transaction ledger (the four entries of
@@ -1488,20 +1470,11 @@ BALANCE_ACTION_ARMS = """
             WHERE a.billing_account_id = %(account)s
               AND a.kind = 'transfer' AND a.status = 'completed'
 """
-BALANCE_ACTION_COUNT = """
-    SELECT (SELECT count(*) FROM balance_action WHERE billing_account_id = %(account)s
-            AND kind = 'adjustment' AND status IN ('completed', 'cancelled'))
-         + (SELECT count(*) FROM balance_action_reversal WHERE billing_account_id = %(account)s)
-         + (SELECT count(*) FROM balance_action WHERE kind = 'transfer' AND status = 'completed'
-            AND receiver_billing_account_id = %(account)s)
-         + (SELECT count(*) FROM balance_action WHERE kind = 'transfer' AND status = 'completed'
-            AND billing_account_id = %(account)s)
-"""
 
 
 def page_account_transactions(
     conn: psycopg.Connection, account_id: UUID, *, tz: str, offset: int, limit: int
-) -> tuple[list[Row], int]:
+) -> tuple[list[Row], bool]:
     """Charges, refunds and payments as one ledger with the running balance after each
     entry, newest first. Signs as in accountBalance: positive = credit to the customer
     (a charge is -amount, a refund - stored negative - is +|amount|, a payment +amount;
@@ -1547,21 +1520,6 @@ def page_account_transactions(
         ORDER BY day DESC, rank DESC, at DESC, (kind = 'payout') DESC, id DESC
         OFFSET %(offset)s LIMIT %(limit)s
         """.replace("--ARMS--", arms),
-        {"account": account_id, "tz": tz, "fee": FEE_NAME, "offset": offset, "limit": limit},
+        {"account": account_id, "tz": tz, "fee": FEE_NAME, "offset": offset, "limit": limit + 1},
     )
-    total = fetch_one(
-        conn,
-        """
-        SELECT (SELECT count(*) FROM applied_customer_billing_rate
-                WHERE billing_account_id = %(account)s)
-             + (SELECT count(*) FROM payment
-                WHERE billing_account_id = %(account)s AND status = 'done')
-             + (SELECT count(*) FROM refund WHERE billing_account_id = %(account)s) AS n
-        """,
-        {"account": account_id},
-    )
-    assert total is not None
-    n = total["n"]
-    if arms:
-        n += conn.execute(BALANCE_ACTION_COUNT, {"account": account_id}).fetchone()[0]
-    return rows, n
+    return rows[:limit], len(rows) > limit

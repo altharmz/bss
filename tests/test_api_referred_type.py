@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 
 from tests import apidata, timeline
+from tests.apiclient import total
 from tests.apidata import ACCOUNT, CATALOG, CUSTOMER, ORDER, PAYMENT
 
 # orders: the day the catalog's prices start (as in test_api_ordering.py)
@@ -16,7 +17,7 @@ OPEN = timeline.START + timedelta(hours=9)
 
 
 def _count(api, url: str) -> int:
-    return int(api.get(f"{url}?limit=1").headers["X-Total-Count"])
+    return int(total(api.get(f"{url}?limit=1"), api))
 
 
 def _refused(api, url: str, body: dict[str, Any], field: str, expected: str) -> None:

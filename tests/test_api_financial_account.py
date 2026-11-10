@@ -7,7 +7,7 @@ import pytest
 from psycopg import errors
 
 from tests import apidata
-from tests.apiclient import decimals
+from tests.apiclient import decimals, total
 from tests.apidata import ACCOUNT, NIL, PARTY
 
 FINANCIAL = "/tmf-api/accountManagement/v5/financialAccount"
@@ -271,7 +271,7 @@ def test_list_filters_fields_and_not_found(api):
     assert len(api.get(f"{FINANCIAL}?accountType=Business").json()) == 1
     assert len(api.get(f"{FINANCIAL}?name=Personal").json()) == 1
     response = api.get(f"{FINANCIAL}?fields=name&limit=1")
-    assert response.headers["X-Total-Count"] == "2"
+    assert total(response, api) == "2"
     assert set(response.json()[0]) == {"id", "href", "@type", "name"}
     response = api.post(f"{FINANCIAL}?fields=state", {"name": "x", "relatedParty": [owner(org)]})
     assert set(response.json()) == {"id", "href", "@type", "state"}

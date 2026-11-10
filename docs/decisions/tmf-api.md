@@ -880,7 +880,8 @@ implemented; order processing lives in `app/ordering/`.
   outgoing dates are midnight in `BILLING_TZ`.
 - **Lists:** `offset` (default 0), `limit` (default 20, max 100; above the max is a 400),
   ordered by creation. Always 200 - none of the vendored specs declares 206 for a list.
-  `X-Total-Count` = all matching rows, `X-Result-Count` = rows in this response.
+  `X-Total-Count` = all matching rows, `X-Result-Count` = rows in this response. (Since
+  #312: no `X-Total-Count`; `Link: rel="next"` while more rows follow, see below.)
   `fields=` selects top-level attributes (`id`, `href`, `@type` always); an unknown name
   is a 400. Filters are equality only, on the attributes listed per resource; any other
   query parameter is a 400.
@@ -1062,7 +1063,7 @@ allocates `amount + taxAmount`, which `totalAmount` (if sent) must equal
 
 ## List paging and filters (2026-11-09, #286)
 
-- **`X-Total-Count` stays exact** (TMF630; the UI requires it). It is kept cheap by indexes,
+- **Superseded by #312 (2026-11-10): no counts.** ~~`X-Total-Count` stays exact~~ (TMF630; the UI requires it). It is kept cheap by indexes,
   and for productUsage by requiring a line (docs/decisions/usage.md), not by estimates.
 - **Offset paging stays** (`offset` / `limit`). Every list pages `ORDER BY created_at, id`,
   served by a `(created_at, id)` index on each table that grows with subscribers
@@ -1070,7 +1071,28 @@ allocates `amount + taxAmount`, which `totalAmount` (if sent) must equal
 - **Typed filters.** `select_page` compares each value with the column's own type, so the
   filter indexes apply. A string for an enum column is checked against the enum's labels
   (loaded once per process). One that is no label answers an empty page with
-  `X-Total-Count: 0` and no query, as before ("an unknown value matches nothing").
+  no rows and no query, as before ("an unknown value matches nothing").
 - **Filter indexes by rule:** a reference (`*_id`) filter without an index gets a btree, as
   does a name filter; status/state filters get none (low selectivity). Each list's filters
   and the index serving them are listed in the PR of #286.
+
+## Lists without counts (2026-11-10, #312)
+
+Decided by the human: no list counts its rows. A deliberate deviation from TMF630's
+`X-Total-Count`: at 100k subscribers an exact count re-reads the matching rows on every
+page request, and grows with every month of history.
+
+- **Every list** (TMF, internal, MCP) reads `limit + 1` rows and answers `limit`, with
+  `X-Result-Count` and, while more rows follow, `Link: <the same request, offset +
+  limit>; rel="next"` (RFC 8288). No response carries `X-Total-Count`.
+- **Every list takes `offset` / `limit`** (default 20, maximum 100). The lists that used
+  to return everything now page as well: an account's open products, a product's
+  devices and port PINs, SIM batches, users.
+- **productOrder and cancelProductOrder are listed newest first**
+  (`ORDER BY created_at DESC, id DESC`, decided by the human). TMF622 does not specify an
+  order, and without a count the UI could no longer read them from the end. Every other
+  list stays oldest first.
+- **The UI** pages with Previous/Next and shows no "of N". **MCP** list tools return
+  `resultCount` and `hasMore`.
+- **Screens** that still fetch a whole list of a growing table are a follow-up issue
+  (#312's decision 3; see that issue).

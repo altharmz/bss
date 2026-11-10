@@ -334,10 +334,10 @@ def list_specifications(request: Request, tx: Tx) -> TmfJSONResponse:
         attributes=SPEC_ATTRIBUTES,
     )
     with tx() as conn:
-        rows, total = catalog.list_product_specifications(
+        rows, more = catalog.list_product_specifications(
             conn, where=query.where, offset=query.offset, limit=query.limit
         )
-    return listing.list_response([specification_body(row) for row in rows], total, query)
+    return listing.list_response([specification_body(row) for row in rows], more, query)
 
 
 @router.get("/productSpecification/{spec_id}")
@@ -550,10 +550,10 @@ def list_prices(request: Request, tx: Tx) -> TmfJSONResponse:
         attributes=PRICE_ATTRIBUTES,
     )
     with tx() as conn:
-        rows, total = catalog.list_product_offering_prices(
+        rows, more = catalog.list_product_offering_prices(
             conn, where=query.where, offset=query.offset, limit=query.limit
         )
-    return listing.list_response([price_body(row) for row in rows], total, query)
+    return listing.list_response([price_body(row) for row in rows], more, query)
 
 
 @router.get("/productOfferingPrice/{price_id}")
@@ -1124,11 +1124,11 @@ def list_offerings(request: Request, tx: Tx) -> TmfJSONResponse:
         attributes=OFFERING_ATTRIBUTES,
     )
     with tx() as conn:
-        rows, total = catalog.list_product_offerings(
+        rows, more = catalog.list_product_offerings(
             conn, where=query.where, offset=query.offset, limit=query.limit
         )
         items = [offering_body(conn, row) for row in rows]
-    return listing.list_response(items, total, query)
+    return listing.list_response(items, more, query)
 
 
 @router.get("/productOffering/{offering_id}")

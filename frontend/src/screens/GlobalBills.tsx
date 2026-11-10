@@ -145,7 +145,7 @@ export function BillsScreen() {
               columns={BILL_COLUMNS}
               errorTitle="Failed to load bills"
               empty={{ title: 'No bills', text: 'A bill is issued on the billing cycle day.' }}
-              total={(data) => data.length}
+              count={(data) => data.length}
               rows={(data) =>
                 data
                   .filter((b) => onDate(b.billDate))
@@ -208,7 +208,7 @@ export function BillsScreen() {
                 title: 'No bill cycles',
                 text: 'A cycle exists for each daily billing run.',
               }}
-              total={(data) => data.length}
+              count={(data) => data.length}
               rows={(data) =>
                 data
                   .filter((c) => onDate(c.billingDate))

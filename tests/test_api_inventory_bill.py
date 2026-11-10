@@ -11,7 +11,7 @@ import pytest
 
 from app.repository import billing, orders, products
 from tests import factories
-from tests.apiclient import decimals
+from tests.apiclient import decimals, total
 from tests.apidata import BILL, PRODUCT, RATE
 from tests.factories import NOW, days
 
@@ -41,7 +41,7 @@ def terminate(db_conn, w, on: date) -> None:
 
 def test_product_view(api, world):
     listed = api.get(PRODUCT)
-    assert listed.headers["X-Total-Count"] == "1"
+    assert total(listed, api) == "1"
     product = listed.json()[0]
     pid, acc, off = world.product["id"], world.account, world.offering
     assert product["href"] == f"{PRODUCT}/{pid}"
@@ -95,7 +95,7 @@ def test_bill_and_rate_lists_are_empty_before_any_billing_run(api):
     for url in (BILL, RATE):
         response = api.get(url)
         assert response.status_code == 200 and response.json() == []
-        assert response.headers["X-Total-Count"] == "0"
+        assert total(response, api) == "0"
 
 
 def test_applied_billing_rates(api, world, db_conn):

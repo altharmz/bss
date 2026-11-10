@@ -154,13 +154,13 @@ def _delete(
 def _list(request: Request, tx: Tx, party_type: str, filters, attributes) -> TmfJSONResponse:
     query = listing.parse_list_query(request, filters=filters, attributes=attributes)
     with tx() as conn:
-        rows, total = parties.list_parties(
+        rows, more = parties.list_parties(
             conn,
             where={"party_type": party_type, **query.where},
             offset=query.offset,
             limit=query.limit,
         )
-    return listing.list_response([party_body(row) for row in rows], total, query)
+    return listing.list_response([party_body(row) for row in rows], more, query)
 
 
 # --- individual ---

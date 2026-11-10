@@ -271,11 +271,11 @@ def list_bills(request: Request, tx: Tx) -> TmfJSONResponse:
         attributes=BILL_ATTRIBUTES,
     )
     with tx() as conn:
-        rows, total = billing.page_bills(
+        rows, more = billing.page_bills(
             conn, where=query.where, offset=query.offset, limit=query.limit
         )
         items = [bill_body(conn, row) for row in rows]
-    return listing.list_response(items, total, query)
+    return listing.list_response(items, more, query)
 
 
 @router.get("/customerBill/{bill_id}")
@@ -432,7 +432,7 @@ def list_bill_cycles(request: Request, tx: Tx) -> TmfJSONResponse:
         attributes=CYCLE_ATTRIBUTES,
     )
     with tx() as conn:
-        rows, total = select_page(
+        rows, more = select_page(
             conn,
             "billing_run",
             where={**query.where, "kind": "daily"},
@@ -440,7 +440,7 @@ def list_bill_cycles(request: Request, tx: Tx) -> TmfJSONResponse:
             limit=query.limit,
         )
         items = [cycle_body(conn, row) for row in rows]
-    return listing.list_response(items, total, query)
+    return listing.list_response(items, more, query)
 
 
 @router.get("/billCycle/{cycle_id}")
@@ -467,11 +467,11 @@ def list_rates(request: Request, tx: Tx) -> TmfJSONResponse:
         attributes=RATE_ATTRIBUTES,
     )
     with tx() as conn:
-        rows, total = billing.page_abrs(
+        rows, more = billing.page_abrs(
             conn, where=query.where, offset=query.offset, limit=query.limit
         )
         items = [rate_body(conn, row) for row in rows]
-    return listing.list_response(items, total, query)
+    return listing.list_response(items, more, query)
 
 
 @router.get("/appliedCustomerBillingRate/{rate_id}")

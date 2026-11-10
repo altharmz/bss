@@ -259,11 +259,11 @@ def list_resources(request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse
     )
     today = clock.today()
     with tx() as conn:
-        rows, total = repo.page(
+        rows, more = repo.page(
             conn, query.where, query.offset, query.limit, today, settings.msisdn_quarantine_days
         )
         bodies = [resource_body(conn, row, today) for row in rows]
-    return listing.list_response(bodies, total, query)
+    return listing.list_response(bodies, more, query)
 
 
 @router.get("/resource/{resource_id}")

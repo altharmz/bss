@@ -154,18 +154,17 @@ def page(
     state: str | None,
     offset: int,
     limit: int,
-) -> tuple[list[Row], int]:
+) -> tuple[list[Row], bool]:
     where = (  # noqa: S608 - fixed text, the values are parameters
         " WHERE (%(o)s::uuid IS NULL OR product_order_id = %(o)s)"
         " AND (%(p)s::uuid IS NULL OR product_id = %(p)s)"
         " AND (%(s)s::text IS NULL OR state = %(s)s)"
     )
-    args = {"o": order_id, "p": product_id, "s": state, "off": offset, "lim": limit}
-    total = fetch_one(conn, f"SELECT count(*) AS n FROM network_command{where}", args)["n"]  # noqa: S608
+    args = {"o": order_id, "p": product_id, "s": state, "off": offset, "lim": limit + 1}
     rows = fetch_all(
         conn,
         f"SELECT * FROM network_command{where} ORDER BY created_at DESC, id"  # noqa: S608
         " LIMIT %(lim)s OFFSET %(off)s",
         args,
     )
-    return rows, total
+    return rows[:limit], len(rows) > limit

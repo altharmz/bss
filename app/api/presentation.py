@@ -150,10 +150,10 @@ def list_bill_formats(request: Request, tx: Tx) -> TmfJSONResponse:
         request, filters={"name": ("name", listing.as_str)}, attributes=ATTRIBUTES
     )
     with tx() as conn:
-        rows, total = repo.page(
+        rows, more = repo.page(
             conn, "bill_format", where=query.where, offset=query.offset, limit=query.limit
         )
-    return listing.list_response([resource_body(r, "billFormat") for r in rows], total, query)
+    return listing.list_response([resource_body(r, "billFormat") for r in rows], more, query)
 
 
 @router.get("/billFormat/{format_id}")
@@ -198,7 +198,7 @@ def list_bill_media(request: Request, tx: Tx) -> TmfJSONResponse:
         request, filters={"name": ("name", listing.as_str)}, attributes=ATTRIBUTES
     )
     with tx() as conn:
-        rows, total = repo.page(
+        rows, more = repo.page(
             conn,
             "bill_presentation_media",
             where=query.where,
@@ -206,7 +206,7 @@ def list_bill_media(request: Request, tx: Tx) -> TmfJSONResponse:
             limit=query.limit,
         )
     return listing.list_response(
-        [resource_body(r, "billPresentationMedia") for r in rows], total, query
+        [resource_body(r, "billPresentationMedia") for r in rows], more, query
     )
 
 

@@ -313,7 +313,8 @@ def list_cycle_specifications(request: Request, tx: Tx) -> TmfJSONResponse:
             stored_cycle_body(r) for r in cycles.all_rows(conn)
         ]
     rows = [b for b in bodies if all(b.get(key) == value for key, value in query.where.items())]
-    return listing.list_response(rows[query.offset : query.offset + query.limit], len(rows), query)
+    end = query.offset + query.limit
+    return listing.list_response(rows[query.offset : end], len(rows) > end, query)
 
 
 @router.get("/billingCycleSpecification/{specification_id}")
@@ -655,11 +656,11 @@ def list_accounts(request: Request, tx: Tx) -> TmfJSONResponse:
         attributes=ATTRIBUTES,
     )
     with tx() as conn:
-        rows, total = parties.list_billing_accounts(
+        rows, more = parties.list_billing_accounts(
             conn, where=query.where, offset=query.offset, limit=query.limit
         )
         items = account_bodies(conn, rows)
-    return listing.list_response(items, total, query)
+    return listing.list_response(items, more, query)
 
 
 @router.get("/billingAccount/{account_id}")

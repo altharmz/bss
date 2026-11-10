@@ -290,7 +290,7 @@ the Edit tool):
    before; anonymous `GET /internal/v1/context` -> 401 **JSON** from the app (not
    `index.html`); the smoke secret alone (`X-Bss-Service`) -> 200 JSON, operator ==
    `"smoke"` (a literal); `/tmf-api/accountManagement/v5/billingAccount?limit=1` with
-   the secret -> 200 JSON + `X-Total-Count`; POST with the secret -> 403 from the app;
+   the secret -> 200 JSON + `X-Result-Count` (no `X-Total-Count` since #312); POST with the secret -> 403 from the app;
    `/healthz` 200. Drop the "Caddy's login alone -> 401" check and **`SMOKE_BASIC_AUTH`
    everywhere**: `web-smoke.sh`, `scripts/deploy.sh` (no longer required in
    `.env.smoke`; its `.env.prod` guard against that line and the dry-run message can

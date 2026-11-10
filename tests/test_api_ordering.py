@@ -7,6 +7,7 @@ import pytest
 
 from app.repository import products
 from tests import apidata, timeline
+from tests.apiclient import total
 from tests.apidata import NIL, ORDER, PRODUCT
 from tests.timeline import iso, midnight, z
 
@@ -317,7 +318,7 @@ def test_order_list_and_filters(api, shop):
     apidata.order(api, acc, apidata.rejected_item(api, offering))
     apidata.order(api, other, apidata.add_item(offering))
     listed = api.get(f"{ORDER}?billingAccount.id={acc['id']}")
-    assert listed.headers["X-Total-Count"] == "2"
+    assert total(listed, api) == "2"
     assert [o["state"] for o in api.get(f"{ORDER}?state=rejected").json()] == ["rejected"]
     slim = api.get(f"{ORDER}?fields=state").json()
     assert all(set(o) == {"id", "href", "@type", "state"} for o in slim)

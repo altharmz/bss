@@ -17,6 +17,7 @@ from app.worker.plan import catch_up_dates
 from app.worker.process import RunAborted, bill_date
 from app.worker.queue import process_requests
 from app.worker.runs import RunInProgress
+from tests.apiclient import total
 from tests.test_worker_failures import accounts_with_products, fail_for
 from tests.test_worker_process import DEC1, DEC2, DEC3, at, scenario, set_currency
 from tests.timeline import TZ
@@ -66,7 +67,7 @@ def test_catch_up_dates(latest, held, up_to, dates):
 def test_runs_are_listed_newest_first_with_derived_counts(api, worker):
     s = scenario(api, worker, broken=True)  # x failed Dec 1, blocked Dec 2 and 3
     response = api.get(RUNS)
-    assert response.headers["X-Total-Count"] == "3"
+    assert total(response, api) == "3"
     runs = response.json()
     assert [r["runDate"] for r in runs] == ["2026-12-03", "2026-12-02", "2026-12-01"]
     assert [r["isLatest"] for r in runs] == [True, False, False]

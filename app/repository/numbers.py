@@ -69,15 +69,12 @@ def page(conn, where, offset, limit, today, quarantine_days):
     )
     clause = sql.SQL(" WHERE ") + conditions if where else sql.SQL("")
     params = [today, today, today, quarantine_days, today, *map(str, where.values())]
-    total = fetch_one(
-        conn, source + sql.SQL("SELECT count(*) AS n FROM inventory") + clause, params
-    )
     rows = fetch_all(
         conn,
         source
         + sql.SQL("SELECT * FROM inventory")
         + clause
         + sql.SQL(" ORDER BY created_at, id OFFSET %s LIMIT %s"),
-        [*params, offset, limit],
+        [*params, offset, limit + 1],
     )
-    return rows, total["n"]
+    return rows[:limit], len(rows) > limit

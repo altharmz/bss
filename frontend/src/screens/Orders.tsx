@@ -179,7 +179,6 @@ export function OrdersScreen() {
           data: {
             ...list.data,
             items: visibleRows,
-            total: list.data.total - (list.data.items.length - visibleRows.length),
           },
         }
       : list;
@@ -187,11 +186,6 @@ export function OrdersScreen() {
     <div className="bss-screen" data-ui="ui.orders">
       <PageHeader
         title="Orders"
-        count={
-          list.status === 'ok'
-            ? formatInt(visibleList.status === 'ok' ? visibleList.data.total : 0)
-            : undefined
-        }
         meta="Every product order, newest first"
         filters={
           <>
@@ -260,7 +254,7 @@ export function OrdersScreen() {
             title: 'No orders',
             text: 'Orders appear here once a product is added, changed or ended.',
           }}
-          total={(data) => data.total}
+          count={(data) => data.items.length}
           rows={(data) => data.items}
           onResetFilters={() => {
             setState('all');
@@ -306,7 +300,7 @@ export function OrdersScreen() {
                 />
               ))}
               <TableFooter
-                left={`Showing ${formatInt(data.offset + 1)}–${formatInt(data.offset + rows.length)} of ${formatInt(data.total)}`}
+                left={`Showing ${formatInt(data.offset + 1)}–${formatInt(data.offset + rows.length)}`}
                 right={
                   <span className="bss-table-pager">
                     <Button
@@ -320,7 +314,7 @@ export function OrdersScreen() {
                     <Button
                       small
                       data-ui="ui.orders.next"
-                      disabled={offset + ORDER_PAGE >= data.total}
+                      disabled={!data.more}
                       onClick={() => setOffset(offset + ORDER_PAGE)}
                     >
                       Next

@@ -94,11 +94,11 @@ export function toRecord(body: UsageBody): UsageRecord {
   };
 }
 
-/** One page of a line's records, newest first; `total` is every record (X-Total-Count). */
+/** One page of a line's records, newest first; `more` says whether older ones follow. */
 export async function loadUsageRecords(productId: string, offset: number, signal: AbortSignal) {
   const page = await getPage<UsageBody>(
     `${USAGE}?product.id=${encodeURIComponent(productId)}&offset=${offset}&limit=${USAGE_PAGE}`,
     signal,
   );
-  return { items: page.items.map(toRecord), total: page.total };
+  return { items: page.items.map(toRecord), more: page.more };
 }

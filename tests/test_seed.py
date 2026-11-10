@@ -34,7 +34,7 @@ def all_of(api, url: str) -> list[dict]:
     while True:
         page = api.get(f"{url}?offset={len(items)}&limit=100")
         items += page.json()
-        if len(items) >= int(page.headers["X-Total-Count"]):
+        if 'rel="next"' not in page.headers.get("Link", ""):
             return items
 
 

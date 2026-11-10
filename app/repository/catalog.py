@@ -303,19 +303,19 @@ def attach_price(conn: psycopg.Connection, price_id: UUID, offering_id: UUID) ->
 
 def list_product_specifications(
     conn: psycopg.Connection, *, where: dict[str, Any], offset: int, limit: int
-) -> tuple[list[Row], int]:
+) -> tuple[list[Row], bool]:
     return select_page(conn, "product_specification", where=where, offset=offset, limit=limit)
 
 
 def list_product_offerings(
     conn: psycopg.Connection, *, where: dict[str, Any], offset: int, limit: int
-) -> tuple[list[Row], int]:
+) -> tuple[list[Row], bool]:
     return select_page(conn, "product_offering", where=where, offset=offset, limit=limit)
 
 
 def list_product_offering_prices(
     conn: psycopg.Connection, *, where: dict[str, Any], offset: int, limit: int
-) -> tuple[list[Row], int]:
+) -> tuple[list[Row], bool]:
     return select_page(conn, "product_offering_price", where=where, offset=offset, limit=limit)
 
 

@@ -11,7 +11,7 @@ import pytest
 from psycopg import sql
 
 from tests import apidata
-from tests.apiclient import decimals
+from tests.apiclient import decimals, total
 from tests.apidata import ACCOUNT, CATALOG, CUSTOMER, NIL, ORDER, PARTY, PAYMENT, PRODUCT
 from tests.test_api_bill_settlement import account_with_bills, bills
 from tests.timeline import START, iso, midnight, z
@@ -346,7 +346,7 @@ def test_cycle_links_dates_amounts_paging_and_read_only_contract(api, db_conn):
         assert row["taxExcludedAmount"] == row["taxIncludedAmount"] == row["amountDue"]
         assert row["nextBillDate"] == row["billingPeriod"]["endDateTime"]
         filtered = api.get(f"{CYCLE}?billingDate={cycle['billingDate']}&fields=billingDate")
-        assert filtered.headers["X-Total-Count"] == "1"
+        assert total(filtered, api) == "1"
         assert filtered.json() == [{k: cycle[k] for k in ("id", "href", "@type", "billingDate")}]
     assert api.get(f"{CYCLE}?limit=1&offset=1").headers["X-Result-Count"] == "1"
     assert api.get(f"{CYCLE}/{NIL}").status_code == 404

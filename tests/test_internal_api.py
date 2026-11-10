@@ -13,7 +13,7 @@ import pytest
 
 from app.config import settings
 from tests import apidata
-from tests.apiclient import decimals
+from tests.apiclient import decimals, total
 from tests.apidata import ACCOUNT, CATALOG, NIL
 from tests.test_billing_db import add, at, bill, delete
 from tests.timeline import iso, midnight
@@ -230,7 +230,7 @@ def test_open_products_with_next_charge_and_price(api, offering):
     delete(api, account, cancelled, None, on=at(today, 17))  # cancelled: not open
 
     response = api.get(f"{BASE}/billingAccount/{account['id']}/products")
-    assert response.headers["X-Total-Count"] == "3"
+    assert total(response, api) == "3"
     rows = {p["id"]: p for p in decimals(response)}
     assert set(rows) == {running["id"], future["id"], ending["id"]}
     assert {pid: (p["status"], p["nextChargeDate"]) for pid, p in rows.items()} == {
@@ -254,7 +254,9 @@ def test_products_of_an_unknown_account_and_bad_query(api):
     assert api.get(f"{BASE}/billingAccount/{NIL}/products").status_code == 404
     assert api.get(f"{BASE}/billingAccount/nope/products").status_code == 404
     account = apidata.account(api)
-    assert api.get(f"{BASE}/billingAccount/{account['id']}/products?limit=1").status_code == 400
+    # paged like every list since #312: limit is allowed, an unknown parameter is not
+    assert api.get(f"{BASE}/billingAccount/{account['id']}/products?limit=1").status_code == 200
+    assert api.get(f"{BASE}/billingAccount/{account['id']}/products?bogus=1").status_code == 400
 
 
 # --- charges and transactions ---
@@ -278,7 +280,7 @@ def history(api, db_conn, offering):
 def test_charges(api, history):
     account, product = history
     response = api.get(f"{BASE}/billingAccount/{account['id']}/charges")
-    assert response.headers["X-Total-Count"] == "2"
+    assert total(response, api) == "2"
     refund, charge = decimals(response)
     assert {k: refund[k] for k in ("kind", "runDate", "period", "billableDays", "periodDays")} == {
         "kind": "refund",
@@ -302,7 +304,7 @@ def test_charges(api, history):
 def test_transactions_carry_the_running_balance(api, history):
     account, _ = history
     response = api.get(f"{BASE}/billingAccount/{account['id']}/transactions")
-    assert response.headers["X-Total-Count"] == "3"
+    assert total(response, api) == "3"
     rows = decimals(response)
     assert [(t["type"], t["date"], t["amount"], t["balanceAfter"]) for t in rows] == [
         ("refund", "2026-12-20", usd("116.13"), usd("-83.87")),
@@ -322,7 +324,7 @@ def test_history_paging(api, history):
     account, _ = history
     url = f"{BASE}/billingAccount/{account['id']}/transactions"
     page = api.get(f"{url}?offset=1&limit=1")
-    assert (page.headers["X-Total-Count"], page.headers["X-Result-Count"]) == ("3", "1")
+    assert (total(page, api), page.headers["X-Result-Count"]) == ("3", "1")
     assert page.json()[0]["type"] == "payment"
     assert api.get(f"{url}?offset=3").json() == []
     for bad in ("limit=101", "limit=0", "offset=-1", "fields=id", "kind=charge"):

@@ -12,6 +12,7 @@ import pytest
 from app.api import account, accounts, specschema
 from app.config import settings
 from tests import apidata
+from tests.apiclient import total
 from tests.apidata import ACCOUNT, NIL, ORDER
 from tests.test_api_financial_account import FINANCIAL, financial, link, owner
 from tests.test_events import stored, subscribe
@@ -315,7 +316,7 @@ def test_financial_account_documents_and_owner_change(api):
     moved = api.patch(fa["href"], {"relatedParty": [owner(person), BILL_RECEIVER]})
     assert moved.status_code == 200, moved.text
     assert moved.json()["relatedParty"][0]["partyOrPartyRole"]["id"] == person["id"]
-    assert api.get(f"{FINANCIAL}?relatedParty.id={person['id']}").headers["X-Total-Count"] == "1"
+    assert total(api.get(f"{FINANCIAL}?relatedParty.id={person['id']}"), api) == "1"
     pa = api.post(
         f"{BASE}/partyAccount",
         {"name": "p", "relatedParty": [owner(person)], "financialAccount": link(fa)},

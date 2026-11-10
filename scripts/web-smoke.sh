@@ -87,7 +87,9 @@ code="$(get auth GET '/tmf-api/accountManagement/v5/billingAccount?limit=1')"
 [[ "${code}" == 200 ]] || fail "GET /tmf-api/.../billingAccount answered ${code}"
 [[ "$(header Content-Type)" == application/json* ]] && is_json \
   || fail "GET /tmf-api/.../billingAccount is not JSON"
-[[ -n "$(header X-Total-Count)" ]] || fail "GET /tmf-api/.../billingAccount has no X-Total-Count"
+# lists page without counts (#312): X-Result-Count, never X-Total-Count
+[[ -n "$(header X-Result-Count)" ]] || fail "GET /tmf-api/.../billingAccount has no X-Result-Count"
+[[ -z "$(header X-Total-Count)" ]] || fail "GET /tmf-api/.../billingAccount still counts (X-Total-Count)"
 ok "GET /tmf-api/accountManagement/v5/billingAccount -> 200 JSON"
 
 # 6. the smoke secret cannot change anything (the app's 403)

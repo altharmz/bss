@@ -144,7 +144,7 @@ export function SimsScreen() {
             title: 'No SIMs yet',
             text: 'Import a CSV of physical SIMs or generate eSIM profiles.',
           }}
-          total={(data) => data.length}
+          count={(data) => data.length}
           rows={(data) =>
             data.filter(
               (s) =>

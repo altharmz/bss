@@ -471,7 +471,7 @@ def _every(client: TestClient, url: str) -> list[dict[str, Any]]:
         page = client.get(f"{url}?offset={len(items)}&limit=100")
         assert page.status_code == 200, f"{url}: {page.text}"
         items += page.json()
-        if not page.json() or len(items) >= int(page.headers["X-Total-Count"]):
+        if 'rel="next"' not in page.headers.get("Link", ""):
             return items
 
 

@@ -89,7 +89,7 @@ def page(
     limit: int,
     *,
     kind: str | None = "topup",
-) -> tuple[list[Row], int]:
+) -> tuple[list[Row], bool]:
     """Actions of `kind` (any kind when None) matching every `column = value` of `where`,
     oldest first."""
     conditions = [sql.SQL("{}::text = %s").format(sql.Identifier(c)) for c in where]
@@ -98,16 +98,14 @@ def page(
         conditions.insert(0, sql.SQL("kind = %s"))
         params.insert(0, kind)
     clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions) if conditions else sql.SQL("")
-    total = fetch_one(conn, sql.SQL("SELECT count(*) AS n FROM balance_action") + clause, params)
-    assert total is not None
     rows = fetch_all(
         conn,
         sql.SQL("SELECT * FROM balance_action")
         + clause
         + sql.SQL(" ORDER BY requested_at, id OFFSET %s LIMIT %s"),
-        [*params, offset, limit],
+        [*params, offset, limit + 1],
     )
-    return rows, total["n"]
+    return rows[:limit], len(rows) > limit
 
 
 def set_descriptive(

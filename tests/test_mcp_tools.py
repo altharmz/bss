@@ -634,7 +634,8 @@ def test_every_get_tool_answers_against_the_app(mcp, world):
         called.add(name)
     assert called == {n for n, t in generated().items() if t.read_only}
     is_error, payments = mcp.result(reader, "list_payments", arguments["list_payments"])
-    assert payments["totalCount"] == 1 and payments["body"][0]["id"] == world["payment"]["id"]
+    assert payments["resultCount"] == 1 and payments["hasMore"] is False
+    assert payments["body"][0]["id"] == world["payment"]["id"]
 
 
 def test_every_write_tool_reaches_the_app(api, mcp, world):

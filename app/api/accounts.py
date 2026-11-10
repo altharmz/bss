@@ -391,11 +391,11 @@ def list_financial_accounts(request: Request, tx: Tx) -> TmfJSONResponse:
         attributes=ATTRIBUTES,
     )
     with tx() as conn:
-        rows, total = accounts.page_financial(
+        rows, more = accounts.page_financial(
             conn, where=query.where, offset=query.offset, limit=query.limit
         )
         items = [financial_body(conn, row) for row in rows]
-    return listing.list_response(items, total, query)
+    return listing.list_response(items, more, query)
 
 
 @router.get("/financialAccount/{account_id}")
@@ -552,11 +552,11 @@ def _list_party_accounts(request: Request, tx: Tx, kind: str) -> TmfJSONResponse
         attributes=PARTY_ATTRIBUTES,
     )
     with tx() as conn:
-        rows, total = accounts.page_party_accounts(
+        rows, more = accounts.page_party_accounts(
             conn, kind, where=query.where, offset=query.offset, limit=query.limit
         )
         items = [party_account_body(conn, row) for row in rows]
-    return listing.list_response(items, total, query)
+    return listing.list_response(items, more, query)
 
 
 def _get_party_account(account_id: str, request: Request, tx: Tx, kind: str) -> TmfJSONResponse:

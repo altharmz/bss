@@ -181,7 +181,7 @@ ACCOUNT_HISTORY = {
 
 def list_parties(
     conn: psycopg.Connection, *, where: dict[str, Any], offset: int, limit: int
-) -> tuple[list[Row], int]:
+) -> tuple[list[Row], bool]:
     return select_page(conn, "party", where=where, offset=offset, limit=limit)
 
 
@@ -198,7 +198,7 @@ def with_details(changes: dict[str, Any]) -> dict[str, Any]:
 
 def list_customers(
     conn: psycopg.Connection, *, where: dict[str, Any], offset: int, limit: int
-) -> tuple[list[Row], int]:
+) -> tuple[list[Row], bool]:
     return select_page(conn, "customer", where=where, offset=offset, limit=limit)
 
 
@@ -217,7 +217,7 @@ def accounts_of_customer(conn: psycopg.Connection, customer_id: UUID) -> list[Ro
 
 def list_billing_accounts(
     conn: psycopg.Connection, *, where: dict[str, Any], offset: int, limit: int
-) -> tuple[list[Row], int]:
+) -> tuple[list[Row], bool]:
     return select_page(conn, "billing_account", where=where, offset=offset, limit=limit)
 
 

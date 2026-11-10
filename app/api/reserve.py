@@ -190,9 +190,9 @@ def list_reserve_balances(request: Request, tx: Tx) -> TmfJSONResponse:
         attributes=ATTRIBUTES,
     )
     with tx() as conn:
-        rows, total = repo.page(conn, query.where, query.offset, query.limit, kind=KIND)
+        rows, more = repo.page(conn, query.where, query.offset, query.limit, kind=KIND)
         bodies = [reserve_body(conn, row) for row in rows]
-    return listing.list_response(bodies, total, query)
+    return listing.list_response(bodies, more, query)
 
 
 @router.get(f"/{RESOURCE}/{{reserve_id}}")

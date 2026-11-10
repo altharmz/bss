@@ -29,9 +29,9 @@ def page(
     state: str | None,
     offset: int,
     limit: int,
-) -> tuple[list[Row], int]:
+) -> tuple[list[Row], bool]:
     """Newest acceptance first; ties by id."""
-    params = {"account": account_id, "state": state, "offset": offset, "limit": limit}
+    params = {"account": account_id, "state": state, "offset": offset, "limit": limit + 1}
     rows = fetch_all(
         conn,
         _SELECT + " WHERE (%(account)s::uuid IS NULL OR c.billing_account_id = %(account)s)"
@@ -39,13 +39,7 @@ def page(
         " ORDER BY c.created_at DESC, c.id DESC OFFSET %(offset)s LIMIT %(limit)s",
         params,
     )
-    total = conn.execute(
-        "SELECT count(*) FROM prepaid_command c"
-        " WHERE (%(account)s::uuid IS NULL OR c.billing_account_id = %(account)s)"
-        " AND (%(state)s::text IS NULL OR c.state = %(state)s)",
-        params,
-    ).fetchone()[0]
-    return rows, total
+    return rows[:limit], len(rows) > limit
 
 
 def _request_products(request: dict[str, Any]) -> set[str]:

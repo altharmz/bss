@@ -18,6 +18,7 @@ from fastapi import APIRouter, Request
 from app.api.common import utc
 from app.api.deps import ClockDep, Tx, _content_type, _object_body
 from app.api.errors import TmfError, bad_request, conflict, unprocessable
+from app.api.listing import page_response, parse_page, split_page
 from app.api.tmfjson import TmfJSONResponse
 from app.integrations.network import NetworkTemporary, adapter
 from app.internal.context import no_query
@@ -155,13 +156,11 @@ def stock(conn, name: str, sim_type: str, items: list[dict], source: str, now) -
 
 @router.get("/batch")
 def list_batches(request: Request, tx: Tx) -> TmfJSONResponse:
-    no_query(request)
+    offset, limit = parse_page(request)
     with tx() as conn:
-        rows = repo.batches(conn)
+        rows, more = split_page(repo.batches(conn)[offset:], limit)
     items = [batch_body(row) for row in rows]
-    return TmfJSONResponse(
-        items, headers={"X-Total-Count": str(len(items)), "X-Result-Count": str(len(items))}
-    )
+    return page_response(request, items, more, offset, limit)
 
 
 @router.post("/batch", status_code=201)

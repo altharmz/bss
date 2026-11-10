@@ -109,7 +109,7 @@ What `deploy.sh` does, in order:
     is the boundary): this build's `index.html`, a deep link and a hashed asset without
     credentials, `/internal/v1/context` 401 JSON from the app without them, with the
     read-only smoke secret 200 JSON with `operator` = `smoke`, a TMF list with
-    `X-Total-Count`, `POST` -> 403 from the app, `/healthz` open.
+    `X-Result-Count` and no `X-Total-Count` (#312), `POST` -> 403 from the app, `/healthz` open.
 13. Runs the MCP discovery, authentication and OAuth smoke checks through Caddy, then the
     **OAuth login smoke** (`scripts/mcp-oauth-smoke.py`) as the `mcp` smoke user from
     `.env.smoke` (`MCP_SMOKE_USER`, `MCP_SMOKE_PASSWORD`): read scope only, one read tool,

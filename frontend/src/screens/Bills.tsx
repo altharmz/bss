@@ -95,7 +95,7 @@ export function BillsPanel({
           columns={BILL_COLUMNS}
           errorTitle="Failed to load bills"
           empty={{ title: 'No bills', text: 'A bill is issued on the billing cycle day.' }}
-          total={(data) => data.length}
+          count={(data) => data.length}
           rows={(data) => data}
           onResetFilters={() => {}}
         >

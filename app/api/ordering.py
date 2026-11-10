@@ -658,11 +658,11 @@ def list_orders(request: Request, tx: Tx) -> TmfJSONResponse:
         attributes=ATTRIBUTES,
     )
     with tx() as conn:
-        rows, total = orders.list_orders(
+        rows, more = orders.list_orders(
             conn, where=query.where, offset=query.offset, limit=query.limit
         )
         items = [order_body(conn, row) for row in rows]
-    return listing.list_response(items, total, query)
+    return listing.list_response(items, more, query)
 
 
 @router.get("/productOrder/{order_id}")
@@ -900,10 +900,10 @@ def list_cancellations(request: Request, tx: Tx) -> TmfJSONResponse:
         attributes=CANCEL_ATTRIBUTES,
     )
     with tx() as conn:
-        rows, total = orders.list_cancellations(
+        rows, more = orders.list_cancellations(
             conn, where=query.where, offset=query.offset, limit=query.limit
         )
-    return listing.list_response([cancel_body(row) for row in rows], total, query)
+    return listing.list_response([cancel_body(row) for row in rows], more, query)
 
 
 @router.get("/cancelProductOrder/{cancel_id}")

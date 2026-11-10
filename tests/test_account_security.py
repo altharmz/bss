@@ -10,6 +10,7 @@ import pytest
 from app.config import settings
 from app.integrations.notify import adapter as sender
 from tests import apidata
+from tests.apiclient import total
 from tests.apidata import ACCOUNT, CUSTOMER, ORDER, PARTY
 from tests.test_api_account_attributes import CONTACT
 from tests.test_api_resource_inventory import number
@@ -437,7 +438,7 @@ def test_the_audit_log_is_read_only_filterable_and_paged(api, db_conn, line):
     assert audit(api, operator="nobody") == []
     page = api.get(f"{SEC}/audit?limit=1&offset=1")
     assert page.status_code == 200 and len(page.json()) == 1
-    assert page.headers["X-Total-Count"] == "3"
+    assert total(page, api) == "3"
     assert api.get(f"{SEC}/audit?action=bogus").status_code == 400
     assert api.get(f"{SEC}/audit?nope=1").status_code == 400
     for write in (api.post(f"{SEC}/audit", {}), api.put(f"{SEC}/audit", {})):
