@@ -125,3 +125,46 @@ pinned).
 |---|---|---|---|
 | Day 7 of the 100k seed (about 20k subscribers), PROCESSES=1, before / after #292's first fixes | 1,960 s / 1,474 s (tick 1,050 / 665 s, creation 824 / 731 s) | | full table scans gone; `balance_ledger_check` 4.26 / 1.40 ms; the rest is about 1.2M queries a day at about 0.6 ms round trip each |
 | N=1000, DAYS=10, USAGE_DAYS=3, PROCESSES=4 | 9 min 6 s (billing 70 s, subscribers 65 s, ticks 162 s, usage 221 s) | 59 MB | 64.7 billed accounts/s, 15.3 subscribers/s, 282 usage records/s; the database used about half of its 4 CPUs: the generator's serial Python path is the limit |
+
+## The 100k dataset (#293, finished 2026-11-10)
+
+`~/.local/share/bss/loadtest/seed100k.dump` (554 MB, `pg_dump -Fc`) is the only copy,
+on the workstation's WSL disk; the human decided against a second copy. It holds 31
+simulated days, 5 October to 4 November 2026. The human chose 31 of the planned 35 days:
+every subscriber is billed at least once and one daily run covers all 100k accounts.
+
+| What | Count |
+|---|---|
+| Billing accounts (subscribers) | 100,000 (70 % prepaid) |
+| Products (lines) | 114,978 |
+| Usage records (days 29-31) | 6,781,880 |
+| Daily billing runs | 31 |
+| ABRs / bills (bill state changes) | 132,668 / 372,433 state changes |
+| Database size | 4.2 GB |
+
+Days 11-31 took 16.9 h (6 processes, generator not pinned, database on `4-7`). The phases
+were billing 6.3 h, the evening tick 7.3 h, usage 2.4 h (3 days) and creation 0.9 h.
+Days 1-10 took about 2.5 h more, partly before #292's fixes.
+- **The billing run of day 31**, the first with all 100k accounts as members: 1,441 s,
+  about 24 min, 69 accounts/s in one process.
+- **Usage:** about 790-810 records/s over 6 processes; each record is one set of
+  statements (#305).
+- **The evening tick:** a full sweep of every prepaid account once per simulated day
+  (account review only helps a worker that ticks every minute), plus the day's purchases
+  and renewals.
+
+### Keeping and using it
+
+- **Restore before every measured run:** `make loadtest-restore NAME=seed100k` in the
+  task's own load-test stack. It loads the dump, migrates it to the current head and
+  analyzes it. A test writes to the database, so each measured run starts from the dump.
+  The task's database volume is deleted by `make finish-task`; the dump is what stays.
+- **Schema changes** reach the dataset through the migrations a restore applies. A change
+  to the data mix itself means seeding again: about a day for 31 days.
+- **Dates are frozen.** The last billing run is 4 November 2026, and the dataset ages one
+  day per calendar day. The worker does not bill such a gap by itself (an operator's
+  catch-up does, at about 50 min per day at 100k). Tests run on these dates; the
+  billing-night scenario (#281) starts one explicit catch-up run.
+- **More days** can be added later. `make loadtest-seed N=100000 DAYS=35 USAGE_DAYS=7` on a
+  restored dump continues at day 32: the generator resumes, and its parameters must stay
+  the same.
