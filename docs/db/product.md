@@ -62,6 +62,7 @@ SID Product (TMF637 product): an instance of an offering on a billing account. W
 | Name | Definition | Backs a constraint |
 |---|---|---|
 | `product_billing_account_id_idx` | `CREATE INDEX product_billing_account_id_idx ON product USING btree (billing_account_id)` | no |
+| `product_created_at_id_idx` | `CREATE INDEX product_created_at_id_idx ON product USING btree (created_at, id)` | no |
 | `product_created_by_item_id_key` | `CREATE UNIQUE INDEX product_created_by_item_id_key ON product USING btree (created_by_item_id)` | yes |
 | `product_id_billing_account_id_key` | `CREATE UNIQUE INDEX product_id_billing_account_id_key ON product USING btree (id, billing_account_id)` | yes |
 | `product_parent_idx` | `CREATE INDEX product_parent_idx ON product USING btree (parent_product_id) WHERE (parent_product_id IS NOT NULL)` | no |

@@ -59,6 +59,7 @@ SID ProductOrder (TMF622 productOrder): the only way to create or terminate prod
 | Name | Definition | Backs a constraint |
 |---|---|---|
 | `product_order_billing_account_id_idx` | `CREATE INDEX product_order_billing_account_id_idx ON product_order USING btree (billing_account_id)` | no |
+| `product_order_created_at_id_idx` | `CREATE INDEX product_order_created_at_id_idx ON product_order USING btree (created_at, id)` | no |
 | `product_order_pkey` | `CREATE UNIQUE INDEX product_order_pkey ON product_order USING btree (id)` | yes |
 
 ## Triggers

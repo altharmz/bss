@@ -38,6 +38,10 @@ SID Party (TMF632 individual / organization): a person or an organization, told 
 
 | Name | Definition | Backs a constraint |
 |---|---|---|
+| `party_created_at_id_idx` | `CREATE INDEX party_created_at_id_idx ON party USING btree (created_at, id)` | no |
+| `party_family_name_idx` | `CREATE INDEX party_family_name_idx ON party USING btree (family_name)` | no |
+| `party_given_name_idx` | `CREATE INDEX party_given_name_idx ON party USING btree (given_name)` | no |
+| `party_organization_name_idx` | `CREATE INDEX party_organization_name_idx ON party USING btree (organization_name)` | no |
 | `party_pkey` | `CREATE UNIQUE INDEX party_pkey ON party USING btree (id)` | yes |
 
 ## Triggers

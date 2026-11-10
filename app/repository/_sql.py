@@ -67,6 +67,38 @@ def money(value: Decimal) -> Decimal:
     return value
 
 
+# (database, table) -> {column: (data_type, udt_name)}; (database, enum) -> labels.
+# Loaded once per process (and database: the tests use one per test).
+_COLUMN_TYPES: dict[tuple[str, str], dict[str, tuple[str, str]]] = {}
+_ENUM_LABELS: dict[tuple[str, str], frozenset[str]] = {}
+TEXT_TYPES = {"text", "character varying", "character"}
+
+
+def _column_types(conn: psycopg.Connection, table: str) -> dict[str, tuple[str, str]]:
+    key = (conn.info.dbname, table)
+    if key not in _COLUMN_TYPES:
+        rows = conn.execute(
+            "SELECT column_name, data_type, udt_name FROM information_schema.columns"
+            " WHERE table_schema = current_schema() AND table_name = %s",
+            (table,),
+        ).fetchall()
+        _COLUMN_TYPES[key] = {name: (data_type, udt) for name, data_type, udt in rows}
+    return _COLUMN_TYPES[key]
+
+
+def _enum_labels(conn: psycopg.Connection, enum: str) -> frozenset[str] | None:
+    """The labels of an enum type; None when `enum` is not one."""
+    key = (conn.info.dbname, enum)
+    if key not in _ENUM_LABELS:
+        rows = conn.execute(
+            "SELECT e.enumlabel FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid"
+            " WHERE t.typname = %s",
+            (enum,),
+        ).fetchall()
+        _ENUM_LABELS[key] = frozenset(r[0] for r in rows)
+    return _ENUM_LABELS[key] or None
+
+
 def select_page(
     conn: psycopg.Connection,
     table: str,
@@ -77,22 +109,33 @@ def select_page(
 ) -> tuple[list[Row], int]:
     """One page of `table` matching every `column = value` in `where` (a value may also
     be IS_NULL or NOT_NULL), plus the total number of matching rows. Ordered by creation,
-    so pages are stable.
+    so pages are stable (the `(created_at, id)` indexes of migration 0070 serve it).
 
     `table` and the column names are identifiers chosen by the caller's code, never user
-    input. String values are compared with `column::text`, so a value that is not a member
-    of an enum column matches nothing instead of raising.
+    input. Values are compared with the column's own type, so the filter indexes apply
+    (#286). A string for an enum column is checked against the enum's labels first: one
+    that is not a label matches nothing, and the answer is an empty page with no query. A
+    string for a column that is neither text nor an enum keeps the `column::text` match.
     """
     conds, params = [], []
+    types = None
     for column, value in where.items():
         ident = sql.Identifier(column)
         if value is IS_NULL:
             conds.append(sql.SQL("{} IS NULL").format(ident))
         elif value is NOT_NULL:
             conds.append(sql.SQL("{} IS NOT NULL").format(ident))
+        elif isinstance(value, str):
+            types = types if types is not None else _column_types(conn, table)
+            data_type, udt = types.get(column, ("text", "text"))
+            labels = _enum_labels(conn, udt) if data_type == "USER-DEFINED" else None
+            if labels is not None and value not in labels:
+                return [], 0
+            typed = labels is not None or data_type in TEXT_TYPES
+            conds.append(sql.SQL("{} = %s" if typed else "{}::text = %s").format(ident))
+            params.append(value)
         else:
-            template = "{}::text = %s" if isinstance(value, str) else "{} = %s"
-            conds.append(sql.SQL(template).format(ident))
+            conds.append(sql.SQL("{} = %s").format(ident))
             params.append(value)
     clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conds) if conds else sql.SQL("")
     ident = sql.Identifier(table)

@@ -53,7 +53,9 @@ TMF676 recorded refund and its consumed credit.
 | Name | Definition | Backs a constraint |
 |---|---|---|
 | `refund_billing_account_id_idx` | `CREATE INDEX refund_billing_account_id_idx ON refund USING btree (billing_account_id)` | no |
+| `refund_created_at_id_idx` | `CREATE INDEX refund_created_at_id_idx ON refund USING btree (created_at, id)` | no |
 | `refund_id_billing_account_id_key` | `CREATE UNIQUE INDEX refund_id_billing_account_id_key ON refund USING btree (id, billing_account_id)` | yes |
+| `refund_payment_id_idx` | `CREATE INDEX refund_payment_id_idx ON refund USING btree (payment_id)` | no |
 | `refund_pkey` | `CREATE UNIQUE INDEX refund_pkey ON refund USING btree (id)` | yes |
 
 ## Triggers

@@ -598,6 +598,8 @@ def get_arguments(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "get_prepaid_command": {"command_id": str(world["command"]["id"])},
         "list_prepaid_commands": {"state": "pending", "limit": 1},
         "get_usage": {"usage_id": str(world["usage"]["id"])},
+        # a productUsage list needs a line (#286)
+        "list_usage": {"filters": {"product.id": world["product"]["id"]}, "limit": 1},
         "usage_summary": {"product.id": world["product"]["id"]},
         "list_devices": {"product.id": world["product"]["id"]},
         "check_device": {"imei": "356938035643809"},

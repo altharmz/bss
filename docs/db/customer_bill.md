@@ -53,7 +53,9 @@ SID CustomerBill (TMF678 customerBill): issued on a cycle day, collects every un
 
 | Name | Definition | Backs a constraint |
 |---|---|---|
+| `customer_bill_billing_account_id_bill_date_idx` | `CREATE INDEX customer_bill_billing_account_id_bill_date_idx ON customer_bill USING btree (billing_account_id, bill_date)` | no |
 | `customer_bill_billing_run_id_idx` | `CREATE INDEX customer_bill_billing_run_id_idx ON customer_bill USING btree (billing_run_id)` | no |
+| `customer_bill_created_at_id_idx` | `CREATE INDEX customer_bill_created_at_id_idx ON customer_bill USING btree (created_at, id)` | no |
 | `customer_bill_id_billing_account_id_key` | `CREATE UNIQUE INDEX customer_bill_id_billing_account_id_key ON customer_bill USING btree (id, billing_account_id)` | yes |
 | `customer_bill_no_overlap` | `CREATE INDEX customer_bill_no_overlap ON customer_bill USING gist (billing_account_id, bill_period) WHERE (run_type = 'onCycle'::text)` | yes |
 | `customer_bill_pkey` | `CREATE UNIQUE INDEX customer_bill_pkey ON customer_bill USING btree (id)` | yes |
