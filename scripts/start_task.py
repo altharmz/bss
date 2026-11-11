@@ -19,6 +19,7 @@ import time
 import unicodedata
 from pathlib import Path
 
+import task_testmon
 from task_runtime import (
     RESERVED_PORTS,
     InvalidRuntime,
@@ -964,6 +965,8 @@ def start(on_ready=None):
                         cwd=destination,
                     )
                     claim.verify()
+                    # An ignored file, written after every check of the new worktree.
+                    result["test_selection"] = task_testmon.seed(destination, common)
                     if on_ready is not None:
                         on_ready(result)
 

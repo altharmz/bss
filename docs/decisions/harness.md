@@ -29,7 +29,7 @@ no automated regex check is added because dates, versions and money cause false 
 
 One local test run per cycle: develop -> `make commit` (the pre-commit hook is the run) ->
 push -> PR. Commit and push need no approval. Extra runs (`make check`, `make web-e2e`,
-`make progress`) are optional. Run `make test` (the full suite, about 7 minutes) before a PR
+`make progress`) are optional. Run `make test` (the full suite, about 11 minutes) before a PR
 that touches billing, migrations or the API. Every feature or fix comes with a test that
 fails without it (a CLAUDE.md rule, not enforced by a hook).
 
@@ -69,7 +69,7 @@ bcrypt hash (unless the line carries `pre-push: allow-dummy-hash`), an added or 
 `.env*` path (except `.env.example`), a branch deletion and a non-fast-forward. It names the
 commit and file, never the value.
 
-`make test` takes about 7 minutes. Timing-based tests (`test_worker_heartbeat.py`, the thread
+`make test` takes about 11 minutes ([measured](#test-speed-2026-11-11-319)). Timing-based tests (`test_worker_heartbeat.py`, the thread
 tests in `test_order_concurrency.py` and `test_billing_db.py`) can fail under full load: rerun
 once before suspecting a regression.
 
@@ -168,15 +168,29 @@ not skipped: the rerun repeats them from the checkpoint.
 
 ## Tests in the hook: smoke plus affected
 
-The full suite is too long for every commit (about 7 minutes locally, 30 on a CI runner), so
+The full suite is too long for every commit (about 11 minutes locally, 19 in the nightly CI run), so
 the hook runs `make test-smoke` (the `smoke`-marked tests, about 1.5 minutes, and the shell
 scripts' own cases) and `make test-changed` (`pytest -n auto --testmon`:
 [pytest-testmon](https://github.com/tarpas/pytest-testmon), pinned in `requirements-dev.txt`),
 which runs tests whose executed code changed since their last recorded run, plus new and
 previously failed ones (about 20 s when nothing is affected).
 
+**A new worktree starts with a record** (#319). testmon has nothing to compare against in a
+fresh worktree, so the first commit of every task ran the whole suite in `make test-changed`
+(2534 tests, 10 to 15 minutes), even for a change that touches no application code.
+`make finish-task` now saves the merged task's record (a consistent SQLite copy that passes
+its integrity check) as `bss-testmon/testmondata` in the common Git directory, and
+`make start-task` copies it into the new worktree (`scripts/task_testmon.py`; the result
+shows `test_selection`). The record is keyed on the content of the code each test ran, not
+on a commit, so one that is older than `master` or comes from another branch makes testmon
+run more tests, never fewer. Both steps are best effort: a missing or damaged record, or a
+worktree that does not ignore `.testmon/`, leaves the old behaviour (the whole suite).
+Measured 2026-11-11: a fresh worktree seeded from another task's record selected no tests
+in 28 s.
+
 testmon limits: selection is off under `-m` and `-k` (so smoke and affected are separate runs);
-the first run on a checkout, or after deleting `.testmon/`, is the whole suite; it follows
+the first run on a checkout without a seeded record, or after deleting `.testmon/`, is the
+whole suite; it follows
 Python code only, hence the full-suite triggers above; comment-only edits select nothing. Its
 data is `.testmon/.testmondata`, per worktree and gitignored. If the selection looks stale,
 delete `.testmon/`.
@@ -186,6 +200,68 @@ covers billing core, the TMF contract (validator, enum lock, operation ids, spec
 health, order states, catalog, conventions), migrations on an empty database, and the MCP
 connector. A new test is not smoke by default: mark one only where it guards what the gate
 exists for, and keep the set near two minutes of summed time.
+
+## Test speed (2026-11-11, #319)
+
+Measured on the 12-CPU workstation. The host is shared with other agents' test runs, so
+every comparison below was run back to back with the host otherwise quiet; a single number
+taken under load is not comparable (the same smoke run took 84 to 219 s).
+
+| What | Before | After | Change |
+|---|---|---|---|
+| First commit in a new worktree, `make test-changed` | all 2534 tests, 10 to 15 min | no tests selected, 28 s | the seeded record ([above](#tests-in-the-hook-smoke-plus-affected)) |
+| Smoke subset (`make test-smoke`, the pytest part) | 89 and 95 s | 84 and 89 s | the kept template database ([infra.md](infra.md#conventions)) |
+| UI unit tests (`make web-test`, one timezone) | 123 and 125 s | 103 and 104 s | the two largest test files split |
+| Full backend suite (`make test`, the pytest part) | 10 min 42 s | not measured again | the docs said 7 minutes; the suite grew |
+
+**The UI split.** vitest runs files side by side but one file's tests in order, and
+`SubscriberCard.test.tsx` (168 tests, 121 s) alone set the wall time while all files
+together were 518 s of work. It is now five files and `Catalog.test.tsx` (88 tests, 71 s)
+three, with the fixtures they share in `frontend/src/test/subscriberCardKit.ts` and
+`catalogKit.ts`. Every test moved verbatim: 920 tests before and after. The price is CPU:
+each file sets up its own environment, so the summed work rose to about 800 s and the load
+during the run doubles. A further split would cost more than it gains.
+
+**A bug the per-worker migration hid.** `alembic/env.py` configures logging from
+`alembic.ini`, which replaces the root handlers. While every worker migrated its own
+template, every test process lost the app's redacting log handler at start. With one build
+per run only the building worker would lose it, so the build now puts the logging back
+(`tests/conftest.py`), and two MCP audit tests failed at once: the redaction read the
+principal of a static token, `mcp-token:<name>`, as a `token:` secret pair and logged
+`mcp-token:[redacted]` in the audit line and the request line's operator. That was the
+behaviour in production; the tests had only passed because the handler was gone.
+`app/logsetup.py` now leaves that principal alone (`tests/test_logging.py`).
+
+**Suites never inherit a hook's Git selectors.** Inside a hook Git exports `GIT_DIR` and
+`GIT_INDEX_FILE`, and a git command that inherits them acts on the hook's repository,
+whatever directory it names. On 2026-11-11 a new suite ran `git init <temporary directory>`
+from the commit hook: Git re-initialised the real repository instead and set `core.bare`,
+so every command in the primary checkout failed until `git config core.bare false`
+(nothing else changed). `scripts/run_suites.py` now removes the selectors from every
+suite's environment, `scripts/task_testmon.py` from its own git call, and
+`scripts/test_task_testmon.py` has the case.
+
+**Measured and left alone:**
+
+- *Scheduler and workers.* `--dist worksteal` gave 91 and 92 s on the smoke subset against
+  84 and 89 s without it. Fewer workers were slower (`-n 8` 155 s, `-n 6` 144 s, single runs
+  under some load), in line with the earlier decision to keep `-n auto`.
+- *How a test database is made.* Cloning the template and dropping the clone takes
+  0.12 to 0.16 s; `STRATEGY file_copy` is no faster than the default (60 cycles: 9.6 s
+  against 7.2 and 9.8 s). A typical API test spends about half its 0.6 s in this setup, but
+  the alternative, one database per worker that is emptied between tests, gives up the
+  isolation the suite relies on and is a decision of its own.
+- *The slowest tests* (`test_loadtest_seed.py` twice, `test_seed.py`,
+  `test_tmf_gaps.py[nested]`: 29 to 46 s each alone, about 100 s each in a full run). A
+  profile shows the time is the application's own work, 35,000 to 45,000 SQL statements per
+  test for the demo seed and the gap probe; fixtures, client start and stop and pool
+  handling are under 0.3 s. The generator tests are already at 12 subscribers over 3 to 4
+  days and each compares two complete runs, which is what they prove. Nothing was changed:
+  a faster version of any of them would have to do less.
+- *Bytecode.* Sources are mounted read-only, so every pytest process compiles about 2000
+  modules (1.6 s). A cache volume would save that once per worker; not worth a new volume.
+- *The browser e2e run* could not be timed: `make seed` fails on a default local stack
+  ([#321](https://github.com/altharmz/bss/issues/321)).
 
 ## CI
 

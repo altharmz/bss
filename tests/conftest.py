@@ -1,4 +1,5 @@
 # ruff: noqa: E402 - PROMETHEUS_MULTIPROC_DIR must be set before the imports below
+import logging
 import os
 import tempfile
 
@@ -13,6 +14,7 @@ if os.environ.get("BSS_PROMETHEUS_PID") != str(os.getpid()):
 import time
 from collections.abc import Iterator
 from functools import cache
+from pathlib import Path
 
 import hypothesis
 import psycopg
@@ -149,26 +151,40 @@ def temp_db_url(monkeypatch) -> Iterator[str]:
         _drop_database(test_db)
 
 
-@pytest.fixture(scope="session")
-def template_db() -> Iterator[str]:
-    """Migrated to head once per session. Test databases are cloned from it with
-    CREATE DATABASE ... TEMPLATE, which copies files instead of replaying migrations.
-    Nothing may stay connected to it: Postgres refuses to clone a database in use."""
-    name = scratch_db.name("template")
-    url = _create_database(name)
+def _migrate(name: str) -> None:
+    """Migrates the empty database `name` to head and leaves no session connected to it."""
+    from app import db
+
+    url = ADMIN_URL.rsplit("/", 1)[0] + f"/{name}"
     previous = os.environ.get("DATABASE_URL")
     os.environ["DATABASE_URL"] = url  # alembic/env.py reads it
+    # alembic/env.py also configures logging from alembic.ini, which replaces the root
+    # handlers. Only the worker that builds the template runs it, so put the logging back:
+    # the workers must not differ. (While every worker migrated its own template, all of
+    # them lost the app's redacting handler, which hid a wrong redaction, see logsetup.)
+    root = logging.getLogger()
+    handlers, level = list(root.handlers), root.level
     try:
         command.upgrade(Config("alembic.ini"), "head")
     finally:
+        root.handlers[:] = handlers
+        root.setLevel(level)
         if previous is None:
             del os.environ["DATABASE_URL"]
         else:
             os.environ["DATABASE_URL"] = previous
-    try:
-        yield name
-    finally:
-        _drop_database(name)
+        db.close(url)
+
+
+@pytest.fixture(scope="session")
+def template_db() -> str:
+    """The database at migration head that test databases are cloned from with
+    CREATE DATABASE ... TEMPLATE, which copies files instead of replaying migrations.
+    Built once for a set of migrations and kept (tests/scratch_db.py): every xdist worker
+    used to migrate its own, 4.5 s alone and 9 to 30 s each when twelve did it at once.
+    Nothing may stay connected to it: Postgres refuses to clone a database in use."""
+    digest = scratch_db.migrations_digest(Path.cwd())
+    return scratch_db.keep(ADMIN_URL, "template", digest, _migrate)
 
 
 @pytest.fixture

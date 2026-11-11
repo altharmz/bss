@@ -17,6 +17,7 @@ from pathlib import Path
 import start_task
 import task_pr
 import task_telemetry
+import task_testmon
 from task_cleanup import command, docker, remove_leftovers
 from task_git import require, require_no_git_overrides, run
 from task_quality import context, paths, query, review
@@ -425,6 +426,10 @@ def finish_steps(primary, common, slot):
                 "task head changed during cleanup",
             )
             clean_task(root)
+            # The merged task's test-selection record seeds the next worktree.
+            saved = task_testmon.save(root, common)
+            if saved.startswith("not saved"):
+                print(f"finish-task: test-selection record {saved}", file=sys.stderr)
             runtime_inventory(root, task)
             command(root, str(root / "scripts/task-compose"), "--profile", "*", "down")
             require(runtime_inventory(root, task) == ([], []), "task runtime removal incomplete")
