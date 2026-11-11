@@ -1057,7 +1057,8 @@ def two_open_bills(api, db_conn) -> tuple[dict, list[dict]]:
     bill(db_conn, account, date(2026, 12, 1))
     bill(db_conn, account, date(2027, 1, 1))
     api.clock.set(at_day(date(2027, 1, 2)))
-    return account, decimals(api.get(f"{BILL}?billingAccount.id={account['id']}"))
+    # the list is newest first (#314): Jan, Dec; returned oldest first
+    return account, decimals(api.get(f"{BILL}?billingAccount.id={account['id']}"))[::-1]
 
 
 def test_payments_as_the_ui_sends_them(api, db_conn):
@@ -1082,9 +1083,10 @@ def test_payments_as_the_ui_sends_them(api, db_conn):
     )
     assert lettered.status_code == 201, lettered.text
     bills = decimals(api.get(f"{BILL}?billingAccount.id={a}"))
+    # TEST-CHANGE (#314): bills are listed newest first (decided by the human 2026-11-11)
     assert [(b["state"], b["remainingAmount"]["value"]) for b in bills] == [
-        ("settled", Decimal("0.00")),
         ("partiallyPaid", Decimal("150.00")),
+        ("settled", Decimal("0.00")),
     ]
 
 
@@ -1101,16 +1103,17 @@ def test_hold_and_release_as_the_ui_sends_them(api, db_conn):
 
 
 def test_global_bill_cycle_and_rate_reads_as_the_ui_makes_them(api, db_conn):
-    """api/bills.ts, pinned in GlobalBills.test.tsx: the bill list by billingAccount.id and
-    state (paged by getAll; the billing date is applied client side), the bill's billCycle
-    ref and runType, the bill cycle list and GET, and the rates by bill.id with one rate."""
+    """api/bills.ts, pinned in GlobalBills.test.tsx: the bill page by billingAccount.id and
+    state, newest first (#314), the bill's billCycle ref and runType, the bill cycle list
+    and GET, and the rates by bill.id with one rate."""
     account, (dec, jan) = two_open_bills(api, db_conn)
     a = account["id"]
     page = "offset=0&limit=100"
-    mine = api.get(f"{BILL}?billingAccount.id={a}&state=sent&{page}")
-    assert {b["id"] for b in mine.json()} == {dec["id"], jan["id"]}
-    assert api.get(f"{BILL}?state=settled&{page}").json() == []
-    assert len(api.get(f"{BILL}?{page}").json()) >= 2
+    listed = "offset=0&limit=50"
+    mine = api.get(f"{BILL}?billingAccount.id={a}&state=sent&{listed}")
+    assert [b["id"] for b in mine.json()] == [jan["id"], dec["id"]]
+    assert api.get(f"{BILL}?state=settled&{listed}").json() == []
+    assert len(api.get(f"{BILL}?{listed}").json()) >= 2
     row = mine.json()[0]
     assert row["billingAccount"]["id"] == a and row["billingAccount"]["name"]
     assert row["billDate"] and row["runType"] in ("onCycle", "offCycle")
@@ -1610,7 +1613,8 @@ def test_balances_screen_reads_as_the_ui_makes_them(api, db_conn):
     assert total_detail.json()["partyAccount"]["id"] == tx.id
     assert total_detail.json()["totalBalance"] == one_total[0]["totalBalance"]
     assert one_total[0]["totalBalance"] == {"amount": 40, "units": "USD"}
-    # each kind's list, by account and status; the transfer is the sender's, created
+    # each kind's page (#314), by account and status; the transfer is the sender's, created
+    page = "offset=0&limit=50"
     sent = api.get(f"{prepay}/transferBalance?partyAccount.id={tx.id}&{page}").json()
     assert [t["id"] for t in sent] == [moved["id"]]
     assert api.get(f"{prepay}/transferBalance?partyAccount.id={rx.id}&{page}").json() == []
@@ -2491,7 +2495,7 @@ def test_payment_and_refund_history_reads_as_the_ui_makes_them(api):
     )
     assert refund.status_code == 201, refund.text
 
-    page = "offset=0&limit=100"
+    page = "offset=0&limit=50"  # the global screen's pages (#314), newest first
     mine = api.get(f"{PAYMENT}?account.id={a}&status=done&{page}")
     assert [p["id"] for p in mine.json()] == [made.json()["id"]]
     assert total(mine, api) == "1"

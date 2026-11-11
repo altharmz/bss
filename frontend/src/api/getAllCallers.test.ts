@@ -27,6 +27,7 @@ const ALLOWED: Record<string, string> = {
   'numbers.ts:loadNumberProducts': "one number's products",
   'orders.ts:findOrderCommand': "one order's prepaid commands",
   'orders.ts:loadCancellations': "one order's cancellations",
+  'payments.ts:loadPayments': "one account's payments",
   'ports.ts:loadPins': "one product's transfer PINs",
   'transfer.ts:findReceiver': 'one exact number value',
   'transfer.ts:loadOwnNumbers': "one account's active products",
@@ -46,11 +47,6 @@ const ALLOWED: Record<string, string> = {
   'bss.ts:loadFinancialAccounts': 'financial accounts: group accounts, not one per subscriber',
   'bss.ts:loadPartyAccounts': 'party and settlement accounts: not one per subscriber',
   'ports.ts:loadPorts': 'the port request queue (number portability), filtered',
-  // global lists still read whole: converted once their order is decided (#314)
-  'bills.ts:loadAllBills': 'global Bills screen: pending the newest-first decision (#314)',
-  'history.ts:loadKindActions': 'global Balances actions: pending the newest-first decision',
-  'payments.ts:loadPayments': 'global Payments screen: pending the newest-first decision',
-  'payments.ts:loadRefundHistory': 'global Payments screen: pending the newest-first decision',
 };
 
 /** `file:function` of every getAll call in the API modules. */

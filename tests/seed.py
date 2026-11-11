@@ -342,7 +342,11 @@ BILLS = "/tmf-api/customerBillManagement/v5/customerBill"
 def open_bills(api: Api, world: World, who: str) -> list[dict]:
     """The account's bills that still owe something and take payments, oldest first."""
     bills = api.get(f"{BILLS}?billingAccount.id={world.accounts[who]['id']}&limit=100")
-    found = [b for b in bills if b["state"] in ("sent", "partiallyPaid")]
+    # the list is newest first (#314): order by bill date here
+    found = sorted(
+        (b for b in bills if b["state"] in ("sent", "partiallyPaid")),
+        key=lambda b: (b["billDate"], b["id"]),
+    )
     if not found:
         raise SeedError(f"{who} has no open bill to seed the bill lifecycle with")
     return found

@@ -79,12 +79,16 @@ function open(path: string) {
 }
 
 const PAGE = 'offset=0&limit=100';
+/** a page of the global payment and refund lists (#314) */
+const LIST = 'offset=0&limit=50';
 
 describe('payments screen', () => {
+  // TEST-CHANGE (#314): the server lists payments newest first; the screen shows them as
+  // served, one page per tab
   it('lists payments newest first with links to the cards, and the refunds tab', async () => {
     const { calls } = backend({
-      [`GET ${PAYMENT}?${PAGE}`]: () => json([PAY1, PAY2], { total: 2 }),
-      [`GET ${REFUND}?${PAGE}`]: () => json([REFUND1], { total: 1 }),
+      [`GET ${PAYMENT}?${LIST}`]: () => json([PAY2, PAY1]),
+      [`GET ${REFUND}?${LIST}`]: () => json([REFUND1], { total: 1 }),
     });
     open('/payments');
     await screen.findByText('Ivan Ivanov');
@@ -101,7 +105,7 @@ describe('payments screen', () => {
     expect(within(row).getByText('USD')).toBeTruthy();
     expect(within(row).getByText('Bank transfer')).toBeTruthy();
     expect(within(row).getByText('INV-77')).toBeTruthy();
-    expect(screen.getByText('Showing 2')).toBeTruthy();
+    expect(screen.getByText('Showing 1–2')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Refunds' }));
     await screen.findByText('Returned deposit');
@@ -118,16 +122,14 @@ describe('payments screen', () => {
     expect(calls.filter((c) => c.startsWith(`GET ${PAYMENT}?`))).toHaveLength(1);
   });
 
-  it('filters by status, by the account chip and by a client-side date range', async () => {
+  // TEST-CHANGE (#314): no date range (the API has no date filter; a page is not filtered
+  // locally)
+  it('filters by status and by the account chip on the server', async () => {
     const { calls } = backend({
-      [`GET ${PAYMENT}?${PAGE}`]: () => json([PAY1, PAY2], { total: 2 }),
-      [`GET ${REFUND}?${PAGE}`]: () => json([REFUND1], { total: 1 }),
-      [`GET ${PAYMENT}?account.id=${A1}&${PAGE}`]: () => json([PAY1], { total: 1 }),
-      [`GET ${REFUND}?account.id=${A1}&${PAGE}`]: () => json([REFUND1], { total: 1 }),
-      [`GET ${PAYMENT}?account.id=${A1}&status=done&${PAGE}`]: () => json([PAY1], { total: 1 }),
-      [`GET ${REFUND}?account.id=${A1}&status=done&${PAGE}`]: () => json([REFUND1], { total: 1 }),
-      [`GET ${PAYMENT}?status=done&${PAGE}`]: () => json([PAY1, PAY2], { total: 2 }),
-      [`GET ${REFUND}?status=done&${PAGE}`]: () => json([REFUND1], { total: 1 }),
+      [`GET ${PAYMENT}?${LIST}`]: () => json([PAY2, PAY1]),
+      [`GET ${PAYMENT}?account.id=${A1}&${LIST}`]: () => json([PAY1]),
+      [`GET ${PAYMENT}?account.id=${A1}&status=done&${LIST}`]: () => json([PAY1]),
+      [`GET ${PAYMENT}?status=done&${LIST}`]: () => json([PAY2, PAY1]),
     });
     open(`/payments?account=${A1}`);
     const chip = await screen.findByText(/Account/, {
@@ -135,29 +137,36 @@ describe('payments screen', () => {
     });
     await screen.findByRole('link', { name: 'Ivan Ivanov' });
     expect(screen.queryByText('Olga Kuznetsova')).toBeNull();
+    expect(screen.queryByLabelText('From')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'done' }));
     await waitFor(() =>
-      expect(calls).toContain(`GET ${PAYMENT}?account.id=${A1}&status=done&${PAGE}`),
+      expect(calls).toContain(`GET ${PAYMENT}?account.id=${A1}&status=done&${LIST}`),
     );
-    // dates are applied to the loaded rows: no new request
-    await screen.findByRole('link', { name: 'Ivan Ivanov' });
-    const before = calls.length;
-    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-09-15' } });
-    await waitFor(() => expect(screen.queryByRole('link', { name: 'Ivan Ivanov' })).toBeNull());
-    expect(calls.length).toBe(before);
-    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-09-01' } });
-    fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-09-30' } });
-    await screen.findByRole('link', { name: 'Ivan Ivanov' });
     fireEvent.click(within(chip).getByRole('button', { name: 'Remove the account filter' }));
-    await screen.findByText('Showing 1 of 2'); // PAY2 (Oct 1) is outside the range
+    await waitFor(() => expect(calls).toContain(`GET ${PAYMENT}?status=done&${LIST}`));
+    expect(await screen.findByText('Olga Kuznetsova')).toBeTruthy();
     expect(window.location.search).toBe('');
-    expect(screen.queryByText('Olga Kuznetsova')).toBeNull();
+  });
+
+  it('pages with Previous and Next', async () => {
+    const { calls } = backend({
+      [`GET ${PAYMENT}?${LIST}`]: () => json([PAY2], { more: true }),
+      [`GET ${PAYMENT}?offset=50&limit=50`]: () => json([PAY1]),
+    });
+    open('/payments');
+    await screen.findByText('Olga Kuznetsova');
+    expectUi('ui.payments.previous');
+    expectUi('ui.payments.next');
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(await screen.findByText('Ivan Ivanov')).toBeTruthy();
+    expect(screen.getByText('Showing 51–51')).toBeTruthy();
+    expect(calls).toContain(`GET ${PAYMENT}?offset=50&limit=50`);
   });
 
   it('opens a payment from GET /payment/{id} with what it paid', async () => {
     backend({
-      [`GET ${PAYMENT}?${PAGE}`]: () => json([PAY1], { total: 1 }),
-      [`GET ${REFUND}?${PAGE}`]: () => json([], { total: 0 }),
+      [`GET ${PAYMENT}?${LIST}`]: () => json([PAY1], { total: 1 }),
+      [`GET ${REFUND}?${LIST}`]: () => json([], { total: 0 }),
       [`GET ${PAYMENT}/${P1}`]: () => json(PAY1),
     });
     open('/payments');
@@ -174,9 +183,9 @@ describe('payments screen', () => {
   it('shows the error with Retry and the empty state', async () => {
     let fail = true;
     backend({
-      [`GET ${PAYMENT}?${PAGE}`]: () =>
+      [`GET ${PAYMENT}?${LIST}`]: () =>
         fail ? tmfError(503, 'Service Unavailable') : json([], { total: 0 }),
-      [`GET ${REFUND}?${PAGE}`]: () => json([], { total: 0 }),
+      [`GET ${REFUND}?${LIST}`]: () => json([], { total: 0 }),
     });
     open('/payments');
     const alert = await screen.findByRole('alert');
@@ -258,8 +267,7 @@ describe('account-level refunds from payments', () => {
         [`GET /tmf-api/customerBillManagement/v5/customerBillOnDemand?billingAccount.id=${A1}&${PAGE}`]:
           () => json([], { total: 0 }),
         [`GET ${PAYMENT}?account.id=${A1}&${PAGE}`]: () => json([PAY1], { total: 1 }),
-        [`GET ${PAYMENT}?${PAGE}`]: () => json([PAY1], { total: 1 }),
-        [`GET ${REFUND}?${PAGE}`]: () => json([], { total: 0 }),
+        [`GET ${PAYMENT}?${LIST}`]: () => json([PAY1]),
         [`GET ${PAYMENT}/${P1}`]: () => json(PAY1),
         [`POST ${REFUND}`]: () => json({ ...REFUND1, totalAmount: usd(25.1) }),
       });
@@ -312,9 +320,10 @@ describe('account-level refunds from payments', () => {
       expect(writes[0]?.[1]?.body).toBe(
         `{"@type":"Refund","account":{"id":"${A1}","@referredType":"BillingAccount"},"totalAmount":{"unit":"USD","value":25.10},"paymentMethod":{"name":"bankTransfer"},"description":"Returned deposit"}`,
       );
+      // TEST-CHANGE (#314): the global screen reloads the page it shows (the payments tab)
       const refreshed =
         entry === 'global payment'
-          ? `GET ${REFUND}?${PAGE}`
+          ? `GET ${PAYMENT}?${LIST}`
           : `GET ${REFUND}?account.id=${A1}&${PAGE}`;
       await waitFor(() => expect(calls.filter((call) => call === refreshed)).toHaveLength(2));
     },

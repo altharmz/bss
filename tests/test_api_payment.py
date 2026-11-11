@@ -178,7 +178,8 @@ def test_payment_list_filters(api):
     listed = api.get(f"{PAYMENT}?account.id={ivan['id']}")
     assert total(listed, api) == "2"
     values = [p["totalAmount"]["value"] for p in decimals(listed)]
-    assert values == [Decimal("100.00"), Decimal("200.00")]
+    # TEST-CHANGE (#314): payments are listed newest first (decided by the human 2026-11-11)
+    assert values == [Decimal("200.00"), Decimal("100.00")]
     assert len(api.get(f"{PAYMENT}?status=done").json()) == 3
     assert api.get(f"{PAYMENT}?account.id=nope").status_code == 400
 

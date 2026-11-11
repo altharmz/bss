@@ -8,7 +8,8 @@ def get(conn, uid):
 
 
 def page(conn, **kwargs):
-    return select_page(conn, "refund", **kwargs)
+    """Newest first (#314, decided by the human 2026-11-11)."""
+    return select_page(conn, "refund", newest_first=True, **kwargs)
 
 
 def insert(conn, account_id, data, now, details):

@@ -1,4 +1,4 @@
-import { getAll, getJson } from './client';
+import { getAll, getJson, getPage } from './client';
 import { PAYMENTS, REFUNDS } from './bss';
 
 // Payments and refunds history (docs/ui.md): TMF676 reads only.
@@ -66,12 +66,42 @@ function query(base: string, filter: HistoryFilter): string {
   return parts.length === 0 ? base : `${base}?${parts.join('&')}`;
 }
 
-export function loadPayments(filter: HistoryFilter, signal?: AbortSignal) {
-  return getAll<PaymentRecord>(query(PAYMENTS, filter), signal);
+/** One account's payments, every page (the subscriber card). */
+export function loadPayments(account: string, signal?: AbortSignal) {
+  return getAll<PaymentRecord>(query(PAYMENTS, { account, status: null }), signal);
 }
 
-export function loadRefundHistory(filter: HistoryFilter, signal?: AbortSignal) {
-  return getAll<RefundRecord>(query(REFUNDS, filter), signal);
+export const PAYMENT_PAGE = 50;
+
+type Paged<T> = { items: T[]; more: boolean; offset: number };
+
+function pageQuery(filter: HistoryFilter, offset: number): string {
+  const query = new URLSearchParams();
+  if (filter.account !== null) query.set('account.id', filter.account);
+  if (filter.status !== null) query.set('status', filter.status);
+  query.set('offset', String(offset));
+  query.set('limit', String(PAYMENT_PAGE));
+  return query.toString();
+}
+
+/** One page of payments, newest first on the server (#314). */
+export async function loadPaymentPage(
+  filter: HistoryFilter,
+  offset: number,
+  signal?: AbortSignal,
+): Promise<Paged<PaymentRecord>> {
+  const page = await getPage<PaymentRecord>(`${PAYMENTS}?${pageQuery(filter, offset)}`, signal);
+  return { ...page, offset };
+}
+
+/** One page of refunds, newest first on the server (#314). */
+export async function loadRefundPage(
+  filter: HistoryFilter,
+  offset: number,
+  signal?: AbortSignal,
+): Promise<Paged<RefundRecord>> {
+  const page = await getPage<RefundRecord>(`${REFUNDS}?${pageQuery(filter, offset)}`, signal);
+  return { ...page, offset };
 }
 
 export function loadPayment(id: string, signal?: AbortSignal) {

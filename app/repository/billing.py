@@ -671,7 +671,10 @@ def get_bill(conn: psycopg.Connection, bill_id: UUID) -> Row | None:
 def page_bills(
     conn: psycopg.Connection, *, where: dict[str, Any], offset: int, limit: int
 ) -> tuple[list[Row], bool]:
-    return select_page(conn, "customer_bill", where=where, offset=offset, limit=limit)
+    """Newest first (#314, decided by the human 2026-11-11)."""
+    return select_page(
+        conn, "customer_bill", where=where, offset=offset, limit=limit, newest_first=True
+    )
 
 
 # --- the billing core's view of one account (rows <-> app/billing/model.py) ---

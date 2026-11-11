@@ -828,7 +828,11 @@ with its reason, so a new one must be justified there.
 - **Filters the API cannot serve are dropped**, never applied to a page locally:
   Products' offering text (the number becomes an exact value), SIMs' ICCID (the IMSI
   becomes an exact value), Numbers' partial match (exact value), the Subscribers
-  negative-balance figure, every filter count.
+  negative-balance figure, the Bills tab's billing date (the bill cycles keep it: one per
+  billing date, read whole), the Payments date range, every filter count.
+- **Event screens are newest first on the server** (the human, 2026-11-11): Bills,
+  Payments and Refunds, and the Balances top-up, adjustment, hold and transfer tabs show
+  each page as served ([tmf-api.md](tmf-api.md#lists-without-counts-2026-11-10-312)).
 - **Pickers** search as you type: the financial-account owner picker reads
   `/internal/v1/party?q=` (20 at a time, the chosen owner kept); the number picker offers
   the first 50 available numbers and finds a full typed number anywhere.

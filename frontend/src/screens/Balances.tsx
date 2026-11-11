@@ -11,6 +11,7 @@ import {
 } from '../api/balances';
 import {
   loadKindAction,
+  ACTION_PAGE,
   loadKindActions,
   type ActionKind,
   type BalanceAction,
@@ -20,12 +21,12 @@ import { useSetCrumbs, useSystemContext } from '../app/context';
 import { hrefOf, Link } from '../app/router';
 import { businessDate, clockTime } from '../format/dates';
 import { shortId } from '../format/ids';
-import { formatCents, formatInt } from '../format/money';
+import { formatCents } from '../format/money';
 import { SelectField, Dialog, PageHeader, Panel, StatusPill, Segmented, KeyValue } from '../ui/kit';
 import { Amount } from '../ui/Amount';
 import { Id } from '../ui/Id';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
-import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
+import { TableHead, TableRow, type Column } from '../ui/Table';
 import { PageFooter, usePageOffset } from '../ui/paging';
 import { actionLabel, ActionDialog, statusLabel } from './PrepaidHistory';
 import './screens.css';
@@ -119,10 +120,10 @@ export function BalancesScreen() {
   const buckets = useResource(`balances-buckets:${key}:${offset}`, (signal) =>
     tab === 'buckets' ? loadBucketRows(filter, offset, signal) : Promise.resolve(none),
   );
-  const actions = useResource(`balances-actions:${key}`, (signal) =>
+  const actions = useResource(`balances-actions:${key}:${offset}`, (signal) =>
     tab === 'buckets' || tab === 'totals'
-      ? Promise.resolve([] as BalanceAction[])
-      : loadKindActions(KIND_OF[tab], filter, signal),
+      ? Promise.resolve(none)
+      : loadKindActions(KIND_OF[tab], filter, offset, signal),
   );
 
   const totals = useResource(`balances-totals:${key}:${offset}`, (signal) =>
@@ -151,11 +152,9 @@ export function BalancesScreen() {
           ? (totals.data.items.find((r) => r.account.id === account)?.account.name ?? null)
           : null
         : actions.status === 'ok'
-          ? (actions.data.find((a) => a.sender.id === account)?.sender.name ?? null)
+          ? (actions.data.items.find((a) => a.sender.id === account)?.sender.name ?? null)
           : null;
   const statusOptions = tab === 'buckets' ? BUCKET_STATUSES : ACTION_STATUSES;
-  const shown = (rows: number, all: number) =>
-    rows === all ? `${formatInt(rows)}` : `${formatInt(rows)} of ${formatInt(all)}`;
 
   return (
     <div className="bss-screen" data-ui="ui.balances">
@@ -297,8 +296,8 @@ export function BalancesScreen() {
               columns={ACTION_COLUMNS}
               errorTitle="Failed to load the list"
               empty={{ title: 'Nothing here', text: 'No matching requests.' }}
-              count={(data) => data.length}
-              rows={(data) => data}
+              count={(data) => data.items.length}
+              rows={(data) => data.items}
               onResetFilters={reset}
             >
               {(rows, data) => (
@@ -311,7 +310,14 @@ export function BalancesScreen() {
                       cells={actionCells(action, timeZone)}
                     />
                   ))}
-                  <TableFooter left={`Showing ${shown(rows.length, data.length)}`} />
+                  <PageFooter
+                    offset={data.offset}
+                    shown={rows.length}
+                    more={data.more}
+                    size={ACTION_PAGE}
+                    onOffset={setOffset}
+                    ui="ui.balances"
+                  />
                 </>
               )}
             </ListState>

@@ -186,8 +186,8 @@ OPERATIONS: dict[str, Op] = {
         "One account's total prepaid balance over its buckets.", query=FIELDS
     ),
     "list_topup_balances": Op(
-        "Top-ups: money received on a prepaid bucket (payments to a prepaid account appear here"
-        " too); filter by status, bucket.id or partyAccount.id.",
+        "Top-ups, newest first: money received on a prepaid bucket (payments to a prepaid"
+        " account appear here too); filter by status, bucket.id or partyAccount.id.",
         query=LIST,
     ),
     "get_topup_balance": Op("One top-up.", query=FIELDS),
@@ -205,7 +205,8 @@ OPERATIONS: dict[str, Op] = {
     ),
     "delete_topup_balance": Op("Delete a failed top-up; a completed or cancelled one is history."),
     "list_adjust_balances": Op(
-        "Balance adjustments (signed corrections); filter by status, bucket.id or partyAccount.id.",
+        "Balance adjustments (signed corrections), newest first; filter by status, bucket.id or"
+        " partyAccount.id.",
         query=LIST,
     ),
     "get_adjust_balance": Op("One balance adjustment.", query=FIELDS),
@@ -232,7 +233,8 @@ OPERATIONS: dict[str, Op] = {
     ),
     "get_history": Op("One balance action's history entry.", query=FIELDS),
     "list_reserve_balances": Op(
-        "Operator holds on prepaid funds; filter by status, bucket.id or partyAccount.id.",
+        "Operator holds on prepaid funds, newest first; filter by status, bucket.id or"
+        " partyAccount.id.",
         query=LIST,
     ),
     "get_reserve_balance": Op("One operator hold.", query=FIELDS),
@@ -253,7 +255,7 @@ OPERATIONS: dict[str, Op] = {
         "Delete a failed hold; cancel a created one instead, a cancelled one is history."
     ),
     "list_transfer_balances": Op(
-        "Credit transfers between prepaid buckets; filter by status, bucket.id,"
+        "Credit transfers between prepaid buckets, newest first; filter by status, bucket.id,"
         " receiverBucket.id or partyAccount.id.",
         query=LIST,
     ),
@@ -527,13 +529,13 @@ OPERATIONS: dict[str, Op] = {
     ),
     "delete_settlement_account": Op("Delete a settlement account (nothing refers to one)."),
     # --- TMF676 payment ---
-    "list_refunds": Op("Completed refunds paid out of unused credit.", query=LIST),
+    "list_refunds": Op("Completed refunds paid out of unused credit, newest first.", query=LIST),
     "get_refund": Op("One completed refund.", query=FIELDS),
     "create_refund": Op(
         "Record a completed payout, bounded by unused credit and net account balance.",
         body=RefundCreate,
     ),
-    "list_payments": Op("Payments received.", query=LIST),
+    "list_payments": Op("Payments received, newest first.", query=LIST),
     "get_payment": Op("One payment, with the bills it paid (paymentItem).", query=FIELDS),
     "create_payment": Op(
         "Record a payment that has been received (status done) on a billing account, in"
@@ -570,7 +572,7 @@ OPERATIONS: dict[str, Op] = {
         " posted unbilled charges.",
         body=DemandCreate,
     ),
-    "list_bills": Op("Customer bills, written by the billing runs.", query=LIST),
+    "list_bills": Op("Customer bills, written by the billing runs, newest first.", query=LIST),
     "list_bill_cycles": Op(
         "Daily billing cycles, one per billing run.",
         query=LIST,

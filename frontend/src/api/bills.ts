@@ -1,4 +1,4 @@
-import { getAll, getJson } from './client';
+import { getAll, getJson, getPage } from './client';
 import { BILLS } from './bss';
 
 // Global bills, bill cycles and rates (docs/ui.md): TMF678 reads
@@ -62,12 +62,20 @@ export interface BillFilter {
   state: BillStateFilter | null;
 }
 
-export function loadAllBills(filter: BillFilter, signal?: AbortSignal) {
-  const parts = [
-    ...(filter.account !== null ? [`billingAccount.id=${encodeURIComponent(filter.account)}`] : []),
-    ...(filter.state !== null ? [`state=${filter.state}`] : []),
-  ];
-  return getAll<BillRow>(parts.length === 0 ? BILLS : `${BILLS}?${parts.join('&')}`, signal);
+export const BILL_PAGE = 50;
+
+/** One page of bills, newest first on the server (#314); state and account filter there. */
+export async function loadBillPage(
+  filter: BillFilter,
+  offset: number,
+  signal?: AbortSignal,
+): Promise<{ items: BillRow[]; more: boolean; offset: number }> {
+  const query = new URLSearchParams();
+  if (filter.account !== null) query.set('billingAccount.id', filter.account);
+  if (filter.state !== null) query.set('state', filter.state);
+  query.set('offset', String(offset));
+  query.set('limit', String(BILL_PAGE));
+  return { ...(await getPage<BillRow>(`${BILLS}?${query}`, signal)), offset };
 }
 
 export function loadBillCycles(signal?: AbortSignal) {

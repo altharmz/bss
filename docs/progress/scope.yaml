@@ -517,11 +517,15 @@ items:
   - {id: ui.addProduct.prepaidPreview, area: ui, stage: 5, title: "Prepaid first-charge preview in Add product: to pay, available, shortfall, ledger after"}
   - {id: ui.addProduct.topUpShortfall, area: ui, stage: 5, title: "Top up the shortfall from Add product: opens the Top-up form with the amount typed in"}
   - {id: ui.bills, area: ui, stage: 5, title: "Bills screen: bills and bill cycles tabs with state, account and billing date filters"}
+  - {id: ui.bills.previous, area: ui, stage: 5, title: "Bills: previous page of newer bills"}
+  - {id: ui.bills.next, area: ui, stage: 5, title: "Bills: next page of older bills"}
   - {id: ui.bills.accountChip, area: ui, stage: 5, title: "Bills screen account filter chip"}
   - {id: ui.bills.links, area: ui, stage: 5, title: "Bill dialog links: bill cycle and rates"}
   - {id: ui.bills.cycleDetail, area: ui, stage: 5, title: "Bill cycle detail dialog"}
   - {id: ui.bills.rateDetail, area: ui, stage: 5, title: "Applied billing rate detail dialog"}
   - {id: ui.payments, area: ui, stage: 5, title: "Payments screen: payments and refunds tabs with status, account and date filters"}
+  - {id: ui.payments.previous, area: ui, stage: 5, title: "Payments: previous page of newer rows"}
+  - {id: ui.payments.next, area: ui, stage: 5, title: "Payments: next page of older rows"}
   - {id: ui.payments.accountChip, area: ui, stage: 5, title: "Payments screen account filter chip"}
   - {id: ui.balances, area: ui, stage: 5, title: "Balances screen: buckets, top-ups, adjustments, holds and transfers (TMF654 reads)"}
   - {id: ui.balances.previous, area: ui, stage: 5, title: "Balances buckets and totals: previous page"}

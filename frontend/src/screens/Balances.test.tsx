@@ -11,7 +11,6 @@ import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, type Handler } from '../tes
 const PREPAY = '/tmf-api/prepayBalanceManagement/v4';
 const BUCKETS = `${PREPAY}/bucket`;
 const ACC = `${PREPAY}/accumulatedBalance`;
-const PAGE = 'offset=0&limit=100';
 /** a page of the buckets and totals lists (#314) */
 const LIST = 'offset=0&limit=50';
 const A1 = 'c0000001-0000-4000-8000-000000000001';
@@ -226,14 +225,14 @@ describe('balances screen', () => {
     const { calls } = backend({
       [`GET ${BUCKETS}?${LIST}`]: () => json([B_OLGA], { total: 1 }),
       [`GET ${ACC}?${LIST}`]: () => json([AB_OLGA], { total: 1 }),
-      [`GET ${PREPAY}/${path}?${PAGE}`]: () => json([], { total: 0 }),
+      [`GET ${PREPAY}/${path}?${LIST}`]: () => json([], { total: 0 }),
     });
     open('/balances');
     await screen.findByText('Olga Kuznetsova');
     tab(name);
     expect(await screen.findByText('Nothing here')).toBeTruthy();
     expectUi(ui);
-    expect(calls).toContain(`GET ${PREPAY}/${path}?${PAGE}`);
+    expect(calls).toContain(`GET ${PREPAY}/${path}?${LIST}`);
     // the other kinds are not read until their tab is opened
     const others = ['topupBalance', 'adjustBalance', 'reserveBalance', 'transferBalance'].filter(
       (p) => p !== path,
@@ -245,8 +244,8 @@ describe('balances screen', () => {
     const { calls, fetchMock } = backend({
       [`GET ${BUCKETS}?${LIST}`]: () => json([B_OLGA], { total: 1 }),
       [`GET ${ACC}?${LIST}`]: () => json([AB_OLGA], { total: 1 }),
-      [`GET ${PREPAY}/topupBalance?${PAGE}`]: () => json([topup], { total: 1 }),
-      [`GET ${PREPAY}/topupBalance?status=failed&${PAGE}`]: () => json([], { total: 0 }),
+      [`GET ${PREPAY}/topupBalance?${LIST}`]: () => json([topup], { total: 1 }),
+      [`GET ${PREPAY}/topupBalance?status=failed&${LIST}`]: () => json([], { total: 0 }),
       [`GET ${PREPAY}/topupBalance/${T1}`]: () => json(topup),
       [`PATCH ${PREPAY}/topupBalance/${T1}`]: () => json({ ...topup, status: 'cancelled' }),
     });
@@ -267,7 +266,7 @@ describe('balances screen', () => {
     expect(writes).toEqual([[`${PREPAY}/topupBalance/${T1}`, '{"status":"cancelled"}']]);
     fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'failed' } });
     await waitFor(() =>
-      expect(calls).toContain(`GET ${PREPAY}/topupBalance?status=failed&${PAGE}`),
+      expect(calls).toContain(`GET ${PREPAY}/topupBalance?status=failed&${LIST}`),
     );
   });
 
@@ -275,7 +274,7 @@ describe('balances screen', () => {
     const { calls } = backend({
       [`GET ${BUCKETS}?${LIST}`]: () => json([B_OLGA], { total: 1 }),
       [`GET ${ACC}?${LIST}`]: () => json([AB_OLGA], { total: 1 }),
-      [`GET ${PREPAY}/transferBalance?${PAGE}`]: () => json([transfer], { total: 1 }),
+      [`GET ${PREPAY}/transferBalance?${LIST}`]: () => json([transfer], { total: 1 }),
       [`GET ${PREPAY}/transferBalance/${X1}`]: () => json(transfer),
       [`GET ${BUCKETS}/${B2}`]: () => json(B_JAN),
     });

@@ -1,5 +1,5 @@
 import { PATHS } from './bss';
-import { getAll, getJson, patchJson, request } from './client';
+import { getAll, getJson, getPage, patchJson, request } from './client';
 import { toCents } from '../format/money';
 
 // TMF654 balanceActionHistory: every top-up, hold, adjustment and transfer of a prepaid
@@ -249,21 +249,24 @@ async function resolveActions(
   );
 }
 
-/** One kind's list (TMF654 topupBalance, adjustBalance, reserveBalance, transferBalance),
- * filtered on the server by partyAccount.id and status, newest requested first. */
+export const ACTION_PAGE = 50;
+
+/** One page of one kind's list (TMF654 topupBalance, adjustBalance, reserveBalance,
+ * transferBalance), filtered on the server by partyAccount.id and status, newest requested
+ * first by the server (#314). */
 export async function loadKindActions(
   kind: ActionKind,
   filter: { account: string | null; status: string | null },
+  offset: number,
   signal: AbortSignal,
-): Promise<BalanceAction[]> {
-  const query = [
-    ...(filter.account !== null ? [`partyAccount.id=${filter.account}`] : []),
-    ...(filter.status !== null ? [`status=${filter.status}`] : []),
-  ];
-  const path = query.length ? `${WRITE_PATH[kind]}?${query.join('&')}` : WRITE_PATH[kind];
-  const bodies = await getAll<HistoryBody>(path, signal);
-  const actions = await resolveActions(bodies, signal);
-  return actions.sort((a, b) => b.requestedDate.localeCompare(a.requestedDate));
+): Promise<{ items: BalanceAction[]; more: boolean; offset: number }> {
+  const query = new URLSearchParams();
+  if (filter.account !== null) query.set('partyAccount.id', filter.account);
+  if (filter.status !== null) query.set('status', filter.status);
+  query.set('offset', String(offset));
+  query.set('limit', String(ACTION_PAGE));
+  const page = await getPage<HistoryBody>(`${WRITE_PATH[kind]}?${query}`, signal);
+  return { items: await resolveActions(page.items, signal), more: page.more, offset };
 }
 
 /** One action from its kind's GET (the Balances detail; the card reads the history instead). */
