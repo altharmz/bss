@@ -232,6 +232,15 @@ principal of a static token, `mcp-token:<name>`, as a `token:` secret pair and l
 behaviour in production; the tests had only passed because the handler was gone.
 `app/logsetup.py` now leaves that principal alone (`tests/test_logging.py`).
 
+**Suites never inherit a hook's Git selectors.** Inside a hook Git exports `GIT_DIR` and
+`GIT_INDEX_FILE`, and a git command that inherits them acts on the hook's repository,
+whatever directory it names. On 2026-11-11 a new suite ran `git init <temporary directory>`
+from the commit hook: Git re-initialised the real repository instead and set `core.bare`,
+so every command in the primary checkout failed until `git config core.bare false`
+(nothing else changed). `scripts/run_suites.py` now removes the selectors from every
+suite's environment, `scripts/task_testmon.py` from its own git call, and
+`scripts/test_task_testmon.py` has the case.
+
 **Measured and left alone:**
 
 - *Scheduler and workers.* `--dist worksteal` gave 91 and 92 s on the smoke subset against

@@ -1,13 +1,28 @@
 #!/usr/bin/env python3
 """scripts/task_testmon.py: the test-selection record saved by finish and seeded by start."""
 
+import os
 import sqlite3
 import subprocess
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 import task_testmon
+
+
+def git(*args):
+    # Never with inherited GIT_* selectors: the commit hook runs this suite with GIT_DIR
+    # set, and `git init <dir>` then re-initialises the hook's repository as bare instead
+    # of creating <dir>. That happened to the real repository once (2026-11-11).
+    return subprocess.run(  # noqa: S603
+        ["git", *args],  # noqa: S607
+        check=True,
+        capture_output=True,
+        text=True,
+        env=task_testmon.git_environment(),
+    ).stdout.strip()
 
 
 def record(path, rows):
@@ -36,7 +51,7 @@ class TestSelectionTests(unittest.TestCase):
         self.old, self.new = self.base / "old", self.base / "new"
         for tree in (self.old, self.new):
             tree.mkdir()
-            subprocess.run(["git", "init", "-q", str(tree)], check=True)  # noqa: S603, S607
+            git("init", "-q", str(tree))
             (tree / ".gitignore").write_text(".testmon/\n")
 
     def test_a_saved_record_seeds_the_next_worktree(self):
@@ -91,6 +106,24 @@ class TestSelectionTests(unittest.TestCase):
         (self.new / ".gitignore").write_text("")
         self.assertEqual(task_testmon.seed(self.new, self.common), "not seeded (not ignored)")
         self.assertFalse((self.new / ".testmon").exists())
+
+    def test_git_selectors_of_a_hook_are_not_inherited(self):
+        # as inside the commit hook: GIT_DIR names another repository
+        victim = self.base / "victim"
+        git("init", "-q", str(victim))
+        selectors = {"GIT_DIR": str(victim / ".git"), "GIT_INDEX_FILE": str(victim / ".git/index")}
+        record(self.old / task_testmon.DATA, ["test_a"])
+        task_testmon.save(self.old, self.common)
+        fresh = self.base / "fresh"
+        with unittest.mock.patch.dict(os.environ, selectors):
+            git("init", "-q", str(fresh))
+            (fresh / ".gitignore").write_text(".testmon/\n")
+            self.assertEqual(task_testmon.seed(fresh, self.common), "seeded")
+            # the victim ignores nothing: with its GIT_DIR inherited the answer would be no
+            (self.new / ".gitignore").write_text("")
+            self.assertEqual(task_testmon.seed(self.new, self.common), "not seeded (not ignored)")
+        self.assertTrue((fresh / ".git").is_dir())
+        self.assertEqual(git("-C", str(victim), "config", "--local", "core.bare"), "false")
 
     def test_symlinks_are_never_followed(self):
         record(self.old / "real/.testmondata", ["test_a"])

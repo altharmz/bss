@@ -54,6 +54,13 @@ def backup(source, target):
             raise sqlite3.DatabaseError("integrity check failed")
 
 
+def git_environment():
+    """The environment without Git's repository selectors. Inside a hook Git exports
+    GIT_DIR and its relatives, and every git command that inherits them acts on the
+    hook's repository, whatever directory it names."""
+    return {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+
+
 def ignored(root):
     """Whether Git ignores the record in this worktree: a seed must never make it dirty."""
     return (
@@ -61,6 +68,7 @@ def ignored(root):
             ["git", "-C", str(root), "check-ignore", "-q", DATA],  # noqa: S607 - fixed query
             capture_output=True,
             check=False,
+            env=git_environment(),
         ).returncode
         == 0
     )
