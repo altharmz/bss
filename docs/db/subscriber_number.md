@@ -62,6 +62,7 @@ TMF639 LogicalResource inventory: subscriber identities, built-in msisdn (E.164 
 
 | Name | Definition | Backs a constraint |
 |---|---|---|
+| `subscriber_number_created_at_id_idx` | `CREATE INDEX subscriber_number_created_at_id_idx ON subscriber_number USING btree (created_at, id)` | no |
 | `subscriber_number_iccid_key` | `CREATE UNIQUE INDEX subscriber_number_iccid_key ON subscriber_number USING btree (iccid) WHERE (iccid IS NOT NULL)` | no |
 | `subscriber_number_id_kind_key` | `CREATE UNIQUE INDEX subscriber_number_id_kind_key ON subscriber_number USING btree (id, resource_specification_id)` | yes |
 | `subscriber_number_kind_value_key` | `CREATE UNIQUE INDEX subscriber_number_kind_value_key ON subscriber_number USING btree (resource_specification_id, value)` | yes |

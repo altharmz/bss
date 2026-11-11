@@ -39,6 +39,7 @@ Stable TMF654 bucket and accumulatedBalance identities for one prepaid account/c
 |---|---|---|
 | `prepaid_bucket_accumulated_balance_id_key` | `CREATE UNIQUE INDEX prepaid_bucket_accumulated_balance_id_key ON prepaid_bucket USING btree (accumulated_balance_id)` | yes |
 | `prepaid_bucket_billing_account_id_currency_key` | `CREATE UNIQUE INDEX prepaid_bucket_billing_account_id_currency_key ON prepaid_bucket USING btree (billing_account_id, currency)` | yes |
+| `prepaid_bucket_created_at_id_idx` | `CREATE INDEX prepaid_bucket_created_at_id_idx ON prepaid_bucket USING btree (created_at, id)` | no |
 | `prepaid_bucket_id_billing_account_id_currency_key` | `CREATE UNIQUE INDEX prepaid_bucket_id_billing_account_id_currency_key ON prepaid_bucket USING btree (id, billing_account_id, currency)` | yes |
 | `prepaid_bucket_pkey` | `CREATE UNIQUE INDEX prepaid_bucket_pkey ON prepaid_bucket USING btree (id)` | yes |
 

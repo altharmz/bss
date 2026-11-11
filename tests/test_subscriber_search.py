@@ -107,3 +107,13 @@ def test_the_prefix_searches_use_indexes(db_conn):
     ):
         plan = "\n".join(r[0] for r in db_conn.execute("EXPLAIN " + query))
         assert "Seq Scan" not in plan, plan
+
+
+def test_the_number_and_bucket_pages_read_their_order_index(db_conn):
+    """Numbers, SIMs and Balances page `ORDER BY created_at, id` (#314, migration 0073)."""
+    db_conn.execute("SET enable_seqscan = off")
+    db_conn.execute("SET enable_sort = off")
+    for table in ("subscriber_number", "prepaid_bucket"):
+        query = f"SELECT id FROM {table} ORDER BY created_at, id LIMIT 51"  # noqa: S608
+        plan = "\n".join(r[0] for r in db_conn.execute("EXPLAIN " + query))
+        assert f"{table}_created_at_id_idx" in plan, plan
