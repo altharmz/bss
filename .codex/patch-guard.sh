@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Codex apply_patch hook: the Edit deny rules of .claude/settings.json, which Codex never
 # reads (keep the two lists the same). tool_input.command is the patch text; every path in
-# it is checked. Exit 2 blocks. Cases: patch-guard-cases.txt, run by test-guard.sh.
+# it is checked. Exit 2 blocks. Cases: patch-guard-cases.txt, run by scripts/test_guard.py.
 set -uo pipefail
 
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"

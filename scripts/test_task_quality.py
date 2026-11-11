@@ -60,14 +60,14 @@ class QualityTests(unittest.TestCase):
         self.env["BSS_TEST_FAIL_TARGET"] = "check-preflight"
         result = self.quality("check")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("ran-guard-check", result.stdout)
+        self.assertIn("ran-docs-check", result.stdout)
         self.assertIn("failed: check-preflight", result.stdout)
         self.assertLess(result.stdout.index("ran-check-preflight"), result.stdout.index("ran-test"))
 
     def test_stage_selection_is_conservative(self):
         for names in (None, set(), {"app/api/example.py"}, {"Makefile"}, {"unknown"}):
             self.assertIn("web-e2e", check_stages(names))
-        for names in ({"scripts/task_git.py"}, {"docs/worktrees.md", ".claude/hooks/guard.sh"}):
+        for names in ({"scripts/task_git.py"}, {"docs/worktrees.md", ".claude/hooks/guard.py"}):
             stages = check_stages(names)
             self.assertNotIn("web-test", stages)
             self.assertNotIn("web-e2e", stages)

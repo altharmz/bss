@@ -94,7 +94,9 @@ class HandlerTests(unittest.TestCase):
         self.check(text, "command gh pr", "exit 3", "<redacted>")
 
     def test_finish_names_the_failing_command(self):
-        with patch.object(start_task, "primary", side_effect=failure(["docker", "volume", LEAK])):
+        with patch.object(
+            task_finish.task_repo, "primary", side_effect=failure(["docker", "volume", LEAK])
+        ):
             text = self.run_main(
                 task_finish, ["finish-task"], "slot_path", failure(["docker", "compose", LEAK])
             )

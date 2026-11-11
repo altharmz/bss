@@ -261,7 +261,7 @@ repository).
 ### Security scan
 
 `.github/workflows/security.yml` scans the Python packages, the UI packages and the runtime
-image every night at 01:45 UTC ([decisions/harness.md](decisions/harness.md#supply-chain-scanning-2026-11-08)).
+image every night at 01:45 UTC ([decisions/infra.md](decisions/infra.md#supply-chain-scanning-2026-11-08)).
 When a run is red:
 
 1. Read the failing job's log. The gate prints one line per blocking finding
@@ -285,9 +285,9 @@ hostile agent** ([decisions/harness.md](decisions/harness.md#the-guard)):
 
 - `.claude/settings.json`: `allow` (make, read-only git and gh, read/edit of the sources),
   `deny` (reading or editing `.env*`, edits under `design-ref/`).
-- `.claude/hooks/guard.sh`: a short pattern matcher run before every shell command - blocks
+- `.claude/hooks/guard.py`: a short pattern matcher run before every shell command - blocks
   reading secrets, destructive docker cleanups, force/delete pushes and skipping the git
-  hooks. Cases: `.claude/hooks/guard-cases.txt`, run by `.claude/hooks/test-guard.sh`.
+  hooks. Cases: `.claude/hooks/guard-cases.txt`, run by `scripts/test_guard.py`.
 - `.claude/hooks/format.sh`: formats edited Python (ruff) and UI files (prettier) in
   containers.
 - **Approval rules**: commit and push need none. Agents merge their own PRs only under the

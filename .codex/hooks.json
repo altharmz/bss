@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "root=\"$(git rev-parse --show-toplevel 2>/dev/null)\" && [ -f \"$root/.codex/guard.sh\" ] && exec bash \"$root/.codex/guard.sh\"; echo 'BLOCKED: bss guard not found - run Codex inside the repository' >&2; exit 2",
+            "command": "root=\"$(git rev-parse --show-toplevel 2>/dev/null)\" && [ -f \"$root/.claude/hooks/guard.py\" ] && exec python3 -B \"$root/.claude/hooks/guard.py\" --codex; echo 'BLOCKED: bss guard not found - run Codex inside the repository' >&2; exit 2",
             "timeout": 30,
             "statusMessage": "Checking project shell policy"
           }

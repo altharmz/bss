@@ -18,6 +18,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import start_task as task
+from task_runtime import gh_detail
 
 SCRIPTS = Path(__file__).resolve().parent
 MARKER = "startup-fixture-must-never-be-read-or-printed"
@@ -83,6 +84,8 @@ class StartupTests(unittest.TestCase):
         (self.primary / "scripts").mkdir()
         for name in (
             "start_task.py",
+            "task_board.py",
+            "task_repo.py",
             "task_runtime.py",
             "task_testmon.py",
             "task_telemetry.py",
@@ -942,14 +945,12 @@ class StartupTests(unittest.TestCase):
         self.env["BSS_TEST_FLAKY"] = str(self.base / "flaky")
         self.assertEqual(self.result()["issue"], 81)
         self.assertEqual(
-            task.gh_detail("HTTP 502: Bad Gateway (https://api.github.com/graphql)\nsecond"),
+            gh_detail("HTTP 502: Bad Gateway (https://api.github.com/graphql)\nsecond"),
             "HTTP 502: Bad Gateway (<url>)",
         )
-        self.assertEqual(
-            task.gh_detail("token ghp_abcdefghijklmnopqrstuvwxyz0123456789"), "<redacted>"
-        )
-        self.assertLessEqual(len(task.gh_detail("x" * 500)), 120)
-        self.assertEqual(task.gh_detail(""), "")
+        self.assertEqual(gh_detail("token ghp_abcdefghijklmnopqrstuvwxyz0123456789"), "<redacted>")
+        self.assertLessEqual(len(gh_detail("x" * 500)), 120)
+        self.assertEqual(gh_detail(""), "")
 
     def test_new_priority_task_rejects_missing_input_and_reserved_labels(self):
         cases = [
