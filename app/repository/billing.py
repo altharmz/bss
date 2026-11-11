@@ -101,6 +101,23 @@ def take_over_run(conn: psycopg.Connection, run_id: UUID, *, now: datetime) -> R
     return run
 
 
+def count_members(conn: psycopg.Connection, run_id: UUID, tz: str | None = None) -> Row:
+    """Store a daily run's member count: the accounts opened before 00:00 of its date in
+    BILLING_TZ (opened_at is the injected clock's, migration 0004). start_run calls it in
+    the transaction that creates, reopens or takes over the run (#284)."""
+    return returning(
+        conn,
+        """
+        UPDATE billing_run SET member_count =
+               (SELECT count(*) FROM billing_account a
+                 WHERE a.opened_at < (billing_run.run_date::timestamp AT TIME ZONE %(tz)s))
+         WHERE kind = 'daily' AND id = %(id)s
+        RETURNING *
+        """,
+        {"id": run_id, "tz": tz or settings.billing_tz},
+    )
+
+
 def _end_run(
     conn: psycopg.Connection,
     run_id: UUID,
@@ -126,8 +143,8 @@ def finish_run(
     conn: psycopg.Connection, run_id: UUID, *, now: datetime, tz: str | None = None
 ) -> Row:
     """Mark a running run completed - only when every member account has an ok outcome.
-    There are no counters (migration 0004): this check is the "completed means every
-    member is ok" rule, and RunNotComplete says what is missing."""
+    The check reads the outcome rows, not the stored counts (#284): it is the "completed
+    means every member is ok" rule, and RunNotComplete says what is missing."""
     run = fetch_one(conn, "SELECT * FROM billing_run WHERE id = %s FOR UPDATE", (run_id,))
     if run is None or run["kind"] != "daily" or run["status"] != "running":
         raise LookupError(f"no running billing run {run_id}")
@@ -213,40 +230,45 @@ def latest_run_date(conn: psycopg.Connection) -> date | None:
     return row["latest"] if row else None
 
 
+# The stored counts only (#284): reading the runs costs the same at 1k or 100k accounts.
 _RUN_VIEW = """
-    SELECT r.*, m.total, o.ok, o.failed, o.blocked, r.run_date = l.latest AS is_latest
+    SELECT r.*, r.member_count AS total, r.ok_count AS ok, r.failed_count AS failed,
+           r.blocked_count AS blocked, r.run_date = l.latest AS is_latest
       FROM billing_run r
      CROSS JOIN (SELECT max(run_date) AS latest FROM billing_run WHERE kind = 'daily') l
-     CROSS JOIN LATERAL (
-            SELECT count(*) AS total FROM billing_account a
-             WHERE a.opened_at < (r.run_date::timestamp AT TIME ZONE %(tz)s)) m
-     CROSS JOIN LATERAL (
-            SELECT count(*) FILTER (WHERE status = 'ok') AS ok,
-                   count(*) FILTER (WHERE status = 'failed') AS failed,
-                   count(*) FILTER (WHERE status = 'blocked') AS blocked
-              FROM billing_run_account WHERE run_id = r.id) o
 """
 
 
-def page_runs(
-    conn: psycopg.Connection, *, offset: int, limit: int, tz: str | None = None
-) -> tuple[list[Row], bool]:
-    """Runs newest first, each with its member count (accounts opened before 00:00 of its
-    date), its outcome counts and whether it is the latest - derived, not stored."""
+def page_runs(conn: psycopg.Connection, *, offset: int, limit: int) -> tuple[list[Row], bool]:
+    """Runs newest first, each with its stored member and outcome counts and whether it is
+    the latest."""
     rows = fetch_all(
         conn,
         _RUN_VIEW
         + " WHERE r.kind = 'daily' ORDER BY r.run_date DESC OFFSET %(offset)s LIMIT %(limit)s",
-        {"tz": tz or settings.billing_tz, "offset": offset, "limit": limit + 1},
+        {"offset": offset, "limit": limit + 1},
     )
     return rows[:limit], len(rows) > limit
 
 
-def run_view(conn: psycopg.Connection, run_id: UUID, tz: str | None = None) -> Row | None:
-    return fetch_one(
-        conn,
-        _RUN_VIEW + " WHERE r.kind = 'daily' AND r.id = %(id)s",
-        {"tz": tz or settings.billing_tz, "id": run_id},
+def run_view(conn: psycopg.Connection, run_id: UUID) -> Row | None:
+    return fetch_one(conn, _RUN_VIEW + " WHERE r.kind = 'daily' AND r.id = %(id)s", {"id": run_id})
+
+
+def forget_member(conn: psycopg.Connection, account_id: UUID, tz: str | None = None) -> None:
+    """A billing account is being deleted (only one without history, so no completed run
+    covers it): one member less in every daily run it is a member of. In the deleting
+    transaction, which holds the account FOR UPDATE - the same order (account, then run)
+    as the worker's outcome writes; a start_run counting concurrently either sees the
+    delete committed or is followed by this decrement (#284)."""
+    conn.execute(
+        """
+        UPDATE billing_run r SET member_count = member_count - 1
+          FROM billing_account a
+         WHERE a.id = %(account)s AND r.kind = 'daily'
+           AND a.opened_at < (r.run_date::timestamp AT TIME ZONE %(tz)s)
+        """,
+        {"account": account_id, "tz": tz or settings.billing_tz},
     )
 
 
@@ -288,10 +310,6 @@ def page_run_outcomes(
         params,
     )
     return rows[:limit], len(rows) > limit
-
-
-def touch_run(conn: psycopg.Connection, run_id: UUID, now: datetime) -> None:
-    conn.execute("UPDATE billing_run SET heartbeat_at = %s WHERE id = %s", (now, run_id))
 
 
 # --- per-(run, account) outcomes (billing_run_account, migration 0004) ---
@@ -349,21 +367,46 @@ def record_outcome(
     waits_for: UUID | None = None,
 ) -> Row:
     """The account's outcome in this run; a second outcome replaces the first and counts an
-    attempt."""
+    attempt. One statement also moves the run's stored counts (the old status down, the
+    new one up) and its heartbeat: one billing_run write per account (#284). The caller
+    holds the account's lock, so the old status cannot change underneath."""
     return returning(
         conn,
         """
-        INSERT INTO billing_run_account
-            (run_id, billing_account_id, status, error, waits_for_run_id, finished_at)
-        VALUES (%s, %s, %s, %s, %s, %s)
-        ON CONFLICT (run_id, billing_account_id) DO UPDATE
-            SET status = EXCLUDED.status, error = EXCLUDED.error,
-                waits_for_run_id = EXCLUDED.waits_for_run_id,
-                attempts = billing_run_account.attempts + 1,
-                finished_at = EXCLUDED.finished_at, updated_at = now()
-        RETURNING *
+        WITH old AS (
+            SELECT status FROM billing_run_account
+             WHERE run_id = %(run)s AND billing_account_id = %(account)s
+        ), outcome AS (
+            INSERT INTO billing_run_account
+                (run_id, billing_account_id, status, error, waits_for_run_id, finished_at)
+            VALUES (%(run)s, %(account)s, %(status)s, %(error)s, %(waits)s, %(now)s)
+            ON CONFLICT (run_id, billing_account_id) DO UPDATE
+                SET status = EXCLUDED.status, error = EXCLUDED.error,
+                    waits_for_run_id = EXCLUDED.waits_for_run_id,
+                    attempts = billing_run_account.attempts + 1,
+                    finished_at = EXCLUDED.finished_at, updated_at = now()
+            RETURNING *
+        ), run AS (
+            UPDATE billing_run SET
+                   heartbeat_at = %(now)s,
+                   ok_count = ok_count + (%(status)s = 'ok')::int
+                       - coalesce((SELECT status = 'ok' FROM old), false)::int,
+                   failed_count = failed_count + (%(status)s = 'failed')::int
+                       - coalesce((SELECT status = 'failed' FROM old), false)::int,
+                   blocked_count = blocked_count + (%(status)s = 'blocked')::int
+                       - coalesce((SELECT status = 'blocked' FROM old), false)::int
+             WHERE id = %(run)s
+        )
+        SELECT * FROM outcome
         """,
-        (run_id, account_id, status, error, waits_for, now),
+        {
+            "run": run_id,
+            "account": account_id,
+            "status": status,
+            "error": error,
+            "waits": waits_for,
+            "now": now,
+        },
     )
 
 

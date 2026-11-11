@@ -1148,3 +1148,67 @@ def test_0065_drops_the_drill_table_and_its_downgrade_recreates_it_empty(temp_db
     with psycopg.connect(temp_db_url) as conn:
         assert conn.execute("SELECT count(*) FROM rollback_drill").fetchone() == (0,)
     command.upgrade(cfg, "0065")
+
+
+def test_0075_backfills_the_stored_run_counts(temp_db_url):
+    """member_count by the members' definition (opened before 00:00 of the run date in
+    BILLING_TZ), the outcome counts from billing_run_account; downgrade drops the columns."""
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "0074")
+    with psycopg.connect(temp_db_url) as conn:
+        conn.execute(
+            "INSERT INTO party (party_type, given_name, family_name)"
+            " VALUES ('Individual', 'Ivan', 'Ivanov')"
+        )
+        conn.execute(
+            "INSERT INTO customer (party_id, name, status) SELECT id, 'I', 'Active' FROM party"
+        )
+        # opened 2026-01-31 23:59 and 2026-02-01 00:00 Moscow: members of Feb 1 = 1, Feb 2 = 2
+        conn.execute(
+            """
+            INSERT INTO billing_account
+                (customer_id, name, state, currency, bill_cycle_day, opened_at)
+            SELECT id, n, 'Active', 'USD', 1, o::timestamptz FROM customer,
+                   (VALUES ('A', '2026-01-31 23:59+03'), ('B', '2026-02-01 00:00+03')) v(n, o)
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO billing_run (run_date, status, started_at, finished_at, trigger,
+                                     failure_kind, error) VALUES
+                ('2026-02-01', 'completed', now(), now(), 'scheduled', NULL, NULL),
+                ('2026-02-02', 'failed', now(), now(), 'scheduled', 'accounts', '2 of 2')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO billing_run_account
+                (run_id, billing_account_id, status, error, waits_for_run_id, finished_at)
+            SELECT r.id, a.id, s.status::billing_run_account_status, s.error,
+                   CASE WHEN s.status = 'blocked'
+                        THEN (SELECT id FROM billing_run WHERE run_date = '2026-02-01') END,
+                   now()
+              FROM (VALUES ('2026-02-01'::date, 'A', 'ok', NULL),
+                           ('2026-02-02'::date, 'A', 'failed', 'boom'),
+                           ('2026-02-02'::date, 'B', 'blocked', NULL)) s(day, acc, status, error)
+              JOIN billing_run r ON r.run_date = s.day
+              JOIN billing_account a ON a.name = s.acc
+            """
+        )
+    command.upgrade(cfg, "0075")
+    with psycopg.connect(temp_db_url) as conn:
+        counts = conn.execute(
+            "SELECT run_date, member_count, ok_count, failed_count, blocked_count"
+            " FROM billing_run ORDER BY run_date"
+        ).fetchall()
+    assert counts == [(date(2026, 2, 1), 1, 1, 0, 0), (date(2026, 2, 2), 2, 0, 1, 1)]
+    command.downgrade(cfg, "0074")
+    with psycopg.connect(temp_db_url) as conn:
+        columns = {
+            r[0]
+            for r in conn.execute(
+                "SELECT column_name FROM information_schema.columns"
+                " WHERE table_name = 'billing_run'"
+            )
+        }
+    assert columns.isdisjoint({"member_count", "ok_count", "failed_count", "blocked_count"})

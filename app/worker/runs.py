@@ -11,6 +11,8 @@ the run's row decides:
                 take it over, attempt + 1, trigger kept,
                 started_at = now (the attempt's start)
 
+Every start counts the run's members into member_count in the same transaction (#284).
+
 A takeover is safe because bill_account is idempotent and writes one account per
 transaction; the per-account outcome rows (slice b2) keep ok accounts untouched.
 """
@@ -47,17 +49,24 @@ def ensure_ownership(conn: psycopg.Connection) -> None:
 
 
 def start_run(
-    conn: psycopg.Connection, run_date: date, *, now: datetime, trigger: str
+    conn: psycopg.Connection,
+    run_date: date,
+    *,
+    now: datetime,
+    trigger: str,
+    tz: str | None = None,
 ) -> Started | AlreadyCompleted:
     ensure_ownership(conn)  # before anything is read
     with conn.transaction():
         run = billing.lock_run(conn, run_date)
         if run is None:
-            return Started(billing.insert_run(conn, run_date, now=now, trigger=trigger), "new")
+            new = billing.insert_run(conn, run_date, now=now, trigger=trigger)
+            return Started(billing.count_members(conn, new["id"], tz), "new")
         if run["status"] == "completed":
             return AlreadyCompleted(run)
         if run["status"] == "failed":
-            reopened = billing.reopen_run(conn, run["id"], now=now, trigger=trigger)
-            return Started(reopened, "reopened")
+            billing.reopen_run(conn, run["id"], now=now, trigger=trigger)
+            return Started(billing.count_members(conn, run["id"], tz), "reopened")
         # running, and we hold the lock: whoever started it is gone
-        return Started(billing.take_over_run(conn, run["id"], now=now), "takenOver")
+        billing.take_over_run(conn, run["id"], now=now)
+        return Started(billing.count_members(conn, run["id"], tz), "takenOver")

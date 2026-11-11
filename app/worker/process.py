@@ -129,7 +129,8 @@ class DateRun:
         with conn.transaction():
             # Deleted since the run listed its members (DELETE billingAccount, only one
             # without history): nothing to bill or record, and close_run no longer counts
-            # it. The lock is bill_account's own, so a delete in flight finishes first.
+            # it (the delete took it out of member_count). The lock is bill_account's own,
+            # so a delete in flight finishes first.
             if parties.get_billing_account(conn, account_id, "update") is None:
                 return
             if blocker is not None:
@@ -150,7 +151,6 @@ class DateRun:
                     )
                 else:
                     billing.record_outcome(conn, run_id, account_id, "ok", now=now)
-            billing.touch_run(conn, run_id, now)
 
     def close(self) -> Row:
         return close_run(self.conn, self.run, clock=self.clock, tz=self.tz)
@@ -196,7 +196,7 @@ def bill_date(
         due = retry_time(held)
         if clock.now() < due:
             raise NotYet(held, due)
-    started = start_run(conn, run_date, now=clock.now(), trigger=trigger)
+    started = start_run(conn, run_date, now=clock.now(), trigger=trigger, tz=tz.key)
     if isinstance(started, AlreadyCompleted):
         return started.run
     date_run = DateRun(conn, started.run, clock=clock, tz=tz, on_account=heartbeat)
@@ -265,7 +265,7 @@ def _redo(
 ) -> dict[UUID, str]:
     """Reopen the failed run of `run_date`, process `accounts` only, close it again; the
     accounts' outcomes."""
-    started = start_run(conn, run_date, now=clock.now(), trigger="retry")
+    started = start_run(conn, run_date, now=clock.now(), trigger="retry", tz=tz.key)
     if not isinstance(started, Started):
         raise LookupError(f"billing run {run_date} is not failed")
     date_run = DateRun(conn, started.run, clock=clock, tz=tz, only=accounts, on_account=heartbeat)
