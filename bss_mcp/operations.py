@@ -691,6 +691,31 @@ OPERATIONS: dict[str, Op] = {
             "ratingType": {"type": "string", "enum": ["prepaid", "postpaid"]},
         },
     ),
+    "search_parties": Op(
+        "Individuals and organizations, oldest first, paged: the Parties list. q matches by"
+        ' prefix (any case) a given name, "given family", a family name or an organization'
+        " name, or the first characters of the id; kind and status filter. Each row has the"
+        " party's customers and their billing accounts, and whether it owns accounts.",
+        query=PAGE,
+        extra={
+            "kind": {"type": "string", "enum": ["Individual", "Organization"]},
+            "q": {"type": "string", "maxLength": 200},
+            "status": {
+                "type": "string",
+                "enum": ["initialized", "validated", "deceased", "closed"],
+            },
+        },
+    ),
+    "search_customers": Op(
+        "Customers, oldest first, paged, each with its party and billing accounts. q matches"
+        " the customer name by prefix (any case) or the first characters of the id; status"
+        " filters.",
+        query=PAGE,
+        extra={
+            "q": {"type": "string", "maxLength": 200},
+            "status": {"type": "string", "enum": ["Created", "Active", "Inactive"]},
+        },
+    ),
     "list_runs": Op(
         "Billing runs, newest first, with status, account counts and charges.", query=PAGE
     ),

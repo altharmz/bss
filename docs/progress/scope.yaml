@@ -364,6 +364,8 @@ items:
   - {id: api.internal.billDetail.get, area: api, stage: 5, method: GET, path: "/internal/v1/customerBill/{bill_id}", title: "A bill with charges, sources, history and allowed states"}
   - {id: api.internal.priceChange.create, area: api, stage: 5, method: POST, path: "/internal/v1/productOffering/{offering_id}/priceChange", title: "Atomic price change of a live offering (D-W21)"}
   - {id: api.internal.subscriber.search, area: api, stage: 5, method: GET, path: /internal/v1/subscriber, title: "Search subscribers by prefix, paged (the Subscribers list)"}
+  - {id: api.internal.party.search, area: api, stage: 5, method: GET, path: /internal/v1/party, title: "Search parties by prefix, paged (the Parties list, owner picker)"}
+  - {id: api.internal.partyCustomer.search, area: api, stage: 5, method: GET, path: /internal/v1/partyCustomer, title: "Search customers by prefix, paged (the Parties customers list)"}
   - {id: api.internal.billingRun.list, area: api, stage: 4, method: GET, path: /internal/v1/billingRun, title: "List billing runs (newest first)"}
   - {id: api.internal.billingRun.get, area: api, stage: 4, method: GET, path: "/internal/v1/billingRun/{run_id}", title: "Get a billing run"}
   - {id: api.internal.billingRunAccounts.list, area: api, stage: 4, method: GET, path: "/internal/v1/billingRun/{run_id}/accounts", title: "A run's per-account outcomes"}
@@ -435,6 +437,8 @@ items:
   - {id: ui.subscriber.transferPinItem, area: ui, stage: 5, title: "Number Transfer PIN menu item on an active or suspended product"}
   - {id: ui.subscriber.transferPin, area: ui, stage: 5, title: "Number Transfer PIN dialog: shown once with expiry, copyable"}
   - {id: ui.sims.list, area: ui, stage: 5, title: "SIM and eSIM stock with state, type and batch filters"}
+  - {id: ui.sims.previous, area: ui, stage: 5, title: "SIMs: previous page"}
+  - {id: ui.sims.next, area: ui, stage: 5, title: "SIMs: next page"}
   - {id: ui.sims.import, area: ui, stage: 5, title: "Import a SIM batch from CSV"}
   - {id: ui.sims.importDialog, area: ui, stage: 5, title: "SIM CSV import dialog"}
   - {id: ui.sims.generate, area: ui, stage: 5, title: "Generate eSIM profiles"}
@@ -520,6 +524,8 @@ items:
   - {id: ui.payments, area: ui, stage: 5, title: "Payments screen: payments and refunds tabs with status, account and date filters"}
   - {id: ui.payments.accountChip, area: ui, stage: 5, title: "Payments screen account filter chip"}
   - {id: ui.balances, area: ui, stage: 5, title: "Balances screen: buckets, top-ups, adjustments, holds and transfers (TMF654 reads)"}
+  - {id: ui.balances.previous, area: ui, stage: 5, title: "Balances buckets and totals: previous page"}
+  - {id: ui.balances.next, area: ui, stage: 5, title: "Balances buckets and totals: next page"}
   - {id: ui.balances.status, area: ui, stage: 5, title: "Balances screen status filter"}
   - {id: ui.balances.accountChip, area: ui, stage: 5, title: "Balances screen account filter chip"}
   - {id: ui.balances.buckets, area: ui, stage: 5, title: "Balances buckets tab: bucket list joined with accumulated balances"}
@@ -584,6 +590,8 @@ items:
   - {id: ui.catalog.errorLog, area: ui, stage: 5, title: "Full error log of a failed job"}
   - {id: ui.catalog.deleteJob, area: ui, stage: 5, title: "Delete a job record"}
   - {id: ui.parties, area: ui, stage: 5, title: "Parties screen (Customers > Parties): individuals, organizations, customers"}
+  - {id: ui.parties.previous, area: ui, stage: 5, title: "Parties: previous page"}
+  - {id: ui.parties.next, area: ui, stage: 5, title: "Parties: next page"}
   - {id: ui.parties.individuals, area: ui, stage: 5, title: "Parties tab: individuals with customers and subscribers"}
   - {id: ui.parties.organizations, area: ui, stage: 5, title: "Parties tab: organizations with customers and subscribers"}
   - {id: ui.parties.customers, area: ui, stage: 5, title: "Parties tab: customers with engaged party and billing accounts"}

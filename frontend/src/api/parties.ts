@@ -4,7 +4,7 @@
 // settlement accounts through their owner), so the delete rules are visible in the data.
 // Design: docs/ui.md.
 
-import { getAll, getJson, patchJson, postJson, request } from './client';
+import { getJson, getPage, patchJson, postJson, request } from './client';
 import { PATHS, type PartyKind } from './bss';
 import { businessDate, zonedDateTime } from '../format/dates';
 import {
@@ -15,8 +15,6 @@ import {
 } from './partyDocuments';
 
 const PARTIES = '/tmf-api/partyManagement/v5';
-const ACCOUNTS = '/tmf-api/accountManagement/v5';
-
 export const PARTY_PATH: Record<PartyKind, string> = {
   Individual: `${PARTIES}/individual`,
   Organization: `${PARTIES}/organization`,
@@ -34,13 +32,6 @@ interface CustomerBody {
   name?: string;
   status?: string;
   engagedParty?: { id?: string; '@referredType'?: string };
-}
-interface RelatedBody {
-  relatedParty?: { role?: string; partyOrPartyRole?: { id?: string } }[];
-}
-interface AccountBody extends RelatedBody {
-  id?: string;
-  name?: string;
 }
 
 function need<T>(value: T | undefined | null, what: string): T {
@@ -63,22 +54,22 @@ export interface PartyCustomer {
   status: string;
   partyId: string;
   partyKind: PartyKind;
+  partyName: string;
+  /** its billing accounts */
+  accounts: { id: string; name: string }[];
 }
 
-export interface AccountLink {
+/** A row of the Parties list: the party with what the server computed for the page. */
+export interface PartyRow {
   id: string;
+  kind: PartyKind;
   name: string;
-  customerId: string;
-}
-
-export interface Parties {
-  individuals: Party[];
-  organizations: Party[];
-  customers: PartyCustomer[];
-  /** billing accounts, matched to a customer by id */
-  accounts: AccountLink[];
-  /** party ids that own a financial, party or settlement account */
-  accountOwners: Set<string>;
+  status: string;
+  customers: { id: string; name: string }[];
+  /** the billing accounts of those customers */
+  accounts: { id: string; name: string; customerId: string }[];
+  /** it owns a financial, party or settlement account */
+  ownsAccounts: boolean;
 }
 
 export function toParty(kind: PartyKind, body: PartyBody): Party {
@@ -97,67 +88,93 @@ export function toParty(kind: PartyKind, body: PartyBody): Party {
   };
 }
 
-function toCustomer(body: CustomerBody): PartyCustomer {
-  return {
-    id: need(body.id, 'customer id'),
-    name: need(body.name, 'customer name'),
-    status: need(body.status, 'customer status'),
-    partyId: need(body.engagedParty?.id, 'engagedParty id'),
-    partyKind: need(body.engagedParty?.['@referredType'], 'engagedParty type') as PartyKind,
-  };
+export const PARTY_PAGE = 50;
+const PARTY_SEARCH = '/internal/v1/party';
+const CUSTOMER_SEARCH = '/internal/v1/partyCustomer';
+
+interface PartyRowBody {
+  id: string;
+  kind: PartyKind;
+  name: string;
+  status: string | null;
+  customers: { id: string; name: string }[];
+  billingAccounts: { id: string; name: string; customerId: string }[];
+  ownsAccounts: boolean;
 }
 
-const ownerOf = (body: RelatedBody) =>
-  body.relatedParty?.find((p) => p.role === 'owner')?.partyOrPartyRole?.id;
-
-export async function loadParties(signal: AbortSignal): Promise<Parties> {
-  const owned = (kind: string) =>
-    getAll<RelatedBody>(`${ACCOUNTS}/${kind}?fields=relatedParty`, signal);
-  const [individuals, organizations, customers, accounts, financial, party, settlement] =
-    await Promise.all([
-      getAll<PartyBody>(PARTY_PATH.Individual, signal),
-      getAll<PartyBody>(PARTY_PATH.Organization, signal),
-      getAll<CustomerBody>(`${PATHS.customers}?fields=name,status,engagedParty`, signal),
-      getAll<AccountBody>(`${PATHS.accounts}?fields=name,relatedParty`, signal),
-      owned('financialAccount'),
-      owned('partyAccount'),
-      owned('settlementAccount'),
-    ]);
-  const accountOwners = new Set<string>();
-  for (const body of [...financial, ...party, ...settlement]) {
-    const id = ownerOf(body);
-    if (id) accountOwners.add(id);
-  }
-  return {
-    individuals: individuals.map((b) => toParty('Individual', b)),
-    organizations: organizations.map((b) => toParty('Organization', b)),
-    customers: customers.map(toCustomer),
-    accounts: accounts.map((b) => ({
-      id: need(b.id, 'account id'),
-      name: b.name ?? '',
-      customerId: need(
-        b.relatedParty?.find((p) => p.role === 'customer')?.partyOrPartyRole?.id,
-        'account customer',
-      ),
-    })),
-    accountOwners,
-  };
+interface CustomerRowBody {
+  id: string;
+  name: string;
+  status: string;
+  party: { id: string; kind: PartyKind; name: string };
+  billingAccounts: { id: string; name: string }[];
 }
 
-/** Customers engaging a party, and the billing accounts of those customers. */
-export function customersOf(data: Parties, partyId: string): PartyCustomer[] {
-  return data.customers.filter((c) => c.partyId === partyId);
+export interface PartyFilter {
+  /** the start of a name, or of the id (any case) */
+  q: string;
+  status: string | null;
 }
 
-export function accountsOf(data: Parties, customerIds: string[]): AccountLink[] {
-  return data.accounts.filter((a) => customerIds.includes(a.customerId));
+function searchQuery(filter: PartyFilter, offset: number, extra: Record<string, string> = {}) {
+  const query = new URLSearchParams(extra);
+  if (filter.q.trim()) query.set('q', filter.q.trim());
+  if (filter.status) query.set('status', filter.status);
+  query.set('offset', String(offset));
+  query.set('limit', String(PARTY_PAGE));
+  return query;
 }
 
-/** What the loaded data shows against deleting a party; null = nothing found. */
-export function partyBlock(data: Parties, party: Party): string | null {
-  const customers = customersOf(data, party.id).length;
+/** One page of individuals or organizations, searched by prefix on the server (#314). */
+export async function loadPartyPage(
+  kind: PartyKind,
+  filter: PartyFilter,
+  offset: number,
+  signal: AbortSignal,
+): Promise<{ items: PartyRow[]; more: boolean; offset: number }> {
+  const page = await getPage<PartyRowBody>(
+    `${PARTY_SEARCH}?${searchQuery(filter, offset, { kind })}`,
+    signal,
+  );
+  const items = page.items.map((row) => ({
+    id: row.id,
+    kind: row.kind,
+    name: row.name,
+    status: row.status ?? '',
+    customers: row.customers,
+    accounts: row.billingAccounts,
+    ownsAccounts: row.ownsAccounts,
+  }));
+  return { items, more: page.more, offset };
+}
+
+/** One page of customers, searched by prefix on the server (#314). */
+export async function loadCustomerPage(
+  filter: PartyFilter,
+  offset: number,
+  signal: AbortSignal,
+): Promise<{ items: PartyCustomer[]; more: boolean; offset: number }> {
+  const page = await getPage<CustomerRowBody>(
+    `${CUSTOMER_SEARCH}?${searchQuery(filter, offset)}`,
+    signal,
+  );
+  const items = page.items.map((row) => ({
+    id: row.id,
+    name: row.name,
+    status: row.status,
+    partyId: row.party.id,
+    partyKind: row.party.kind,
+    partyName: row.party.name,
+    accounts: row.billingAccounts,
+  }));
+  return { items, more: page.more, offset };
+}
+
+/** What the row shows against deleting a party; null = nothing found. */
+export function partyBlock(party: PartyRow): string | null {
+  const customers = party.customers.length;
   if (customers > 0) return `It has ${customers} customer${customers === 1 ? '' : 's'}`;
-  if (data.accountOwners.has(party.id)) return 'It owns accounts';
+  if (party.ownsAccounts) return 'It owns accounts';
   return null;
 }
 
@@ -239,14 +256,13 @@ export async function loadCustomerDetail(id: string, signal: AbortSignal): Promi
   const body = await getJson<
     CustomerBody & { engagedParty?: CustomerBody['engagedParty'] & { name?: string } }
   >(`${PATHS.customers}/${id}`, signal);
-  const c = toCustomer(body);
   return {
-    id: c.id,
-    name: c.name,
-    status: c.status,
-    partyId: c.partyId,
+    id: need(body.id, 'customer id'),
+    name: need(body.name, 'customer name'),
+    status: need(body.status, 'customer status'),
+    partyId: need(body.engagedParty?.id, 'engagedParty id'),
     partyName: body.engagedParty?.name ?? '',
-    partyKind: c.partyKind,
+    partyKind: need(body.engagedParty?.['@referredType'], 'engagedParty type') as PartyKind,
   };
 }
 
@@ -319,7 +335,10 @@ export async function createParty(kind: PartyKind, form: NewParty): Promise<void
   });
 }
 
-export async function createCustomer(party: Party, name: string): Promise<void> {
+export async function createCustomer(
+  party: Pick<Party, 'id' | 'kind'>,
+  name: string,
+): Promise<void> {
   await postJson(PATHS.customers, {
     '@type': 'Customer',
     name: name.trim(),

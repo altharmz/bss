@@ -805,3 +805,35 @@ Design: [network.md](network.md). No backend change; the UI reads and writes wha
 - **Network step.** `NetworkCommands` (`screens/NetworkCommands.tsx`, `api/network.ts`) is a section of the order dialog (`productOrder.id=`) and the product dialog (`product.id=`); it is **hidden when there are no commands** (offerings that are not network lines send nothing) and shows kind, state (`network` status family), due date, attempts, last attempt, next attempt (pending), last error and refusal code.
 - **Retry** (`ui.network.retry`) is a bodiless POST, offered only for `exhausted`; a refusal shows a note that it is final (a new order is the fix), and a 409 is shown with the button kept. The API never sends: the worker does on its next tick, so the panel re-reads and shows `pending`.
 - Tests: `Catalog.test.tsx` (profile and narrowing bodies), `Orders.test.tsx`, `Products.test.tsx`; `test/fetch.ts` answers the two list queries with an empty list by default; `tests/test_ui_requests.py` replays the bodies and reads. `list_network_commands` and `retry_network_command` left `tests/ui-mcp-allowlist.txt` (the UI calls them); `get_network_command` stays, the list rows carry every field shown.
+
+## Screens page on the server (2026-11-10, issue #314)
+
+Follows "Lists without counts" ([tmf-api.md](tmf-api.md#lists-without-counts-2026-11-10-312)):
+no screen reads a whole table that grows with subscribers. `getAll` remains only for one
+owner's rows and small admin lists; `src/api/getAllCallers.test.ts` lists every caller
+with its reason, so a new one must be justified there.
+
+- **Paging.** The global lists page with Previous/Next from Link rel=next and show
+  "Showing a–b", never a total (`src/ui/paging.tsx`: `PageFooter`, `usePageOffset`,
+  `useSettled`). New filters start at the first page; a search waits 250 ms after typing.
+  An empty page under a filter is "No matches", not the empty-system copy.
+- **Search on the server, by prefix** (the human's decision for Subscribers, 2026-11-10,
+  applied the same way to Parties): internal endpoints with indexed case-insensitive
+  prefix search and the row's figures computed for the page only. `/internal/v1/subscriber`
+  (customer or account name, subscriber number, short id; migration 0071),
+  `/internal/v1/party` (given name, "given family", family name, organization name, short
+  id; migration 0072) and `/internal/v1/partyCustomer` (customer name, short id). Each
+  has an MCP tool (`search_subscribers`, `search_parties`, `search_customers`); the TMF
+  list tools the UI no longer calls are in the parity allowlist.
+- **Filters the API cannot serve are dropped**, never applied to a page locally:
+  Products' offering text (the number becomes an exact value), SIMs' ICCID (the IMSI
+  becomes an exact value), Numbers' partial match (exact value), the Subscribers
+  negative-balance figure, every filter count.
+- **Pickers** search as you type: the financial-account owner picker reads
+  `/internal/v1/party?q=` (20 at a time, the chosen owner kept); the number picker offers
+  the first 50 available numbers and finds a full typed number anywhere.
+- **Derived columns per page:** the Products number column reads the page's numbers by
+  id; a Balances bucket page reads each of its accounts' accumulated balance; a product's
+  number dialog reads its own numbers. Billing settings drop the "Used by" count, which
+  read every billing account: Delete is offered and the server's 409 refuses a setting in
+  use.

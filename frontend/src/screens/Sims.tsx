@@ -5,6 +5,7 @@ import {
   loadBatches,
   loadSim,
   loadSims,
+  SIM_PAGE,
   simIccid,
   simState,
   simType,
@@ -36,6 +37,7 @@ import {
 import { Note } from '../ui/Note';
 import { ErrorBlock, ListState } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
+import { PageFooter, usePageOffset, useSettled } from '../ui/paging';
 import { SimActivationCode } from './SimActivationCode';
 
 const COLUMNS: Column[] = [
@@ -65,9 +67,13 @@ export function SimsScreen() {
   const [dialog, setDialog] = useState<'import' | 'generate' | null>(null);
   const [selected, setSelected] = useState<Sim | null>(null);
   const batches = useResource('sim-batches', loadBatches);
-  const sims = useResource(`sims:${state}:${type}:${batch}`, (signal) =>
-    loadSims({ state, type, batch }, signal),
+  const imsi = useSettled(query).replace(/\D/g, '');
+  const filterKey = `${state}:${type}:${batch}:${imsi}`;
+  const [offset, setOffset] = usePageOffset(filterKey);
+  const sims = useResource(`sims:${filterKey}:${offset}`, (signal) =>
+    loadSims({ state, type, batch, imsi }, offset, signal),
   );
+  const filtered = query !== '' || state !== '' || type !== '' || batch !== '';
   const reload = () => {
     sims.retry();
     batches.retry();
@@ -76,7 +82,6 @@ export function SimsScreen() {
     <div className="bss-screen" data-ui="ui.sims.list">
       <PageHeader
         title="SIMs"
-        count={sims.status === 'ok' ? sims.data.length : undefined}
         actions={
           <>
             <Button data-ui="ui.sims.import" onClick={() => setDialog('import')}>
@@ -91,7 +96,7 @@ export function SimsScreen() {
           <>
             <TextInput
               aria-label="Search SIMs"
-              placeholder="Search IMSI or ICCID"
+              placeholder="IMSI (exact)"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -144,14 +149,9 @@ export function SimsScreen() {
             title: 'No SIMs yet',
             text: 'Import a CSV of physical SIMs or generate eSIM profiles.',
           }}
-          count={(data) => data.length}
-          rows={(data) =>
-            data.filter(
-              (s) =>
-                (s.value ?? '').includes(query.trim()) ||
-                (simIccid(s) ?? '').includes(query.trim()),
-            )
-          }
+          // filtered on the server: an empty filtered page is "no matches", not "no SIMs"
+          count={(data) => (filtered ? 1 : data.items.length)}
+          rows={(data) => data.items}
           onResetFilters={() => {
             setQuery('');
             setState('');
@@ -159,25 +159,35 @@ export function SimsScreen() {
             setBatch('');
           }}
         >
-          {(rows) =>
-            rows.map((s) => {
-              const t = simType(s);
-              const st = simState(s);
-              return (
-                <TableRow
-                  key={s.id}
-                  columns={COLUMNS}
-                  cells={{
-                    imsi: <Button onClick={() => setSelected(s)}>{s.value}</Button>,
-                    iccid: simIccid(s) ?? '—',
-                    type: t ? <Tag>{TYPE_LABEL[t]}</Tag> : '—',
-                    state: st ? <Tag>{STATE_LABEL[st]}</Tag> : '—',
-                    batch: (s as { batchNumber?: string }).batchNumber ?? '—',
-                  }}
-                />
-              );
-            })
-          }
+          {(rows, data) => (
+            <>
+              {rows.map((s) => {
+                const t = simType(s);
+                const st = simState(s);
+                return (
+                  <TableRow
+                    key={s.id}
+                    columns={COLUMNS}
+                    cells={{
+                      imsi: <Button onClick={() => setSelected(s)}>{s.value}</Button>,
+                      iccid: simIccid(s) ?? '—',
+                      type: t ? <Tag>{TYPE_LABEL[t]}</Tag> : '—',
+                      state: st ? <Tag>{STATE_LABEL[st]}</Tag> : '—',
+                      batch: (s as { batchNumber?: string }).batchNumber ?? '—',
+                    }}
+                  />
+                );
+              })}
+              <PageFooter
+                offset={data.offset}
+                shown={rows.length}
+                more={data.more}
+                size={SIM_PAGE}
+                onOffset={setOffset}
+                ui="ui.sims"
+              />
+            </>
+          )}
         </ListState>
       </div>
       {dialog === 'import' && (

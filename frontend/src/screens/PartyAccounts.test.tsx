@@ -7,7 +7,6 @@ import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } fr
 // The Party and Settlement tabs of the Accounts screen (docs/ui.md).
 
 const ACC = '/tmf-api/accountManagement/v5';
-const PARTY = '/tmf-api/partyManagement/v5';
 const PAGE = 'offset=0&limit=100';
 const ROMASHKA = 'p1';
 const OLGA = 'aaaa1111-0000-4000-8000-000000000002';
@@ -65,12 +64,16 @@ function backend(extra: Record<string, Handler> = {}) {
     [`GET ${ACC}/financialAccount?${PAGE}`]: () => json([], { total: 0 }),
     [`GET ${ACC}/partyAccount?${PAGE}`]: () => json([LINKED, FREE], { total: 2 }),
     [`GET ${ACC}/settlementAccount?${PAGE}`]: () => json([PAYOUT], { total: 1 }),
-    [`GET ${PARTY}/individual?${PAGE}`]: () =>
-      json([{ id: OLGA, givenName: 'Olga', familyName: 'Kuznetsova', '@type': 'Individual' }], {
-        total: 1,
-      }),
-    [`GET ${PARTY}/organization?${PAGE}`]: () =>
-      json([{ id: ROMASHKA, name: 'Romashka LLC', '@type': 'Organization' }], { total: 1 }),
+    // TEST-CHANGE (#314): the owner picker searches parties on the server as typed
+    'GET /internal/v1/party?*': (url) => {
+      const q = (new URL(url ?? '', 'http://test').searchParams.get('q') ?? '').toLowerCase();
+      return json(
+        [
+          { id: OLGA, kind: 'Individual', name: 'Olga Kuznetsova' },
+          { id: ROMASHKA, kind: 'Organization', name: 'Romashka LLC' },
+        ].filter((p) => p.name.toLowerCase().startsWith(q)),
+      );
+    },
     [`GET ${ACC}/financialAccount?relatedParty.id=${ROMASHKA}&${PAGE}`]: () =>
       json(
         [

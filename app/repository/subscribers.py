@@ -13,12 +13,12 @@ HEX = re.compile(r"[0-9a-f]{1,8}")
 DIGITS = re.compile(r"\+?[0-9]{3,15}")
 
 
-def _like_prefix(text: str) -> str:
+def like_prefix(text: str) -> str:
     """A LIKE pattern matching `text` as a prefix, its wildcards escaped."""
     return re.sub(r"([\\%_])", r"\\\1", text) + "%"
 
 
-def _id_range(prefix: str) -> tuple[str, str]:
+def id_range(prefix: str) -> tuple[str, str]:
     """The uuids whose text starts with `prefix` (1-8 hex digits): a primary-key range."""
     low = (prefix + "0" * 32)[:32]
     high = (prefix + "f" * 32)[:32]
@@ -53,7 +53,7 @@ def search(
             "SELECT b.id FROM billing_account b JOIN customer c ON c.id = b.customer_id"
             " WHERE lower(c.name) LIKE %(name)s",
         ]
-        params["name"] = _like_prefix(term.lower())
+        params["name"] = like_prefix(term.lower())
         bare = re.sub(r"(?i)^ba-", "", term.replace(" ", "")).lower()
         try:
             params["uuid"] = str(UUID(bare))
@@ -61,7 +61,7 @@ def search(
         except ValueError:
             pass
         if HEX.fullmatch(bare):
-            params["low"], params["high"] = _id_range(bare)
+            params["low"], params["high"] = id_range(bare)
             matches.append(
                 "SELECT id FROM billing_account WHERE id BETWEEN %(low)s::uuid AND %(high)s::uuid"
             )
@@ -70,7 +70,7 @@ def search(
                 " BETWEEN %(low)s::uuid AND %(high)s::uuid"
             )
         if DIGITS.fullmatch(term):
-            params["number"] = _like_prefix(term.lstrip("+"))
+            params["number"] = like_prefix(term.lstrip("+"))
             matches.append(
                 "SELECT p.billing_account_id FROM subscriber_number n"
                 " JOIN number_assignment na ON na.subscriber_number_id = n.id"

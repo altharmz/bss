@@ -167,10 +167,6 @@ export function toAccount(body: BillingAccountBody): Account {
   };
 }
 
-export async function loadAccounts(signal: AbortSignal): Promise<Account[]> {
-  return (await getAll<BillingAccountBody>(PATHS.accounts, signal)).map(toAccount);
-}
-
 export async function loadAccount(id: string, signal: AbortSignal): Promise<Account> {
   return toAccount(await getJson<BillingAccountBody>(`${PATHS.accounts}/${id}`, signal));
 }

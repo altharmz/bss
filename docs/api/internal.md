@@ -4,7 +4,7 @@
 
 - Base path here: `/internal/v1`
 - Contract: [`spec/internal/bss-internal.oas.yaml`](../../spec/internal/bss-internal.oas.yaml) - BSS internal API (admin UI) version 1.0.0; the spec's server URL is `/internal/v1`
-- Operations exposed: 63
+- Operations exposed: 65
 
 
 ## Operations
@@ -41,6 +41,8 @@
 | POST | `/internal/v1/notification/consent` | body: `application/json` | `object` | 201 `NotificationConsent` | [`app/internal/notifications.py`](../../app/internal/notifications.py) |
 | POST | `/internal/v1/notification/message/{message_id}/resend` | path: `message_id`; body: `application/json` | - | 201 `ResentMessage` | [`app/internal/notifications.py`](../../app/internal/notifications.py) |
 | POST | `/internal/v1/number/pool` | body: `application/json` | `object` | 201 `NumberPool` | [`app/internal/ports.py`](../../app/internal/ports.py) |
+| GET | `/internal/v1/party` | query: `offset`, `limit`, `kind`, `q`, `status` | - | 200 `array of PartyRow` | [`app/main.py`](../../app/main.py) |
+| GET | `/internal/v1/partyCustomer` | query: `offset`, `limit`, `q`, `status` | - | 200 `array of PartyCustomerRow` | [`app/main.py`](../../app/main.py) |
 | GET | `/internal/v1/payment/command` | query: `offset`, `limit`, `billingAccount.id`, `state` | - | 200 `array of PaymentCommand` | [`app/internal/payments.py`](../../app/internal/payments.py) |
 | GET | `/internal/v1/payment/command/{command_id}` | path: `command_id` | - | 200 `PaymentCommand` | [`app/internal/payments.py`](../../app/internal/payments.py) |
 | POST | `/internal/v1/payment/command/{command_id}/retry` | path: `command_id`; body: `application/json` | - | 202 `PaymentCommand` | [`app/internal/payments.py`](../../app/internal/payments.py) |

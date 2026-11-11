@@ -3,7 +3,7 @@ import { DialogFooter } from '../ui/kit';
 import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { Children, cloneElement, isValidElement, useState } from 'react';
-import type { AccountRecord, AccountState } from '../api/bss';
+import type { AccountRecord, AccountState, PartyKind } from '../api/bss';
 import { explain } from '../api/client';
 import {
   createAccount,
@@ -23,6 +23,7 @@ import { useSystemContext } from '../app/context';
 import { parseAmount } from '../format/money';
 import { SelectField, Button, Dialog, Segmented, TextInput } from '../ui/kit';
 import { Combobox } from '../ui/combobox';
+import { useSettled } from '../ui/paging';
 import { ErrorBlock, SkeletonRows } from '../ui/states';
 import { Field } from './SubscriberForms';
 import { uncertain } from './submissionKey';
@@ -174,7 +175,14 @@ export function FinancialFormModal({
   onClose: () => void;
   onDone: (message: string) => void;
 }) {
-  const owners = useResource('financial-owners', loadOwnerChoices);
+  // the owners matching what is typed; the previous choices stay while it looks
+  const [typed, setTyped] = useState('');
+  const q = useSettled(typed);
+  const owners = useResource(
+    `financial-owners:${q}`,
+    (signal) => loadOwnerChoices(q, signal),
+    true,
+  );
   const title = account ? `Edit ${account.name}` : `New ${NAME[kind]}`;
   return (
     <Dialog
@@ -203,6 +211,7 @@ export function FinancialFormModal({
           account={account}
           kind={kind}
           owners={owners.data}
+          onSearch={setTyped}
           onClose={onClose}
           onDone={onDone}
         />
@@ -215,18 +224,24 @@ function Body({
   account,
   kind,
   owners,
+  onSearch,
   onClose,
   onDone,
 }: {
   account: Editable | null;
   kind: AccountKind;
   owners: OwnerChoice[];
+  onSearch: (typed: string) => void;
   onClose: () => void;
   onDone: (message: string) => void;
 }) {
   const context = useSystemContext();
   const before: FinancialForm = account
-    ? formOf(account, owners.find((o) => o.id === account.ownerId) ?? null, context.currency)
+    ? formOf(
+        account,
+        { id: account.ownerId, kind: account.ownerKind as PartyKind, name: account.ownerName },
+        context.currency,
+      )
     : {
         name: '',
         owner: null,
@@ -242,6 +257,11 @@ function Body({
   const write = useWrite(onDone);
   const set = (change: Partial<FinancialForm>) => setForm({ ...form, ...change });
   const linkable = kind !== 'FinancialAccount';
+  // the chosen owner stays a choice whatever the search shows
+  const choices = [
+    ...(form.owner ? [form.owner] : []),
+    ...owners.filter((o) => o.id !== form.owner?.id),
+  ];
   const ownerId = form.owner?.id ?? '';
   // the owner's financial accounts, loaded again when the owner changes
   const financial = useResource(`financial-choices:${linkable ? ownerId : ''}`, (signal) =>
@@ -266,13 +286,14 @@ function Body({
               ui={`${MARKER[kind]}.owner`}
               placeholder="Choose a party"
               value={form.owner?.id ?? ''}
-              options={owners.map((owner) => ({
+              options={choices.map((owner) => ({
                 value: owner.id,
                 label: `${owner.name} · ${owner.kind === 'Individual' ? 'person' : 'organization'}`,
               }))}
+              onQueryChange={onSearch}
               onChange={(id) =>
                 set({
-                  owner: owners.find((o) => o.id === id) ?? null,
+                  owner: choices.find((o) => o.id === id) ?? null,
                   ...(linkable ? { financialId: null } : {}),
                 })
               }

@@ -1586,18 +1586,21 @@ def test_balances_screen_reads_as_the_ui_makes_them(api, db_conn):
         headers={"Idempotency-Key": "ui-balances-1"},
     ).json()
     assert "id" in moved, moved
-    page = "offset=0&limit=100"
-    buckets = api.get(f"{prepay}/bucket?{page}").json()
+    page = "offset=0&limit=100"  # the action lists
+    listed = "offset=0&limit=50"  # the bucket and total pages (#314)
+    buckets = api.get(f"{prepay}/bucket?{listed}").json()
     assert {b["id"] for b in buckets} >= {tx.bucket, rx.bucket}
     assert postpaid["id"] not in {b["partyAccount"]["id"] for b in buckets}
-    mine = api.get(f"{prepay}/bucket?partyAccount.id={tx.id}&status=active&{page}").json()
+    mine = api.get(f"{prepay}/bucket?partyAccount.id={tx.id}&status=active&{listed}").json()
     assert [b["id"] for b in mine] == [tx.bucket]
     assert mine[0]["remainingValue"]["amount"] == 40
-    suspended = api.get(f"{prepay}/bucket?status=suspended&{page}").json()
+    suspended = api.get(f"{prepay}/bucket?status=suspended&{listed}").json()
     assert all(b["status"] == "suspended" for b in suspended)
-    totals = api.get(f"{prepay}/accumulatedBalance?{page}").json()
+    totals = api.get(f"{prepay}/accumulatedBalance?{listed}").json()
     assert {t["partyAccount"]["id"] for t in totals} >= {tx.id, rx.id}
-    one_total = api.get(f"{prepay}/accumulatedBalance?partyAccount.id={tx.id}&{page}").json()
+    one_total = api.get(f"{prepay}/accumulatedBalance?partyAccount.id={tx.id}&{listed}").json()
+    joined = api.get(f"{prepay}/accumulatedBalance?partyAccount.id={tx.id}&limit=1").json()
+    assert [t["id"] for t in joined] == [t["id"] for t in one_total]
     assert [t["id"] for t in one_total] == [
         next(t["id"] for t in totals if t["partyAccount"]["id"] == tx.id)
     ]
@@ -2099,24 +2102,18 @@ def test_order_writes_replay_as_the_ui_sends_them(api):
 
 def test_party_and_customer_writes_as_the_ui_sends_them(api):
     """patchParty(), patchCustomer(), deleteParty() and deleteCustomer() and the list
-    requests of loadParties(): bodies pinned in Parties.test.tsx."""
+    requests of loadPartyPage() and loadCustomerPage(): pinned in Parties.test.tsx."""
     person = apidata.individual(api, "Olga", "Kuznetsova")
     org = apidata.organization(api, "Lone Ltd")
     buyer = apidata.customer(api, apidata.individual(api, "Ivan", "Petrov"))
     held = apidata.account(api, buyer)
-    # the list requests of the Parties screen: fields and paging are accepted
-    party = "/tmf-api/partyManagement/v5"
-    accounts = "/tmf-api/accountManagement/v5"
-    for url in (
-        f"{party}/individual?offset=0&limit=100",
-        f"{party}/organization?offset=0&limit=100",
-        "/tmf-api/customer/v5/customer?fields=name,status,engagedParty&offset=0&limit=100",
-        f"{accounts}/billingAccount?fields=name,relatedParty&offset=0&limit=100",
-        f"{accounts}/financialAccount?fields=relatedParty&offset=0&limit=100",
-        f"{accounts}/partyAccount?fields=relatedParty&offset=0&limit=100",
-        f"{accounts}/settlementAccount?fields=relatedParty&offset=0&limit=100",
-    ):
-        assert api.get(url).status_code == 200, url
+    # the list requests of the Parties screen (#314): one paged search per section
+    found = api.get("/internal/v1/party?kind=Individual&q=iv&status=validated&offset=0&limit=50")
+    assert found.status_code == 200, found.text
+    assert api.get("/internal/v1/party?kind=Organization&offset=0&limit=50").status_code == 200
+    rows = api.get("/internal/v1/partyCustomer?q=iv&offset=0&limit=50")
+    assert rows.status_code == 200, rows.text
+    assert held["id"] in [a["id"] for r in rows.json() for a in r["billingAccounts"]]
     # a merge patch of only the changed names
     patched = api.patch(person["href"], {"familyName": "Kuznetsova-Lee"})
     assert patched.status_code == 200, patched.text
@@ -2213,10 +2210,10 @@ def test_financial_account_writes_and_links_as_the_ui_sends_them(api):
         "partyOrPartyRole": {"id": org["id"], "@type": "PartyRef", "@referredType": "Organization"},
         "@type": "RelatedPartyRefOrPartyRoleRef",
     }
-    # the lists of the forms: owners, and one owner's financial accounts
+    # the lists of the forms: owners searched as typed (#314), one owner's financial accounts
     for url in (
-        f"{PARTY}/individual?offset=0&limit=100",
-        f"{PARTY}/organization?offset=0&limit=100",
+        "/internal/v1/party?offset=0&limit=20",
+        "/internal/v1/party?q=rom&offset=0&limit=20",
         f"{fin}?relatedParty.id={org['id']}&offset=0&limit=100",
     ):
         assert api.get(url).status_code == 200, url

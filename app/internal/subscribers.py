@@ -27,7 +27,7 @@ STATES = ("Active", "Suspended", "Closed")
 RATING_TYPES = ("prepaid", "postpaid")
 
 
-def _one(request: Request, name: str, allowed: tuple[str, ...] | None = None) -> str | None:
+def one_param(request: Request, name: str, allowed: tuple[str, ...] | None = None) -> str | None:
     given = request.query_params.getlist(name)
     if len(given) > 1:
         raise bad_request(f"{name} given more than once")
@@ -66,9 +66,9 @@ def subscriber_body(
 @router.get("")
 def search_subscribers(request: Request, tx: Tx) -> TmfJSONResponse:
     offset, limit = parse_page(request, extra=("q", "state", "ratingType"))
-    q = _one(request, "q")
-    state = _one(request, "state", STATES)
-    rating_type = _one(request, "ratingType", RATING_TYPES)
+    q = one_param(request, "q")
+    state = one_param(request, "state", STATES)
+    rating_type = one_param(request, "ratingType", RATING_TYPES)
     with tx() as conn:
         rows, more = repo.search(
             conn, q=q, state=state, rating_type=rating_type, offset=offset, limit=limit

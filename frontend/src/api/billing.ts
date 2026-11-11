@@ -3,7 +3,7 @@
 // docs/ui.md; rules in docs/decisions/accounts.md.
 
 import { getAll, patchJson, postJson, request } from './client';
-import { BUILT_IN_CYCLE, type Account } from './bss';
+import { BUILT_IN_CYCLE } from './bss';
 
 export type SettingKind = 'cycles' | 'formats' | 'media';
 
@@ -49,17 +49,6 @@ export async function loadSettings(kind: SettingKind, signal: AbortSignal): Prom
 }
 
 /** How many of the loaded accounts name this setting. */
-export function usedBy(kind: SettingKind, id: string, accounts: Account[]): number {
-  return accounts.filter((account) => {
-    const b = account.billing;
-    if (kind === 'cycles' && id === BUILT_IN_CYCLE) return !b?.cycleId;
-    if (!b) return false;
-    if (kind === 'cycles') return b.cycleId === id;
-    if (kind === 'formats') return b.formatId === id;
-    return b.mediaIds.includes(id);
-  }).length;
-}
-
 export interface SettingForm {
   name: string;
   description: string;

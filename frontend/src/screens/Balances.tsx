@@ -2,12 +2,12 @@ import { submitDialogPrimary } from '../ui/kit';
 import { useState } from 'react';
 import {
   loadBucketDetail,
+  BALANCE_PAGE,
+  loadAccountTotalPage,
   loadBucketRows,
-  loadAccountTotals,
   loadAccountTotal,
   BUCKET_STATUSES,
   type BucketRow,
-  type AccountTotal,
 } from '../api/balances';
 import {
   loadKindAction,
@@ -26,6 +26,7 @@ import { Amount } from '../ui/Amount';
 import { Id } from '../ui/Id';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
+import { PageFooter, usePageOffset } from '../ui/paging';
 import { actionLabel, ActionDialog, statusLabel } from './PrepaidHistory';
 import './screens.css';
 
@@ -112,9 +113,11 @@ export function BalancesScreen() {
   const [openAction, setOpenAction] = useState<{ id: string; kind: ActionKind } | null>(null);
   const filter = { account, status: status === '' ? null : status };
   const key = `${tab}:${account ?? ''}:${status}:${version}`;
+  const [offset, setOffset] = usePageOffset(key);
+  const none = { items: [], more: false, offset: 0 };
   // each tab reads only its own list: the buckets tab makes no action request and vice versa
-  const buckets = useResource(`balances-buckets:${key}`, (signal) =>
-    tab === 'buckets' ? loadBucketRows(filter, signal) : Promise.resolve([] as BucketRow[]),
+  const buckets = useResource(`balances-buckets:${key}:${offset}`, (signal) =>
+    tab === 'buckets' ? loadBucketRows(filter, offset, signal) : Promise.resolve(none),
   );
   const actions = useResource(`balances-actions:${key}`, (signal) =>
     tab === 'buckets' || tab === 'totals'
@@ -122,8 +125,8 @@ export function BalancesScreen() {
       : loadKindActions(KIND_OF[tab], filter, signal),
   );
 
-  const totals = useResource(`balances-totals:${key}`, (signal) =>
-    tab === 'totals' ? loadAccountTotals(account, signal) : Promise.resolve([] as AccountTotal[]),
+  const totals = useResource(`balances-totals:${key}:${offset}`, (signal) =>
+    tab === 'totals' ? loadAccountTotalPage(account, offset, signal) : Promise.resolve(none),
   );
 
   const dropAccount = () => {
@@ -141,11 +144,11 @@ export function BalancesScreen() {
   const name =
     tab === 'buckets'
       ? buckets.status === 'ok'
-        ? (buckets.data.find((r) => r.account.id === account)?.account.name ?? null)
+        ? (buckets.data.items.find((r) => r.account.id === account)?.account.name ?? null)
         : null
       : tab === 'totals'
         ? totals.status === 'ok'
-          ? (totals.data.find((r) => r.account.id === account)?.account.name ?? null)
+          ? (totals.data.items.find((r) => r.account.id === account)?.account.name ?? null)
           : null
         : actions.status === 'ok'
           ? (actions.data.find((a) => a.sender.id === account)?.sender.name ?? null)
@@ -215,11 +218,11 @@ export function BalancesScreen() {
                 title: 'No account totals',
                 text: 'Prepaid account totals appear here once enabled.',
               }}
-              count={(data) => data.length}
-              rows={(data) => data}
+              count={(data) => (account !== null ? 1 : data.items.length)}
+              rows={(data) => data.items}
               onResetFilters={reset}
             >
-              {(rows) => (
+              {(rows, data) => (
                 <>
                   {rows.map((row) => (
                     <TableRow
@@ -233,7 +236,14 @@ export function BalancesScreen() {
                       }}
                     />
                   ))}
-                  <TableFooter left={`Showing ${formatInt(rows.length)}`} />
+                  <PageFooter
+                    offset={data.offset}
+                    shown={rows.length}
+                    more={data.more}
+                    size={BALANCE_PAGE}
+                    onOffset={setOffset}
+                    ui="ui.balances"
+                  />
                 </>
               )}
             </ListState>
@@ -246,8 +256,9 @@ export function BalancesScreen() {
               columns={BUCKET_COLUMNS}
               errorTitle="Failed to load the buckets"
               empty={{ title: 'No buckets', text: 'Prepaid accounts appear here once enabled.' }}
-              count={(data) => data.length}
-              rows={(data) => data}
+              // filtered on the server: an empty filtered page is "no matches"
+              count={(data) => (account !== null || status !== '' ? 1 : data.items.length)}
+              rows={(data) => data.items}
               onResetFilters={reset}
             >
               {(rows, data) => (
@@ -266,7 +277,14 @@ export function BalancesScreen() {
                       }}
                     />
                   ))}
-                  <TableFooter left={`Showing ${shown(rows.length, data.length)}`} />
+                  <PageFooter
+                    offset={data.offset}
+                    shown={rows.length}
+                    more={data.more}
+                    size={BALANCE_PAGE}
+                    onOffset={setOffset}
+                    ui="ui.balances"
+                  />
                 </>
               )}
             </ListState>

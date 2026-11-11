@@ -312,6 +312,60 @@ paths:
                 type: array
                 items: {$ref: '#/components/schemas/SubscriberRow'}
         '400': {$ref: '#/components/responses/Error'}
+  /party:
+    get:
+      summary: The Parties screen's individuals and organizations, oldest first.
+      description: >-
+        Paged with Link rel=next, no count (#312). q matches by prefix, case-insensitive:
+        an individual's given name, "given family" or family name, an organization's name;
+        or a short id (a prefix of the id) or the full id (#314). customers,
+        billingAccounts and ownsAccounts are computed for the page.
+      parameters:
+        - {$ref: '#/components/parameters/Offset'}
+        - {$ref: '#/components/parameters/Limit'}
+        - name: kind
+          in: query
+          schema: {type: string, enum: [Individual, Organization]}
+        - name: q
+          in: query
+          schema: {type: string, maxLength: 200}
+        - name: status
+          in: query
+          schema: {type: string, enum: [initialized, validated, deceased, closed]}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/PartyRow'}
+        '400': {$ref: '#/components/responses/Error'}
+  /partyCustomer:
+    get:
+      summary: The Parties screen's customers, oldest first, each with its party.
+      description: >-
+        Paged with Link rel=next, no count (#312). q matches the customer name by prefix
+        (case-insensitive), or a short or full id (#314). billingAccounts is computed for
+        the page.
+      parameters:
+        - {$ref: '#/components/parameters/Offset'}
+        - {$ref: '#/components/parameters/Limit'}
+        - name: q
+          in: query
+          schema: {type: string, maxLength: 200}
+        - name: status
+          in: query
+          schema: {type: string, enum: [Created, Active, Inactive]}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/PartyCustomerRow'}
+        '400': {$ref: '#/components/responses/Error'}
   /billingRun:
     get:
       summary: Billing runs, newest run date first (stage 4).
@@ -1479,6 +1533,57 @@ components:
             name: {type: string}
         activeProducts: {type: integer, minimum: 0}
         customerAccounts: {type: integer, minimum: 1}
+    PartyRow:
+      type: object
+      additionalProperties: false
+      required: [id, kind, name, status, customers, billingAccounts, ownsAccounts]
+      properties:
+        id: {type: string, format: uuid}
+        kind: {type: string, enum: [Individual, Organization]}
+        name: {type: string}
+        status: {type: string, nullable: true}
+        customers:
+          type: array
+          items: {$ref: '#/components/schemas/NamedRef'}
+        billingAccounts:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name, customerId]
+            properties:
+              id: {type: string, format: uuid}
+              name: {type: string}
+              customerId: {type: string, format: uuid}
+        ownsAccounts:
+          type: boolean
+          description: It owns a financial, party or settlement account.
+    PartyCustomerRow:
+      type: object
+      additionalProperties: false
+      required: [id, name, status, party, billingAccounts]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        status: {type: string, enum: [Created, Active, Inactive]}
+        party:
+          type: object
+          additionalProperties: false
+          required: [id, kind, name]
+          properties:
+            id: {type: string, format: uuid}
+            kind: {type: string, enum: [Individual, Organization]}
+            name: {type: string}
+        billingAccounts:
+          type: array
+          items: {$ref: '#/components/schemas/NamedRef'}
+    NamedRef:
+      type: object
+      additionalProperties: false
+      required: [id, name]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
     Money:
       type: object
       additionalProperties: false

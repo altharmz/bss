@@ -558,9 +558,13 @@ def test_ui_sim_requests_replayed(api, db_conn, line_world):
     assert api.post(GENERATE, {"batch": "UG", "count": 2}).status_code == 201
     listed = api.get(
         f"{RESOURCE}?resourceSpecification.id=imsi&simState=in_stock&simType=physical"
-        "&batchNumber=U1&offset=0&limit=100"
+        "&batchNumber=U1&offset=0&limit=50"
     )
     assert listed.status_code == 200 and len(listed.json()) == 2
+    found = api.get(
+        f"{RESOURCE}?resourceSpecification.id=imsi&value=001010000000002&offset=0&limit=50"
+    )
+    assert [s["value"] for s in found.json()] == ["001010000000002"]
     assert sorted(b["name"] for b in api.get(BATCH).json()) == ["U1", "UG"]
     # the add item Add product sends for "Any eSIM": the characteristic carries a valueType
     item = apidata.add_item(line_world.off, "1")
