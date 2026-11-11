@@ -24,6 +24,10 @@ Daily runs have one identity per business date; prepaid command runs have one re
 | `failure_kind` | `billing_run_failure_kind` (enum, see [README](README.md#enums)) | yes |  | Set exactly when failed: accounts (some account failed or is blocked; later dates go ahead) or run (the run itself failed; no later date is billed until it succeeds). |
 | `kind` | `text` | no | `'daily'::text` | Internal daily or prepaidCommand identity; only daily runs drive scheduling, health and daily APIs. |
 | `command_id` | `uuid` | yes |  | Retained one-to-one prepaid command identity; null on daily runs. |
+| `member_count` | `integer` | no | `0` | Daily run: its members, the accounts opened before 00:00 of run_date (BILLING_TZ), counted when the run starts, is reopened or taken over; less one for a member deleted before the run reached it. 0 for other kinds. |
+| `ok_count` | `integer` | no | `0` | Members with an ok billing_run_account row; kept in the transaction that writes the row. |
+| `failed_count` | `integer` | no | `0` | Members with a failed billing_run_account row; kept in the transaction that writes the row. |
+| `blocked_count` | `integer` | no | `0` | Members with a blocked billing_run_account row; kept in the transaction that writes the row. |
 
 ## Foreign keys
 

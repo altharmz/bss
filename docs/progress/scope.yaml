@@ -666,6 +666,7 @@ items:
   - {id: worker.failureIsolation, area: worker, stage: 4, title: "A failed account blocks only itself; after a fix it catches up its dates in order"}
   - {id: worker.wholeRunFailure, area: worker, stage: 4, title: "A whole-run failure does not advance past its date; retried with backoff"}
   - {id: worker.completedAllOk, area: worker, stage: 4, title: "A run is completed only when every member account is ok"}
+  - {id: worker.storedRunCounts, area: worker, stage: 5, title: "Run member and outcome counts are stored, kept in the outcome's transaction and equal the live recount"}
   - {id: worker.requestQueue, area: worker, stage: 4, title: "Catch-up and retry requests from the UI queue are processed"}
   - {id: worker.statusFlips, area: worker, stage: 4, title: "Status flips (created -> active, pendingTerminate -> terminated) by run date"}
   - {id: worker.scheduler, area: worker, stage: 4, title: "Scheduler and --once: dates due at BILLING_RUN_AT, automatic catch-up of today and yesterday"}

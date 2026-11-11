@@ -191,3 +191,43 @@ that wakes every minute. The design was approved by the human on 2026-11-09:
   stopped by SIGTERM deletes nothing and records no sweep.
 - **The passes keep their rules.** Only the set of accounts they look at changes.
   `accounts=None` (tests and direct calls) still means every account.
+
+## Stored run counts (2026-11-11, #284)
+
+The runs view counted, for every run on the page, the accounts opened before its date and
+its `billing_run_account` rows by status: about 4M rows for a page of 20 daily runs at
+100k subscribers, growing with subscribers and runs. The design was approved by the human
+on 2026-11-09:
+
+- **Stored on `billing_run`** (migration 0075): `member_count`, `ok_count`, `failed_count`,
+  `blocked_count`, `NOT NULL DEFAULT 0`. A prepaid command run keeps zeros. The migration
+  backfills them from the existing rows, and `member_count` from the members' definition.
+- **`member_count` is written when the run starts.** `start_run` stores it
+  (`billing.count_members`) in the transaction that creates, reopens or takes over the run.
+  `insert_run`, `reopen_run` and `take_over_run` do not name the column: the migration
+  tests build data at old schema versions through them. Members are the accounts opened before 00:00 of the run date
+  in BILLING_TZ, so a new run, a reopen and a takeover all count the same set.
+- **Deleting a member account** (DELETE billingAccount, only one without history) takes it
+  out of `member_count` of every daily run it belongs to, in the deleting transaction
+  (`billing.forget_member`). Without this the stored count would stay one too high: the
+  worker skips a deleted account and `close_run` no longer counts it. Nothing else needs
+  it: an account with history cannot be deleted, so no completed run is touched. The
+  delete holds the account `FOR UPDATE` and then writes the run row, the same order as
+  the worker's outcome write. A `start_run` counting at the same time either sees the
+  delete committed or is followed by the decrement. This step was added in
+  implementation, as the consequence of "stored counts equal the live recount".
+- **Outcome counts move with the outcome row.** `record_outcome` is one statement: the old
+  status (if any), the upsert of the row, and one `UPDATE billing_run` that decrements the
+  old status, increments the new one and sets `heartbeat_at`. The separate `touch_run`
+  went into it, so there is still one `billing_run` write per account (tested by counting
+  statements). The worker holds the account's lock, so the old status cannot change
+  underneath.
+- **The view reads only the stored columns** (`total` = `member_count`). `finish_run` and
+  `close_run` still decide "completed" from the rows (`outcome_gaps`), not the counts.
+- **The accounts of a run** (`GET .../billingRun/{id}/accounts`) were already ordered by
+  `billing_account_id` within the run, which is the primary key's order; the order did
+  not change. The issue's `X-Total-Count` part no longer applies: #312 (decided by the
+  human 2026-11-10) removed list counts in favour of `Link rel=next`.
+- **The consistency check** (`tests/run_counts.py`) recounts live and compares, in tests
+  only: after a clean run, an accounts failure, a retry that fixes it and releases the
+  blocked accounts, a takeover after a killed worker, and a member deleted mid-run.

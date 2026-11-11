@@ -848,5 +848,6 @@ def delete_account(account_id: str, request: Request, tx: Tx, clock: ClockDep) -
         refuse_if_referenced("billingAccount", uid, counts, "close it instead (state Closed)")
         emit.deleted(conn, API, "billingAccount", lambda: account_body(conn, row), at=clock.now())
         presentation.remove_preferences(conn, uid)
+        billing.forget_member(conn, uid)
         delete_row(conn, "billing_account", uid)
     return Response(status_code=204)

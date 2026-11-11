@@ -1,8 +1,9 @@
 """Billing runs for the admin UI (stage 4, docs/archive/stage4-design.md section 7), under
 /internal/v1/billingRun. Ours, not TMF.
 
-Read: the runs newest first, one run, a run's per-account outcomes - every count derived
-from billing_run_account and the run's members (accounts opened before 00:00 of its date).
+Read: the runs newest first, one run, a run's per-account outcomes. The counts are the
+ones stored on the run (#284): its members (accounts opened before 00:00 of its date) and
+its outcomes by status.
 Write: **the API never bills.** A catch-up or a retry is a worker_request row; the worker
 (which owns billing) carries it out within a minute.
 
