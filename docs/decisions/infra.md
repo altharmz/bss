@@ -122,11 +122,18 @@ would attach the prod container to both `lab` and `shared`).
   and the deploy script both depend on it.
 - Python 3.12, `ruff` for lint and format, `pytest` for tests.
 - `make test` runs the suite in parallel (`pytest -n auto`, pytest-xdist). Tests share
-  nothing: each worker migrates its own template database and every test gets its own
-  clone, dropped afterwards. A run cut short (a killed hook) cannot drop its own, so
+  nothing: every test gets its own clone of a template database at migration head,
+  dropped afterwards. The template is built once for a set of migrations and kept
+  (`vpslab_kept_template_<digest of alembic/ and alembic.ini>`): the first worker that
+  asks builds it under a server-wide advisory lock, under a timed name that becomes the
+  kept one only when the migration has finished, and every other worker and every later
+  run finds it. A changed migration set has another digest, so it builds its own and drops
+  the older kept ones. Before #319 each xdist worker migrated its own template at start:
+  4.5 s in one process, 9 to 30 s each with twelve at once, in every pytest run (the
+  commit hook starts two). A run cut short (a killed hook) cannot drop its own, so
   the names carry their creation time (`tests/scratch_db.py`) and every test session
   first drops the `vpslab_%` databases older than 6 hours that nobody is connected to
-  (2026-10-23: 37 had piled up). Hypothesis
+  (2026-10-23: 37 had piled up), never a kept template. Hypothesis
   examples per property come from a profile selected by `HYPOTHESIS_PROFILE`: `dev` (50)
   for `make test` and the pre-commit hook, `ci` (200) for `make verify` (a target-specific
   variable in the Makefile). Plain `pytest` without the variable uses `dev`.
@@ -141,9 +148,11 @@ would attach the prod container to both `lab` and `shared`).
   checkpoint. Local only - production uses vps-infra's postgres and never reads
   `compose.override.yaml`, so it is unaffected. Not crash-safe: after a WSL crash (or a
   killed Docker VM) the local database may be corrupt; the recovery is `make clean`
-  (drops the local volume) and `make up`. The lock limit (default 64) is for the test
-  templates: every xdist worker migrates its own template in one transaction and the lock
-  table is shared, so near 62 tables the parallel suite ran out of shared memory (issue #186).
+  (drops the local volume) and `make up`. The lock limit (default 64) dates from
+  the time every xdist worker migrated its own template in one transaction, all at once:
+  the lock table is shared, so near 62 tables the parallel suite ran out of shared memory
+  (issue #186). One build at a time needs less, but the limit stays: tests migrate
+  databases of their own in parallel too.
 - Spec YAML is parsed with libyaml (`yaml.CSafeLoader`), not `yaml.safe_load`: same
   documents, ~6x faster, and every xdist worker parses all of `spec/` once.
 - **Dependencies are pinned, never floating** (since 2026-10-03). Direct dependencies are

@@ -43,12 +43,23 @@ _SECRET_PAIR = re.compile(
     r"""(?ix)(["']?\b(?:[\w-]*?(?:password|passwd|token|secret)|pin|code)["']?\s*[:=]\s*["']?)"""
     r"""[^\s"',&;}]+"""
 )
+# Not a secret pair: the principal of a static MCP token, `mcp-token:<token name>`
+# (bss_mcp/auth.py). The audit line and the request line's operator exist to say who
+# acted, and the name was masked like a token value (#319).
+_PRINCIPAL = re.compile(r"(?i)\bmcp-token:[\w.-]+")
 
 
 def redact(text: str) -> str:
     text = _HEADER_VALUE.sub(lambda m: f"{m.group(1)}{m.group(2)}{REDACTED}", text)
     text = _BEARER.sub(f"Bearer {REDACTED}", text)
-    return _SECRET_PAIR.sub(lambda m: f"{m.group(1)}{REDACTED}", text)
+    principals = [m.span() for m in _PRINCIPAL.finditer(text)]
+
+    def mask(m: re.Match[str]) -> str:
+        if any(m.start() < end and start < m.end() for start, end in principals):
+            return m.group(0)
+        return f"{m.group(1)}{REDACTED}"
+
+    return _SECRET_PAIR.sub(mask, text)
 
 
 class RequestIdFilter(logging.Filter):

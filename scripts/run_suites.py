@@ -19,8 +19,16 @@ import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# Harness tests must never write to the shared telemetry database.
-ENV = {"GIT_PAGER": "cat", "BSS_TELEMETRY_DISABLED": "1"}
+
+def suite_environment():
+    """The caller's environment without Git's repository selectors. The commit hook runs
+    the suites with GIT_DIR and GIT_INDEX_FILE set; a suite that passed them on to
+    `git init <dir>` re-initialised the real repository as bare (2026-11-11). Harness tests
+    must also never write to the shared telemetry database."""
+    selectors = ("GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE", "GIT_PREFIX")
+    selectors += ("GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES")
+    environment = {key: value for key, value in os.environ.items() if key not in selectors}
+    return {**environment, "GIT_PAGER": "cat", "BSS_TELEMETRY_DISABLED": "1"}
 
 
 def names(suite):
@@ -47,7 +55,7 @@ def execute(*args):
         capture_output=True,
         text=True,
         check=False,
-        env={**os.environ, **ENV},
+        env=suite_environment(),
     )
 
 

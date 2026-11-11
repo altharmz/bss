@@ -189,6 +189,20 @@ def test_nothing_secret_is_logged_at_debug(lines):
     assert any("[redacted]" in line for line in out)
 
 
+def test_a_static_token_principal_keeps_its_name(lines):
+    # who acted is not a secret: the MCP audit line and the request line's operator
+    log = logging.getLogger("app.test")
+    log.info('{"principal": "mcp-token:reader", "tool": "listBill"}')
+    log.info("x", extra={"operator": "mcp-token:reader"})
+    log.info("mcp-token:reader token=%s", SECRET)
+    audit, request, mixed = lines()[-3:]
+    assert json.loads(audit["msg"])["principal"] == "mcp-token:reader"
+    assert request["operator"] == "mcp-token:reader"
+    assert mixed["msg"] == "mcp-token:reader token=[redacted]"
+    for text in (f"token={SECRET}", f'"token": "{SECRET}"', f"access_token:{SECRET}"):
+        assert SECRET not in logsetup.redact(text), text
+
+
 @pytest.mark.parametrize("name", ["psycopg", "httpx2", "httpcore", "asyncio", "multipart"])
 def test_third_party_loggers_stay_at_warning(lines, name):
     logging.getLogger("psycopg").setLevel(logging.NOTSET)

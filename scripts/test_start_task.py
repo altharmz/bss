@@ -8,6 +8,7 @@ import json
 import os
 import shutil
 import socket
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -86,6 +87,7 @@ class StartupTests(unittest.TestCase):
             "task_board.py",
             "task_repo.py",
             "task_runtime.py",
+            "task_testmon.py",
             "task_telemetry.py",
             "worker_slots.py",
             "task_finish.py",
@@ -335,6 +337,35 @@ class StartupTests(unittest.TestCase):
         self.assertEqual(self.git("rev-parse", "master"), expected)
         self.assertEqual(self.git("rev-parse", "HEAD", cwd=result["worktree"]), expected)
         self.assertNotEqual(expected, self.original)
+
+    def test_a_new_worktree_gets_the_saved_test_selection_record(self):
+        (self.primary / ".gitignore").write_text(".task/\n.env\n__pycache__/\n.testmon/\n")
+        self.git("commit", "-qam", "ignore the test-selection record")
+        self.git("push", "-q", "origin", "master")
+        saved = self.primary / ".git/bss-testmon/testmondata"
+        saved.parent.mkdir()
+        connection = sqlite3.connect(saved)
+        connection.execute("CREATE TABLE node (name TEXT)")
+        connection.commit()
+        connection.close()
+        result = self.result()
+        self.assertEqual(result["test_selection"], "seeded")
+        seeded = Path(result["worktree"]) / ".testmon/.testmondata"
+        self.assertTrue(seeded.is_file())
+        self.assertEqual(self.git("status", "--porcelain", cwd=result["worktree"]), "")
+
+    def test_a_record_git_does_not_ignore_is_not_seeded(self):
+        saved = self.primary / ".git/bss-testmon/testmondata"
+        saved.parent.mkdir()
+        sqlite3.connect(saved).close()
+        result = self.result()
+        self.assertEqual(result["test_selection"], "not seeded (not ignored)")
+        self.assertFalse((Path(result["worktree"]) / ".testmon").exists())
+
+    def test_without_a_saved_record_the_worktree_starts_without_one(self):
+        result = self.result()
+        self.assertEqual(result["test_selection"], "none")
+        self.assertFalse((Path(result["worktree"]) / ".testmon").exists())
 
     def test_local_ahead_is_not_reset_or_used_as_task_base(self):
         (self.primary / "README").write_text("local\n")
