@@ -86,9 +86,13 @@ services:
     profiles: [loadtest]
     command: ["python", "-m", "app.worker"]
     stop_grace_period: 60s
-    environment: *lt-env
+    environment:
+      <<: *lt-env
+      # the billing-run measurement (#283, make loadtest-billing-run): the worker's clock
+      # pinned to the run's start (APP_ENV=test only); empty = the real clock
+      WORKER_FAKE_NOW: ${LOADTEST_WORKER_FAKE_NOW:-}
     cpuset: ${LOADTEST_SUT_CPUS:-4-7}
-    cpus: 3.0
+    cpus: ${LOADTEST_WORKER_CPUS:-3.0}
     mem_limit: 1024m
     memswap_limit: 1024m
     read_only: true

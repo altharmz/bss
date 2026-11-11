@@ -231,3 +231,37 @@ on 2026-11-09:
 - **The consistency check** (`tests/run_counts.py`) recounts live and compares, in tests
   only: after a clean run, an accounts failure, a retry that fixes it and releases the
   blocked accounts, a takeover after a killed worker, and a member deleted mid-run.
+
+## Billing run capacity (2026-11-11, #283)
+
+The issue's decisions were approved by the human on 2026-11-09: measure first, then
+optimize the single-account path, and build parallel billing only if one process at
+one CPU still does < 19 accounts/s.
+
+- **Measured, not parallelized.** The baseline on the 100k dataset at `cpus: 1` was
+  58.2 accounts/s, so the run takes 29 min of the 90 min budget. Step 3 (owner process,
+  `BILLING_PROCESSES` children over a queue, the `pg_locks` owner check) was not
+  triggered and is not built. `compose.prod.yaml` therefore gets no `BILLING_PROCESSES`
+  variable: a setting that does nothing would mislead. The worker limits from the
+  environment came with #288. The numbers are in
+  [billing-worker.md](../billing-worker.md#capacity).
+- **One account lock per account.** `DateRun.process` locks the account
+  (`billing.lock_account`, the core columns `FOR UPDATE`; None = deleted since the run
+  listed it) and passes the `Account` to `bill_account(account=...)`. `load_state`
+  locks only when it gets no account. Other callers of `bill_account` and
+  `load_account` are unchanged.
+- **Unresolved failures read once per run.** `DateRun` reads every account's earliest
+  failed earlier run once, at construction (`billing.earliest_failures_before`, on
+  the partial index `billing_run_account_unresolved`). The answer holds for the whole
+  run: outcomes are written only by the worker that owns billing, one run at a time,
+  and this run's outcomes are on its own date, never before it. A retry builds a new
+  `DateRun` per reopened date, so it reads the map again after the previous date
+  changed it.
+- **Results unchanged** is proven by the same digest of ABRs, bills and outcomes
+  before and after on the 100k run (`loadtest/billing-digest.sql`) and by the existing
+  worker suite. The statement shape is pinned by `tests/test_worker_run_cost.py`.
+- **Left as is:** the savepoint around `bill_account` (a `BillingError` must undo
+  the account's writes but keep its `failed` row), the `running_run FOR SHARE` per
+  account, and `has_balance_ledger`'s `to_regclass` (older-schema migration tests
+  need it). Together they are about 4 of the 17 statements. With the 3.7x margin they
+  are not worth the risk.

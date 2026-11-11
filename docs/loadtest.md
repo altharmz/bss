@@ -40,6 +40,28 @@ and the pre-commit hook (all on the dev `db`) neither see nor disturb them. Plai
 | `make loadtest-dump NAME=...` / `make loadtest-restore NAME=...` | save the database to `~/.local/share/bss/loadtest/<NAME>.dump`, outside every worktree, or replace it from there and migrate. This is how another task's worktree gets the dataset |
 | `make loadtest-pg-stats-reset` / `make loadtest-pg-stats` | reset `pg_stat_statements`; print the top 20 statements and save them to `loadtest/out/` |
 
+## Measuring a billing run
+
+`make loadtest-billing-run DATE=<run date> [CPUS=1]` (#283, `loadtest/billing_run.py`,
+run on the host) measures the daily run of DATE on the restored dataset. The run of the
+day before must exist and DATE must have no run. Restore first: the measurement writes
+the run.
+
+1. It resets `pg_stat_statements`.
+2. It recreates `lt-worker` with `cpus` = CPUS (`LOADTEST_WORKER_CPUS`) and its clock
+   pinned to DATE 00:31 (`LOADTEST_WORKER_FAKE_NOW`, i.e. `WORKER_FAKE_NOW`; the
+   overlay's `APP_ENV=test` allows it). The worker bills DATE on its own.
+3. Every 5 s it reads the accounts done and samples `docker stats` of `lt-worker` and
+   `lt-db`. Wall times are the host's, since the worker's own timestamps come from the
+   pinned clock.
+4. When the run ends it stops `lt-worker`, whose wake-up would go on with the queue and
+   the prepaid sweep. It writes `loadtest/out/billing-run-<time>.json` with the wall
+   time, accounts/s, queries per account, the top 10 statements, the CPU split,
+   `lscpu -e` and the digest of the run's results (`loadtest/billing-digest.sql`). Two
+   runs of one date on the same dump must give the same digest.
+
+The results are in [billing-worker.md](billing-worker.md#capacity).
+
 ## The dataset
 
 `make loadtest-seed N=<subscribers> [PROCESSES=4] [DAYS=90] [USAGE_DAYS=30]` runs

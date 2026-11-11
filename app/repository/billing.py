@@ -410,22 +410,22 @@ def record_outcome(
     )
 
 
-def earliest_failure_before(
-    conn: psycopg.Connection, account_id: UUID, run_date: date
-) -> Row | None:
-    """The account's earliest failed run before `run_date` (its unresolved failure), or
-    None. A blocked row always waits for it."""
-    return fetch_one(
+def earliest_failures_before(conn: psycopg.Connection, run_date: date) -> dict[UUID, Row]:
+    """Each account's earliest failed run before `run_date` (its unresolved failure), for
+    every account that has one: one query per run, not one per account (#283). A blocked
+    row always waits for it. Only the worker writes outcomes, one run at a time, so the
+    answer holds for the whole run (its own outcomes are on `run_date`, never before)."""
+    rows = fetch_all(
         conn,
         """
-        SELECT o.run_id, r.run_date FROM billing_run_account o
-          JOIN billing_run r ON r.id = o.run_id
-         WHERE r.kind = 'daily' AND o.billing_account_id = %s AND o.status = 'failed'
-           AND r.run_date < %s
-         ORDER BY r.run_date LIMIT 1
+        SELECT DISTINCT ON (o.billing_account_id) o.billing_account_id, o.run_id, r.run_date
+          FROM billing_run_account o JOIN billing_run r ON r.id = o.run_id
+         WHERE r.kind = 'daily' AND o.status = 'failed' AND r.run_date < %s
+         ORDER BY o.billing_account_id, r.run_date
         """,
-        (account_id, run_date),
+        (run_date,),
     )
+    return {row["billing_account_id"]: row for row in rows}
 
 
 def failed_accounts(conn: psycopg.Connection, run_id: UUID) -> list[UUID]:
@@ -753,18 +753,24 @@ def running_run(conn: psycopg.Connection, run_id: UUID) -> Row:
     return row
 
 
-def load_account(conn: psycopg.Connection, account_id: UUID) -> Account:
-    """The account, locked until the transaction ends: two runs billing the same account
-    concurrently would both see it unbilled."""
+def lock_account(conn: psycopg.Connection, account_id: UUID) -> Account | None:
+    """The account, locked until the transaction ends (two runs billing the same account
+    concurrently would both see it unbilled); None if it does not exist."""
     row = fetch_one(
         conn,
         "SELECT id, currency, bill_cycle_day, details, rating_type FROM billing_account"
         " WHERE id = %s FOR UPDATE",
         (account_id,),
     )
-    if row is None:
+    return None if row is None else core_account(row)
+
+
+def load_account(conn: psycopg.Connection, account_id: UUID) -> Account:
+    """The account, locked until the transaction ends; LookupError if it does not exist."""
+    account = lock_account(conn, account_id)
+    if account is None:
         raise LookupError(f"billing account {account_id} does not exist")
-    return core_account(row)
+    return account
 
 
 def core_account(row: Row) -> Account:

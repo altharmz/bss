@@ -36,7 +36,7 @@ from app.billing.adapter import bill_account, visible_before
 from app.billing.model import BillingError
 from app.clock import Clock
 from app.events import emit
-from app.repository import billing, parties, products
+from app.repository import billing, products
 from app.repository._sql import Row
 from app.worker.plan import retry_time
 from app.worker.runs import AlreadyCompleted, Started, start_run
@@ -109,6 +109,8 @@ class DateRun:
         done = billing.outcomes(conn, run["id"])
         accounts = billing.run_members(conn, self.run_date, tz.key) if only is None else only
         self.todo = deque(a for a in accounts if a not in done or done[a]["status"] != "ok")
+        # each account's unresolved earlier failure, read once for the run (#283)
+        self.blockers = billing.earliest_failures_before(conn, self.run_date)
 
     def step(self) -> bool:
         """Process the next account; False when there is none left."""
@@ -125,13 +127,14 @@ class DateRun:
 
     def process(self, account_id: UUID) -> None:
         conn, run_id, now = self.conn, self.run["id"], self.clock.now()
-        blocker = billing.earliest_failure_before(conn, account_id, self.run_date)
+        blocker = self.blockers.get(account_id)
         with conn.transaction():
             # Deleted since the run listed its members (DELETE billingAccount, only one
             # without history): nothing to bill or record, and close_run no longer counts
-            # it (the delete took it out of member_count). The lock is bill_account's own,
-            # so a delete in flight finishes first.
-            if parties.get_billing_account(conn, account_id, "update") is None:
+            # it (the delete took it out of member_count). This is the lock bill_account
+            # would take (it gets the locked account), so a delete in flight finishes first.
+            account = billing.lock_account(conn, account_id)
+            if account is None:
                 return
             if blocker is not None:
                 billing.record_outcome(
@@ -139,7 +142,7 @@ class DateRun:
                 )
             else:
                 try:
-                    bill_account(conn, account_id, self.run, tz=self.tz)
+                    bill_account(conn, account_id, self.run, tz=self.tz, account=account)
                 except BillingError as error:
                     billing.record_outcome(
                         conn,

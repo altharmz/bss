@@ -144,7 +144,7 @@ DAYS ?= 90
 USAGE_DAYS ?= 30
 SEED_ARGS ?=
 LT_DATA := $(or $(XDG_DATA_HOME),$(HOME)/.local/share)/bss/loadtest
-.PHONY: loadtest-up loadtest-down loadtest-ps loadtest-logs loadtest-migrate loadtest-reset loadtest-secret loadtest-seed loadtest-dump loadtest-restore loadtest-pg-stats-reset loadtest-pg-stats
+.PHONY: loadtest-up loadtest-down loadtest-ps loadtest-logs loadtest-migrate loadtest-reset loadtest-secret loadtest-seed loadtest-dump loadtest-restore loadtest-pg-stats-reset loadtest-pg-stats loadtest-billing-run
 
 loadtest-up: ## Start the load-test stack (lt-db, lt-app, lt-worker, lt-mcp; pinned to LOADTEST_SUT_CPUS, default 4-7), migrated
 	./scripts/task-compose build app
@@ -210,6 +210,12 @@ loadtest-pg-stats-reset: ## Reset pg_stat_statements in the load-test database
 loadtest-pg-stats: ## Top 20 statements by total time since the last reset, also to loadtest/out/pg-stats-<time>.txt
 	@mkdir -p loadtest/out
 	$(LT_PSQL) < loadtest/pg-stats.sql | tee "loadtest/out/pg-stats-$$(date +%Y%m%dT%H%M%S).txt"
+
+loadtest-billing-run: ## Measure the daily billing run of DATE on the restored dataset (DATE=YYYY-MM-DD [CPUS=1]); report in loadtest/out/
+	@test -n "$(DATE)" || { echo "loadtest-billing-run: DATE=<run date> is required" >&2; exit 2; }
+	@mkdir -p loadtest/out
+	$(LT) up -d --wait lt-db lt-app
+	python3 -B loadtest/billing_run.py --date $(DATE) --cpus $(or $(CPUS),1)
 
 worker-once: ## One wake-up of the billing worker against the local stack (due dates, queue, flips), then exit
 	./scripts/task-compose run --rm app python -m app.worker --once

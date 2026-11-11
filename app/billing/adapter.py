@@ -28,9 +28,14 @@ def visible_before(run_date: date, tz: ZoneInfo) -> datetime:
 
 
 def load_state(
-    conn: psycopg.Connection, account_id: UUID, run_date: date, tz: ZoneInfo
+    conn: psycopg.Connection,
+    account_id: UUID,
+    run_date: date,
+    tz: ZoneInfo,
+    account: Account | None = None,
 ) -> BillingState:
-    account = billing.load_account(conn, account_id)
+    """`account`: the caller already holds its row lock (`billing.lock_account`)."""
+    account = account or billing.load_account(conn, account_id)
     products = billing.load_products(conn, account_id, visible_before=visible_before(run_date, tz))
     return BillingState(
         account=account,
@@ -102,17 +107,24 @@ def settle_account(
 
 
 def bill_account(
-    conn: psycopg.Connection, account_id: UUID, run: dict, *, tz: ZoneInfo | None = None
+    conn: psycopg.Connection,
+    account_id: UUID,
+    run: dict,
+    *,
+    tz: ZoneInfo | None = None,
+    account: Account | None = None,
 ) -> BillingResult:
     """Bill one account for `run` (a billing_run row that is still running): write the
     ABRs and bills due up to its run date, issue the bills, and settle the account (its
     unused credit pays its open bills). Running it again for the same run writes nothing.
-    Raises BillingError (nothing written) if the account cannot be billed."""
+    Raises BillingError (nothing written) if the account cannot be billed. `account`: the
+    caller already locked it in its open transaction (the worker, #283); else it is locked
+    here."""
     tz = tz or ZoneInfo(settings.billing_tz)
     with conn.transaction():
         current = billing.running_run(conn, run["id"])
         run_date = current["run_date"]
-        state = load_state(conn, account_id, run_date, tz)
+        state = load_state(conn, account_id, run_date, tz, account)
         result = compute(state, run_date, tz)
         now = current["started_at"]
         apply_result(conn, state.account, run["id"], result, issued_at=now)
