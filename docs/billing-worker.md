@@ -233,6 +233,37 @@ during a catch-up does not fail on it.
 400. Proven by `tests/test_billing_status.py` (all ten tests, including a strict
 schema with `additionalProperties: false` on every response).
 
+## Capacity
+
+Measured on 2026-11-11 (#283), with `make loadtest-billing-run DATE=2026-11-05 CPUS=1`
+([loadtest.md](loadtest.md#measuring-a-billing-run)). The setup is the 100k dataset
+restored into the local load-test stack, with the worker at `cpus: 1` inside the
+4-CPU SUT cpuset `4-7`. The run is the daily run of 2026-11-05: 100,000 members, all
+`ok`, 1,353 ABRs and 1,061 bills.
+
+| Code | Wall time | Accounts/s | Queries per account | CPU (worker / postgres) |
+|---|---|---|---|---|
+| before #283 | 1,719 s (28.6 min) | 58.2 | 19.4 | 42 % / 49 % |
+| **after #283** | **1,402 s (23.4 min)** | **71.4** | **17.4** | 38 % / 49 % |
+
+- **The budget:** the run starts at 00:30 and must end before the 02:15 backup. The
+  target is 100k accounts in < 90 min, at least 19 accounts/s. One process at one CPU
+  does about 3.7 times that, so 100k accounts use about a quarter of the window. The
+  approved parallel design (`BILLING_PROCESSES`) was therefore not built. Production
+  runs one worker process.
+- **The run is latency bound, not CPU bound.** Neither container uses its CPU. A
+  profile spends 85 % of the time in `psycopg` waiting for the database. Each account
+  makes about 13 queries, plus `BEGIN`, a savepoint and a `COMMIT` that waits for its
+  WAL flush. What scales it is fewer round trips per account, not more CPU. The
+  outcome write (`record_outcome`, #284) is the costliest statement, at 0.58 ms.
+- **What #283 changed:** the worker takes the account's row lock once and hands the
+  locked account to `bill_account`, which no longer locks it a second time. The
+  accounts' unresolved earlier failures (for `blocked`) are read once per run
+  (`billing.earliest_failures_before`), not once per account. Both runs gave the same
+  results digest (`loadtest/billing-digest.sql`: ABRs, bills and outcomes without ids):
+  abrs `fc08396b`, bills `3ec7d204`, outcomes `a5529ca7`. Proven by
+  `tests/test_worker_run_cost.py`.
+
 ## Heartbeat and liveness
 
 The liveness file (`WORKER_LIVENESS_FILE`, default `/tmp/worker-alive`) is touched on
