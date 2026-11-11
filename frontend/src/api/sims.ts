@@ -1,5 +1,5 @@
 import type { components as T639 } from './generated/tmf639';
-import { getAll, getJson, postJson, request } from './client';
+import { getJson, getPage, postJson, request } from './client';
 import { NUMBERS } from './numbers';
 
 // SIM and eSIM stock (docs/decisions/sim.md): TMF639 lists and filters the SIMs, the bulk
@@ -43,17 +43,28 @@ export const simType = (sim: ResourceBody) => characteristic(sim, 'simType') as 
  * active, because the matching ID lets anyone install the profile. */
 export const activationCode = (sim: ResourceBody) => characteristic(sim, 'activationCode');
 
-/** The SIMs (IMSI resources), filtered by the TMF639 attributes the server defines. */
-export async function loadSims(filters: SimFilters, signal: AbortSignal): Promise<Sim[]> {
+export const SIM_PAGE = 50;
+
+/** One page of SIMs (IMSI resources), filtered by the TMF639 attributes the server
+ * defines; `imsi` is an exact value (#314: the API has no partial match). */
+export async function loadSims(
+  filters: SimFilters & { imsi: string },
+  offset: number,
+  signal: AbortSignal,
+): Promise<{ items: Sim[]; more: boolean; offset: number }> {
   const query = new URLSearchParams({ 'resourceSpecification.id': 'imsi' });
   if (filters.state) query.set('simState', filters.state);
   if (filters.type) query.set('simType', filters.type);
   if (filters.batch) query.set('batchNumber', filters.batch);
-  const rows = await getAll<ResourceBody>(`${NUMBERS}?${query}`, signal);
-  return rows.map((row) => {
+  if (filters.imsi) query.set('value', filters.imsi);
+  query.set('offset', String(offset));
+  query.set('limit', String(SIM_PAGE));
+  const page = await getPage<ResourceBody>(`${NUMBERS}?${query}`, signal);
+  const items = page.items.map((row) => {
     if (!row.id) throw new Error('The API sent a SIM without an id');
     return { ...row, id: row.id };
   });
+  return { items, more: page.more, offset };
 }
 
 export function loadSim(id: string, signal: AbortSignal): Promise<Sim> {

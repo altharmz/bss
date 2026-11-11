@@ -81,6 +81,7 @@ TMF654 top-up, reservation, adjustment and transfer actions; balanceActionHistor
 | `balance_action_hold_id_key` | `CREATE UNIQUE INDEX balance_action_hold_id_key ON balance_action USING btree (hold_id)` | yes |
 | `balance_action_id_billing_account_id_currency_key` | `CREATE UNIQUE INDEX balance_action_id_billing_account_id_currency_key ON balance_action USING btree (id, billing_account_id, currency)` | yes |
 | `balance_action_id_billing_account_id_key` | `CREATE UNIQUE INDEX balance_action_id_billing_account_id_key ON balance_action USING btree (id, billing_account_id)` | yes |
+| `balance_action_kind_requested_idx` | `CREATE INDEX balance_action_kind_requested_idx ON balance_action USING btree (kind, requested_at, id)` | no |
 | `balance_action_payment_id_key` | `CREATE UNIQUE INDEX balance_action_payment_id_key ON balance_action USING btree (payment_id)` | yes |
 | `balance_action_pkey` | `CREATE UNIQUE INDEX balance_action_pkey ON balance_action USING btree (id)` | yes |
 | `balance_action_receiver_billing_account_id_idx` | `CREATE INDEX balance_action_receiver_billing_account_id_idx ON balance_action USING btree (receiver_billing_account_id)` | no |

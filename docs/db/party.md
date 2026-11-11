@@ -40,8 +40,11 @@ SID Party (TMF632 individual / organization): a person or an organization, told 
 |---|---|---|
 | `party_created_at_id_idx` | `CREATE INDEX party_created_at_id_idx ON party USING btree (created_at, id)` | no |
 | `party_family_name_idx` | `CREATE INDEX party_family_name_idx ON party USING btree (family_name)` | no |
+| `party_family_name_prefix_idx` | `CREATE INDEX party_family_name_prefix_idx ON party USING btree (lower(family_name) text_pattern_ops) WHERE (party_type = 'Individual'::party_type)` | no |
+| `party_full_name_prefix_idx` | `CREATE INDEX party_full_name_prefix_idx ON party USING btree (lower(((COALESCE(given_name, ''::text) \|\| ' '::text) \|\| family_name)) text_pattern_ops) WHERE (party_type = 'Individual'::party_type)` | no |
 | `party_given_name_idx` | `CREATE INDEX party_given_name_idx ON party USING btree (given_name)` | no |
 | `party_organization_name_idx` | `CREATE INDEX party_organization_name_idx ON party USING btree (organization_name)` | no |
+| `party_organization_name_prefix_idx` | `CREATE INDEX party_organization_name_prefix_idx ON party USING btree (lower(organization_name) text_pattern_ops) WHERE (party_type = 'Organization'::party_type)` | no |
 | `party_pkey` | `CREATE UNIQUE INDEX party_pkey ON party USING btree (id)` | yes |
 
 ## Triggers

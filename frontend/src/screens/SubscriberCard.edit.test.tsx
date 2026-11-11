@@ -324,7 +324,7 @@ describe('delete a billing account', () => {
     [`GET ${INTERNAL}/charges?limit=20`]: () => json([], { total: 0 }),
     [`GET ${INTERNAL}/transactions?limit=20`]: () => json([], { total: 0 }),
   };
-  const LIST = '/tmf-api/accountManagement/v5/billingAccount?offset=0&limit=100';
+  const LIST = '/internal/v1/subscriber?offset=0&limit=50';
   const DELETE_KEY = `DELETE ${ACCOUNT_URL}`;
   const deleteButton = () => screen.queryByRole('menuitem', { name: 'Delete…' });
   const deletes = (calls: string[]) => calls.filter((c) => c.startsWith('DELETE'));
@@ -334,8 +334,6 @@ describe('delete a billing account', () => {
       ...EMPTY,
       [DELETE_KEY]: () => new Response(null, { status: 204 }),
       [`GET ${LIST}`]: () => json([], { total: 0 }),
-      'GET /tmf-api/productInventory/v5/product?status=active&fields=billingAccount&offset=0&limit=100':
-        () => json([], { total: 0 }),
     });
     await open();
     await screen.findByText('No active products');

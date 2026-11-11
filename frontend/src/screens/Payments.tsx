@@ -2,8 +2,10 @@ import { submitDialogPrimary } from '../ui/kit';
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   loadPayment,
+  loadPaymentPage,
   loadPayments,
-  loadRefundHistory,
+  loadRefundPage,
+  PAYMENT_PAGE,
   PAYMENT_STATUSES,
   referenceOf,
   type PaymentRecord,
@@ -15,22 +17,14 @@ import { useSetCrumbs, useSystemContext } from '../app/context';
 import { hrefOf, Link } from '../app/router';
 import { businessDate, clockTime } from '../format/dates';
 import { shortId } from '../format/ids';
-import { formatInt, toCents } from '../format/money';
+import { toCents } from '../format/money';
 import { Amount } from '../ui/Amount';
 import { Id } from '../ui/Id';
 import { paymentMethodLabel } from '../format/labels';
-import {
-  Coded,
-  Dialog,
-  PageHeader,
-  Panel,
-  StatusPill,
-  Segmented,
-  DateField,
-  Button,
-} from '../ui/kit';
+import { Coded, Dialog, PageHeader, Panel, StatusPill, Segmented, Button } from '../ui/kit';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
-import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
+import { TableHead, TableRow, type Column } from '../ui/Table';
+import { PageFooter, usePageOffset } from '../ui/paging';
 import './screens.css';
 import { PaymentRefundModal } from './AccountActions';
 
@@ -115,7 +109,7 @@ export function PaymentsPanel({
   const { timeZone } = useSystemContext();
   const [open, setOpen] = useState<string | null>(null);
   const payments = useResource(`payments:${accountId}:${version}`, (signal) =>
-    loadPayments({ account: accountId, status: null }, signal),
+    loadPayments(accountId, signal),
   );
   const count = payments.status === 'ok' ? payments.data.length : undefined;
   useEffect(() => {
@@ -280,11 +274,6 @@ export function PaymentDialog({
   );
 }
 
-function inRange(instant: string, from: string, to: string, timeZone: string): boolean {
-  const day = businessDate(instant, timeZone);
-  return (from === '' || day >= from) && (to === '' || day <= to);
-}
-
 /** The global Payments screen. */
 export function PaymentsScreen() {
   useSetCrumbs([{ label: 'Payments' }], 'payments');
@@ -292,13 +281,20 @@ export function PaymentsScreen() {
   const [tab, setTab] = useState<Tab>('payments');
   const [status, setStatus] = useState<StatusFilter>('all');
   const [account, setAccount] = useState<string | null>(accountFromUrl);
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
   const [open, setOpen] = useState<string | null>(null);
+  const [version, setVersion] = useState(0);
   const filter = { account, status: status === 'all' ? null : status };
-  const key = `${account ?? ''}:${status}`;
-  const payments = useResource(`payments-all:${key}`, (signal) => loadPayments(filter, signal));
-  const refunds = useResource(`refunds-all:${key}`, (signal) => loadRefundHistory(filter, signal));
+  const key = `${tab}:${account ?? ''}:${status}:${version}`;
+  const [offset, setOffset] = usePageOffset(key);
+  const none = { items: [], more: false, offset: 0 };
+  // each tab reads only its own list, one page at a time, newest first on the server (#314)
+  const payments = useResource(`payments-all:${key}:${offset}`, (signal) =>
+    tab === 'payments' ? loadPaymentPage(filter, offset, signal) : Promise.resolve(none),
+  );
+  const refunds = useResource(`refunds-all:${key}:${offset}`, (signal) =>
+    tab === 'refunds' ? loadRefundPage(filter, offset, signal) : Promise.resolve(none),
+  );
+  const filtered = status !== 'all' || account !== null;
 
   const dropAccount = () => {
     window.history.replaceState(null, '', '/payments');
@@ -306,17 +302,12 @@ export function PaymentsScreen() {
   };
   const reset = () => {
     setStatus('all');
-    setFrom('');
-    setTo('');
     if (account !== null) dropAccount();
   };
   const name =
     payments.status === 'ok'
-      ? (payments.data.find((p) => p.account.id === account)?.account.name ?? null)
+      ? (payments.data.items.find((p) => p.account.id === account)?.account.name ?? null)
       : null;
-
-  const shown = (rows: number, all: number) =>
-    rows === all ? `${formatInt(rows)}` : `${formatInt(rows)} of ${formatInt(all)}`;
 
   return (
     <div className="bss-screen" data-ui="ui.payments">
@@ -343,24 +334,6 @@ export function PaymentsScreen() {
             ...PAYMENT_STATUSES.map((s) => ({ key: s, label: s })),
           ]}
         />
-        <label className="bss-caption" htmlFor="payments-from">
-          From
-        </label>
-        <DateField
-          id="payments-from"
-          value={from}
-          max={to === '' ? undefined : to}
-          onChange={(event) => setFrom(event.target.value)}
-        />
-        <label className="bss-caption" htmlFor="payments-to">
-          To
-        </label>
-        <DateField
-          id="payments-to"
-          value={to}
-          min={from === '' ? undefined : from}
-          onChange={(event) => setTo(event.target.value)}
-        />
         {account !== null && (
           <span className="bss-run-tag" data-ui="ui.payments.accountChip">
             Account {name ?? <Id id={account} prefix="BA-" />}{' '}
@@ -384,13 +357,9 @@ export function PaymentsScreen() {
               columns={GLOBAL_PAYMENT_COLUMNS}
               errorTitle="Failed to load payments"
               empty={{ title: 'No payments', text: 'Received payments appear here.' }}
-              count={(data) => data.length}
-              rows={(data) =>
-                newestFirst(
-                  data.filter((p) => inRange(p.paymentDate, from, to, timeZone)),
-                  (p) => p.paymentDate,
-                )
-              }
+              // filtered on the server: an empty filtered page is "no matches"
+              count={(data) => (filtered ? 1 : data.items.length)}
+              rows={(data) => data.items}
               onResetFilters={reset}
             >
               {(rows, data) => (
@@ -416,7 +385,14 @@ export function PaymentsScreen() {
                       }}
                     />
                   ))}
-                  <TableFooter left={`Showing ${shown(rows.length, data.length)}`} />
+                  <PageFooter
+                    offset={data.offset}
+                    shown={rows.length}
+                    more={data.more}
+                    size={PAYMENT_PAGE}
+                    onOffset={setOffset}
+                    ui="ui.payments"
+                  />
                 </>
               )}
             </ListState>
@@ -429,13 +405,8 @@ export function PaymentsScreen() {
               columns={REFUND_COLUMNS}
               errorTitle="Failed to load refunds"
               empty={{ title: 'No recorded refunds', text: 'Completed payouts appear here.' }}
-              count={(data) => data.length}
-              rows={(data) =>
-                newestFirst(
-                  data.filter((r) => inRange(r.refundDate, from, to, timeZone)),
-                  (r) => r.refundDate,
-                )
-              }
+              count={(data) => (filtered ? 1 : data.items.length)}
+              rows={(data) => data.items}
               onResetFilters={reset}
             >
               {(rows, data) => (
@@ -443,7 +414,14 @@ export function PaymentsScreen() {
                   {rows.map((refund) => (
                     <RefundRow key={refund.id} refund={refund} timeZone={timeZone} />
                   ))}
-                  <TableFooter left={`Showing ${shown(rows.length, data.length)}`} />
+                  <PageFooter
+                    offset={data.offset}
+                    shown={rows.length}
+                    more={data.more}
+                    size={PAYMENT_PAGE}
+                    onOffset={setOffset}
+                    ui="ui.payments"
+                  />
                 </>
               )}
             </ListState>
@@ -451,7 +429,11 @@ export function PaymentsScreen() {
         )}
       </Panel>
       {open !== null && (
-        <PaymentDialog paymentId={open} onClose={() => setOpen(null)} onChanged={refunds.retry} />
+        <PaymentDialog
+          paymentId={open}
+          onClose={() => setOpen(null)}
+          onChanged={() => setVersion((v) => v + 1)}
+        />
       )}
     </div>
   );

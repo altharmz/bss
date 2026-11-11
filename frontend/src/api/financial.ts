@@ -2,9 +2,8 @@
 // the financial accounts a billing account may link to. Design: docs/ui.md;
 // rules in docs/decisions/accounts.md.
 
-import { AMOUNT, getAll, jsonWithAmount, patchJson, postJson, request } from './client';
+import { AMOUNT, getAll, getPage, jsonWithAmount, patchJson, postJson, request } from './client';
 import { PATHS, type AccountRecord, type AccountState, type PartyKind } from './bss';
-import { PARTY_PATH } from './parties';
 
 export interface OwnerChoice {
   id: string;
@@ -12,25 +11,22 @@ export interface OwnerChoice {
   name: string;
 }
 
-interface PartyBody {
-  id?: string;
-  givenName?: string;
-  familyName?: string;
-  name?: string;
-}
+export const OWNER_PAGE = 20;
 
-/** Individuals and organizations: the choices for the owner of a financial account. */
-export async function loadOwnerChoices(signal: AbortSignal): Promise<OwnerChoice[]> {
-  const [people, organizations] = await Promise.all([
-    getAll<PartyBody>(PARTY_PATH.Individual, signal),
-    getAll<PartyBody>(PARTY_PATH.Organization, signal),
-  ]);
-  const name = (body: PartyBody) =>
-    body.name ?? [body.givenName, body.familyName].filter(Boolean).join(' ');
-  return [
-    ...people.map((b) => ({ id: b.id ?? '', kind: 'Individual' as const, name: name(b) })),
-    ...organizations.map((b) => ({ id: b.id ?? '', kind: 'Organization' as const, name: name(b) })),
-  ].filter((choice) => choice.id !== '');
+/**
+ * Owner choices for a financial account: the parties whose name starts with `q` (any
+ * case; the first page when empty), searched on the server (#314), not every party.
+ */
+export async function loadOwnerChoices(q: string, signal: AbortSignal): Promise<OwnerChoice[]> {
+  const query = new URLSearchParams();
+  if (q.trim()) query.set('q', q.trim());
+  query.set('offset', '0');
+  query.set('limit', String(OWNER_PAGE));
+  const page = await getPage<{ id: string; kind: PartyKind; name: string }>(
+    `/internal/v1/party?${query}`,
+    signal,
+  );
+  return page.items.map(({ id, kind, name }) => ({ id, kind, name }));
 }
 
 export interface FinancialChoice {

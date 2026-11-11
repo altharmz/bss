@@ -1,4 +1,4 @@
-import { getAll, getJson } from './client';
+import { getAll, getJson, getPage } from './client';
 import { PATHS } from './bss';
 import { toCents } from '../format/money';
 
@@ -54,11 +54,30 @@ function accountTotal(body: AccumulatedBody): AccountTotal {
 }
 
 export async function loadAccountTotals(
-  account: string | null,
+  account: string,
   signal: AbortSignal,
 ): Promise<AccountTotal[]> {
-  const path = account === null ? ACCUMULATED : `${ACCUMULATED}?partyAccount.id=${account}`;
-  return (await getAll<AccumulatedBody>(path, signal)).map(accountTotal);
+  return (await getAll<AccumulatedBody>(`${ACCUMULATED}?partyAccount.id=${account}`, signal)).map(
+    accountTotal,
+  );
+}
+
+export const BALANCE_PAGE = 50;
+
+type Paged<T> = { items: T[]; more: boolean; offset: number };
+
+/** One page of account totals (#314); one account's when `account` is set. */
+export async function loadAccountTotalPage(
+  account: string | null,
+  offset: number,
+  signal: AbortSignal,
+): Promise<Paged<AccountTotal>> {
+  const query = new URLSearchParams();
+  if (account !== null) query.set('partyAccount.id', account);
+  query.set('offset', String(offset));
+  query.set('limit', String(BALANCE_PAGE));
+  const page = await getPage<AccumulatedBody>(`${ACCUMULATED}?${query}`, signal);
+  return { items: page.items.map(accountTotal), more: page.more, offset };
 }
 
 export async function loadAccountTotal(id: string, signal: AbortSignal): Promise<AccountTotal> {
@@ -86,30 +105,35 @@ function need<T>(value: T | undefined | null, what: string): T {
   return value;
 }
 
-function bucketQuery(base: string, filter: BucketFilter): string {
-  const query = [
-    ...(filter.account !== null ? [`partyAccount.id=${filter.account}`] : []),
-    ...(filter.status !== null ? [`status=${filter.status}`] : []),
-  ];
-  return query.length ? `${base}?${query.join('&')}` : base;
-}
-
-/** Every bucket, joined with the accumulated balance of its account by account id. */
+/**
+ * One page of buckets (#314), each joined with the accumulated balance of its account:
+ * one filtered read per account on the page, not every accumulated balance.
+ */
 export async function loadBucketRows(
   filter: BucketFilter,
+  offset: number,
   signal: AbortSignal,
-): Promise<BucketRow[]> {
-  const accountOnly =
-    filter.account !== null ? `${ACCUMULATED}?partyAccount.id=${filter.account}` : ACCUMULATED;
-  const [buckets, accumulated] = await Promise.all([
-    getAll<BucketBody>(bucketQuery(PATHS.buckets, filter), signal),
-    getAll<AccumulatedBody>(accountOnly, signal),
-  ]);
+): Promise<Paged<BucketRow>> {
+  const query = new URLSearchParams();
+  if (filter.account !== null) query.set('partyAccount.id', filter.account);
+  if (filter.status !== null) query.set('status', filter.status);
+  query.set('offset', String(offset));
+  query.set('limit', String(BALANCE_PAGE));
+  const page = await getPage<BucketBody>(`${PATHS.buckets}?${query}`, signal);
+  const accounts = [
+    ...new Set(page.items.map((bucket) => need(bucket.partyAccount?.id, 'bucket partyAccount'))),
+  ];
+  const totals = await Promise.all(
+    accounts.map((id) =>
+      getPage<AccumulatedBody>(`${ACCUMULATED}?partyAccount.id=${id}&limit=1`, signal),
+    ),
+  );
   const byAccount = new Map<string, AccumulatedBody>();
-  for (const acc of accumulated) {
-    if (acc.partyAccount?.id) byAccount.set(acc.partyAccount.id, acc);
-  }
-  return buckets.map((bucket) => {
+  totals.forEach((total, i) => {
+    const first = total.items[0];
+    if (first) byAccount.set(accounts[i] as string, first);
+  });
+  const items = page.items.map((bucket) => {
     const account = need(bucket.partyAccount?.id, 'bucket partyAccount');
     const acc = byAccount.get(account);
     return {
@@ -122,6 +146,7 @@ export async function loadBucketRows(
       totalCents: acc?.totalBalance?.amount === undefined ? null : toCents(acc.totalBalance.amount),
     };
   });
+  return { items, more: page.more, offset };
 }
 
 export interface BucketDetail {
@@ -133,7 +158,6 @@ export interface BucketDetail {
   totalCents: number | null;
 }
 
-/** The bucket's GET and, when joined, its account's accumulated balance GET. */
 export async function loadBucketDetail(row: BucketRow, signal: AbortSignal): Promise<BucketDetail> {
   const [bucket, accumulated] = await Promise.all([
     getJson<BucketBody>(`${PATHS.buckets}/${row.bucketId}`, signal),

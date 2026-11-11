@@ -10,7 +10,7 @@ import {
   changeNumber,
   iccidOf,
   kindOf,
-  loadNumbers,
+  loadNumbersById,
   requirements,
   type ResourceKind,
 } from '../api/numbers';
@@ -64,12 +64,16 @@ export function NumberModal({
   );
   const [numberId, setNumberId] = useState('');
   const [imsiId, setImsiId] = useState('');
-  const inventory = useResource('number-picker', loadNumbers);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState('');
   const [code, setCode] = useState<string | undefined>();
   const [uncertain, setUncertain] = useState(false);
   const refs = product.status === 'ok' ? (product.data.realizingResource ?? []) : [];
+  // the product's own numbers, to tell its MSISDN from its IMSI (#314: not the inventory)
+  const refIds = refs.map((r) => r.id ?? '').filter(Boolean);
+  const inventory = useResource(`product-number-refs:${refIds.join(',')}`, (signal) =>
+    loadNumbersById(refIds, signal),
+  );
   const known = inventory.status === 'ok' ? inventory.data : [];
   const kindOfRef = (id?: string): ResourceKind | undefined => {
     const n = known.find((k) => k.id === id);

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { App } from '../app/App';
 import { expectUi } from '../test/expectUi';
@@ -144,17 +144,18 @@ describe('financial accounts', () => {
 
   describe('writes', () => {
     const FIN = '/tmf-api/accountManagement/v5/financialAccount';
-    const PARTY = '/tmf-api/partyManagement/v5';
-    const PAGE = 'offset=0&limit=100';
     const OLGA = 'aaaa1111-0000-4000-8000-000000000002';
     const ROMASHKA = 'p1';
+    // TEST-CHANGE (#314): the owners come from the party search, as typed, not every party
+    const PARTIES = [
+      { id: OLGA, kind: 'Individual', name: 'Olga Kuznetsova' },
+      { id: ROMASHKA, kind: 'Organization', name: 'Romashka LLC' },
+    ];
     const choices: Record<string, Handler> = {
-      [`GET ${PARTY}/individual?${PAGE}`]: () =>
-        json([{ id: OLGA, givenName: 'Olga', familyName: 'Kuznetsova', '@type': 'Individual' }], {
-          total: 1,
-        }),
-      [`GET ${PARTY}/organization?${PAGE}`]: () =>
-        json([{ id: ROMASHKA, name: 'Romashka LLC', '@type': 'Organization' }], { total: 1 }),
+      'GET /internal/v1/party?*': (url) => {
+        const q = (new URL(url ?? '', 'http://test').searchParams.get('q') ?? '').toLowerCase();
+        return json(PARTIES.filter((p) => p.name.toLowerCase().startsWith(q)));
+      },
     };
     const writes = (fetchMock: ReturnType<typeof stubFetch>['fetchMock']) =>
       fetchMock.mock.calls
@@ -282,6 +283,23 @@ describe('financial accounts', () => {
           '{"accountType":null,"creditLimit":{"unit":"USD","value":250.00}}',
         ],
       ]);
+    });
+
+    it('searches the owners on the server as the name is typed', async () => {
+      const { calls } = withWrites({});
+      await open();
+      await screen.findByText('Group receivables');
+      fireEvent.click(screen.getByRole('button', { name: '+ New financial account' }));
+      const dialog = await screen.findByRole('dialog', { name: 'New financial account' });
+      const owner = within(dialog).getByRole('combobox', { name: 'Owner' });
+      await waitFor(() => expect(owner.hasAttribute('disabled')).toBe(false));
+      expect(calls).toContain('GET /internal/v1/party?offset=0&limit=20');
+      fireEvent.focus(owner);
+      fireEvent.change(owner, { target: { value: 'Rom' } });
+      await waitFor(() =>
+        expect(calls).toContain('GET /internal/v1/party?q=Rom&offset=0&limit=20'),
+      );
+      expect(await within(dialog).findByRole('option', { name: /Romashka LLC/ })).toBeTruthy();
     });
 
     it('shows the server refusal of an owner change and keeps the values', async () => {

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { App } from '../app/App';
 import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } from '../test/fetch';
@@ -7,7 +7,6 @@ import { expectUi } from '../test/expectUi';
 const PARTY = '/tmf-api/partyManagement/v5';
 const CUSTOMERS = '/tmf-api/customer/v5/customer';
 const ACCOUNTS = '/tmf-api/accountManagement/v5';
-const PAGE = 'offset=0&limit=100';
 
 const IVAN = 'aaaa1111-0000-4000-8000-000000000001';
 const OLGA = 'aaaa1111-0000-4000-8000-000000000002';
@@ -19,7 +18,6 @@ const C_ORPHAN = 'dddd0000-0000-4000-8000-000000000002';
 const C_ROMASHKA = 'dddd0000-0000-4000-8000-000000000003';
 const A1 = '11111111-0000-4000-8000-0000000000a1';
 const A3 = '33333333-0000-4000-8000-0000000000a3';
-const FIN = 'f0000000-0000-4000-8000-000000000001';
 
 const individual = (id: string, givenName: string, familyName: string, status = 'validated') => ({
   id,
@@ -41,16 +39,7 @@ const customer = (id: string, name: string, party: string, kind: string, status 
   engagedParty: { id: party, name, '@referredType': kind, '@type': 'PartyRef' },
   '@type': 'Customer',
 });
-const account = (id: string, name: string, customerId: string) => ({
-  id,
-  name,
-  relatedParty: [{ role: 'customer', partyOrPartyRole: { id: customerId } }],
-});
-const owned = (partyId: string) => ({
-  id: FIN,
-  relatedParty: [{ role: 'owner', partyOrPartyRole: { id: partyId } }],
-});
-
+const account = (id: string, name: string, customerId: string) => ({ id, name, customerId });
 const INDIVIDUALS = [
   individual(IVAN, 'Ivan', 'Petrov'),
   individual(OLGA, 'Olga', 'Kuznetsova', 'initialized'),
@@ -64,7 +53,70 @@ const CUSTOMER_ROWS = [
 ];
 const ACCOUNT_ROWS = [account(A1, 'Ivan main', C_IVAN), account(A3, 'Romashka HQ', C_ROMASHKA)];
 
+type Row = { name: string; status: string; id: string };
+
+/** The server's paging and prefix search (#314) over `rows`, by `name` (and `extra`). */
+function serve<T extends Row>(rows: T[], names: (row: T) => string[] = (r) => [r.name]): Handler {
+  return (url) => {
+    const query = new URL(url ?? '', 'http://test').searchParams;
+    const q = (query.get('q') ?? '').toLowerCase();
+    const offset = Number(query.get('offset') ?? 0);
+    const limit = Number(query.get('limit') ?? 20);
+    const found = rows.filter(
+      (row) =>
+        (!q || names(row).some((n) => n.toLowerCase().startsWith(q)) || row.id.startsWith(q)) &&
+        (!query.get('status') || row.status === query.get('status')),
+    );
+    return json(found.slice(offset, offset + limit), { more: found.length > offset + limit });
+  };
+}
+
+/** GET /internal/v1/party rows, made from the fixtures. */
+function partyRows(kind: 'Individual' | 'Organization') {
+  const parties =
+    kind === 'Individual'
+      ? INDIVIDUALS.map((p) => ({ ...p, name: `${p.givenName} ${p.familyName}` }))
+      : ORGANIZATIONS;
+  return parties.map((p) => {
+    const customers = CUSTOMER_ROWS.filter((c) => c.engagedParty.id === p.id);
+    return {
+      id: p.id,
+      kind,
+      name: p.name,
+      status: p.status,
+      family: 'familyName' in p ? String(p.familyName) : p.name,
+      customers: customers.map((c) => ({ id: c.id, name: c.name })),
+      billingAccounts: ACCOUNT_ROWS.filter((a) => customers.some((c) => c.id === a.customerId)),
+      ownsAccounts: p.id === PAVEL,
+    };
+  });
+}
+
+const customerRows = () =>
+  CUSTOMER_ROWS.map((c) => ({
+    id: c.id,
+    name: c.name,
+    status: c.status,
+    party: {
+      id: c.engagedParty.id,
+      kind: c.engagedParty['@referredType'],
+      name: [...INDIVIDUALS, ...ORGANIZATIONS]
+        .filter((p) => p.id === c.engagedParty.id)
+        .map((p) => ('givenName' in p ? `${p.givenName} ${p.familyName}` : p.name))[0],
+    },
+    billingAccounts: ACCOUNT_ROWS.filter((a) => a.customerId === c.id).map(({ id, name }) => ({
+      id,
+      name,
+    })),
+  }));
+
+const PARTIES = '/internal/v1/party';
+const SEARCH_CUSTOMERS = '/internal/v1/partyCustomer';
+const PAGE = 'offset=0&limit=50';
+
 function backend(extra: Record<string, Handler> = {}) {
+  const individuals = serve(partyRows('Individual'), (r) => [r.name, r.family]);
+  const organizations = serve(partyRows('Organization'));
   return stubFetch({
     [NAV_RUNS]: noRuns,
     'GET /internal/v1/context': () => json(CONTEXT),
@@ -74,17 +126,9 @@ function backend(extra: Record<string, Handler> = {}) {
     [`GET ${ACCOUNTS}/financialAccount?limit=1&fields=id`]: () => json([], { total: 1 }),
     'GET /tmf-api/productCatalogManagement/v5/productOffering?limit=1&fields=id': () =>
       json([], { total: 3 }),
-    [`GET ${PARTY}/individual?${PAGE}`]: () => json(INDIVIDUALS, { total: INDIVIDUALS.length }),
-    [`GET ${PARTY}/organization?${PAGE}`]: () =>
-      json(ORGANIZATIONS, { total: ORGANIZATIONS.length }),
-    [`GET ${CUSTOMERS}?fields=name,status,engagedParty&${PAGE}`]: () =>
-      json(CUSTOMER_ROWS, { total: CUSTOMER_ROWS.length }),
-    [`GET ${ACCOUNTS}/billingAccount?fields=name,relatedParty&${PAGE}`]: () =>
-      json(ACCOUNT_ROWS, { total: ACCOUNT_ROWS.length }),
-    [`GET ${ACCOUNTS}/financialAccount?fields=relatedParty&${PAGE}`]: () =>
-      json([owned(PAVEL)], { total: 1 }),
-    [`GET ${ACCOUNTS}/partyAccount?fields=relatedParty&${PAGE}`]: () => json([], { total: 0 }),
-    [`GET ${ACCOUNTS}/settlementAccount?fields=relatedParty&${PAGE}`]: () => json([], { total: 0 }),
+    [`GET ${PARTIES}?kind=Individual*`]: individuals,
+    [`GET ${PARTIES}?kind=Organization*`]: organizations,
+    [`GET ${SEARCH_CUSTOMERS}?*`]: serve(customerRows()),
     ...extra,
   });
 }
@@ -104,7 +148,7 @@ const writes = (fetchMock: ReturnType<typeof stubFetch>['fetchMock']) =>
     .map(([url, init]) => [init?.method, String(url), init?.body ?? null]);
 
 describe('parties list', () => {
-  it('lists individuals, organizations and customers from the three list requests', async () => {
+  it('lists individuals, organizations and customers, one page each', async () => {
     const { calls } = backend();
     await open();
     expectUi('ui.parties');
@@ -140,26 +184,58 @@ describe('parties list', () => {
     expect(rowOf(/Ivan Second/)?.textContent).toContain('Created');
     // customer kind: Created is Draft
     expect(pill(rowOf(/Ivan Second/), 'Created').contains('pill-draft')).toBe(true);
-    expect(calls).toContain(`GET ${PARTY}/individual?${PAGE}`);
-    expect(calls).toContain(`GET ${PARTY}/organization?${PAGE}`);
-    expect(calls).toContain(`GET ${CUSTOMERS}?fields=name,status,engagedParty&${PAGE}`);
+    // TEST-CHANGE (#314): one paged search per section, its figures computed by the server
+    expect(calls).toContain(`GET ${PARTIES}?kind=Individual&${PAGE}`);
+    expect(calls).toContain(`GET ${PARTIES}?kind=Organization&${PAGE}`);
+    expect(calls).toContain(`GET ${SEARCH_CUSTOMERS}?${PAGE}`);
   });
 
-  it('searches by name and filters by status', async () => {
-    backend();
+  // TEST-CHANGE (#314): a prefix search and the status on the server, without counts
+  it('searches by the start of a name and filters by status on the server', async () => {
+    const { calls } = backend();
     await open();
     await screen.findByText('Olga Kuznetsova');
-    fireEvent.change(screen.getByLabelText('Search individuals'), { target: { value: 'pav' } });
-    expect(screen.queryByText('Olga Kuznetsova')).toBeNull();
-    expect(screen.getByText('Pavel Sidorov')).toBeTruthy();
+    expect(
+      within(screen.getByRole('group', { name: 'Status' }))
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['All', 'initialized', 'validated', 'deceased']);
+    fireEvent.change(screen.getByLabelText('Search individuals'), { target: { value: 'sid' } });
+    await waitFor(() => expect(calls).toContain(`GET ${PARTIES}?kind=Individual&q=sid&${PAGE}`));
+    await waitFor(() => expect(screen.queryByText('Olga Kuznetsova')).toBeNull());
+    expect(await screen.findByText('Pavel Sidorov')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Search individuals'), { target: { value: 'nobody' } });
+    expect(await screen.findByText('Nothing matches “nobody”')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Search individuals'), { target: { value: '' } });
-    fireEvent.click(screen.getByRole('button', { name: /initialized/ }));
-    expect(screen.getByText('Olga Kuznetsova')).toBeTruthy();
-    expect(screen.queryByText('Pavel Sidorov')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'initialized' }));
+    expect(await screen.findByText('Olga Kuznetsova')).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText('Pavel Sidorov')).toBeNull());
+    expect(calls).toContain(`GET ${PARTIES}?kind=Individual&status=initialized&${PAGE}`);
+  });
+
+  it('pages with Previous and Next', async () => {
+    const many = Array.from({ length: 51 }, (_, i) => ({
+      id: `p${i}`,
+      kind: 'Organization',
+      name: `Org ${String(i).padStart(2, '0')}`,
+      status: 'validated',
+      customers: [],
+      billingAccounts: [],
+      ownsAccounts: false,
+    }));
+    backend({ [`GET ${PARTIES}?kind=Organization*`]: serve(many) });
+    await open();
+    tab('Organizations');
+    expect(await screen.findByText('Org 00')).toBeTruthy();
+    expectUi('ui.parties.previous');
+    expectUi('ui.parties.next');
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(await screen.findByText('Org 50')).toBeTruthy();
+    expect(screen.getByText(/^Showing 51–51/)).toBeTruthy();
   });
 
   it('is in the sidebar under Customers and shows a load failure', async () => {
-    backend({ [`GET ${PARTY}/individual?${PAGE}`]: () => tmfError(503, 'Unavailable') });
+    backend({ [`GET ${PARTIES}?kind=Individual*`]: () => tmfError(503, 'Unavailable') });
     await open();
     expect(await screen.findByText('Failed to load parties')).toBeTruthy();
     const nav = screen.getByRole('navigation', { name: 'Main' });

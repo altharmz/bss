@@ -43,7 +43,7 @@ const batch = {
   total: 2,
   counts: { in_stock: 1, reserved: 0, active: 1, retired: 0 },
 };
-const LIST = `GET ${NUMBERS}?resourceSpecification.id=imsi&offset=0&limit=100`;
+const LIST = `GET ${NUMBERS}?resourceSpecification.id=imsi&offset=0&limit=50`;
 const BATCHES = 'GET /internal/v1/sim/batch';
 
 function stock() {
@@ -63,11 +63,11 @@ describe('SIM stock', () => {
     const { calls } = stubFetch({
       [LIST]: () => json([esim, physical], { total: 2 }),
       // the filters change one at a time: each step is its own request
-      [`GET ${NUMBERS}?resourceSpecification.id=imsi&simState=in_stock&offset=0&limit=100`]: () =>
+      [`GET ${NUMBERS}?resourceSpecification.id=imsi&simState=in_stock&offset=0&limit=50`]: () =>
         json([physical], { total: 1 }),
-      [`GET ${NUMBERS}?resourceSpecification.id=imsi&simState=in_stock&simType=physical&offset=0&limit=100`]:
+      [`GET ${NUMBERS}?resourceSpecification.id=imsi&simState=in_stock&simType=physical&offset=0&limit=50`]:
         () => json([physical], { total: 1 }),
-      [`GET ${NUMBERS}?resourceSpecification.id=imsi&simState=in_stock&simType=physical&batchNumber=B1&offset=0&limit=100`]:
+      [`GET ${NUMBERS}?resourceSpecification.id=imsi&simState=in_stock&simType=physical&batchNumber=B1&offset=0&limit=50`]:
         () => json([physical], { total: 1 }),
       [BATCHES]: () => json([batch]),
     });
@@ -83,6 +83,39 @@ describe('SIM stock', () => {
     expect(calls.some((c) => c.includes('simState=in_stock&simType=physical&batchNumber=B1'))).toBe(
       true,
     );
+  });
+
+  // TEST-CHANGE (#314): the search is an exact IMSI on the server; ICCID search is gone
+  // (the API has no filter for it, and a page cannot be filtered locally)
+  it('searches an exact IMSI on the server and pages with Previous and Next', async () => {
+    const many = Array.from({ length: 51 }, (_, i) => ({
+      ...physical,
+      id: `s${i}`,
+      value: `00101000000${String(i).padStart(4, '0')}`,
+    }));
+    const { calls } = stubFetch({
+      [LIST]: () => json(many.slice(0, 50), { more: true }),
+      [`GET ${NUMBERS}?resourceSpecification.id=imsi&offset=50&limit=50`]: () =>
+        json(many.slice(50)),
+      [`GET ${NUMBERS}?resourceSpecification.id=imsi&value=001010000000050&offset=0&limit=50`]:
+        () => json(many.slice(50)),
+      [BATCHES]: () => json([batch]),
+    });
+    stock();
+    expect(await screen.findByText('001010000000000')).toBeTruthy();
+    expectUi('ui.sims.previous');
+    expectUi('ui.sims.next');
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(await screen.findByText('Showing 51–51')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Search SIMs'), {
+      target: { value: '001010000000050' },
+    });
+    await waitFor(() =>
+      expect(calls).toContain(
+        `GET ${NUMBERS}?resourceSpecification.id=imsi&value=001010000000050&offset=0&limit=50`,
+      ),
+    );
+    expect(await screen.findByText('Showing 1–1')).toBeTruthy();
   });
 
   it('shows an assigned eSIM activation code as text and QR, and none for a stocked profile', async () => {

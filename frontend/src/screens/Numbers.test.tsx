@@ -6,7 +6,7 @@ import { NumbersScreen, NumberPicker } from './Numbers';
 import { ProductNumber } from './ProductNumber';
 import { CrumbsProvider } from '../app/context';
 import { RouterProvider } from '../app/router';
-import { json, stubFetch, tmfError } from '../test/fetch';
+import { json, stubFetch, tmfError, type Handler } from '../test/fetch';
 import { NUMBERS } from '../api/numbers';
 import { orderAdd, PATHS } from '../api/bss';
 import { ToastProvider } from '../ui/kit';
@@ -22,7 +22,35 @@ const stock = {
   administrativeState: 'unlocked',
   usageState: 'idle',
 };
-const list = `GET ${NUMBERS}?offset=0&limit=100`;
+type Stock = typeof stock & { resourceSpecification?: { id: string } };
+
+/** The inventory as the server lists it (#314): exact filters, then the page. Each number
+ * is also readable by id (a product's own numbers). */
+function inventoryOf(numbers: Partial<Stock>[]): Record<string, Handler> {
+  const listed: Handler = (url) => {
+    const query = new URL(url ?? '', 'http://test').searchParams;
+    const field: Record<string, (n: Partial<Stock>) => string | undefined> = {
+      value: (n) => n.value,
+      'resourceSpecification.id': (n) => n.resourceSpecification?.id ?? 'msisdn',
+      administrativeState: (n) => n.administrativeState,
+      allocationStatus: (n) => n.allocationStatus,
+    };
+    const offset = Number(query.get('offset') ?? 0);
+    const limit = Number(query.get('limit') ?? 20);
+    const found = numbers.filter((n) =>
+      Object.entries(field).every(([name, of]) => !query.has(name) || of(n) === query.get(name)),
+    );
+    return json(found.slice(offset, offset + limit), { more: found.length > offset + limit });
+  };
+  return {
+    [`GET ${NUMBERS}?*`]: listed,
+    ...Object.fromEntries(numbers.map((n) => [`GET ${NUMBERS}/${n.id}`, () => json(n)])),
+  };
+}
+const requested = (fetchMock: ReturnType<typeof stubFetch>['fetchMock']) =>
+  fetchMock.mock.calls.map(([url]) => String(url)).filter((url) => url.startsWith(`${NUMBERS}?`));
+const AVAILABLE =
+  'resourceSpecification.id=msisdn&administrativeState=unlocked&allocationStatus=available';
 function inventory() {
   return render(
     <RouterProvider>
@@ -38,7 +66,7 @@ function inventory() {
 describe('number inventory', () => {
   it('searches, creates an exact number, inspects assignment and locks', async () => {
     const { fetchMock } = stubFetch({
-      [list]: () => json([stock], { total: 1 }),
+      ...inventoryOf([stock]),
       [`POST ${NUMBERS}`]: () => json(stock),
       [`GET ${PATHS.products}?realizingResource.id=${N1}&offset=0&limit=100`]: () =>
         json([], { total: 0 }),
@@ -49,6 +77,8 @@ describe('number inventory', () => {
     expectUi('ui.numbers.list');
     fireEvent.change(screen.getByLabelText('Search numbers'), { target: { value: '999' } });
     expect(await screen.findByText('No matches')).toBeTruthy();
+    // TEST-CHANGE (#314): an exact value on the server (the API has no partial match)
+    expect(requested(fetchMock)).toContain(`${NUMBERS}?value=999&offset=0&limit=50`);
     fireEvent.click(screen.getByText('Reset filters'));
     fireEvent.click(await screen.findByRole('button', { name: stock.value }));
     const detail = screen.getByRole('dialog');
@@ -90,7 +120,7 @@ describe('number inventory', () => {
     const used = { ...stock, id: 'n2', value: '12025550124', allocationStatus: 'assigned' };
     let refuse = true;
     const { fetchMock } = stubFetch({
-      [list]: () => json([stock, used], { total: 2 }),
+      ...inventoryOf([stock, used]),
       [`GET ${NUMBERS}/${N1}`]: () => json(stock),
       [`GET ${NUMBERS}/n2`]: () => json(used),
       [`GET ${PATHS.products}?realizingResource.id=${N1}&offset=0&limit=100`]: () =>
@@ -127,7 +157,9 @@ describe('number inventory', () => {
 
   it('offers retry on a failed inventory read', async () => {
     let failed = true;
-    stubFetch({ [list]: () => (failed ? tmfError(503, 'Unavailable') : json([], { total: 0 })) });
+    stubFetch({
+      [`GET ${NUMBERS}?*`]: () => (failed ? tmfError(503, 'Unavailable') : json([])),
+    });
     inventory();
     expect(await screen.findByText('Failed to load numbers')).toBeTruthy();
     failed = false;
@@ -136,16 +168,12 @@ describe('number inventory', () => {
   });
 
   it('only offers unlocked available numbers', async () => {
-    stubFetch({
-      [list]: () =>
-        json(
-          [
-            stock,
-            { ...stock, id: 'n2', value: '12025550124', administrativeState: 'locked' },
-            { ...stock, id: 'n3', value: '12025550125', allocationStatus: 'reserved' },
-          ],
-          { total: 3 },
-        ),
+    const { fetchMock } = stubFetch({
+      ...inventoryOf([
+        stock,
+        { ...stock, id: 'n2', value: '12025550124', administrativeState: 'locked' },
+        { ...stock, id: 'n3', value: '12025550125', allocationStatus: 'reserved' },
+      ]),
     });
     render(<NumberPicker value="" onChange={() => {}} />);
     const input = screen.getByRole('combobox', { name: 'Subscriber number' });
@@ -155,18 +183,32 @@ describe('number inventory', () => {
     expect(screen.getByRole('option', { name: stock.value })).toBeTruthy();
     expect(screen.queryByRole('option', { name: '12025550124' })).toBeNull();
     expect(screen.queryByRole('option', { name: '12025550125' })).toBeNull();
+    // TEST-CHANGE (#314): the server filters the picker's numbers, one page of them
+    expect(requested(fetchMock)).toEqual([`${NUMBERS}?${AVAILABLE}&offset=0&limit=50`]);
+  });
+
+  it('finds a typed number outside the first page, keeping the list while it looks', async () => {
+    const far = { ...stock, id: 'far', value: '12025559999', name: 'MSISDN 12025559999' };
+    const { fetchMock } = stubFetch({
+      [`GET ${NUMBERS}?${AVAILABLE}&offset=0&limit=50`]: () => json([stock], { more: true }),
+      [`GET ${NUMBERS}?${AVAILABLE}&value=12025559999&limit=1`]: () => json([far]),
+    });
+    render(<NumberPicker value="" onChange={() => {}} />);
+    const input = screen.getByRole('combobox', { name: 'Subscriber number' });
+    await waitFor(() => expect(input.hasAttribute('disabled')).toBe(false));
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: '+1 202 555 9999' } });
+    expect(input.hasAttribute('disabled')).toBe(false);
+    expect(await screen.findByRole('option', { name: far.value })).toBeTruthy();
+    expect(requested(fetchMock)).toContain(`${NUMBERS}?${AVAILABLE}&value=12025559999&limit=1`);
   });
 
   it('filters by typing, moves with the arrows, picks with Enter and restores on Escape', async () => {
     stubFetch({
-      [list]: () =>
-        json(
-          [
-            { ...stock, id: 'a', value: '12025550123', name: '12025550123' },
-            { ...stock, id: 'b', value: '12025550199', name: 'Sales line' },
-          ],
-          { total: 2 },
-        ),
+      ...inventoryOf([
+        { ...stock, id: 'a', value: '12025550123', name: '12025550123' },
+        { ...stock, id: 'b', value: '12025550199', name: 'Sales line' },
+      ]),
     });
     const picked: string[] = [];
     function Host() {
@@ -238,7 +280,7 @@ describe('number inventory', () => {
       [`GET ${PATHS.products}/product`]: () =>
         json({ id: 'product', status: 'active', productSpecification: { id: 'spec' } }),
       [`GET ${PATHS.specifications}/spec`]: () => json({ resourceSpecification: [] }),
-      [list]: () => json([], { total: 0 }),
+      ...inventoryOf([]),
     });
     render(<ProductNumber accountId="account" productId="product" onDone={() => {}} />);
     fireEvent.click(screen.getByText('Subscriber number'));
@@ -253,7 +295,7 @@ describe('number inventory', () => {
   it('does not claim the offering has no numbers while the product is still loading', async () => {
     stubFetch({
       [`GET ${PATHS.products}/product`]: () => new Promise<Response>(() => {}),
-      [list]: () => json([], { total: 0 }),
+      ...inventoryOf([]),
     });
     render(<ProductNumber accountId="account" productId="product" onDone={() => {}} />);
     fireEvent.click(screen.getByText('Subscriber number'));
@@ -272,7 +314,10 @@ describe('number inventory', () => {
         }),
       ['GET /tmf-api/productCatalogManagement/v5/productSpecification/spec']: () =>
         json({ resourceSpecification: [{ id: 'msisdn' }] }),
-      [list]: () => json([stock], { total: 1 }),
+      ...inventoryOf([
+        stock,
+        { ...stock, id: 'old', value: '12025550122', allocationStatus: 'allocated' },
+      ]),
       [`POST ${PATHS.orders}`]: () =>
         json({
           state: 'rejected',
@@ -324,13 +369,16 @@ describe('number inventory', () => {
       resourceSpecification: { id: 'imsi', '@type': 'ResourceSpecificationRef' },
     };
     const { fetchMock } = stubFetch({
-      [list]: () => json([stock, sim], { total: 2 }),
+      ...inventoryOf([stock, sim]),
       [`POST ${NUMBERS}`]: () => json(sim),
     });
     inventory();
     await screen.findByRole('button', { name: sim.value });
     fireEvent.change(screen.getByLabelText('Kind'), { target: { value: 'imsi' } });
-    expect(screen.queryByRole('button', { name: stock.value })).toBeNull();
+    await waitFor(() => expect(screen.queryByRole('button', { name: stock.value })).toBeNull());
+    expect(requested(fetchMock)).toContain(
+      `${NUMBERS}?resourceSpecification.id=imsi&offset=0&limit=50`,
+    );
     expect(screen.getByRole('button', { name: sim.value })).toBeTruthy();
     fireEvent.click(screen.getByText('New number'));
     const create = screen.getByRole('dialog');
@@ -395,7 +443,7 @@ describe('number inventory', () => {
         }),
       ['GET /tmf-api/productCatalogManagement/v5/productSpecification/spec']: () =>
         json({ resourceSpecification: [{ id: 'msisdn' }, { id: 'imsi' }] }),
-      [list]: () => json([msisdn, oldSim, newSim], { total: 3 }),
+      ...inventoryOf([msisdn, oldSim, newSim]),
       [`POST ${PATHS.orders}`]: () => json({ state: 'completed' }),
     });
     render(<ProductNumber accountId="account" productId="product" onDone={() => {}} />);
@@ -413,5 +461,23 @@ describe('number inventory', () => {
       { id: 'num', '@type': 'ResourceRef', '@referredType': 'LogicalResource' },
       { id: 'newsim', '@type': 'ResourceRef', '@referredType': 'LogicalResource' },
     ]);
+  });
+
+  it('pages the inventory with Previous and Next', async () => {
+    const many = Array.from({ length: 51 }, (_, i) => ({
+      ...stock,
+      id: `n${i}`,
+      value: `1202555${String(i).padStart(4, '0')}`,
+    }));
+    stubFetch(inventoryOf(many));
+    inventory();
+    expect(await screen.findByRole('button', { name: '12025550000' })).toBeTruthy();
+    expect(screen.getByText('Showing 1–50')).toBeTruthy();
+    expectUi('ui.numbers.previous');
+    expectUi('ui.numbers.next');
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(await screen.findByRole('button', { name: '12025550050' })).toBeTruthy();
+    expect(screen.getByText('Showing 51–51')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Next' }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

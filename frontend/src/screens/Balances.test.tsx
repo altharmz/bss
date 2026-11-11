@@ -11,7 +11,8 @@ import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, type Handler } from '../tes
 const PREPAY = '/tmf-api/prepayBalanceManagement/v4';
 const BUCKETS = `${PREPAY}/bucket`;
 const ACC = `${PREPAY}/accumulatedBalance`;
-const PAGE = 'offset=0&limit=100';
+/** a page of the buckets and totals lists (#314) */
+const LIST = 'offset=0&limit=50';
 const A1 = 'c0000001-0000-4000-8000-000000000001';
 const A2 = 'c0000002-0000-4000-8000-000000000002';
 const B1 = 'b0000001-0000-4000-8000-000000000001';
@@ -83,6 +84,9 @@ function backend(routes: Record<string, Handler>) {
       json([], { total: 7 }),
     'GET /tmf-api/productCatalogManagement/v5/productOffering?limit=1&fields=id': () =>
       json([], { total: 4 }),
+    // a bucket page joins each of its accounts' accumulated balance (#314)
+    [`GET ${ACC}?partyAccount.id=${A1}&limit=1`]: () => json([AB_OLGA]),
+    [`GET ${ACC}?partyAccount.id=${A2}&limit=1`]: () => json([AB_JAN]),
     ...routes,
   });
 }
@@ -97,13 +101,14 @@ const tab = (name: string) => fireEvent.click(screen.getByRole('button', { name 
 describe('balances screen', () => {
   it('lists independent account totals, filters by account and GETs fresh detail', async () => {
     const { calls } = backend({
-      [`GET ${BUCKETS}?partyAccount.id=${A1}&${PAGE}`]: () => json([], { total: 0 }),
-      [`GET ${ACC}?partyAccount.id=${A1}&${PAGE}`]: () => json([AB_OLGA], { total: 1 }),
-      [`GET ${ACC}?${PAGE}`]: () => json([AB_OLGA, AB_JAN], { total: 2 }),
+      [`GET ${BUCKETS}?partyAccount.id=${A1}&${LIST}`]: () => json([], { total: 0 }),
+      [`GET ${ACC}?partyAccount.id=${A1}&${LIST}`]: () => json([AB_OLGA], { total: 1 }),
+      [`GET ${ACC}?${LIST}`]: () => json([AB_OLGA, AB_JAN], { total: 2 }),
       [`GET ${ACC}/${AB1}`]: () => json({ ...AB_OLGA, totalBalance: money(130) }),
     });
     open(`/balances?account=${A1}`);
-    await screen.findByText('No buckets');
+    // TEST-CHANGE (#314): filtered on the server, an empty page under the chip is no matches
+    await screen.findByText('No matches');
     tab('Account totals');
     expect(await screen.findByText('125.00')).toBeTruthy();
     expectUi('ui.balances.totals');
@@ -117,12 +122,12 @@ describe('balances screen', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
     fireEvent.click(screen.getByLabelText('Remove the account filter'));
     expect(await screen.findByText('Jan Petrov')).toBeTruthy();
-    expect(calls).toContain(`GET ${ACC}?${PAGE}`);
+    expect(calls).toContain(`GET ${ACC}?${LIST}`);
   });
   it('lists the buckets joined with each account accumulated balance', async () => {
     const { calls } = backend({
-      [`GET ${BUCKETS}?${PAGE}`]: () => json([B_OLGA, B_JAN], { total: 2 }),
-      [`GET ${ACC}?${PAGE}`]: () => json([AB_OLGA, AB_JAN], { total: 2 }),
+      [`GET ${BUCKETS}?${LIST}`]: () => json([B_OLGA, B_JAN], { total: 2 }),
+      [`GET ${ACC}?${LIST}`]: () => json([AB_OLGA, AB_JAN], { total: 2 }),
     });
     open('/balances');
     expect(await screen.findByText('Olga Kuznetsova')).toBeTruthy();
@@ -132,23 +137,26 @@ describe('balances screen', () => {
     expect(screen.getByText('125.00')).toBeTruthy();
     expect(screen.getByText('Suspended', { selector: 'span' })).toBeTruthy();
     // the buckets tab reads buckets and balances only: no action list
-    expect(calls).toContain(`GET ${BUCKETS}?${PAGE}`);
-    expect(calls).toContain(`GET ${ACC}?${PAGE}`);
+    expect(calls).toContain(`GET ${BUCKETS}?${LIST}`);
+    // TEST-CHANGE (#314): one accumulated balance read per account on the page, not all
+    expect(calls).toContain(`GET ${ACC}?partyAccount.id=${A1}&limit=1`);
+    expect(calls).toContain(`GET ${ACC}?partyAccount.id=${A2}&limit=1`);
+    expect(calls).not.toContain(`GET ${ACC}?${LIST}`);
     expect(calls.filter((c) => /(topup|adjust|reserve|transfer)Balance/.test(c))).toEqual([]);
   });
 
   it('filters buckets on the server by status and by the account chip', async () => {
     const { calls } = backend({
-      [`GET ${BUCKETS}?${PAGE}`]: () => json([B_OLGA, B_JAN], { total: 2 }),
-      [`GET ${ACC}?${PAGE}`]: () => json([AB_OLGA, AB_JAN], { total: 2 }),
-      [`GET ${BUCKETS}?status=suspended&${PAGE}`]: () => json([B_JAN], { total: 1 }),
-      [`GET ${BUCKETS}?partyAccount.id=${A1}&${PAGE}`]: () => json([B_OLGA], { total: 1 }),
-      [`GET ${ACC}?partyAccount.id=${A1}&${PAGE}`]: () => json([AB_OLGA], { total: 1 }),
+      [`GET ${BUCKETS}?${LIST}`]: () => json([B_OLGA, B_JAN], { total: 2 }),
+      [`GET ${ACC}?${LIST}`]: () => json([AB_OLGA, AB_JAN], { total: 2 }),
+      [`GET ${BUCKETS}?status=suspended&${LIST}`]: () => json([B_JAN], { total: 1 }),
+      [`GET ${BUCKETS}?partyAccount.id=${A1}&${LIST}`]: () => json([B_OLGA], { total: 1 }),
+      [`GET ${ACC}?partyAccount.id=${A1}&${LIST}`]: () => json([AB_OLGA], { total: 1 }),
     });
     open('/balances');
     expect(await screen.findByText('Jan Petrov')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'suspended' } });
-    await waitFor(() => expect(calls).toContain(`GET ${BUCKETS}?status=suspended&${PAGE}`));
+    await waitFor(() => expect(calls).toContain(`GET ${BUCKETS}?status=suspended&${LIST}`));
     expect(await screen.findByText('Jan Petrov')).toBeTruthy();
     expect(screen.queryByText('Olga Kuznetsova')).toBeNull();
     fireEvent.change(screen.getByLabelText('Status'), { target: { value: '' } });
@@ -157,26 +165,44 @@ describe('balances screen', () => {
 
   it('filters on the account chip from the subscriber card link and removes it', async () => {
     const { calls } = backend({
-      [`GET ${BUCKETS}?${PAGE}`]: () => json([B_OLGA, B_JAN], { total: 2 }),
-      [`GET ${ACC}?${PAGE}`]: () => json([AB_OLGA, AB_JAN], { total: 2 }),
-      [`GET ${BUCKETS}?partyAccount.id=${A1}&${PAGE}`]: () => json([B_OLGA], { total: 1 }),
-      [`GET ${ACC}?partyAccount.id=${A1}&${PAGE}`]: () => json([AB_OLGA], { total: 1 }),
+      [`GET ${BUCKETS}?${LIST}`]: () => json([B_OLGA, B_JAN], { total: 2 }),
+      [`GET ${ACC}?${LIST}`]: () => json([AB_OLGA, AB_JAN], { total: 2 }),
+      [`GET ${BUCKETS}?partyAccount.id=${A1}&${LIST}`]: () => json([B_OLGA], { total: 1 }),
+      [`GET ${ACC}?partyAccount.id=${A1}&${LIST}`]: () => json([AB_OLGA], { total: 1 }),
     });
     open(`/balances?account=${A1}`);
     expect(await screen.findByText('Olga Kuznetsova')).toBeTruthy();
     expectUi('ui.balances.accountChip');
-    expect(calls).toContain(`GET ${BUCKETS}?partyAccount.id=${A1}&${PAGE}`);
-    expect(calls).toContain(`GET ${ACC}?partyAccount.id=${A1}&${PAGE}`);
+    expect(calls).toContain(`GET ${BUCKETS}?partyAccount.id=${A1}&${LIST}`);
+    expect(calls).toContain(`GET ${ACC}?partyAccount.id=${A1}&limit=1`);
     expect(screen.queryByText('Jan Petrov')).toBeNull();
     fireEvent.click(screen.getByLabelText('Remove the account filter'));
     expect(await screen.findByText('Jan Petrov')).toBeTruthy();
-    expect(calls).toContain(`GET ${BUCKETS}?${PAGE}`);
+    expect(calls).toContain(`GET ${BUCKETS}?${LIST}`);
+  });
+
+  it('pages buckets and totals with Previous and Next', async () => {
+    const many = Array.from({ length: 51 }, (_, i) =>
+      bucket(`b${i}`, i === 50 ? JAN : OLGA, 'active', i),
+    );
+    const { calls } = backend({
+      [`GET ${BUCKETS}?${LIST}`]: () => json(many.slice(0, 50), { more: true }),
+      [`GET ${BUCKETS}?offset=50&limit=50`]: () => json(many.slice(50)),
+    });
+    open('/balances');
+    expect(await screen.findByText('Showing 1–50')).toBeTruthy();
+    expectUi('ui.balances.previous');
+    expectUi('ui.balances.next');
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(await screen.findByText('Showing 51–51')).toBeTruthy();
+    expect(screen.getByText('Jan Petrov')).toBeTruthy();
+    expect(calls).toContain(`GET ${BUCKETS}?offset=50&limit=50`);
   });
 
   it('opens a bucket with the bucket GET and its accumulated balance GET', async () => {
     const { calls } = backend({
-      [`GET ${BUCKETS}?${PAGE}`]: () => json([B_OLGA], { total: 1 }),
-      [`GET ${ACC}?${PAGE}`]: () => json([AB_OLGA], { total: 1 }),
+      [`GET ${BUCKETS}?${LIST}`]: () => json([B_OLGA], { total: 1 }),
+      [`GET ${ACC}?${LIST}`]: () => json([AB_OLGA], { total: 1 }),
       [`GET ${BUCKETS}/${B1}`]: () => json(B_OLGA),
       [`GET ${ACC}/${AB1}`]: () => json(AB_OLGA),
     });
@@ -197,16 +223,16 @@ describe('balances screen', () => {
     ['Transfers', 'transferBalance', 'ui.balances.transfers'],
   ])('%s reads its own list only', async (name, path, ui) => {
     const { calls } = backend({
-      [`GET ${BUCKETS}?${PAGE}`]: () => json([B_OLGA], { total: 1 }),
-      [`GET ${ACC}?${PAGE}`]: () => json([AB_OLGA], { total: 1 }),
-      [`GET ${PREPAY}/${path}?${PAGE}`]: () => json([], { total: 0 }),
+      [`GET ${BUCKETS}?${LIST}`]: () => json([B_OLGA], { total: 1 }),
+      [`GET ${ACC}?${LIST}`]: () => json([AB_OLGA], { total: 1 }),
+      [`GET ${PREPAY}/${path}?${LIST}`]: () => json([], { total: 0 }),
     });
     open('/balances');
     await screen.findByText('Olga Kuznetsova');
     tab(name);
     expect(await screen.findByText('Nothing here')).toBeTruthy();
     expectUi(ui);
-    expect(calls).toContain(`GET ${PREPAY}/${path}?${PAGE}`);
+    expect(calls).toContain(`GET ${PREPAY}/${path}?${LIST}`);
     // the other kinds are not read until their tab is opened
     const others = ['topupBalance', 'adjustBalance', 'reserveBalance', 'transferBalance'].filter(
       (p) => p !== path,
@@ -216,10 +242,10 @@ describe('balances screen', () => {
 
   it('lists top-ups with a status filter, and cancels one from its detail', async () => {
     const { calls, fetchMock } = backend({
-      [`GET ${BUCKETS}?${PAGE}`]: () => json([B_OLGA], { total: 1 }),
-      [`GET ${ACC}?${PAGE}`]: () => json([AB_OLGA], { total: 1 }),
-      [`GET ${PREPAY}/topupBalance?${PAGE}`]: () => json([topup], { total: 1 }),
-      [`GET ${PREPAY}/topupBalance?status=failed&${PAGE}`]: () => json([], { total: 0 }),
+      [`GET ${BUCKETS}?${LIST}`]: () => json([B_OLGA], { total: 1 }),
+      [`GET ${ACC}?${LIST}`]: () => json([AB_OLGA], { total: 1 }),
+      [`GET ${PREPAY}/topupBalance?${LIST}`]: () => json([topup], { total: 1 }),
+      [`GET ${PREPAY}/topupBalance?status=failed&${LIST}`]: () => json([], { total: 0 }),
       [`GET ${PREPAY}/topupBalance/${T1}`]: () => json(topup),
       [`PATCH ${PREPAY}/topupBalance/${T1}`]: () => json({ ...topup, status: 'cancelled' }),
     });
@@ -240,15 +266,15 @@ describe('balances screen', () => {
     expect(writes).toEqual([[`${PREPAY}/topupBalance/${T1}`, '{"status":"cancelled"}']]);
     fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'failed' } });
     await waitFor(() =>
-      expect(calls).toContain(`GET ${PREPAY}/topupBalance?status=failed&${PAGE}`),
+      expect(calls).toContain(`GET ${PREPAY}/topupBalance?status=failed&${LIST}`),
     );
   });
 
   it('shows a transfer to the receiver named through its receiver bucket', async () => {
     const { calls } = backend({
-      [`GET ${BUCKETS}?${PAGE}`]: () => json([B_OLGA], { total: 1 }),
-      [`GET ${ACC}?${PAGE}`]: () => json([AB_OLGA], { total: 1 }),
-      [`GET ${PREPAY}/transferBalance?${PAGE}`]: () => json([transfer], { total: 1 }),
+      [`GET ${BUCKETS}?${LIST}`]: () => json([B_OLGA], { total: 1 }),
+      [`GET ${ACC}?${LIST}`]: () => json([AB_OLGA], { total: 1 }),
+      [`GET ${PREPAY}/transferBalance?${LIST}`]: () => json([transfer], { total: 1 }),
       [`GET ${PREPAY}/transferBalance/${X1}`]: () => json(transfer),
       [`GET ${BUCKETS}/${B2}`]: () => json(B_JAN),
     });

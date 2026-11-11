@@ -62,6 +62,7 @@ TMF639 LogicalResource inventory: subscriber identities, built-in msisdn (E.164 
 
 | Name | Definition | Backs a constraint |
 |---|---|---|
+| `subscriber_number_created_at_id_idx` | `CREATE INDEX subscriber_number_created_at_id_idx ON subscriber_number USING btree (created_at, id)` | no |
 | `subscriber_number_iccid_key` | `CREATE UNIQUE INDEX subscriber_number_iccid_key ON subscriber_number USING btree (iccid) WHERE (iccid IS NOT NULL)` | no |
 | `subscriber_number_id_kind_key` | `CREATE UNIQUE INDEX subscriber_number_id_kind_key ON subscriber_number USING btree (id, resource_specification_id)` | yes |
 | `subscriber_number_kind_value_key` | `CREATE UNIQUE INDEX subscriber_number_kind_value_key ON subscriber_number USING btree (resource_specification_id, value)` | yes |
@@ -69,6 +70,7 @@ TMF639 LogicalResource inventory: subscriber identities, built-in msisdn (E.164 
 | `subscriber_number_sim_active_key` | `CREATE UNIQUE INDEX subscriber_number_sim_active_key ON subscriber_number USING btree (sim_product_id) WHERE (sim_state = 'active'::text)` | no |
 | `subscriber_number_sim_reserved_key` | `CREATE UNIQUE INDEX subscriber_number_sim_reserved_key ON subscriber_number USING btree (sim_product_id) WHERE (sim_state = 'reserved'::text)` | no |
 | `subscriber_number_sim_stock_idx` | `CREATE INDEX subscriber_number_sim_stock_idx ON subscriber_number USING btree (sim_type, created_at, value) WHERE ((sim_state = 'in_stock'::text) AND (resource_specification_id = 'imsi'::text))` | no |
+| `subscriber_number_value_prefix_idx` | `CREATE INDEX subscriber_number_value_prefix_idx ON subscriber_number USING btree (value text_pattern_ops) WHERE (resource_specification_id = 'msisdn'::text)` | no |
 
 ## Referenced by
 

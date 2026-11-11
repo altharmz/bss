@@ -363,6 +363,9 @@ items:
   - {id: api.internal.accountSettlement.get, area: api, stage: 5, method: GET, path: "/internal/v1/billingAccount/{account_id}/settlement", title: "An account's bills owed, unused credit, overdue and on hold"}
   - {id: api.internal.billDetail.get, area: api, stage: 5, method: GET, path: "/internal/v1/customerBill/{bill_id}", title: "A bill with charges, sources, history and allowed states"}
   - {id: api.internal.priceChange.create, area: api, stage: 5, method: POST, path: "/internal/v1/productOffering/{offering_id}/priceChange", title: "Atomic price change of a live offering (D-W21)"}
+  - {id: api.internal.subscriber.search, area: api, stage: 5, method: GET, path: /internal/v1/subscriber, title: "Search subscribers by prefix, paged (the Subscribers list)"}
+  - {id: api.internal.party.search, area: api, stage: 5, method: GET, path: /internal/v1/party, title: "Search parties by prefix, paged (the Parties list, owner picker)"}
+  - {id: api.internal.partyCustomer.search, area: api, stage: 5, method: GET, path: /internal/v1/partyCustomer, title: "Search customers by prefix, paged (the Parties customers list)"}
   - {id: api.internal.billingRun.list, area: api, stage: 4, method: GET, path: /internal/v1/billingRun, title: "List billing runs (newest first)"}
   - {id: api.internal.billingRun.get, area: api, stage: 4, method: GET, path: "/internal/v1/billingRun/{run_id}", title: "Get a billing run"}
   - {id: api.internal.billingRunAccounts.list, area: api, stage: 4, method: GET, path: "/internal/v1/billingRun/{run_id}/accounts", title: "A run's per-account outcomes"}
@@ -408,6 +411,8 @@ items:
   - {id: ui.logging.settings, area: ui, stage: 5, title: "Logging settings: base level and temporary debug"}
   - {id: ui.shell, area: ui, stage: 5, title: "Shell: sidebar, top bar with business date and zone"}
   - {id: ui.subscribers.list, area: ui, stage: 5, title: "Subscribers list"}
+  - {id: ui.subscribers.previous, area: ui, stage: 5, title: "Subscribers: previous page"}
+  - {id: ui.subscribers.next, area: ui, stage: 5, title: "Subscribers: next page"}
   - {id: ui.subscribers.prepaid, area: ui, stage: 5, title: "Subscribers prepaid account mode"}
   - {id: ui.products, area: ui, stage: 5, title: "Products screen: every status, filters, rows"}
   - {id: ui.products.status, area: ui, stage: 5, title: "Products status filter"}
@@ -415,8 +420,12 @@ items:
   - {id: ui.products.detail, area: ui, stage: 5, title: "Product detail dialog"}
   - {id: ui.products.orderItems, area: ui, stage: 5, title: "Product order items with Orders link"}
   - {id: ui.products.resource, area: ui, stage: 5, title: "Product realizing resource"}
+  - {id: ui.products.previous, area: ui, stage: 5, title: "Products: previous page"}
+  - {id: ui.products.next, area: ui, stage: 5, title: "Products: next page"}
   - {id: ui.numbers.delete, area: ui, stage: 5, title: "Delete a never-assigned number"}
   - {id: ui.numbers.list, area: ui, stage: 5, title: "Subscriber-number inventory and search"}
+  - {id: ui.numbers.previous, area: ui, stage: 5, title: "Numbers: previous page"}
+  - {id: ui.numbers.next, area: ui, stage: 5, title: "Numbers: next page"}
   - {id: ui.numbers.create, area: ui, stage: 5, title: "Create an inventory number"}
   - {id: ui.numbers.detail, area: ui, stage: 5, title: "Number details, assignments and lock/unlock"}
   - {id: ui.numbers.pool, area: ui, stage: 5, title: "Request numbers from the carrier pool by area code"}
@@ -428,6 +437,8 @@ items:
   - {id: ui.subscriber.transferPinItem, area: ui, stage: 5, title: "Number Transfer PIN menu item on an active or suspended product"}
   - {id: ui.subscriber.transferPin, area: ui, stage: 5, title: "Number Transfer PIN dialog: shown once with expiry, copyable"}
   - {id: ui.sims.list, area: ui, stage: 5, title: "SIM and eSIM stock with state, type and batch filters"}
+  - {id: ui.sims.previous, area: ui, stage: 5, title: "SIMs: previous page"}
+  - {id: ui.sims.next, area: ui, stage: 5, title: "SIMs: next page"}
   - {id: ui.sims.import, area: ui, stage: 5, title: "Import a SIM batch from CSV"}
   - {id: ui.sims.importDialog, area: ui, stage: 5, title: "SIM CSV import dialog"}
   - {id: ui.sims.generate, area: ui, stage: 5, title: "Generate eSIM profiles"}
@@ -506,13 +517,19 @@ items:
   - {id: ui.addProduct.prepaidPreview, area: ui, stage: 5, title: "Prepaid first-charge preview in Add product: to pay, available, shortfall, ledger after"}
   - {id: ui.addProduct.topUpShortfall, area: ui, stage: 5, title: "Top up the shortfall from Add product: opens the Top-up form with the amount typed in"}
   - {id: ui.bills, area: ui, stage: 5, title: "Bills screen: bills and bill cycles tabs with state, account and billing date filters"}
+  - {id: ui.bills.previous, area: ui, stage: 5, title: "Bills: previous page of newer bills"}
+  - {id: ui.bills.next, area: ui, stage: 5, title: "Bills: next page of older bills"}
   - {id: ui.bills.accountChip, area: ui, stage: 5, title: "Bills screen account filter chip"}
   - {id: ui.bills.links, area: ui, stage: 5, title: "Bill dialog links: bill cycle and rates"}
   - {id: ui.bills.cycleDetail, area: ui, stage: 5, title: "Bill cycle detail dialog"}
   - {id: ui.bills.rateDetail, area: ui, stage: 5, title: "Applied billing rate detail dialog"}
   - {id: ui.payments, area: ui, stage: 5, title: "Payments screen: payments and refunds tabs with status, account and date filters"}
+  - {id: ui.payments.previous, area: ui, stage: 5, title: "Payments: previous page of newer rows"}
+  - {id: ui.payments.next, area: ui, stage: 5, title: "Payments: next page of older rows"}
   - {id: ui.payments.accountChip, area: ui, stage: 5, title: "Payments screen account filter chip"}
   - {id: ui.balances, area: ui, stage: 5, title: "Balances screen: buckets, top-ups, adjustments, holds and transfers (TMF654 reads)"}
+  - {id: ui.balances.previous, area: ui, stage: 5, title: "Balances buckets and totals: previous page"}
+  - {id: ui.balances.next, area: ui, stage: 5, title: "Balances buckets and totals: next page"}
   - {id: ui.balances.status, area: ui, stage: 5, title: "Balances screen status filter"}
   - {id: ui.balances.accountChip, area: ui, stage: 5, title: "Balances screen account filter chip"}
   - {id: ui.balances.buckets, area: ui, stage: 5, title: "Balances buckets tab: bucket list joined with accumulated balances"}
@@ -577,6 +594,8 @@ items:
   - {id: ui.catalog.errorLog, area: ui, stage: 5, title: "Full error log of a failed job"}
   - {id: ui.catalog.deleteJob, area: ui, stage: 5, title: "Delete a job record"}
   - {id: ui.parties, area: ui, stage: 5, title: "Parties screen (Customers > Parties): individuals, organizations, customers"}
+  - {id: ui.parties.previous, area: ui, stage: 5, title: "Parties: previous page"}
+  - {id: ui.parties.next, area: ui, stage: 5, title: "Parties: next page"}
   - {id: ui.parties.individuals, area: ui, stage: 5, title: "Parties tab: individuals with customers and subscribers"}
   - {id: ui.parties.organizations, area: ui, stage: 5, title: "Parties tab: organizations with customers and subscribers"}
   - {id: ui.parties.customers, area: ui, stage: 5, title: "Parties tab: customers with engaged party and billing accounts"}

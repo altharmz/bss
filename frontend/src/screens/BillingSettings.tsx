@@ -1,6 +1,5 @@
 import { submitDialogPrimary } from '../ui/kit';
 import { useState } from 'react';
-import { loadAccounts } from '../api/bss';
 import {
   createBody,
   createSetting,
@@ -10,7 +9,6 @@ import {
   loadSettings,
   patchBody,
   patchSetting,
-  usedBy,
   type Setting,
   type SettingForm,
   type SettingKind,
@@ -72,7 +70,6 @@ const TABS: Record<SettingKind, Tab> = {
 const COLUMNS: Column[] = [
   { key: 'name', label: 'Name', width: '1fr' },
   { key: 'description', label: 'Description', width: '2fr' },
-  { key: 'used', label: 'Used by', width: '140px', align: 'right' },
   { key: 'actions', label: '', width: '150px', align: 'right' },
 ];
 
@@ -106,8 +103,8 @@ function SettingsTab({ kind, tabs }: { kind: SettingKind; tabs: React.ReactNode 
   const tab = TABS[kind];
   const marker = `ui.billingSettings.${kind}`;
   const rows = useResource(`billing-settings:${kind}`, (signal) => loadSettings(kind, signal));
-  // the billing accounts name these: a setting in use cannot be deleted
-  const accounts = useResource('accounts', loadAccounts);
+  // no "used by" count (#312/#314: it read every billing account): the server refuses
+  // to delete a setting a billing account names, and the dialog shows its 409
   const toast = useToast();
   const [dialog, setDialog] = useState<
     { kind: 'new' } | { kind: 'edit' | 'delete'; setting: Setting } | null
@@ -116,10 +113,7 @@ function SettingsTab({ kind, tabs }: { kind: SettingKind; tabs: React.ReactNode 
     setDialog(null);
     toast(message);
     rows.retry();
-    accounts.retry();
   };
-  const used = (setting: Setting) =>
-    accounts.status === 'ok' ? usedBy(kind, setting.id, accounts.data) : null;
 
   return (
     <div className="bss-screen" data-ui={marker}>
@@ -151,7 +145,6 @@ function SettingsTab({ kind, tabs }: { kind: SettingKind; tabs: React.ReactNode 
           {(list) => (
             <>
               {list.map((setting) => {
-                const count = used(setting);
                 return (
                   <TableRow
                     key={setting.id}
@@ -169,7 +162,6 @@ function SettingsTab({ kind, tabs }: { kind: SettingKind; tabs: React.ReactNode 
                         </div>
                       ),
                       description: setting.description ?? <span className="bss-zero">—</span>,
-                      used: count === null ? <span className="bss-zero">—</span> : formatInt(count),
                       actions: setting.builtIn ? (
                         <span className="bss-secondary">read-only</span>
                       ) : (
@@ -182,18 +174,16 @@ function SettingsTab({ kind, tabs }: { kind: SettingKind; tabs: React.ReactNode 
                           >
                             Edit
                           </Button>{' '}
-                          {count === null || count === 0 ? (
-                            <Button
-                              small
-                              data-ui={`${marker}.delete`}
-                              variant="quiet"
-                              tone="negative"
-                              aria-label={`Delete ${setting.name}`}
-                              onClick={() => setDialog({ kind: 'delete', setting })}
-                            >
-                              Delete
-                            </Button>
-                          ) : null}
+                          <Button
+                            small
+                            data-ui={`${marker}.delete`}
+                            variant="quiet"
+                            tone="negative"
+                            aria-label={`Delete ${setting.name}`}
+                            onClick={() => setDialog({ kind: 'delete', setting })}
+                          >
+                            Delete
+                          </Button>
                         </span>
                       ),
                     }}

@@ -539,18 +539,19 @@ describe('add product', () => {
           ),
       'GET /tmf-api/productCatalogManagement/v5/productSpecification/number-spec': () =>
         json({ resourceSpecification: [{ id: 'msisdn' }] }),
-      'GET /tmf-api/resourceInventory/v5/resource?offset=0&limit=100': () =>
-        json(
-          [
-            {
-              id: numberId,
-              value: '12025550123',
-              administrativeState: 'unlocked',
-              allocationStatus: 'available',
-            },
-          ],
-          { total: 1 },
-        ),
+      'GET /tmf-api/resourceInventory/v5/resource?resourceSpecification.id=msisdn&administrativeState=unlocked&allocationStatus=available&offset=0&limit=50':
+        () =>
+          json(
+            [
+              {
+                id: numberId,
+                value: '12025550123',
+                administrativeState: 'unlocked',
+                allocationStatus: 'available',
+              },
+            ],
+            { total: 1 },
+          ),
       [preview('2026-10-01')]: () => json(FIRST_CHARGE),
       [`POST ${ORDERS}`]: () =>
         json({
@@ -594,7 +595,8 @@ describe('add product', () => {
           ),
       'GET /tmf-api/productCatalogManagement/v5/productSpecification/number-spec': () =>
         json({ resourceSpecification: [{ id: 'msisdn' }] }),
-      'GET /tmf-api/resourceInventory/v5/resource?offset=0&limit=100': () => json([], { total: 0 }),
+      'GET /tmf-api/resourceInventory/v5/resource?resourceSpecification.id=msisdn&administrativeState=unlocked&allocationStatus=available&offset=0&limit=50':
+        () => json([], { total: 0 }),
       [preview('2026-10-01')]: () => json(FIRST_CHARGE),
       'POST /internal/v1/port/in': () =>
         json({ id: 'port1', resource: { id: portedId }, state: 'submitted' }, { status: 201 }),

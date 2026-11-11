@@ -168,7 +168,8 @@ def test_off_cycle_bill_replays_once_and_keeps_monthly_anchor(api, worker, run_d
     run(worker, api, date(2027, 1, 1))
     bills = api.get(f"{apidata.BILL}?billingAccount.id={account['id']}").json()
     assert len(bills) == 2
-    assert bills[1]["runType"] == "onCycle" and bills[1]["amountDue"]["value"] == 310
+    # TEST-CHANGE (#314): bills are listed newest first; the January bill is first
+    assert bills[0]["runType"] == "onCycle" and bills[0]["amountDue"]["value"] == 310
     check_invariant(api, account)
 
 
@@ -300,7 +301,7 @@ def test_presentation_preferences_render_and_preserve_history(api, worker):
     pay(api, account, 310, date(2026, 12, 2))
     assert api.get(bill["href"]).json()["billDocument"][0]["content"] == encoded
     run(worker, api, date(2027, 1, 1))
-    second = api.get(apidata.BILL).json()[1]
+    second = api.get(apidata.BILL).json()[0]  # TEST-CHANGE (#314): newest first
     detailed = tmfjson.loads(base64.b64decode(second["billDocument"][0]["content"]))
     assert detailed["charges"][0]["amount"]["value"] == 310
     assert detailed["presentationMedia"] == []

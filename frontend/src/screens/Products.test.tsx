@@ -13,7 +13,7 @@ const P1 = 'e0000001-0000-4000-8000-000000000001';
 const P2 = 'e0000002-0000-4000-8000-000000000002';
 const A1 = 'a0000001-0000-4000-8000-000000000001';
 const N1 = '10000000-0000-4000-8000-000000000001';
-const PAGE = 'offset=0&limit=100';
+const PAGE = 'offset=0&limit=50';
 
 const first = {
   id: P1,
@@ -51,13 +51,13 @@ function backend(routes: Record<string, Handler>) {
       json([], { total: 7 }),
     'GET /tmf-api/productCatalogManagement/v5/productOffering?limit=1&fields=id': () =>
       json([], { total: 4 }),
-    [`GET ${NUMBERS}?${PAGE}`]: () =>
-      json(
-        [{ id: N1, '@type': 'LogicalResource', name: 'MSISDN 12025550123', value: '12025550123' }],
-        {
-          total: 1,
-        },
-      ),
+    [`GET ${NUMBERS}/${N1}`]: () =>
+      json({
+        id: N1,
+        '@type': 'LogicalResource',
+        name: 'MSISDN 12025550123',
+        value: '12025550123',
+      }),
     ...routes,
   });
 }
@@ -68,24 +68,32 @@ function open(path: string) {
 }
 
 describe('products screen', () => {
-  it('lists every status, filters on the server and client, and opens the detail', async () => {
+  it('lists every status, filters on the server, and opens the detail', async () => {
     const { calls } = backend({
       [`GET ${PRODUCTS}?${PAGE}`]: () => json([first, second], { total: 2 }),
       [`GET ${PRODUCTS}?status=terminated&${PAGE}`]: () => json([second], { total: 1 }),
       [`GET ${PRODUCTS}?billingAccount.id=${A1}&${PAGE}`]: () =>
         json([first, second], { total: 2 }),
       [`GET ${PRODUCTS}/${P1}`]: () => json(first),
+      [`GET ${NUMBERS}?value=12025550123&limit=1`]: () => json([{ id: N1 }]),
+      [`GET ${PRODUCTS}?realizingResource.id=${N1}&${PAGE}`]: () => json([first]),
+      [`GET ${NUMBERS}?value=1999&limit=1`]: () => json([]),
     });
     open('/products');
     expect(await screen.findByText('Plus 20')).toBeTruthy();
     expectUi('ui.products');
     expect(await screen.findByText('12025550123')).toBeTruthy();
-    // client side: offering and number
-    fireEvent.change(screen.getByLabelText('Filter by offering'), { target: { value: 'plus' } });
-    expect(screen.queryByText('Basic 10')).toBeNull();
-    fireEvent.change(screen.getByLabelText('Filter by offering'), { target: { value: '' } });
-    fireEvent.change(screen.getByLabelText('Filter by number'), { target: { value: '0123' } });
-    expect(screen.queryByText('Plus 20')).toBeNull();
+    // TEST-CHANGE (#314): the number is an exact server filter; the offering text filter
+    // is gone (the API has no offering-name filter, and a page cannot be filtered locally)
+    expect(screen.queryByLabelText('Filter by offering')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Filter by number'), {
+      target: { value: '+1 202 555 0123' },
+    });
+    await waitFor(() => expect(screen.queryByText('Plus 20')).toBeNull());
+    expect(calls).toContain(`GET ${NUMBERS}?value=12025550123&limit=1`);
+    expect(calls).toContain(`GET ${PRODUCTS}?realizingResource.id=${N1}&${PAGE}`);
+    fireEvent.change(screen.getByLabelText('Filter by number'), { target: { value: '1999' } });
+    expect(await screen.findByText('No matches')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Filter by number'), { target: { value: '' } });
     // server side: status
     fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'terminated' } });
@@ -181,5 +189,31 @@ describe('products screen', () => {
     failed = false;
     fireEvent.click(screen.getByText('Retry'));
     expect(await screen.findByText('No products')).toBeTruthy();
+  });
+
+  it('pages with Previous and Next, reading only the numbers of the page', async () => {
+    const many = Array.from({ length: 51 }, (_, i) => ({
+      ...second,
+      id: `e${String(i).padStart(7, '0')}-0000-4000-8000-000000000000`,
+      productOffering: { id: 'o2', name: `Offer ${i}` },
+    }));
+    const { calls } = backend({
+      [`GET ${PRODUCTS}?${PAGE}`]: () => json(many.slice(0, 50), { more: true }),
+      [`GET ${PRODUCTS}?offset=50&limit=50`]: () => json([first, ...many.slice(50)]),
+    });
+    open('/products');
+    expect(await screen.findByText('Offer 0')).toBeTruthy();
+    expect(screen.getByText('Showing 1–50')).toBeTruthy();
+    expectUi('ui.products.previous');
+    expectUi('ui.products.next');
+    expect((screen.getByRole('button', { name: 'Previous' }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+    expect(calls.filter((c) => c.startsWith(`GET ${NUMBERS}`))).toEqual([]);
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(await screen.findByText('Showing 51–52')).toBeTruthy();
+    expect(await screen.findByText('12025550123')).toBeTruthy();
+    expect(calls.filter((c) => c.startsWith(`GET ${NUMBERS}`))).toEqual([`GET ${NUMBERS}/${N1}`]);
+    expect((screen.getByRole('button', { name: 'Next' }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

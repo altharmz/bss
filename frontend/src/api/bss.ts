@@ -47,6 +47,7 @@ export const PATHS = {
   cancellations: '/tmf-api/productOrderingManagement/v5/cancelProductOrder',
   internal: '/internal/v1/billingAccount',
   runs: '/internal/v1/billingRun',
+  subscribers: '/internal/v1/subscriber',
   buckets: '/tmf-api/prepayBalanceManagement/v4/bucket',
   topups: '/tmf-api/prepayBalanceManagement/v4/topupBalance',
   adjustments: '/tmf-api/prepayBalanceManagement/v4/adjustBalance',
@@ -164,10 +165,6 @@ export function toAccount(body: BillingAccountBody): Account {
     balanceCents: toCents(balance),
     creditLimitCents: limit === undefined ? null : toCents(limit),
   };
-}
-
-export async function loadAccounts(signal: AbortSignal): Promise<Account[]> {
-  return (await getAll<BillingAccountBody>(PATHS.accounts, signal)).map(toAccount);
 }
 
 export async function loadAccount(id: string, signal: AbortSignal): Promise<Account> {
@@ -410,33 +407,60 @@ export async function loadFinancialAccounts(signal: AbortSignal): Promise<Financ
   return (await getAll<Body>(PATHS.financialAccounts, signal)).map(toFinancialAccount);
 }
 
-/** Active products per billing account: one product list (status=active), grouped here
- * - no request per row (D4). */
-export async function loadActiveProductCounts(signal: AbortSignal): Promise<Map<string, number>> {
-  type Product = T637['schemas']['Product'];
-  const products = await getAll<Product>(
-    `${PATHS.products}?status=active&fields=billingAccount`,
-    signal,
-  );
-  const counts = new Map<string, number>();
-  for (const product of products) {
-    const account = need(product.billingAccount?.id, 'product billingAccount');
-    counts.set(account, (counts.get(account) ?? 0) + 1);
-  }
-  return counts;
+// --- the Subscribers list (#314): paged and searched on the server, no counts (#312) ---
+
+type SubscriberBody = Internal['schemas']['SubscriberRow'];
+
+/** A row of the Subscribers list: the account, its active products and how many accounts
+ * its customer has (both computed by the server for the page). */
+export interface SubscriberRow extends Account {
+  activeProducts: number;
+  customerAccounts: number;
 }
 
-export interface Subscribers {
-  accounts: Account[];
-  activeProducts: Map<string, number>;
+export interface SubscriberFilter {
+  q: string;
+  state: AccountState | null;
+  mode: RatingMode | null;
 }
 
-export async function loadSubscribers(signal: AbortSignal): Promise<Subscribers> {
-  const [accounts, activeProducts] = await Promise.all([
-    loadAccounts(signal),
-    loadActiveProductCounts(signal),
-  ]);
-  return { accounts, activeProducts };
+export const SUBSCRIBER_PAGE = 50;
+
+function toSubscriber(body: SubscriberBody): SubscriberRow {
+  return {
+    id: body.id,
+    name: body.name,
+    state: body.state as AccountState,
+    ratingType: body.ratingType as RatingMode,
+    customerId: body.customer.id,
+    customerName: body.customer.name,
+    cycleDay: body.cycleDay,
+    currency: body.currency,
+    balanceCents: toCents(body.balance.value),
+    creditLimitCents: body.creditLimit ? toCents(body.creditLimit.value) : null,
+    financialAccount: body.financialAccount
+      ? { id: body.financialAccount.id, name: body.financialAccount.name }
+      : null,
+    activeProducts: body.activeProducts,
+    customerAccounts: body.customerAccounts,
+  };
+}
+
+/** One page of subscribers: a prefix search over customer and account names, subscriber
+ * numbers and short ids, oldest account first. */
+export async function searchSubscribers(
+  filter: SubscriberFilter,
+  offset: number,
+  signal: AbortSignal,
+) {
+  const query = new URLSearchParams();
+  if (filter.q.trim()) query.set('q', filter.q.trim());
+  if (filter.state) query.set('state', filter.state);
+  if (filter.mode) query.set('ratingType', filter.mode);
+  query.set('offset', String(offset));
+  query.set('limit', String(SUBSCRIBER_PAGE));
+  const page = await getPage<SubscriberBody>(`${PATHS.subscribers}?${query}`, signal);
+  return { items: page.items.map(toSubscriber), more: page.more, offset };
 }
 
 // --- subscribers: create and edit (TMF632 party, TMF629 customer, TMF666 account) ---

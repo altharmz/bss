@@ -152,12 +152,13 @@ def test_examples_1_4_11_and_the_tmf678_view(api, db_conn, offering):
     }
     assert rates[0]["product"]["id"] == product["id"]
     bills = decimals(api.get(f"{BILL}?billingAccount.id={account['id']}"))
+    # TEST-CHANGE (#314): bills are listed newest first (decided by the human 2026-11-11)
     assert [(b["billDate"], b["amountDue"]["value"]) for b in bills] == [
-        (z(midnight(date(2026, 12, 1))), D("300.00")),
         (z(midnight(date(2027, 1, 1))), D("-116.13")),
+        (z(midnight(date(2026, 12, 1))), D("300.00")),
     ]
     assert {r["bill"]["id"] for r in rates} == {b["id"] for b in bills}
-    assert bills[1]["billingPeriod"] == {
+    assert bills[0]["billingPeriod"] == {
         "startDateTime": z(midnight(date(2027, 1, 1))),
         "endDateTime": z(midnight(date(2027, 2, 1))),
     }

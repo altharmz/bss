@@ -21,6 +21,8 @@ const K1 = 'c1000001-0000-4000-8000-000000000001';
 const R1 = 'd1000001-0000-4000-8000-000000000001';
 const usd = (value: number) => ({ unit: 'USD', value });
 const PAGE = 'offset=0&limit=100';
+/** a page of the bills list (#314) */
+const LIST = 'offset=0&limit=50';
 
 const BILL1 = billBody(B1, '2026-09-01', 300, 100, 'partiallyPaid', {
   billingAccount: { id: A1, name: 'Ivan Ivanov' },
@@ -87,8 +89,9 @@ function open(path: string) {
 }
 
 describe('bills screen', () => {
+  // TEST-CHANGE (#314): the server lists bills newest first; the screen shows them as served
   it('lists bills newest first with account links, kind and amount', async () => {
-    backend({ [`GET ${BILL}?${PAGE}`]: () => json([BILL1, BILL2], { total: 2 }) });
+    backend({ [`GET ${BILL}?${LIST}`]: () => json([BILL2, BILL1]) });
     open('/bills');
     await screen.findByText('Ivan Ivanov');
     expectUi('ui.bills');
@@ -106,16 +109,18 @@ describe('bills screen', () => {
     expect(within(row).getByText('2026-10-01')).toBeTruthy();
     expect(within(row).getByText('Off-cycle')).toBeTruthy();
     expect(within(row).getByText('Unpaid')).toBeTruthy();
-    expect(screen.getByText('Showing 2')).toBeTruthy();
+    expect(screen.getByText('Showing 1–2')).toBeTruthy();
   });
 
-  it('filters by state and account on the server and by billing date client side', async () => {
+  // TEST-CHANGE (#314): no billing-date filter on bills (the API has none; a page is not
+  // filtered locally); the date filters the bill cycles only
+  it('filters by state and account on the server', async () => {
     const { calls } = backend({
-      [`GET ${BILL}?${PAGE}`]: () => json([BILL1, BILL2], { total: 2 }),
-      [`GET ${BILL}?billingAccount.id=${A1}&${PAGE}`]: () => json([BILL1], { total: 1 }),
-      [`GET ${BILL}?billingAccount.id=${A1}&state=partiallyPaid&${PAGE}`]: () =>
+      [`GET ${BILL}?${LIST}`]: () => json([BILL1, BILL2], { total: 2 }),
+      [`GET ${BILL}?billingAccount.id=${A1}&${LIST}`]: () => json([BILL1], { total: 1 }),
+      [`GET ${BILL}?billingAccount.id=${A1}&state=partiallyPaid&${LIST}`]: () =>
         json([BILL1], { total: 1 }),
-      [`GET ${BILL}?state=partiallyPaid&${PAGE}`]: () => json([BILL1], { total: 1 }),
+      [`GET ${BILL}?state=partiallyPaid&${LIST}`]: () => json([BILL1], { total: 1 }),
     });
     open(`/bills?account=${A1}`);
     const chip = await screen.findByText(/Account/, {
@@ -127,23 +132,33 @@ describe('bills screen', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Partly paid' }));
     await waitFor(() =>
-      expect(calls).toContain(`GET ${BILL}?billingAccount.id=${A1}&state=partiallyPaid&${PAGE}`),
+      expect(calls).toContain(`GET ${BILL}?billingAccount.id=${A1}&state=partiallyPaid&${LIST}`),
     );
     await screen.findByRole('link', { name: 'Ivan Ivanov' });
-    const before = calls.length;
-    fireEvent.change(screen.getByLabelText('Billing date'), { target: { value: '2026-10-01' } });
-    await waitFor(() => expect(screen.queryByRole('link', { name: 'Ivan Ivanov' })).toBeNull());
-    expect(calls.length).toBe(before); // applied to the loaded rows
-    fireEvent.change(screen.getByLabelText('Billing date'), { target: { value: '2026-09-01' } });
-    await screen.findByRole('link', { name: 'Ivan Ivanov' });
+    expect(screen.queryByLabelText('Billing date')).toBeNull();
     fireEvent.click(within(chip).getByRole('button', { name: 'Remove the account filter' }));
-    await waitFor(() => expect(calls).toContain(`GET ${BILL}?state=partiallyPaid&${PAGE}`));
+    await waitFor(() => expect(calls).toContain(`GET ${BILL}?state=partiallyPaid&${LIST}`));
     expect(window.location.search).toBe('');
+  });
+
+  it('pages bills with Previous and Next', async () => {
+    const { calls } = backend({
+      [`GET ${BILL}?${LIST}`]: () => json([BILL2], { more: true }),
+      [`GET ${BILL}?offset=50&limit=50`]: () => json([BILL1]),
+    });
+    open('/bills');
+    await screen.findByText('Olga Kuznetsova');
+    expectUi('ui.bills.previous');
+    expectUi('ui.bills.next');
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(await screen.findByText('Ivan Ivanov')).toBeTruthy();
+    expect(screen.getByText('Showing 51–51')).toBeTruthy();
+    expect(calls).toContain(`GET ${BILL}?offset=50&limit=50`);
   });
 
   it('opens the bill dialog with the cycle link and the rates table, and a rate', async () => {
     const { calls } = backend({
-      [`GET ${BILL}?${PAGE}`]: () => json([BILL1], { total: 1 }),
+      [`GET ${BILL}?${LIST}`]: () => json([BILL1], { total: 1 }),
       [`GET /internal/v1/customerBill/${B1}`]: () => json(DETAIL),
       [`GET ${RATE}?bill.id=${B1}&${PAGE}`]: () => json([RATE1], { total: 1 }),
       [`GET ${RATE}/${R1}`]: () => json(RATE1),
@@ -177,7 +192,7 @@ describe('bills screen', () => {
 
   it('has no cycle link for a bill without a bill cycle', async () => {
     backend({
-      [`GET ${BILL}?${PAGE}`]: () => json([BILL2], { total: 1 }),
+      [`GET ${BILL}?${LIST}`]: () => json([BILL2], { total: 1 }),
       [`GET /internal/v1/customerBill/${B2}`]: () =>
         json({ ...DETAIL, id: B2, billNo: 'BL-B2000002' }),
     });
@@ -190,7 +205,7 @@ describe('bills screen', () => {
 
   it('lists the bill cycles with a billing date filter and opens one', async () => {
     const { calls } = backend({
-      [`GET ${BILL}?${PAGE}`]: () => json([], { total: 0 }),
+      [`GET ${BILL}?${LIST}`]: () => json([], { total: 0 }),
       [`GET ${CYCLE}/${K1}`]: () => json(CYCLE1),
     });
     open('/bills');
@@ -211,7 +226,7 @@ describe('bills screen', () => {
   it('shows the error with Retry', async () => {
     let fail = true;
     backend({
-      [`GET ${BILL}?${PAGE}`]: () =>
+      [`GET ${BILL}?${LIST}`]: () =>
         fail ? tmfError(503, 'Service Unavailable') : json([], { total: 0 }),
     });
     open('/bills');

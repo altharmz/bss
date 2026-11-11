@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import {
+  BILL_PAGE,
   BILL_STATES,
-  loadAllBills,
+  loadBillPage,
   loadBillCycles,
   type BillRow,
   type BillStateFilter,
@@ -18,13 +19,15 @@ import { statusPresentation } from '../ui/status';
 import { Coded, PageHeader, Panel, StatusPill, Segmented, DateField } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
+import { PageFooter, usePageOffset } from '../ui/paging';
 import { BillDialog } from './Bills';
 import { CycleDialog } from './BillLinks';
 import './screens.css';
 
 // Global bills and bill cycles (docs/ui.md): TMF678 reads, plus
-// the existing bill dialog (hold/release PATCH). State and account filter on the server; the
-// billing date is applied client side to the loaded rows.
+// the existing bill dialog (hold/release PATCH). Bills page on the server, newest first,
+// with the state and account filters there (#314); the API has no billing-date filter,
+// so the date filters only the bill cycles (one per billing date, read whole).
 
 const BILL_COLUMNS: Column[] = [
   { key: 'no', label: 'Bill', width: '120px', mono: true },
@@ -63,8 +66,10 @@ export function BillsScreen() {
   const [openBill, setOpenBill] = useState<BillRow | null>(null);
   const [openCycle, setOpenCycle] = useState<string | null>(null);
   const filter = { account, state: state === 'all' ? null : state };
-  const bills = useResource(`bills-all:${account ?? ''}:${state}:${version}`, (signal) =>
-    loadAllBills(filter, signal),
+  const filterKey = `${account ?? ''}:${state}:${version}`;
+  const [offset, setOffset] = usePageOffset(filterKey);
+  const bills = useResource(`bills-all:${filterKey}:${offset}`, (signal) =>
+    loadBillPage(filter, offset, signal),
   );
   const cycles = useResource('bill-cycles', (signal) => loadBillCycles(signal));
 
@@ -79,7 +84,7 @@ export function BillsScreen() {
   };
   const name =
     bills.status === 'ok'
-      ? (bills.data.find((b) => b.billingAccount.id === account)?.billingAccount.name ?? null)
+      ? (bills.data.items.find((b) => b.billingAccount.id === account)?.billingAccount.name ?? null)
       : null;
   const onDate = (instant: string) => date === '' || businessDate(instant, timeZone) === date;
   const shown = (rows: number, all: number) =>
@@ -118,10 +123,18 @@ export function BillsScreen() {
             ]}
           />
         )}
-        <label className="bss-caption" htmlFor="bills-date">
-          Billing date
-        </label>
-        <DateField id="bills-date" value={date} onChange={(event) => setDate(event.target.value)} />
+        {tab === 'cycles' && (
+          <>
+            <label className="bss-caption" htmlFor="bills-date">
+              Billing date
+            </label>
+            <DateField
+              id="bills-date"
+              value={date}
+              onChange={(event) => setDate(event.target.value)}
+            />
+          </>
+        )}
         {tab === 'bills' && account !== null && (
           <span className="bss-run-tag" data-ui="ui.bills.accountChip">
             Account {name ?? <Id id={account} prefix="BA-" />}{' '}
@@ -145,12 +158,9 @@ export function BillsScreen() {
               columns={BILL_COLUMNS}
               errorTitle="Failed to load bills"
               empty={{ title: 'No bills', text: 'A bill is issued on the billing cycle day.' }}
-              count={(data) => data.length}
-              rows={(data) =>
-                data
-                  .filter((b) => onDate(b.billDate))
-                  .sort((a, b) => b.billDate.localeCompare(a.billDate))
-              }
+              // filtered on the server: an empty filtered page is "no matches"
+              count={(data) => (state !== 'all' || account !== null ? 1 : data.items.length)}
+              rows={(data) => data.items}
               onResetFilters={reset}
             >
               {(rows, data) => (
@@ -192,7 +202,14 @@ export function BillsScreen() {
                       }}
                     />
                   ))}
-                  <TableFooter left={`Showing ${shown(rows.length, data.length)}`} />
+                  <PageFooter
+                    offset={data.offset}
+                    shown={rows.length}
+                    more={data.more}
+                    size={BILL_PAGE}
+                    onOffset={setOffset}
+                    ui="ui.bills"
+                  />
                 </>
               )}
             </ListState>

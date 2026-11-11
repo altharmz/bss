@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { App } from '../app/App';
 import { expectUi } from '../test/expectUi';
 import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } from '../test/fetch';
-import { accountBody } from '../test/fixtures';
 
 // The Billing settings screen (docs/ui.md).
 
@@ -31,24 +30,6 @@ const MEDIA = [
   { id: BM2, name: 'Post' },
 ];
 
-// one account names Corporate monthly, JSON detailed and Email
-const USER = accountBody(
-  'aaaa1111-0000-4000-8000-0000000000a1',
-  { id: 'c1', name: 'Olga' },
-  {
-    billStructure: {
-      cycleSpecification: { id: CY1 },
-      format: { id: BF1 },
-      presentationMedia: [{ id: BM1 }],
-    },
-  },
-);
-const PLAIN = accountBody(
-  'aaaa2222-0000-4000-8000-0000000000a2',
-  { id: 'c2', name: 'Boris' },
-  { billStructure: { cycleSpecification: { id: 'monthly' } } },
-);
-
 function backend(extra: Record<string, Handler> = {}) {
   return stubFetch({
     'GET /internal/v1/context': () => json(CONTEXT),
@@ -62,7 +43,6 @@ function backend(extra: Record<string, Handler> = {}) {
     [`GET ${ACC}/billingCycleSpecification?${PAGE}`]: () => json(CYCLES, { total: 3 }),
     [`GET ${ACC}/billFormat?${PAGE}`]: () => json(FORMATS, { total: 2 }),
     [`GET ${ACC}/billPresentationMedia?${PAGE}`]: () => json(MEDIA, { total: 2 }),
-    [`GET ${ACC}/billingAccount?${PAGE}`]: () => json([USER, PLAIN], { total: 2 }),
     ...extra,
   });
 }
@@ -87,9 +67,8 @@ async function open(tab: Tab = 'Cycle specifications') {
 
 const rowOf = (name: string) =>
   screen.getAllByRole('row').find((r) => within(r).queryByText(name)) as HTMLElement;
-/** The row once the list (reloaded after a write) and the account usage are shown. */
-const usage = async (name: string, count: string) =>
-  waitFor(() => expect(within(rowOf(name)).getByText(count)).toBeTruthy());
+/** The row once the list (reloaded after a write) shows it. */
+const shown = async (name: string) => waitFor(() => expect(rowOf(name)).toBeTruthy());
 
 describe('billing settings', () => {
   const lifecyclePath = '/internal/v1/lifecycle/settings';
@@ -173,24 +152,6 @@ describe('billing settings', () => {
     },
   );
 
-  it('counts accounts without a cycle reference under built-in Monthly', async () => {
-    backend({
-      [`GET ${ACC}/billingAccount?${PAGE}`]: () =>
-        json(
-          [
-            USER,
-            PLAIN,
-            accountBody('a3', { id: 'c3', name: 'Default' }, { billStructure: {} }),
-            accountBody('a4', { id: 'c4', name: 'No structure' }),
-          ],
-          { total: 4 },
-        ),
-    });
-    await open();
-    await screen.findByText('Monthly billing');
-    await usage('Monthly billing', '3');
-    await usage('Corporate monthly', '1');
-  });
   it('lists the cycle specifications; the built-in one is read-only', async () => {
     backend();
     await open();
@@ -204,31 +165,17 @@ describe('billing settings', () => {
     expect(screen.getByRole('link', { name: /Billing settings/ })).toBeTruthy();
   });
 
-  it('hides Delete while a loaded account uses the setting', async () => {
-    backend();
+  // TEST-CHANGE (#314): no "used by" count, which read every billing account (#312: no
+  // counts); Delete is offered for every stored setting and the server refuses one in use
+  // (the 409 test below)
+  it('offers Delete for every stored setting and reads no billing accounts', async () => {
+    const { calls } = backend();
     await open();
     await screen.findByText('Corporate monthly');
-    await usage('Corporate monthly', '1'); // accounts loaded
-    expect(screen.queryByRole('button', { name: 'Delete Corporate monthly' })).toBeNull();
+    expect(screen.queryByRole('columnheader', { name: 'Used by' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Delete Corporate monthly' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Delete Spare' })).toBeTruthy();
-    fireEvent.click(
-      within(screen.getByRole('group', { name: 'Billing settings sections' })).getByRole('button', {
-        name: 'Bill formats',
-      }),
-    );
-    await screen.findByText('JSON summary');
-    await usage('JSON detailed', '1');
-    expect(screen.queryByRole('button', { name: 'Delete JSON detailed' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Delete JSON summary' })).toBeTruthy();
-    fireEvent.click(
-      within(screen.getByRole('group', { name: 'Billing settings sections' })).getByRole('button', {
-        name: 'Presentation media',
-      }),
-    );
-    await screen.findByText('Post');
-    await usage('Email', '1');
-    expect(screen.queryByRole('button', { name: 'Delete Email' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Delete Post' })).toBeTruthy();
+    expect(calls.filter((c) => c.startsWith(`GET ${ACC}/billingAccount?offset`))).toEqual([]);
   });
 
   it('creates, edits and deletes a cycle specification: bodies pinned', async () => {
@@ -269,7 +216,7 @@ describe('billing settings', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
     await screen.findByText('Spare 2 saved');
 
-    await usage('Spare', '0');
+    await shown('Spare');
     fireEvent.click(await screen.findByRole('button', { name: 'Delete Spare' }));
     expectUi('ui.billingSettings.cycles.delete');
     dialog = await screen.findByRole('dialog', { name: 'Delete Spare' });
@@ -329,7 +276,7 @@ describe('billing settings', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
     await screen.findByText('JSON summary saved');
 
-    await usage('JSON summary', '0');
+    await shown('JSON summary');
     fireEvent.click(await screen.findByRole('button', { name: 'Delete JSON summary' }));
     fireEvent.click(
       within(await screen.findByRole('dialog', { name: 'Delete JSON summary' })).getByRole(
@@ -372,7 +319,7 @@ describe('billing settings', () => {
     fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Paper post' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
     await screen.findByText('Paper post saved');
-    await usage('Post', '0');
+    await shown('Post');
     fireEvent.click(await screen.findByRole('button', { name: 'Delete Post' }));
     fireEvent.click(
       within(await screen.findByRole('dialog', { name: 'Delete Post' })).getByRole('button', {
@@ -402,7 +349,7 @@ describe('billing settings', () => {
     });
     await open();
     await screen.findByText('Spare');
-    await usage('Spare', '0');
+    await shown('Spare');
     fireEvent.click(screen.getByRole('button', { name: 'Delete Spare' }));
     const dialog = await screen.findByRole('dialog', { name: 'Delete Spare' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));

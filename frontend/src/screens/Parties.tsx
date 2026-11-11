@@ -1,20 +1,20 @@
 import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { useRef, useState, type ReactNode } from 'react';
-import type { CustomerStatus } from '../api/bss';
+import type { CustomerStatus, PartyKind } from '../api/bss';
 import { deleteBillingAccount } from '../api/financial';
 import { explain } from '../api/client';
 import {
-  accountsOf,
   createCustomer,
   createParty,
   customerChanges,
-  customersOf,
   deleteCustomer,
   deleteParty,
   loadCustomerDetail,
+  loadCustomerPage,
   loadPartyDetail,
-  loadParties,
+  loadPartyPage,
+  PARTY_PAGE,
   PARTY_STATUSES,
   partyBlock,
   partyChanges,
@@ -22,10 +22,10 @@ import {
   patchParty,
   type CustomerDetail,
   type NewParty,
-  type Parties,
-  type Party,
   type PartyCustomer,
   type PartyDetail,
+  type PartyFilter,
+  type PartyRow,
 } from '../api/parties';
 import { EMPTY_CONTACT, type ContactFields } from '../api/partyDocuments';
 import { useResource } from '../api/useResource';
@@ -33,7 +33,6 @@ import { useSetCrumbs, useSystemContext } from '../app/context';
 import { hrefOf, Link } from '../app/router';
 import { zonedDateTime } from '../format/dates';
 import { shortId } from '../format/ids';
-import { formatInt } from '../format/money';
 import {
   Button,
   DateField,
@@ -46,7 +45,8 @@ import {
   useToast,
 } from '../ui/kit';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
-import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
+import { TableHead, TableRow, type Column } from '../ui/Table';
+import { PageFooter, usePageOffset, useSettled } from '../ui/paging';
 import { AddBillingAccountModal, CUSTOMER_STATUSES, Field } from './SubscriberForms';
 import { uncertain } from './submissionKey';
 import './screens.css';
@@ -74,7 +74,7 @@ const CUSTOMER_COLUMNS: Column[] = [
 
 const dash = <span className="bss-dash">—</span>;
 
-type Open = { party: Party } | { customer: PartyCustomer };
+type Open = { party: PartyRow } | { customer: PartyCustomer };
 
 function AccountLinks({ links }: { links: { id: string; name: string }[] }) {
   if (links.length === 0) return dash;
@@ -98,22 +98,19 @@ export function PartiesScreen() {
   const [version, setVersion] = useState(0);
   const [tab, setTab] = useState<Tab>('individuals');
   const [query, setQuery] = useState('');
+  const q = useSettled(query);
   const [status, setStatus] = useState('All');
   const [open, setOpen] = useState<Open | null>(null);
   const [creating, setCreating] = useState<'Individual' | 'Organization' | null>(null);
-  const resource = useResource(`parties:${version}`, loadParties);
-  const q = query.trim().toLowerCase();
-  const data = resource.status === 'ok' ? resource.data : null;
 
   const customers = tab === 'customers';
-  const parties =
-    data === null ? [] : tab === 'individuals' ? data.individuals : data.organizations;
-  const statusOf = (): string[] =>
-    customers ? [] : [...new Set(parties.map((p) => p.status).filter(Boolean))].sort();
-  const statuses = customers ? ['Created', 'Active', 'Inactive'] : statusOf();
-  const countOf = (s: string) =>
-    (customers ? (data?.customers ?? []) : parties).filter((r) => s === 'All' || r.status === s)
-      .length;
+  const statuses = customers
+    ? ['Created', 'Active', 'Inactive']
+    : PARTY_STATUSES[tab === 'individuals' ? 'Individual' : 'Organization'];
+  const filter = { q, status: status === 'All' ? null : status };
+  const filterKey = `${tab}:${q}:${status}:${version}`;
+  const [offset, setOffset] = usePageOffset(filterKey);
+  const filtered = query !== '' || status !== 'All';
   const changeTab = (next: Tab) => {
     setTab(next);
     setStatus('All');
@@ -128,22 +125,12 @@ export function PartiesScreen() {
     toast(message);
     setVersion((v) => v + 1);
   };
+  const paging = { filterKey, offset, setOffset, filter, filtered, reset };
 
   return (
     <div className="bss-screen" data-ui="ui.parties">
       <PageHeader
         title={customers ? 'Customers' : 'Parties'}
-        count={
-          data
-            ? formatInt(
-                customers
-                  ? data.customers.length
-                  : tab === 'individuals'
-                    ? data.individuals.length
-                    : data.organizations.length,
-              )
-            : undefined
-        }
         actions={
           <>
             <Button
@@ -175,51 +162,35 @@ export function PartiesScreen() {
             />
             <TextInput
               width={300}
-              placeholder={`Search ${tab}`}
+              placeholder="Name or id (starts with)"
               aria-label={`Search ${tab}`}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
-            {data !== null && statuses.length > 0 && (
-              <Segmented
-                label="Status"
-                value={status}
-                onChange={setStatus}
-                options={['All', ...statuses].map((key) => ({
-                  key,
-                  label: key,
-                  count: countOf(key),
-                }))}
-              />
-            )}
+            <Segmented
+              label="Status"
+              value={status}
+              onChange={setStatus}
+              options={['All', ...statuses].map((key) => ({ key, label: key }))}
+            />
           </>
         }
       />
       <div role="table" aria-label="Parties" className="bss-page-table">
         <div data-ui={`ui.parties.${tab}`}>
           {customers ? (
-            <CustomersList
-              resource={resource}
-              q={q}
-              status={status}
-              reset={reset}
-              onOpen={(customer) => setOpen({ customer })}
-            />
+            <CustomersList {...paging} onOpen={(customer) => setOpen({ customer })} />
           ) : (
             <PartiesList
-              resource={resource}
+              {...paging}
+              kind={tab === 'individuals' ? 'Individual' : 'Organization'}
               tab={tab}
-              q={q}
-              status={status}
-              reset={reset}
               onOpen={(party) => setOpen({ party })}
             />
           )}
         </div>
       </div>
-      {open !== null && data !== null && (
-        <RecordModal open={open} data={data} onClose={() => setOpen(null)} onDone={done} />
-      )}
+      {open !== null && <RecordModal open={open} onClose={() => setOpen(null)} onDone={done} />}
       {creating !== null && (
         <NewPartyModal kind={creating} onClose={() => setCreating(null)} onDone={done} />
       )}
@@ -227,24 +198,29 @@ export function PartiesScreen() {
   );
 }
 
-type PartiesResource = ReturnType<typeof useResource<Parties>>;
+interface Paging {
+  filterKey: string;
+  offset: number;
+  setOffset: (offset: number) => void;
+  filter: PartyFilter;
+  filtered: boolean;
+  reset: () => void;
+}
 
 function PartiesList({
-  resource,
-  tab,
-  q,
-  status,
+  filterKey,
+  offset,
+  setOffset,
+  filter,
+  filtered,
   reset,
+  kind,
+  tab,
   onOpen,
-}: {
-  resource: PartiesResource;
-  tab: Tab;
-  q: string;
-  status: string;
-  reset: () => void;
-  onOpen: (party: Party) => void;
-}) {
-  const all = (d: Parties) => (tab === 'individuals' ? d.individuals : d.organizations);
+}: Paging & { kind: PartyKind; tab: Tab; onOpen: (party: PartyRow) => void }) {
+  const resource = useResource(`parties:${filterKey}:${offset}`, (signal) =>
+    loadPartyPage(kind, filter, offset, signal),
+  );
   return (
     <>
       <TableHead columns={PARTY_COLUMNS} />
@@ -253,40 +229,39 @@ function PartiesList({
         columns={PARTY_COLUMNS}
         errorTitle="Failed to load parties"
         empty={{ title: `No ${tab} yet`, text: 'Subscribers create their party.' }}
-        count={(d) => all(d).length}
-        rows={(d) =>
-          all(d).filter(
-            (p) =>
-              (status === 'All' || p.status === status) && (!q || p.name.toLowerCase().includes(q)),
-          )
-        }
+        // filtered on the server: an empty filtered page is "no matches"
+        count={(d) => (filtered ? 1 : d.items.length)}
+        rows={(d) => d.items}
+        query={filter.q || undefined}
         onResetFilters={reset}
       >
         {(rows, d) => (
           <>
-            {rows.map((party) => {
-              const own = customersOf(d, party.id);
-              const accounts = accountsOf(
-                d,
-                own.map((c) => c.id),
-              );
-              return (
-                <TableRow
-                  key={party.id}
-                  columns={PARTY_COLUMNS}
-                  onClick={() => onOpen(party)}
-                  cells={{
-                    name: <span className="bss-name ellipsis">{party.name}</span>,
-                    status: party.status ? <StatusPill kind="party" status={party.status} /> : dash,
-                    customers: <span className={own.length ? '' : 'bss-zero'}>{own.length}</span>,
-                    subscribers: <AccountLinks links={accounts} />,
-                  }}
-                />
-              );
-            })}
-            <TableFooter
-              left={`Showing ${formatInt(rows.length)} of ${formatInt(all(d).length)}`}
-              right="A party without customers can be deleted"
+            {rows.map((party) => (
+              <TableRow
+                key={party.id}
+                columns={PARTY_COLUMNS}
+                onClick={() => onOpen(party)}
+                cells={{
+                  name: <span className="bss-name ellipsis">{party.name}</span>,
+                  status: party.status ? <StatusPill kind="party" status={party.status} /> : dash,
+                  customers: (
+                    <span className={party.customers.length ? '' : 'bss-zero'}>
+                      {party.customers.length}
+                    </span>
+                  ),
+                  subscribers: <AccountLinks links={party.accounts} />,
+                }}
+              />
+            ))}
+            <PageFooter
+              offset={d.offset}
+              shown={rows.length}
+              more={d.more}
+              size={PARTY_PAGE}
+              onOffset={setOffset}
+              ui="ui.parties"
+              note="a party without customers can be deleted"
             />
           </>
         )}
@@ -296,18 +271,17 @@ function PartiesList({
 }
 
 function CustomersList({
-  resource,
-  q,
-  status,
+  filterKey,
+  offset,
+  setOffset,
+  filter,
+  filtered,
   reset,
   onOpen,
-}: {
-  resource: PartiesResource;
-  q: string;
-  status: string;
-  reset: () => void;
-  onOpen: (customer: PartyCustomer) => void;
-}) {
+}: Paging & { onOpen: (customer: PartyCustomer) => void }) {
+  const resource = useResource(`party-customers:${filterKey}:${offset}`, (signal) =>
+    loadCustomerPage(filter, offset, signal),
+  );
   return (
     <>
       <TableHead columns={CUSTOMER_COLUMNS} />
@@ -316,43 +290,39 @@ function CustomersList({
         columns={CUSTOMER_COLUMNS}
         errorTitle="Failed to load customers"
         empty={{ title: 'No customers yet', text: 'Subscribers create their customer.' }}
-        count={(d) => d.customers.length}
-        rows={(d) =>
-          d.customers.filter(
-            (c) =>
-              (status === 'All' || c.status === status) && (!q || c.name.toLowerCase().includes(q)),
-          )
-        }
+        count={(d) => (filtered ? 1 : d.items.length)}
+        rows={(d) => d.items}
+        query={filter.q || undefined}
         onResetFilters={reset}
       >
         {(rows, d) => (
           <>
-            {rows.map((customer) => {
-              const party = [...d.individuals, ...d.organizations].find(
-                (p) => p.id === customer.partyId,
-              );
-              return (
-                <TableRow
-                  key={customer.id}
-                  columns={CUSTOMER_COLUMNS}
-                  onClick={() => onOpen(customer)}
-                  cells={{
-                    name: <span className="bss-name ellipsis">{customer.name}</span>,
-                    status: <StatusPill kind="customer" status={customer.status} />,
-                    party: (
-                      <div className="ellipsis">
-                        {party?.name ?? shortId(customer.partyId)}
-                        <span className="bss-secondary"> · {customer.partyKind}</span>
-                      </div>
-                    ),
-                    accounts: <AccountLinks links={accountsOf(d, [customer.id])} />,
-                  }}
-                />
-              );
-            })}
-            <TableFooter
-              left={`Showing ${formatInt(rows.length)} of ${formatInt(d.customers.length)}`}
-              right="A customer without billing accounts can be deleted"
+            {rows.map((customer) => (
+              <TableRow
+                key={customer.id}
+                columns={CUSTOMER_COLUMNS}
+                onClick={() => onOpen(customer)}
+                cells={{
+                  name: <span className="bss-name ellipsis">{customer.name}</span>,
+                  status: <StatusPill kind="customer" status={customer.status} />,
+                  party: (
+                    <div className="ellipsis">
+                      {customer.partyName || shortId(customer.partyId)}
+                      <span className="bss-secondary"> · {customer.partyKind}</span>
+                    </div>
+                  ),
+                  accounts: <AccountLinks links={customer.accounts} />,
+                }}
+              />
+            ))}
+            <PageFooter
+              offset={d.offset}
+              shown={rows.length}
+              more={d.more}
+              size={PARTY_PAGE}
+              onOffset={setOffset}
+              ui="ui.parties"
+              note="a customer without billing accounts can be deleted"
             />
           </>
         )}
@@ -363,18 +333,15 @@ function CustomersList({
 
 function RecordModal({
   open,
-  data,
   onClose,
   onDone,
 }: {
   open: Open;
-  data: Parties;
   onClose: () => void;
   onDone: (message: string) => void;
 }) {
-  if ('party' in open)
-    return <PartyModal party={open.party} data={data} onClose={onClose} onDone={onDone} />;
-  return <CustomerModal customer={open.customer} data={data} onClose={onClose} onDone={onDone} />;
+  if ('party' in open) return <PartyModal party={open.party} onClose={onClose} onDone={onDone} />;
+  return <CustomerModal customer={open.customer} onClose={onClose} onDone={onDone} />;
 }
 
 function Facts({ rows }: { rows: [string, ReactNode][] }) {
@@ -654,7 +621,7 @@ function NewCustomerModal({
   onClose,
   onDone,
 }: {
-  party: Party;
+  party: PartyRow;
   onClose: () => void;
   onDone: (message: string) => void;
 }) {
@@ -701,12 +668,10 @@ function NewCustomerModal({
 
 function PartyModal({
   party,
-  data,
   onClose,
   onDone,
 }: {
-  party: Party;
-  data: Parties;
+  party: PartyRow;
   onClose: () => void;
   onDone: (message: string) => void;
 }) {
@@ -718,11 +683,8 @@ function PartyModal({
   const [editing, setEditing] = useState<PartyDetail | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [newCustomer, setNewCustomer] = useState(false);
-  const own = customersOf(data, party.id);
-  const accounts = accountsOf(
-    data,
-    own.map((c) => c.id),
-  );
+  const own = party.customers;
+  const accounts = party.accounts;
   const before = detail.status === 'ok' ? detail.data : null;
   const changes = before && editing ? partyChanges(before, editing, context.timeZone) : null;
   const named =
@@ -853,7 +815,7 @@ function PartyModal({
           <>
             <DeleteControl
               noun="party"
-              block={partyBlock(data, party)}
+              block={partyBlock(party)}
               confirming={confirming}
               setConfirming={setConfirming}
               busy={write.busy}
@@ -988,12 +950,10 @@ function CustomerAccountRow({
 
 function CustomerModal({
   customer,
-  data,
   onClose,
   onDone,
 }: {
   customer: PartyCustomer;
-  data: Parties;
   onClose: () => void;
   onDone: (message: string) => void;
 }) {
@@ -1005,7 +965,7 @@ function CustomerModal({
   const [confirming, setConfirming] = useState(false);
   const [addingAccount, setAddingAccount] = useState(false);
   const accountsRef = useRef<HTMLDivElement>(null);
-  const accounts = accountsOf(data, [customer.id]);
+  const accounts = customer.accounts;
   const before = detail.status === 'ok' ? detail.data : null;
   const changes = before && editing ? customerChanges(before, editing) : null;
   const set = (change: Partial<CustomerDetail>) =>

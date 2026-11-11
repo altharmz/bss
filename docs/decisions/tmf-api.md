@@ -1090,8 +1090,12 @@ page request, and grows with every month of history.
   devices and port PINs, SIM batches, users.
 - **productOrder and cancelProductOrder are listed newest first**
   (`ORDER BY created_at DESC, id DESC`, decided by the human). TMF622 does not specify an
-  order, and without a count the UI could no longer read them from the end. Every other
-  list stays oldest first.
+  order, and without a count the UI could no longer read them from the end.
+- **So are the other event lists** (decided by the human 2026-11-11, #314): customerBill,
+  payment and refund (`created_at DESC, id DESC`, the 0070 indexes read backwards), and
+  each TMF654 action kind, topupBalance, adjustBalance, reserveBalance and
+  transferBalance (`requested_at DESC, id DESC`, index of migration 0074). The prepaid
+  balance history (every kind together) and every other list stay oldest first.
 - **The UI** pages with Previous/Next and shows no "of N". **MCP** list tools return
   `resultCount` and `hasMore`.
 - **Screens** that still fetch a whole list of a growing table are a follow-up issue

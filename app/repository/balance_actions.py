@@ -90,8 +90,10 @@ def page(
     *,
     kind: str | None = "topup",
 ) -> tuple[list[Row], bool]:
-    """Actions of `kind` (any kind when None) matching every `column = value` of `where`,
-    oldest first."""
+    """Actions of `kind` (any kind when None) matching every `column = value` of `where`.
+    A kind's list (the TMF654 topup, adjust, reserve and transfer lists) is newest
+    requested first (#314, decided by the human 2026-11-11); the history of every kind
+    stays oldest first."""
     conditions = [sql.SQL("{}::text = %s").format(sql.Identifier(c)) for c in where]
     params = [str(value) for value in where.values()]
     if kind is not None:
@@ -102,7 +104,11 @@ def page(
         conn,
         sql.SQL("SELECT * FROM balance_action")
         + clause
-        + sql.SQL(" ORDER BY requested_at, id OFFSET %s LIMIT %s"),
+        + sql.SQL(
+            " ORDER BY requested_at DESC, id DESC OFFSET %s LIMIT %s"
+            if kind is not None
+            else " ORDER BY requested_at, id OFFSET %s LIMIT %s"
+        ),
         [*params, offset, limit + 1],
     )
     return rows[:limit], len(rows) > limit

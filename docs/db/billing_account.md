@@ -71,6 +71,7 @@ SID BillingAccount (TMF666 billingAccount, served as the BssBillingAccount exten
 | `billing_account_id_currency_key` | `CREATE UNIQUE INDEX billing_account_id_currency_key ON billing_account USING btree (id, currency)` | yes |
 | `billing_account_mode_identity` | `CREATE UNIQUE INDEX billing_account_mode_identity ON billing_account USING btree (id, currency, rating_type)` | yes |
 | `billing_account_name_idx` | `CREATE INDEX billing_account_name_idx ON billing_account USING btree (name)` | no |
+| `billing_account_name_prefix_idx` | `CREATE INDEX billing_account_name_prefix_idx ON billing_account USING btree (lower(name) text_pattern_ops)` | no |
 | `billing_account_pkey` | `CREATE UNIQUE INDEX billing_account_pkey ON billing_account USING btree (id)` | yes |
 
 ## Triggers

@@ -1057,7 +1057,8 @@ def two_open_bills(api, db_conn) -> tuple[dict, list[dict]]:
     bill(db_conn, account, date(2026, 12, 1))
     bill(db_conn, account, date(2027, 1, 1))
     api.clock.set(at_day(date(2027, 1, 2)))
-    return account, decimals(api.get(f"{BILL}?billingAccount.id={account['id']}"))
+    # the list is newest first (#314): Jan, Dec; returned oldest first
+    return account, decimals(api.get(f"{BILL}?billingAccount.id={account['id']}"))[::-1]
 
 
 def test_payments_as_the_ui_sends_them(api, db_conn):
@@ -1082,9 +1083,10 @@ def test_payments_as_the_ui_sends_them(api, db_conn):
     )
     assert lettered.status_code == 201, lettered.text
     bills = decimals(api.get(f"{BILL}?billingAccount.id={a}"))
+    # TEST-CHANGE (#314): bills are listed newest first (decided by the human 2026-11-11)
     assert [(b["state"], b["remainingAmount"]["value"]) for b in bills] == [
-        ("settled", Decimal("0.00")),
         ("partiallyPaid", Decimal("150.00")),
+        ("settled", Decimal("0.00")),
     ]
 
 
@@ -1101,16 +1103,17 @@ def test_hold_and_release_as_the_ui_sends_them(api, db_conn):
 
 
 def test_global_bill_cycle_and_rate_reads_as_the_ui_makes_them(api, db_conn):
-    """api/bills.ts, pinned in GlobalBills.test.tsx: the bill list by billingAccount.id and
-    state (paged by getAll; the billing date is applied client side), the bill's billCycle
-    ref and runType, the bill cycle list and GET, and the rates by bill.id with one rate."""
+    """api/bills.ts, pinned in GlobalBills.test.tsx: the bill page by billingAccount.id and
+    state, newest first (#314), the bill's billCycle ref and runType, the bill cycle list
+    and GET, and the rates by bill.id with one rate."""
     account, (dec, jan) = two_open_bills(api, db_conn)
     a = account["id"]
     page = "offset=0&limit=100"
-    mine = api.get(f"{BILL}?billingAccount.id={a}&state=sent&{page}")
-    assert {b["id"] for b in mine.json()} == {dec["id"], jan["id"]}
-    assert api.get(f"{BILL}?state=settled&{page}").json() == []
-    assert len(api.get(f"{BILL}?{page}").json()) >= 2
+    listed = "offset=0&limit=50"
+    mine = api.get(f"{BILL}?billingAccount.id={a}&state=sent&{listed}")
+    assert [b["id"] for b in mine.json()] == [jan["id"], dec["id"]]
+    assert api.get(f"{BILL}?state=settled&{listed}").json() == []
+    assert len(api.get(f"{BILL}?{listed}").json()) >= 2
     row = mine.json()[0]
     assert row["billingAccount"]["id"] == a and row["billingAccount"]["name"]
     assert row["billDate"] and row["runType"] in ("onCycle", "offCycle")
@@ -1586,18 +1589,21 @@ def test_balances_screen_reads_as_the_ui_makes_them(api, db_conn):
         headers={"Idempotency-Key": "ui-balances-1"},
     ).json()
     assert "id" in moved, moved
-    page = "offset=0&limit=100"
-    buckets = api.get(f"{prepay}/bucket?{page}").json()
+    page = "offset=0&limit=100"  # the action lists
+    listed = "offset=0&limit=50"  # the bucket and total pages (#314)
+    buckets = api.get(f"{prepay}/bucket?{listed}").json()
     assert {b["id"] for b in buckets} >= {tx.bucket, rx.bucket}
     assert postpaid["id"] not in {b["partyAccount"]["id"] for b in buckets}
-    mine = api.get(f"{prepay}/bucket?partyAccount.id={tx.id}&status=active&{page}").json()
+    mine = api.get(f"{prepay}/bucket?partyAccount.id={tx.id}&status=active&{listed}").json()
     assert [b["id"] for b in mine] == [tx.bucket]
     assert mine[0]["remainingValue"]["amount"] == 40
-    suspended = api.get(f"{prepay}/bucket?status=suspended&{page}").json()
+    suspended = api.get(f"{prepay}/bucket?status=suspended&{listed}").json()
     assert all(b["status"] == "suspended" for b in suspended)
-    totals = api.get(f"{prepay}/accumulatedBalance?{page}").json()
+    totals = api.get(f"{prepay}/accumulatedBalance?{listed}").json()
     assert {t["partyAccount"]["id"] for t in totals} >= {tx.id, rx.id}
-    one_total = api.get(f"{prepay}/accumulatedBalance?partyAccount.id={tx.id}&{page}").json()
+    one_total = api.get(f"{prepay}/accumulatedBalance?partyAccount.id={tx.id}&{listed}").json()
+    joined = api.get(f"{prepay}/accumulatedBalance?partyAccount.id={tx.id}&limit=1").json()
+    assert [t["id"] for t in joined] == [t["id"] for t in one_total]
     assert [t["id"] for t in one_total] == [
         next(t["id"] for t in totals if t["partyAccount"]["id"] == tx.id)
     ]
@@ -1607,7 +1613,8 @@ def test_balances_screen_reads_as_the_ui_makes_them(api, db_conn):
     assert total_detail.json()["partyAccount"]["id"] == tx.id
     assert total_detail.json()["totalBalance"] == one_total[0]["totalBalance"]
     assert one_total[0]["totalBalance"] == {"amount": 40, "units": "USD"}
-    # each kind's list, by account and status; the transfer is the sender's, created
+    # each kind's page (#314), by account and status; the transfer is the sender's, created
+    page = "offset=0&limit=50"
     sent = api.get(f"{prepay}/transferBalance?partyAccount.id={tx.id}&{page}").json()
     assert [t["id"] for t in sent] == [moved["id"]]
     assert api.get(f"{prepay}/transferBalance?partyAccount.id={rx.id}&{page}").json() == []
@@ -2099,24 +2106,18 @@ def test_order_writes_replay_as_the_ui_sends_them(api):
 
 def test_party_and_customer_writes_as_the_ui_sends_them(api):
     """patchParty(), patchCustomer(), deleteParty() and deleteCustomer() and the list
-    requests of loadParties(): bodies pinned in Parties.test.tsx."""
+    requests of loadPartyPage() and loadCustomerPage(): pinned in Parties.test.tsx."""
     person = apidata.individual(api, "Olga", "Kuznetsova")
     org = apidata.organization(api, "Lone Ltd")
     buyer = apidata.customer(api, apidata.individual(api, "Ivan", "Petrov"))
     held = apidata.account(api, buyer)
-    # the list requests of the Parties screen: fields and paging are accepted
-    party = "/tmf-api/partyManagement/v5"
-    accounts = "/tmf-api/accountManagement/v5"
-    for url in (
-        f"{party}/individual?offset=0&limit=100",
-        f"{party}/organization?offset=0&limit=100",
-        "/tmf-api/customer/v5/customer?fields=name,status,engagedParty&offset=0&limit=100",
-        f"{accounts}/billingAccount?fields=name,relatedParty&offset=0&limit=100",
-        f"{accounts}/financialAccount?fields=relatedParty&offset=0&limit=100",
-        f"{accounts}/partyAccount?fields=relatedParty&offset=0&limit=100",
-        f"{accounts}/settlementAccount?fields=relatedParty&offset=0&limit=100",
-    ):
-        assert api.get(url).status_code == 200, url
+    # the list requests of the Parties screen (#314): one paged search per section
+    found = api.get("/internal/v1/party?kind=Individual&q=iv&status=validated&offset=0&limit=50")
+    assert found.status_code == 200, found.text
+    assert api.get("/internal/v1/party?kind=Organization&offset=0&limit=50").status_code == 200
+    rows = api.get("/internal/v1/partyCustomer?q=iv&offset=0&limit=50")
+    assert rows.status_code == 200, rows.text
+    assert held["id"] in [a["id"] for r in rows.json() for a in r["billingAccounts"]]
     # a merge patch of only the changed names
     patched = api.patch(person["href"], {"familyName": "Kuznetsova-Lee"})
     assert patched.status_code == 200, patched.text
@@ -2213,10 +2214,10 @@ def test_financial_account_writes_and_links_as_the_ui_sends_them(api):
         "partyOrPartyRole": {"id": org["id"], "@type": "PartyRef", "@referredType": "Organization"},
         "@type": "RelatedPartyRefOrPartyRoleRef",
     }
-    # the lists of the forms: owners, and one owner's financial accounts
+    # the lists of the forms: owners searched as typed (#314), one owner's financial accounts
     for url in (
-        f"{PARTY}/individual?offset=0&limit=100",
-        f"{PARTY}/organization?offset=0&limit=100",
+        "/internal/v1/party?offset=0&limit=20",
+        "/internal/v1/party?q=rom&offset=0&limit=20",
         f"{fin}?relatedParty.id={org['id']}&offset=0&limit=100",
     ):
         assert api.get(url).status_code == 200, url
@@ -2494,7 +2495,7 @@ def test_payment_and_refund_history_reads_as_the_ui_makes_them(api):
     )
     assert refund.status_code == 201, refund.text
 
-    page = "offset=0&limit=100"
+    page = "offset=0&limit=50"  # the global screen's pages (#314), newest first
     mine = api.get(f"{PAYMENT}?account.id={a}&status=done&{page}")
     assert [p["id"] for p in mine.json()] == [made.json()["id"]]
     assert total(mine, api) == "1"
@@ -2568,12 +2569,26 @@ def test_product_inventory_reads_and_number_delete_as_the_ui_sends_them(api):
     )
     assert placed.status_code == 201, placed.text
     product = apidata.product_of(api, placed.json())
-    page = "offset=0&limit=100"
+    page = "offset=0&limit=50"
     everything = api.get(f"{apidata.PRODUCT}?{page}")
     assert everything.status_code == 200 and product["id"] in [p["id"] for p in everything.json()]
+    # the number filter (#314): the number by its exact value, then the products it realizes
+    found = api.get(f"{url}?value=12025550132&limit=1").json()
+    assert [n["id"] for n in found] == [used["id"]]
+    # the Numbers screen and the number picker (#314): exact value, kind, available today
+    listed = api.get(f"{url}?value=12025550131&resourceSpecification.id=msisdn&offset=0&limit=50")
+    assert [n["id"] for n in listed.json()] == [spare["id"]]
+    available = (
+        "resourceSpecification.id=msisdn&administrativeState=unlocked&allocationStatus=available"
+    )
+    offered = [n["id"] for n in api.get(f"{url}?{available}&offset=0&limit=50").json()]
+    assert spare["id"] in offered and used["id"] not in offered
+    typed = api.get(f"{url}?{available}&value=12025550131&limit=1").json()
+    assert [n["id"] for n in typed] == [spare["id"]]
     for query in (
         f"status={product['status']}&{page}",
         f"billingAccount.id={account['id']}&{page}",
+        f"realizingResource.id={used['id']}&{page}",
     ):
         listed = api.get(f"{apidata.PRODUCT}?{query}")
         assert listed.status_code == 200, query

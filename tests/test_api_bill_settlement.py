@@ -42,7 +42,8 @@ def account_with_bills(api, db_conn, offering, *days: date) -> dict:
 
 
 def bills(api, account: dict) -> list[dict]:
-    return decimals(api.get(f"{BILL}?billingAccount.id={account['id']}"))
+    """The account's bills, oldest first (the list itself is newest first, #314)."""
+    return decimals(api.get(f"{BILL}?billingAccount.id={account['id']}"))[::-1]
 
 
 def pay(api, account: dict, value, day: date, **over):
