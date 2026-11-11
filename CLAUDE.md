@@ -42,7 +42,7 @@ that PR at its exact head (`make merge-task HUMAN_APPROVAL=<PR>:<head-SHA>`).
 
 ```
 make up / down / logs / ps / psql   # local stack (app + postgres, hot reload)
-make test                           # FULL suite in the container (~7 min)
+make test                           # FULL suite in the container (~11 min)
 make lint / fmt / format            # ruff check / auto-format / backend + UI
 make migrate / seed / worker-once   # alembic upgrade, demo data, one billing wake-up
 make smoke / mcp-smoke              # local app / MCP connector checks
