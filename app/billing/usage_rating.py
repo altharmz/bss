@@ -130,6 +130,7 @@ def rate_account(
             repo.insert_charge(
                 conn,
                 record_id=record["id"],
+                event_date=record["event_date"],
                 command_id=command_id,
                 account_id=account_id,
                 product_id=product_id,

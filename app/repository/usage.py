@@ -17,8 +17,13 @@ def get(conn: psycopg.Connection, uid: UUID) -> Row | None:
 
 
 def by_network_id(conn: psycopg.Connection, network_record_id: str) -> Row | None:
+    """The stored record of a network id, whatever its event date (the plain index on
+    network_record_id). Two rows only after the accepted race of two concurrent first
+    inserts with different dates: the first stored answers."""
     return fetch_one(
-        conn, "SELECT * FROM usage_record WHERE network_record_id = %s", (network_record_id,)
+        conn,
+        "SELECT * FROM usage_record WHERE network_record_id = %s ORDER BY created_at, id LIMIT 1",
+        (network_record_id,),
     )
 
 
@@ -68,14 +73,15 @@ def insert(
     product: Row | None,
     now: datetime,
 ) -> Row | None:
-    """The new row, or None when the network's record id is already stored."""
+    """The new row, or None when the network's record id is already stored for the date
+    (the unique key is per event_date: the table is partitioned by it)."""
     return fetch_one(
         conn,
         "INSERT INTO usage_record (id, network_record_id, kind, quantity, roaming, throttled,"
         " msisdn, imsi, event_at, event_date, product_id, billing_account_id, status,"
         " rejection_reason, created_at)"
         " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
-        " ON CONFLICT (network_record_id) DO NOTHING RETURNING *",
+        " ON CONFLICT (network_record_id, event_date) DO NOTHING RETURNING *",
         (
             uuid4(),
             network_record_id,
@@ -251,6 +257,7 @@ def insert_charge(
     conn: psycopg.Connection,
     *,
     record_id: UUID,
+    event_date: date,
     command_id: UUID,
     account_id: UUID,
     product_id: UUID,
@@ -259,13 +266,17 @@ def insert_charge(
     blocks: int | None,
     now: datetime,
 ) -> None:
-    """Mark the record rated, once: the primary key refuses a second charge."""
+    """Mark the record rated, once: the primary key refuses a second charge. The event date
+    names the record's partition."""
     conn.execute(
         "INSERT INTO usage_charge (usage_record_id, command_id, billing_account_id, product_id,"
         " price_id, abr_id, blocks, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
         (record_id, command_id, account_id, product_id, price_id, abr_id, blocks, now),
     )
-    conn.execute("UPDATE usage_record SET status = 'rated' WHERE id = %s", (record_id,))
+    conn.execute(
+        "UPDATE usage_record SET status = 'rated' WHERE id = %s AND event_date = %s",
+        (record_id, event_date),
+    )
 
 
 def charges_of(conn: psycopg.Connection, record_id: UUID) -> Row | None:

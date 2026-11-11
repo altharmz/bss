@@ -4,14 +4,16 @@
 
 Area: **billing** ([all tables](README.md))
 
-One usage record from the network feed (TMF635 ProductUsage): data, voice or SMS used on a line, stored once per network record id and matched to the product that held the number on the event date. Not rated here (pay-as-you-go rating is a later slice).
+One usage record from the network feed (TMF635 ProductUsage): data, voice or SMS used on a line, stored once per network record id and matched to the product that held the number on the event date. Partitioned by month of event_date; partitions older than 13 months are dropped by the worker's housekeeping (rated amounts stay in usage_charge and the ABRs).
+
+Partitioned by `RANGE (event_date)`; the partitions are not listed (they are created and dropped by the worker's housekeeping).
 
 ## Columns
 
 | Column | Type | Null | Default | Description |
 |---|---|---|---|---|
 | `id` | `uuid` | no |  |  |
-| `network_record_id` | `text` | no |  | The network's own record id: the idempotency key, a resent batch stores nothing twice. |
+| `network_record_id` | `text` | no |  | The network's own record id, the idempotency key: unique per event_date, and a resend with another date is found by the plain index and answered with the stored record. |
 | `kind` | `text` | no |  | data, voice or sms (the usage specification). |
 | `quantity` | `bigint` | no |  | Data in bytes, voice in seconds, sms in messages; always positive. |
 | `roaming` | `boolean` | no | `false` |  |
@@ -47,19 +49,16 @@ One usage record from the network feed (TMF635 ProductUsage): data, voice or SMS
 | `usage_record_network_record_id_check` | check | `CHECK ((network_record_id <> ''::text))` |
 | `usage_record_quantity_check` | check | `CHECK ((quantity > 0))` |
 | `usage_record_status_check` | check | `CHECK ((status = ANY (ARRAY['notRated'::text, 'rated'::text, 'rejected'::text])))` |
-| `usage_record_pkey` | primary key | `PRIMARY KEY (id)` |
-| `usage_record_network_record_id_key` | unique | `UNIQUE (network_record_id)` |
+| `usage_record_pkey` | primary key | `PRIMARY KEY (id, event_date)` |
+| `usage_record_network_record_id_event_date_key` | unique | `UNIQUE (network_record_id, event_date)` |
 
 ## Indexes
 
 | Name | Definition | Backs a constraint |
 |---|---|---|
-| `usage_record_network_record_id_key` | `CREATE UNIQUE INDEX usage_record_network_record_id_key ON usage_record USING btree (network_record_id)` | yes |
-| `usage_record_pkey` | `CREATE UNIQUE INDEX usage_record_pkey ON usage_record USING btree (id)` | yes |
-| `usage_record_product_date_idx` | `CREATE INDEX usage_record_product_date_idx ON usage_record USING btree (product_id, event_date)` | no |
-| `usage_record_product_event_idx` | `CREATE INDEX usage_record_product_event_idx ON usage_record USING btree (product_id, event_at DESC, id)` | no |
-| `usage_record_product_idx` | `CREATE INDEX usage_record_product_idx ON usage_record USING btree (product_id, event_at)` | no |
-
-## Referenced by
-
-[`usage_charge`](usage_charge.md), [`usage_threshold`](usage_threshold.md)
+| `usage_record_network_record_id_event_date_key` | `CREATE UNIQUE INDEX usage_record_network_record_id_event_date_key ON ONLY usage_record USING btree (network_record_id, event_date)` | yes |
+| `usage_record_network_record_idx` | `CREATE INDEX usage_record_network_record_idx ON ONLY usage_record USING btree (network_record_id)` | no |
+| `usage_record_pkey` | `CREATE UNIQUE INDEX usage_record_pkey ON ONLY usage_record USING btree (id, event_date)` | yes |
+| `usage_record_product_date_idx` | `CREATE INDEX usage_record_product_date_idx ON ONLY usage_record USING btree (product_id, event_date)` | no |
+| `usage_record_product_event_idx` | `CREATE INDEX usage_record_product_event_idx ON ONLY usage_record USING btree (product_id, event_at DESC, id)` | no |
+| `usage_record_product_idx` | `CREATE INDEX usage_record_product_idx ON ONLY usage_record USING btree (product_id, event_at)` | no |

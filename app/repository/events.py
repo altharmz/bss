@@ -149,22 +149,5 @@ def attempt_failed(
     )
 
 
-def purge(conn: psycopg.Connection, before: datetime) -> int:
-    """Remove events every delivery of which finished before `before` (with them)."""
-    rows = fetch_all(
-        conn,
-        """
-        DELETE FROM event e
-         WHERE e.occurred_at < %s
-           AND NOT EXISTS (SELECT 1 FROM event_delivery d
-                            WHERE d.event_id = e.id
-                              AND (d.state = 'pending' OR d.finished_at >= %s))
-        RETURNING id
-        """,
-        (before, before),
-    )
-    return len(rows)
-
-
 def get_delivery(conn: psycopg.Connection, delivery_id: UUID) -> Row | None:
     return fetch_one(conn, "SELECT * FROM event_delivery WHERE id = %s", (delivery_id,))

@@ -94,8 +94,9 @@ by decision (TMF637 product writes, billingCycleSpecification writes, PATCH prod
 
 - **Step 6 of every wake-up** (`app/worker/loop.py`): `deliver.process` sends up to 50
   due deliveries, oldest first, each in its own short transaction holding its row
-  (`FOR UPDATE SKIP LOCKED`), then `deliver.purge` removes events whose deliveries all
-  finished more than 30 days ago.
+  (`FOR UPDATE SKIP LOCKED`). Old deliveries and events are deleted by the worker's
+  housekeeping since #282 (2026-11-11): a delivery 30 days after it finished, an event
+  after 90 days once no delivery refers to it ([data-model.md](data-model.md#retention-2026-11-11-282)).
 - **The POST** (`app/events/deliver.py`, standard library only - no new dependency):
   the stored JSON, `Content-Type: application/json`, `User-Agent: bss-events/1`, 5 s
   timeout, redirects never followed. 2xx: delivered. Anything else - a status, a timeout,

@@ -10,14 +10,18 @@ import http.server
 import json
 import socket
 import threading
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
 import pytest
 
+from app.clock import FixedClock
 from app.config import settings
 from app.events import callbacks, deliver
 from app.events.types import BASES
+from app.worker import db as worker_db
+from app.worker.housekeeping import housekeep
 from tests import apidata
+from tests.timeline import TZ
 
 
 class Listener:
@@ -190,13 +194,38 @@ def test_outside_dev_the_connection_goes_to_the_checked_address(monkeypatch):
     assert error is not None and "ConnectionRefusedError" in error
 
 
-def test_delivered_events_are_purged_after_30_days(api, db_conn, listener):
+def test_deliveries_go_30_days_after_they_finish_and_events_after_90(
+    api, db_conn, migrated_db_url, listener
+):
+    """The worker's housekeeping (#282) replaced the 30-day purge: a finished delivery goes
+    30 days after it finished, its event once it is 90 days old and nothing refers to it.
+    A pending delivery is never touched."""
     server = listener()
     hub(api, server.url)
     apidata.organization(api)
     deliver.process(db_conn, clock=api.clock)
     apidata.organization(api, "Pending")  # not delivered yet
-    api.clock.set(api.clock.now() + timedelta(days=31))
-    assert deliver.purge(db_conn, clock=api.clock) == 1
+    db_conn.commit()
+
+    def housekeeping_after(days):
+        day = (api.clock.now() + timedelta(days=days)).astimezone(TZ).date()
+        conn = worker_db.connect(migrated_db_url)
+        try:
+            result = housekeep(
+                conn,
+                clock=FixedClock(datetime.combine(day, time(4, 10), tzinfo=TZ)),
+                tz=TZ,
+                pause=lambda _seconds: None,
+            )
+        finally:
+            conn.close()
+        # the test client's own session expires too; only the event tables matter here
+        return {k: v for k, v in result.deleted.items() if k.startswith("event")}
+
+    assert housekeeping_after(29) == {}
+    assert housekeeping_after(32) == {"event_delivery": 1}  # its event is too young
     remaining = db_conn.execute("SELECT state::text FROM event_delivery").fetchall()
     assert remaining == [("pending",)]
+    assert db_conn.execute("SELECT count(*) FROM event").fetchone() == (2,)
+    assert housekeeping_after(92) == {"event": 1}
+    assert db_conn.execute("SELECT count(*) FROM event").fetchone() == (1,)  # the pending one

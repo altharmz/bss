@@ -1,15 +1,19 @@
 """Pay-as-you-go rating of usage against the prepaid balance (issue #191)."""
 # ruff: noqa: F811
 
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 from decimal import Decimal as D
 from uuid import UUID
 
 import psycopg
 import pytest
 
+from app.clock import FixedClock
 from app.integrations.network import adapter as network
+from app.repository import housekeeping as housekeeping_repo
 from app.repository import usage as usage_repo
+from app.worker import db as worker_db
+from app.worker.housekeeping import housekeep
 from tests import apidata, contract, timeline
 from tests.apidata import CATALOG
 from tests.test_prepaid_plans import (  # noqa: F401 - fixtures and helpers
@@ -311,6 +315,9 @@ def test_rating_the_same_record_again_never_charges_twice(api, db_conn, payg):
         usage_repo.insert_charge(
             db_conn,
             record_id=record,
+            event_date=db_conn.execute(
+                "SELECT event_date FROM usage_record WHERE id = %s", (record,)
+            ).fetchone()[0],
             command_id=db_conn.execute(
                 "SELECT id FROM prepaid_command WHERE kind = 'usage'"
             ).fetchone()[0],
@@ -322,6 +329,47 @@ def test_rating_the_same_record_again_never_charges_twice(api, db_conn, payg):
             now=api.clock.now(),
         )
     db_conn.rollback()
+
+
+def test_dropping_the_partition_of_a_rated_record_keeps_its_charge(
+    api, db_conn, payg, migrated_db_url
+):
+    """usage_charge has no foreign key to usage_record (#282): when the worker's
+    housekeeping drops a 14-month-old partition, the charges of its records (billing
+    evidence) and their ABRs stay."""
+    world = payg("10")
+    day = api.clock.today()
+    housekeeping_repo.create_partition(db_conn, day)  # its month's partition, not DEFAULT
+    db_conn.commit()
+    record = report(api, world.product, "data", 2 * MIB, api.clock.now())
+    next_day(api, db_conn)
+    charge = db_conn.execute(
+        "SELECT abr_id FROM usage_charge WHERE usage_record_id = %s", (record["id"],)
+    ).fetchone()
+    assert charge is not None and charge[0] is not None
+    db_conn.commit()
+    later = housekeeping_repo.month_start(day, 14)
+    worker = worker_db.connect(migrated_db_url)
+    try:
+        result = housekeep(
+            worker,
+            clock=FixedClock(datetime.combine(later, time(4, 10), tzinfo=timeline.TZ)),
+            tz=timeline.TZ,
+            pause=lambda _seconds: None,
+        )
+    finally:
+        worker.close()
+    assert f"usage_record_y{day:%Y}m{day:%m}" in result.dropped
+    assert api.get(f"{USAGE}/{record['id']}").status_code == 404
+    assert (
+        db_conn.execute(
+            "SELECT abr_id FROM usage_charge WHERE usage_record_id = %s", (record["id"],)
+        ).fetchone()
+        == charge
+    )
+    assert db_conn.execute(
+        "SELECT count(*) FROM applied_customer_billing_rate WHERE id = %s", (charge[0],)
+    ).fetchone() == (1,)
 
 
 def test_a_late_record_of_a_rated_day_is_charged_by_its_own_pass(api, db_conn, payg):

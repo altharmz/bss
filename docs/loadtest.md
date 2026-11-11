@@ -38,6 +38,7 @@ and the pre-commit hook (all on the dev `db`) neither see nor disturb them. Plai
 | `make loadtest-secret` | creates the operators' password file (once) |
 | `make loadtest-seed N=...` | builds the dataset (below) |
 | `make loadtest-dump NAME=...` / `make loadtest-restore NAME=...` | save the database to `~/.local/share/bss/loadtest/<NAME>.dump`, outside every worktree, or replace it from there and migrate. This is how another task's worktree gets the dataset |
+| `make loadtest-growth` | rows and bytes per table (a partitioned table with its partitions) and rows per month of the growing tables (#282); also saved to `loadtest/out/` |
 | `make loadtest-pg-stats-reset` / `make loadtest-pg-stats` | reset `pg_stat_statements`; print the top 20 statements and save them to `loadtest/out/` |
 
 ## Measuring a billing run

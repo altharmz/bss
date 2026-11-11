@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0075**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0076**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -65,7 +65,7 @@ PostgreSQL schema at Alembic head **0075**, read from `pg_catalog` of a throwawa
 | [`balance_action_reversal`](balance_action_reversal.md) | billing | Compensating ledger entry of a cancelled top-up or adjustment; at most one per action. |
 | [`funding_source`](funding_source.md) | billing | Credit sources beside payments and credit notes: positive adjustments, received transfers and restored debit sources. Bounded with allocations, payouts, holds and consumption. |
 | [`funding_consumption`](funding_consumption.md) | billing | Exact source amounts consumed by debits, outgoing transfer principal and credit reversals. |
-| [`usage_record`](usage_record.md) | billing | One usage record from the network feed (TMF635 ProductUsage): data, voice or SMS used on a line, stored once per network record id and matched to the product that held the number on the event date. Not rated here (pay-as-you-go rating is a later slice). |
+| [`usage_record`](usage_record.md) | billing | One usage record from the network feed (TMF635 ProductUsage): data, voice or SMS used on a line, stored once per network record id and matched to the product that held the number on the event date. Partitioned by month of event_date; partitions older than 13 months are dropped by the worker's housekeeping (rated amounts stay in usage_charge and the ABRs). |
 | [`usage_threshold`](usage_threshold.md) | billing | An allowance threshold (80% or 100%) reached by a line in a plan period: one row is one event, once per product, period and allowance. The notifications slice reads it. |
 | [`usage_charge`](usage_charge.md) | billing | The rating of one usage record of a pay-as-you-go line: the pass that rated it (a usage command), the usage price applied and the ABR that charged its line, kind and day. The primary key is what keeps a record from ever being charged twice. Without a price (the offering has none for the kind) or with a zero price there is no charge (abr_id null). |
 | [`usage_bar`](usage_bar.md) | billing | The barring (suspend) and lifting (restore) a pay-as-you-go line gets from its balance: at zero or below the line is barred on the network, above zero it is restored. One row per command, numbered per product; the latest row is the line's barring state. Sent by the billing worker through the network adapter; the id is the idempotency key. |
@@ -350,11 +350,9 @@ flowchart LR
   usage_charge -->|"command_id"| prepaid_command
   usage_charge -->|"price_id"| product_offering_price
   usage_charge -->|"product_id"| product
-  usage_charge -->|"usage_record_id"| usage_record
   usage_record -->|"billing_account_id"| billing_account
   usage_record -->|"product_id"| product
   usage_threshold -->|"product_id"| product
-  usage_threshold -->|"usage_record_id"| usage_record
   worker_request -->|"run_id"| billing_run
 ```
 
@@ -1262,7 +1260,7 @@ erDiagram
     text msisdn
     text imsi
     timestamptz event_at
-    date event_date
+    date event_date PK
     uuid product_id FK
     uuid billing_account_id FK
     text status
@@ -1275,13 +1273,13 @@ erDiagram
     text allowance PK
     smallint threshold PK
     date period_end
-    uuid usage_record_id FK
+    uuid usage_record_id
     bigint used
     bigint included
     timestamptz reached_at
   }
   usage_charge {
-    uuid usage_record_id PK,FK
+    uuid usage_record_id PK
     uuid command_id FK
     uuid billing_account_id FK
     uuid product_id FK
@@ -1413,8 +1411,6 @@ erDiagram
   product_order ||--o{ network_command : "product_order_id"
   product_order_item ||--o{ network_command : "product_order_item_id"
   refund ||--o{ refund_source : "refund_id, billing_account_id"
-  usage_record ||--o{ usage_charge : "usage_record_id"
-  usage_record ||--o{ usage_threshold : "usage_record_id"
 ```
 
 Tables from other areas are shown with their key only: [`billing_account`](billing_account.md), [`product_offering_price`](product_offering_price.md), [`product`](product.md), [`product_offering`](product_offering.md), [`product_order`](product_order.md), [`product_order_item`](product_order_item.md).

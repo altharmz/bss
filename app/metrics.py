@@ -2,10 +2,11 @@
 """Prometheus metrics for the app (issue #240; docs/operations.md, "Metrics").
 
 One non-default registry with the process and platform collectors, the HTTP metrics of
-`HttpMetricsMiddleware`, and `DbCollector`, which reads queue depth, billing freshness and
-product counts from the database at scrape time (cached for 30 s). `/metrics` is off
-(404) unless BSS_METRICS_TOKEN is set, then needs `Authorization: Bearer <token>`; the check
-lives in `app/auth.py` so the route-protection test covers it. Not part of the API contract:
+`HttpMetricsMiddleware`, and `DbCollector`, which reads queue depth, billing freshness,
+product counts and the rows of the DEFAULT usage partition from the database at scrape
+time (cached for 30 s). `/metrics` is off (404) unless BSS_METRICS_TOKEN is set, then needs
+`Authorization: Bearer <token>`; the check lives in `app/auth.py` so the route-protection
+test covers it. Not part of the API contract:
 not in the OpenAPI schema, so no MCP tool and no scope item.
 """
 
@@ -212,6 +213,8 @@ class DbCollector(Collector):
             products = conn.execute(
                 "SELECT status::text, count(*) FROM product GROUP BY 1"
             ).fetchall()
+            # the safety net of a missing partition (#282): should stay empty, so cheap
+            default_rows = conn.execute("SELECT count(*) FROM usage_record_default").fetchone()
             conn.rollback()
 
         families = []
@@ -255,6 +258,13 @@ class DbCollector(Collector):
         for name, count in products:
             by_status.add_metric([name], count)
         families.append(by_status)
+
+        unpartitioned = GaugeMetricFamily(
+            "bss_usage_record_default_rows",
+            "Usage records in the DEFAULT partition (a month without its partition); alert if > 0.",
+        )
+        unpartitioned.add_metric([], default_rows[0])
+        families.append(unpartitioned)
         return families
 
 

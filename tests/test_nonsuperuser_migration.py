@@ -57,9 +57,10 @@ def test_migrations_run_as_non_superuser_database_owner(monkeypatch):
             owner = conn.execute(
                 "SELECT extowner::regrole::text FROM pg_extension WHERE extname = 'btree_gist'"
             ).fetchone()
-            tables = conn.execute(
-                "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'"
-                " AND tableowner = current_user"
+            tables = conn.execute(  # partitions are not domain tables (#282)
+                "SELECT count(*) FROM pg_tables t JOIN pg_class c ON c.oid = format('%I.%I',"
+                " t.schemaname, t.tablename)::regclass WHERE t.schemaname = 'public'"
+                " AND t.tableowner = current_user AND NOT c.relispartition"
             ).fetchone()[0]
         assert owner == (name,)
         assert tables == 83  # 82 domain tables + alembic_version

@@ -26,6 +26,7 @@ FAMILIES = (
     "bss_queue_oldest_pending_age_seconds",
     "bss_queue_failed",
     "bss_products",
+    "bss_usage_record_default_rows",
 )
 
 
@@ -118,6 +119,20 @@ def test_pending_network_command_shows_after_the_cache_expires(client, db_conn):
     assert sample(text, "bss_queue_oldest_pending_age_seconds", queue="network_command") == 31
     assert sample(text, "bss_queue_failed", queue="network_command") == 0
     assert sample(text, "bss_queue_failed", queue="worker_request") is None
+
+
+def test_a_usage_record_without_its_months_partition_shows_in_the_default_gauge(client, db_conn):
+    """#282: the DEFAULT partition is the safety net of a missing monthly partition."""
+    assert sample(client.get("/metrics", headers=AUTH).text, "bss_usage_record_default_rows") == 0
+    db_conn.execute(
+        "INSERT INTO usage_record (id, network_record_id, kind, quantity, msisdn, event_at,"
+        " event_date, status, rejection_reason, created_at)"
+        " VALUES (gen_random_uuid(), 'n-1', 'sms', 1, '79990000001', '2040-01-02T12:00Z',"
+        " '2040-01-02', 'rejected', 'noLine', now())"
+    )
+    db_conn.commit()
+    client.clock.set(client.clock.now() + timedelta(seconds=metrics.CACHE_SECONDS + 1))
+    assert sample(client.get("/metrics", headers=AUTH).text, "bss_usage_record_default_rows") == 1
 
 
 def test_database_failure_gives_db_up_zero_and_no_other_database_series(client):

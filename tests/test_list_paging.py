@@ -2,6 +2,8 @@
 use indexes, and an enum filter value that is no label answers an empty page without a
 query."""
 
+import re
+
 import pytest
 
 from app.repository import _sql
@@ -59,7 +61,11 @@ def test_a_lines_usage_page_reads_its_index_without_sorting(db_conn):
         "SELECT * FROM usage_record WHERE product_id = %s ORDER BY event_at DESC, id LIMIT 100",
         (apidata.NIL,),
     )
-    assert "usage_record_product_event_idx" in text and "Sort" not in text, text
+    # partitioned by month (#282): every partition is read through its copy of
+    # usage_record_product_event_idx and the pages merge in order, without a Sort node
+    scans = [line for line in text.splitlines() if " Scan " in line]
+    assert scans and all("_product_id_event_at_id_idx" in line for line in scans), text
+    assert not re.search(r"\bSort  \(", text), text  # a Sort node, not Merge Append's key
 
 
 def test_an_enum_value_that_is_no_label_is_an_empty_page_without_a_query(api, monkeypatch):
