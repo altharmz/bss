@@ -8,6 +8,7 @@ import json
 import os
 import shutil
 import socket
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -17,6 +18,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import start_task as task
+from task_runtime import gh_detail
 
 SCRIPTS = Path(__file__).resolve().parent
 MARKER = "startup-fixture-must-never-be-read-or-printed"
@@ -82,7 +84,10 @@ class StartupTests(unittest.TestCase):
         (self.primary / "scripts").mkdir()
         for name in (
             "start_task.py",
+            "task_board.py",
+            "task_repo.py",
             "task_runtime.py",
+            "task_testmon.py",
             "task_telemetry.py",
             "worker_slots.py",
             "task_finish.py",
@@ -332,6 +337,35 @@ class StartupTests(unittest.TestCase):
         self.assertEqual(self.git("rev-parse", "master"), expected)
         self.assertEqual(self.git("rev-parse", "HEAD", cwd=result["worktree"]), expected)
         self.assertNotEqual(expected, self.original)
+
+    def test_a_new_worktree_gets_the_saved_test_selection_record(self):
+        (self.primary / ".gitignore").write_text(".task/\n.env\n__pycache__/\n.testmon/\n")
+        self.git("commit", "-qam", "ignore the test-selection record")
+        self.git("push", "-q", "origin", "master")
+        saved = self.primary / ".git/bss-testmon/testmondata"
+        saved.parent.mkdir()
+        connection = sqlite3.connect(saved)
+        connection.execute("CREATE TABLE node (name TEXT)")
+        connection.commit()
+        connection.close()
+        result = self.result()
+        self.assertEqual(result["test_selection"], "seeded")
+        seeded = Path(result["worktree"]) / ".testmon/.testmondata"
+        self.assertTrue(seeded.is_file())
+        self.assertEqual(self.git("status", "--porcelain", cwd=result["worktree"]), "")
+
+    def test_a_record_git_does_not_ignore_is_not_seeded(self):
+        saved = self.primary / ".git/bss-testmon/testmondata"
+        saved.parent.mkdir()
+        sqlite3.connect(saved).close()
+        result = self.result()
+        self.assertEqual(result["test_selection"], "not seeded (not ignored)")
+        self.assertFalse((Path(result["worktree"]) / ".testmon").exists())
+
+    def test_without_a_saved_record_the_worktree_starts_without_one(self):
+        result = self.result()
+        self.assertEqual(result["test_selection"], "none")
+        self.assertFalse((Path(result["worktree"]) / ".testmon").exists())
 
     def test_local_ahead_is_not_reset_or_used_as_task_base(self):
         (self.primary / "README").write_text("local\n")
@@ -911,14 +945,12 @@ class StartupTests(unittest.TestCase):
         self.env["BSS_TEST_FLAKY"] = str(self.base / "flaky")
         self.assertEqual(self.result()["issue"], 81)
         self.assertEqual(
-            task.gh_detail("HTTP 502: Bad Gateway (https://api.github.com/graphql)\nsecond"),
+            gh_detail("HTTP 502: Bad Gateway (https://api.github.com/graphql)\nsecond"),
             "HTTP 502: Bad Gateway (<url>)",
         )
-        self.assertEqual(
-            task.gh_detail("token ghp_abcdefghijklmnopqrstuvwxyz0123456789"), "<redacted>"
-        )
-        self.assertLessEqual(len(task.gh_detail("x" * 500)), 120)
-        self.assertEqual(task.gh_detail(""), "")
+        self.assertEqual(gh_detail("token ghp_abcdefghijklmnopqrstuvwxyz0123456789"), "<redacted>")
+        self.assertLessEqual(len(gh_detail("x" * 500)), 120)
+        self.assertEqual(gh_detail(""), "")
 
     def test_new_priority_task_rejects_missing_input_and_reserved_labels(self):
         cases = [

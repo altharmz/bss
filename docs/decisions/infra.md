@@ -122,11 +122,18 @@ would attach the prod container to both `lab` and `shared`).
   and the deploy script both depend on it.
 - Python 3.12, `ruff` for lint and format, `pytest` for tests.
 - `make test` runs the suite in parallel (`pytest -n auto`, pytest-xdist). Tests share
-  nothing: each worker migrates its own template database and every test gets its own
-  clone, dropped afterwards. A run cut short (a killed hook) cannot drop its own, so
+  nothing: every test gets its own clone of a template database at migration head,
+  dropped afterwards. The template is built once for a set of migrations and kept
+  (`vpslab_kept_template_<digest of alembic/ and alembic.ini>`): the first worker that
+  asks builds it under a server-wide advisory lock, under a timed name that becomes the
+  kept one only when the migration has finished, and every other worker and every later
+  run finds it. A changed migration set has another digest, so it builds its own and drops
+  the older kept ones. Before #319 each xdist worker migrated its own template at start:
+  4.5 s in one process, 9 to 30 s each with twelve at once, in every pytest run (the
+  commit hook starts two). A run cut short (a killed hook) cannot drop its own, so
   the names carry their creation time (`tests/scratch_db.py`) and every test session
   first drops the `vpslab_%` databases older than 6 hours that nobody is connected to
-  (2026-10-23: 37 had piled up). Hypothesis
+  (2026-10-23: 37 had piled up), never a kept template. Hypothesis
   examples per property come from a profile selected by `HYPOTHESIS_PROFILE`: `dev` (50)
   for `make test` and the pre-commit hook, `ci` (200) for `make verify` (a target-specific
   variable in the Makefile). Plain `pytest` without the variable uses `dev`.
@@ -141,9 +148,11 @@ would attach the prod container to both `lab` and `shared`).
   checkpoint. Local only - production uses vps-infra's postgres and never reads
   `compose.override.yaml`, so it is unaffected. Not crash-safe: after a WSL crash (or a
   killed Docker VM) the local database may be corrupt; the recovery is `make clean`
-  (drops the local volume) and `make up`. The lock limit (default 64) is for the test
-  templates: every xdist worker migrates its own template in one transaction and the lock
-  table is shared, so near 62 tables the parallel suite ran out of shared memory (issue #186).
+  (drops the local volume) and `make up`. The lock limit (default 64) dates from
+  the time every xdist worker migrated its own template in one transaction, all at once:
+  the lock table is shared, so near 62 tables the parallel suite ran out of shared memory
+  (issue #186). One build at a time needs less, but the limit stays: tests migrate
+  databases of their own in parallel too.
 - Spec YAML is parsed with libyaml (`yaml.CSafeLoader`), not `yaml.safe_load`: same
   documents, ~6x faster, and every xdist worker parses all of `spec/` once.
 - **Dependencies are pinned, never floating** (since 2026-10-03). Direct dependencies are
@@ -516,7 +525,7 @@ VPS) keeps the last two releases and goes back one by itself. Operator view:
   that needs a schema downgrade adds a new drill-only migration the same way.
 - **Tests:** `scripts/test_deploy_rollback.py` runs the real script with fake `ssh`,
   `rsync`, `docker`, `timeout` and `curl` that log their argv and answer from a rules file,
-  and asserts on the order of the remote commands (in `make runtime-check`).
+  and asserts on the order of the remote commands (in `make deploy-check`).
 
 ## Smoke retries (2026-11-08)
 
@@ -586,3 +595,58 @@ dedicated VPS on 2026-11-09. How to use it: [loadtest.md](../loadtest.md).
   - What stays per process, accepted: the DB pools, the log-level poller (one cheap query
     every 15 s), the metrics database collector's 30 s cache, and the in-memory stub
     adapters (deterministic per call).
+
+## Supply-chain scanning (2026-11-08)
+
+Issue #241. Known vulnerabilities in what we ship, with free tooling only: CodeQL, dependency
+review and secret scanning are paid on a private repository.
+
+- **A separate workflow**, `.github/workflows/security.yml`. It runs on pull requests that
+  change the dependency files, the `Dockerfile`, the ignore files, the gate or the workflow
+  itself. It also runs nightly at 01:45 UTC, after CI, and on `workflow_dispatch`, with
+  `contents: read`. It is not a required check, because a required check with a path filter
+  would hang on every other PR. On a PR it blocks through `make check-pr`. A red nightly run is
+  the signal for a new vulnerability ([operations.md](../operations.md#security-scan)).
+- **Three jobs, each fails on a finding.** `python`: pip-audit (pinned in
+  `requirements-security.txt`, CI only) checks `constraints.txt` and `constraints-dev.txt`,
+  and every finding blocks, since pip-audit reports no severity. `ui`: `npm audit --json` in
+  the pinned Node image (lockfile only, no install) blocks at `high` for production packages
+  and `critical` for dev-only ones. `image`: Trivy scans the `runtime` image for fixable HIGH
+  and CRITICAL findings. Trivy runs from its official image pinned by digest, not from a
+  third-party action, which keeps the supply-chain surface small. The image build reads CI's
+  layer cache and writes its own cache scope, so it does not evict the cache of CI's dev image.
+- **The gate**, `scripts/audit_gate.py`, is stdlib only and tested in `make runtime-check`.
+  It reads the tool's JSON on stdin. Exit 0: nothing blocks. Exit 1: a finding or an
+  ignore-file problem blocks. Exit 2: the input is JSON the gate doesn't understand (it never
+  passes silently). npm audit's report has no dev-only flag, so the gate reads `dev` from
+  `frontend/package-lock.json`. A finding counts as dev-only when every installed copy of the
+  package has the flag. A copy missing from the lockfile counts as production (decided on the
+  issue).
+- **Accepting a finding is explicit and expires.** For pip and npm, an entry in
+  `ops/security/audit-ignore.txt` has the form `<id> <review-by> <reason>`. The gate fails on
+  an entry whose date has passed, on a date more than 60 days ahead, and on a malformed line.
+  For the image, `.trivyignore` uses Trivy's own `exp:` date, with a reason comment above each
+  entry.
+- **Dependabot version updates cover the GitHub Actions only** (`.github/dependabot.yml`):
+  one grouped PR a month that keeps the SHA pins. Python and UI pins change only
+  deliberately ("Dependencies are pinned", above), so there are no routine
+  pip, npm or docker version PRs. A fixable OS finding is handled by bumping the base image
+  through its documented procedure.
+- **Dependabot alerts and security updates are on** (repository settings, enabled by the
+  human; checked 2026-11-08, #268). When an advisory hits a dependency GitHub knows,
+  Dependabot raises an alert and opens a fix PR. GitHub's dependency graph reads
+  `requirements*.txt`, `pyproject.toml` and `frontend/package*.json`, **not
+  `constraints*.txt`**: a vulnerable transitive Python package (like `opentelemetry-api` and
+  `certifi` in #263) gets no alert and no PR. The `Security` workflow's pip-audit, which
+  reads the constraints files, is the check for those. Trivy covers the image.
+- **A Dependabot security PR is a signal, never merged as it is**, like a red nightly
+  `Security` run. It touches only the manifest, so a Python bump leaves `constraints*.txt`
+  at the old version and the `-c` install cannot resolve. Handle it as a task: an issue that
+  links the PR, the fix in a task branch (Python: the documented pin change with
+  constraints regenerated from `pip freeze`; npm: Dependabot's `frontend/package*.json`
+  change may be taken over as is, checked with `make web-install` and the UI checks), and
+  the Dependabot PR closed with a link to the task PR.
+- **The first run's findings** were not upgraded in #241. They were accepted with review-by
+  2026-12-08, and #263 fixed them: Python pins bumped, pip removed from the runtime venv
+  ("No pip in the runtime venv", above), base image digest bumped. Only
+  the two zlib1g CVEs remain accepted, renewed, because no base image ships the fix yet.

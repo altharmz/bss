@@ -1,4 +1,4 @@
-# guard.sh cases: <expect>\t<command>; expect = allow|block.
+# guard.py cases: <expect>\t<command>; expect = allow|block. Run by scripts/test_guard.py.
 allow	make test
 allow	make deploy
 allow	git commit -m "Describe the change"

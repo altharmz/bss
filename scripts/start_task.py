@@ -9,22 +9,45 @@ import os
 import re
 import secrets
 import shlex
-import shutil
 import signal
 import socket
 import stat
 import subprocess
 import sys
-import time
 import unicodedata
 from pathlib import Path
 
+import task_testmon
+from task_board import (
+    DOING,
+    PROJECT,
+    READY,
+    add_to_board,
+    nodes,
+    ownership,
+    pages,
+    query,
+    set_status,
+    settled_snapshot,
+    snapshot,
+    status,
+    wait_for_board_item,
+)
+from task_repo import (
+    StartupError,
+    clean,
+    git,
+    no_tracked_secrets,
+    primary,
+    run,
+    secret_file,
+    worktrees,
+)
 from task_runtime import (
     RESERVED_PORTS,
     InvalidRuntime,
     Reexec,
     diagnostic,
-    gh_detail,
     reexec_if_scripts_changed,
     rerun,
     unique_fields,
@@ -34,46 +57,10 @@ from task_telemetry import record
 from worker_slots import SlotError, candidates, release, reserve, undo
 from worker_slots import claim as claim_slot
 
-PROJECT = "PVT_kwHOEpM-b84BpHA0"
-STATUS_FIELD = "PVTSSF_lAHOEpM-b84BpHA0zhnkE7M"
-READY, DOING, DONE = "abe5d139", "47fc9ee4", "98236657"
-STATUS_URL = "https://www.githubstatus.com"
 REPOSITORY = "altharmz/bss"
 PORT_START, PORT_END = 21000, 21998
 TASK_BRANCH = re.compile(r"^issue-([1-9][0-9]*)-")
-GIT_SELECTORS = {
-    "GIT_DIR",
-    "GIT_WORK_TREE",
-    "GIT_COMMON_DIR",
-    "GIT_INDEX_FILE",
-    "GIT_OBJECT_DIRECTORY",
-    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-}
 
-# POSITION is the board's manual order, not creation time or issue number.
-BOARD_QUERY = """
-query($project: ID!, $cursor: String) {
-  node(id: $project) { ... on ProjectV2 {
-    views(first: 2) { totalCount nodes {
-      layout filter sortByFields(first: 1) { totalCount }
-    } }
-    items(first: 100, after: $cursor, orderBy: {field: POSITION, direction: ASC}) {
-      totalCount pageInfo { hasNextPage endCursor }
-      nodes { id fieldValueByName(name: "Status") {
-        ... on ProjectV2ItemFieldSingleSelectValue { name }
-      } content { ... on Issue {
-        id number title state repository { nameWithOwner }
-        labels(first: 100) { totalCount nodes { name } }
-        blockedBy(first: 100) { totalCount nodes { state } }
-        linkedBranches(first: 100) { totalCount nodes { ref { name } } }
-        closedByPullRequestsReferences(first: 100, includeClosedPrs: false) {
-          totalCount nodes { state }
-        }
-      } } }
-    }
-  } }
-}
-"""
 PR_QUERY = """
 query($cursor: String) {
   repository(owner: "altharmz", name: "bss") {
@@ -84,37 +71,6 @@ query($cursor: String) {
   }
 }
 """
-
-
-class StartupError(Exception):
-    pass
-
-
-class PaginationChanged(StartupError):
-    """The board's item count changed between two pages of one read."""
-
-
-def run(*args, cwd=None, check=True):
-    env = {
-        key: value
-        for key, value in os.environ.items()
-        if args[0] != "git" or key not in GIT_SELECTORS
-    }
-    result = subprocess.run(  # noqa: S603 - explicit argv, never a shell
-        args, cwd=cwd, capture_output=True, text=True, check=False, env=env
-    )
-    if check and result.returncode:
-        # Do not echo subprocess data: URLs and hook output can contain credentials.
-        message = f"command failed: {' '.join(args[:3])}"
-        if args[0] == "gh":
-            detail = gh_detail(result.stderr)
-            message += f" ({detail + '; ' if detail else ''}check {STATUS_URL})"
-        raise StartupError(message)
-    return result
-
-
-def git(*args, cwd=None):
-    return run("git", *args, cwd=cwd).stdout.strip()
 
 
 def branch_name(number, title):
@@ -132,100 +88,6 @@ def runtime(branch, ports):
         task_id=branch,
         **dict(zip(("app_port", "mcp_port", "web_port"), ports, strict=True)),
     )
-
-
-def worktrees(root):
-    records = git("worktree", "list", "--porcelain", "-z", cwd=root).split("\0\0")
-    result = []
-    for tree_record in records:
-        fields = tree_record.split("\0")
-        path = next((s[9:] for s in fields if s.startswith("worktree ")), None)
-        branch = next((s[18:] for s in fields if s.startswith("branch refs/heads/")), "")
-        if path:
-            result.append((Path(path).resolve(), branch))
-    return result
-
-
-def primary():
-    if GIT_SELECTORS & os.environ.keys():
-        raise StartupError("unset inherited GIT_* selectors before starting a task")
-    for executable in ("git", "gh"):
-        if not shutil.which(executable):
-            raise StartupError(f"{executable} is required")
-    root = Path(git("rev-parse", "--show-toplevel")).resolve()
-    common = Path(git("rev-parse", "--path-format=absolute", "--git-common-dir")).resolve()
-    if Path(git("rev-parse", "--absolute-git-dir")).resolve() != common:
-        raise StartupError("run from the primary checkout, not a linked worktree")
-    if git("symbolic-ref", "--quiet", "--short", "HEAD") != "master":
-        raise StartupError("primary checkout must be on master")
-    no_tracked_secrets(root)
-    clean(root)
-    return root, common
-
-
-def clean(root):
-    if git("status", "--porcelain=v1", "--untracked-files=all", cwd=root):
-        raise StartupError("primary checkout must be clean (including staged and untracked files)")
-
-
-def query(document, **variables):
-    args = ["gh", "api", "graphql", "-f", f"query={document}"]
-    for key, value in variables.items():
-        if value is not None:
-            args.extend(["-f", f"{key}={value}"])
-    try:
-        # One retry after a short pause: every GraphQL call here is a read or an idempotent
-        # mutation (status, position, add to board), so repeating it is safe.
-        try:
-            output = run(*args).stdout
-        except StartupError:
-            time.sleep(float(os.environ.get("BSS_GH_RETRY_PAUSE", "2")))
-            output = run(*args).stdout
-        data = json.loads(output)
-        if data.get("errors"):
-            raise ValueError
-        return data["data"]
-    except (ValueError, KeyError, TypeError):
-        raise StartupError(
-            "invalid or incomplete GitHub response; check repository/project access"
-        ) from None
-
-
-def pages(document, connection, **variables):
-    cursor, seen, expected, rows = None, set(), None, []
-    while True:
-        response = query(document, cursor=cursor, **variables)
-        page = connection(response)
-        if expected is None:
-            expected = page["totalCount"]
-        if page["totalCount"] != expected:
-            raise PaginationChanged("GitHub state changed during pagination; retry")
-        rows.extend(page["nodes"])
-        if not page["pageInfo"]["hasNextPage"]:
-            if len(rows) != expected:
-                raise StartupError("incomplete GitHub pagination; refusing task selection")
-            return rows
-        cursor = page["pageInfo"]["endCursor"]
-        if not cursor or cursor in seen:
-            raise StartupError("ambiguous GitHub pagination")
-        seen.add(cursor)
-
-
-def board_page(response):
-    project = response["node"]
-    views = project["views"]
-    if views["totalCount"] != 1 or len(views["nodes"]) != 1:
-        raise StartupError("ambiguous board order: policy requires one canonical board view")
-    view = views["nodes"][0]
-    if view["layout"] != "BOARD_LAYOUT" or view["filter"] or view["sortByFields"]["totalCount"]:
-        raise StartupError("ambiguous board order: filtered/sorted views need an explicit policy")
-    return project["items"]
-
-
-def nodes(connection):
-    if connection["totalCount"] != len(connection["nodes"]):
-        raise StartupError("incomplete issue relationships; refusing task selection")
-    return connection["nodes"]
 
 
 def issue_of(branch):
@@ -368,89 +230,6 @@ def new_task_request():
     ):
         raise StartupError("new-priority-task LABELS cannot set priority, ownership or gates")
     return title, body, labels
-
-
-def snapshot():
-    return pages(BOARD_QUERY, board_page, project=PROJECT)
-
-
-def settled_snapshot(tries=3):
-    """A board read for checking our own just-made change, not for selecting work: a
-    concurrent addition (e.g. a late board automation) is retried, not fatal. Task
-    selection keeps snapshot(), which refuses a board that changes while it reads."""
-    for attempt in range(tries):
-        try:
-            return snapshot()
-        except PaginationChanged:
-            if attempt == tries - 1:
-                raise
-            time.sleep(float(os.environ.get("BSS_GH_RETRY_PAUSE", "2")))
-    raise AssertionError("unreachable")
-
-
-def ownership(item):
-    return {n["name"] for n in nodes(item["content"]["labels"])}
-
-
-def status(item):
-    return (item.get("fieldValueByName") or {}).get("name")
-
-
-def set_status(issue, option):
-    query(
-        """mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) {
-          updateProjectV2ItemFieldValue(input: {projectId: $project, itemId: $item,
-            fieldId: $field, value: {singleSelectOptionId: $option}}) {
-            projectV2Item { id }
-          }
-        }""",
-        project=PROJECT,
-        item=issue["item_id"],
-        field=STATUS_FIELD,
-        option=option,
-    )
-
-
-def board_item(number):
-    matches = [item for item in snapshot() if (item.get("content") or {}).get("number") == number]
-    if len(matches) > 1:
-        raise StartupError("new issue has ambiguous project items")
-    return matches[0] if matches else None
-
-
-def wait_for_board_item(number, seconds):
-    """Poll for the issue's board item; the project's own automation adds it, usually in seconds."""
-    for attempt in range(int(seconds) + 1):
-        try:
-            created = board_item(number)
-        except PaginationChanged:
-            # The board has more than one page, and the automation this loop waits for
-            # added the item between two of them: the item is arriving, poll again.
-            created = None
-        if created is not None:
-            return created
-        if attempt < int(seconds):
-            time.sleep(1)
-    return None
-
-
-def add_to_board(number):
-    """Fallback when the project's auto-add did not run (adding twice returns the same item)."""
-    issue = query(
-        """query($number: Int!) { repository(owner: "altharmz", name: "bss") {
-          issue(number: $number) { id }
-        } }""",
-        number=number,
-    )["repository"]["issue"]
-    query(
-        """mutation($project: ID!, $content: ID!) {
-          addProjectV2ItemById(input: {projectId: $project, contentId: $content}) {
-            item { id }
-          }
-        }""",
-        project=PROJECT,
-        content=issue["id"],
-    )
 
 
 def prioritize(number, url, title):
@@ -696,20 +475,6 @@ def allocate(used):
     raise StartupError(f"no free three-port block in {PORT_START}–{PORT_END}")
 
 
-def secret_file(task, trees, destination):
-    config = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
-    if not config.is_absolute():
-        raise StartupError("XDG_CONFIG_HOME must be absolute and external")
-    path = config / "bss/tasks" / task / ".env"
-    for part in [path, *path.parents]:
-        if part.is_symlink():
-            raise StartupError("refusing symlinked development secret path")
-    roots = [p for p, _ in trees] + [destination]
-    if any(path.is_relative_to(root) or config.resolve().is_relative_to(root) for root in roots):
-        raise StartupError("development secret path must be external to all worktrees")
-    return path
-
-
 def write_runtime(output, data):
     json.dump(data, output, indent=2)
     output.write("\n")
@@ -758,18 +523,6 @@ def rollback(root, branch, destination, base, metadata_created, expected_metadat
     else:
         print(
             f"start-task: preserved changed task; review {destination} / {branch}", file=sys.stderr
-        )
-
-
-def no_tracked_secrets(root, revision=None):
-    names = (
-        git("ls-tree", "-r", "--name-only", "-z", revision, cwd=root)
-        if revision
-        else git("ls-files", "-z", cwd=root)
-    )
-    if any(Path(name).name in {".env", ".env.prod", ".env.smoke"} for name in names.split("\0")):
-        raise StartupError(
-            "refusing tracked secret paths; secrets must remain outside task history"
         )
 
 
@@ -834,7 +587,6 @@ def recover_slot(root, common, slot):
             task_finish.finish(root, common, slot)
     except (
         StartupError,
-        task_finish.start_task.StartupError,
         SlotError,
         InvalidRuntime,
         OSError,
@@ -964,6 +716,8 @@ def start(on_ready=None):
                         cwd=destination,
                     )
                     claim.verify()
+                    # An ignored file, written after every check of the new worktree.
+                    result["test_selection"] = task_testmon.seed(destination, common)
                     if on_ready is not None:
                         on_ready(result)
 

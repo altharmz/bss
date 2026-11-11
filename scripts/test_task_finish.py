@@ -4,6 +4,7 @@ import contextlib
 import io
 import json
 import os
+import sqlite3
 import subprocess
 import sys
 import unittest
@@ -29,6 +30,7 @@ class LifecycleFixture(unittest.TestCase):
         ignore.write_text(
             ignore.read_text()
             + "__pycache__/\nfrontend/.shots/\nfrontend/src/api/generated/\nloadtest/out/\n"
+            + ".testmon/\n"
         )
         self.call(["git", "add", ".gitignore"])
         self.call(["git", "commit", "-m", "ignore generated cache"])
@@ -513,7 +515,7 @@ if a[0] == 'ps' and any(x.startswith('ancestor=') for x in a):
         other.write_text("preserve me")
         self.secret.unlink()
         self.secret.symlink_to(other)
-        with self.assertRaises(lifecycle.start_task.StartupError):
+        with self.assertRaises(lifecycle.task_repo.StartupError):
             self.finish()
         self.assertEqual(other.read_text(), "preserve me")
         self.assertTrue(self.work.exists())
@@ -558,6 +560,27 @@ if a[0] == 'ps' and any(x.startswith('ancestor=') for x in a):
         with self.assertRaises(InvalidRuntime):
             self.finish()
         self.assertTrue(self.work.exists())
+
+    def test_finish_saves_the_test_selection_record_for_the_next_worktree(self):
+        record = self.work / ".testmon/.testmondata"
+        record.parent.mkdir()
+        connection = sqlite3.connect(record)
+        connection.execute("CREATE TABLE node (name TEXT)")
+        connection.commit()
+        connection.close()
+        self.assertEqual(self.finish()["status"], "finished")
+        self.assertFalse(self.work.exists())
+        saved = self.primary / ".git/bss-testmon/testmondata"
+        connection = sqlite3.connect(saved)
+        self.assertEqual(connection.execute("SELECT count(*) FROM node").fetchone(), (0,))
+        connection.close()
+
+    def test_a_damaged_test_selection_record_does_not_stop_the_finish(self):
+        record = self.work / ".testmon/.testmondata"
+        record.parent.mkdir()
+        record.write_bytes(b"not an sqlite file, long enough to be read as a header" * 4)
+        self.assertEqual(self.finish()["status"], "finished")
+        self.assertFalse((self.primary / ".git/bss-testmon/testmondata").exists())
 
     def test_make_target_output_is_removed_with_the_worktree(self):
         for name in (

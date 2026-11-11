@@ -15,8 +15,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-import start_task
 import task_pr
+import task_repo
 from task_git import require, require_no_git_overrides
 from task_runtime import InvalidRuntime, diagnostic
 from worker_slots import SlotError, worker_root
@@ -198,7 +198,7 @@ def finished(root, task):
 
 def plan(root, primary):
     """{'candidates': [...], 'kept': [...]} for every task that still owns leftovers."""
-    trees = {branch for _, branch in start_task.worktrees(primary)}
+    trees = {branch for _, branch in task_repo.worktrees(primary)}
     reserved = reserved_tasks(primary)
     candidates, kept = [], []
     for task in task_ids(root, primary):
@@ -254,13 +254,13 @@ def main():
     confirm = os.environ.get("CONFIRM") == "1"
     try:
         require_no_git_overrides()
-        root, _common = start_task.primary()
+        root, _common = task_repo.primary()
         listing = clean(root, root, plan(root, root), confirm)
         listing["confirmed"] = confirm
         print(json.dumps(listing))
         if not confirm:
             print("clean-tasks: nothing removed; rerun with CONFIRM=1 to remove the candidates")
-    except (InvalidRuntime, SlotError, start_task.StartupError) as error:
+    except (InvalidRuntime, SlotError, task_repo.StartupError) as error:
         print(f"clean-tasks: {error}", file=sys.stderr)
         return 1
     except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:

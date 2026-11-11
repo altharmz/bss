@@ -42,7 +42,7 @@ that PR at its exact head (`make merge-task HUMAN_APPROVAL=<PR>:<head-SHA>`).
 
 ```
 make up / down / logs / ps / psql   # local stack (app + postgres, hot reload)
-make test                           # FULL suite in the container (~7 min)
+make test                           # FULL suite in the container (~11 min)
 make lint / fmt / format            # ruff check / auto-format / backend + UI
 make migrate / seed / worker-once   # alembic upgrade, demo data, one billing wake-up
 make smoke / mcp-smoke              # local app / MCP connector checks
@@ -51,7 +51,8 @@ make docs                           # regenerate docs/api + docs/db
 make web-install                    # npm ci, the only step that downloads
 make web-lint / web-test / web-build / web-types / web-fmt / web-e2e
 make scripts-lint / scripts-fmt     # Python harness scripts
-make runtime-check                  # harness script tests (~1.5 min, parallel)
+make runtime-check                  # harness script tests (~1 min, parallel)
+make deploy-check                   # deploy script tests (~1 min)
 make docs-links                     # Markdown links and the commands the docs name
 make telemetry-collect / telemetry-report / telemetry-summary
 ```
@@ -80,7 +81,7 @@ make telemetry-collect / telemetry-report / telemetry-summary
   that is off limits.
 - Propose a plan before a data-model change or a large design change; otherwise act. When a
   container misbehaves, read `make logs` before changing code. If the guard
-  (`.claude/hooks/guard.sh`) blocks something you believe is legitimate, say so.
+  (`.claude/hooks/guard.py`) blocks something you believe is legitimate, say so.
 
 **Code rules** (details in the linked files): money is `Decimal`, never float; nothing in
 `app/` reads the wall clock except `app/clock.py`; ranges are half-open and billing follows

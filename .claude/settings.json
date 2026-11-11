@@ -15,14 +15,15 @@
       "Bash(gh pr list:*)",
       "Bash(gh pr checks:*)",
       "Bash(gh run list:*)",
-      "Read(./app/**)",
-      "Read(./tests/**)",
+      "Read(./**)",
       "Edit(./app/**)",
+      "Edit(./bss_mcp/**)",
+      "Edit(./alembic/**)",
       "Edit(./tests/**)",
-      "Read(./frontend/**)",
+      "Edit(./loadtest/**)",
       "Edit(./frontend/**)",
-      "Read(./design-ref/**)",
-      "Edit(./docs/progress/scope.yaml)"
+      "Edit(./scripts/**)",
+      "Edit(./docs/**)"
     ],
     "deny": [
       "Read(./.env)",
@@ -31,6 +32,9 @@
       "Edit(./.env)",
       "Edit(./.env.prod)",
       "Edit(./.env.smoke)",
+      "Read(~/.config/bss/**)",
+      "Edit(~/.config/bss/**)",
+      "Edit(./.deployed)",
       "Edit(./design-ref/**)"
     ]
   },
@@ -39,7 +43,7 @@
       {
         "matcher": "Bash",
         "hooks": [
-          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/guard.sh" },
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/guard.py" },
           { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/agent-telemetry.py", "timeout": 10 }
         ]
       }

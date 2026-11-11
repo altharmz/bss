@@ -233,7 +233,7 @@ services:
     # each drop waits for a server-wide checkpoint. Not crash-safe: after a WSL crash this
     # database may be corrupt - recover with `make clean`. Production uses vps-infra's
     # postgres and never sees this file.
-    # max_locks_per_transaction: every xdist worker migrates its own template database in one
+    # max_locks_per_transaction: tests migrate databases in parallel, each in one
     # transaction, and the lock table is shared; the default (64) runs out near 62 tables.
     command: ["postgres", "-c", "fsync=off", "-c", "full_page_writes=off", "-c", "synchronous_commit=off", "-c", "max_locks_per_transaction=256"]
     environment:

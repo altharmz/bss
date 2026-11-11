@@ -2,7 +2,7 @@
 #   mkdir -p ~/.codex/rules && cp .codex/rules/default.rules ~/.codex/rules/default.rules
 # Every regular operation is a make target, so `make` is the one broad allowance. Git writes
 # (add, commit, push) are not listed: `make commit` and `make push` replace them, and
-# .codex/guard.sh blocks the bare commands. Anything not listed here asks for approval.
+# the guard (.claude/hooks/guard.py --codex) blocks the bare commands. Anything not listed here asks for approval.
 prefix_rule(pattern=["make"], decision="allow")
 # Issue comments are the one raw gh write the workflow expects; reads go through `make show-task`.
 prefix_rule(pattern=["gh", "issue", "comment"], decision="allow")

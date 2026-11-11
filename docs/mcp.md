@@ -216,7 +216,7 @@ claude mcp add --transport http bss https://bss2811.duckdns.org/mcp \
 
 `claude mcp list` shows the state; `claude mcp remove bss` drops it (revoke the token
 too). **In this repository**: tool calls through the connector are not checked by
-`.claude/hooks/guard.sh` or the permission rules - see the note at the top.
+`.claude/hooks/guard.py` or the permission rules - see the note at the top.
 
 **Cursor** - Cursor's OAuth redirect is a custom `cursor://` scheme, which registration
 refuses (https or localhost http only, the agreed policy). Use a static token in
@@ -386,7 +386,7 @@ See [ops/monitoring/README.md](../ops/monitoring/README.md).
   keep the client's confirmation for write tools on; treat tool output as untrusted
   (no escaping makes text safe for a model).
 - **The connector bypasses this repo's agent guardrails.** A Claude Code session with the
-  connector added can change the deployed demo through tools that `.claude/hooks/guard.sh`
+  connector added can change the deployed demo through tools that `.claude/hooks/guard.py`
   never sees (it matches Bash commands). The token's scope is the only limit; do not
   give an agent a `write` token it does not need.
 - **Tokens in client configs.** A static token in `~/.claude.json` or `mcp.json` is in

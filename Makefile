@@ -1,5 +1,7 @@
-## The only supported command interface. Claude Code is told to use these targets and
-## nothing else, so every action has a stable name and an honest exit code.
+## The command interface of the project: every regular operation of the agents (Claude,
+## Codex, Kimi) and of the human is a target here, so each action has a stable name and an
+## honest exit code. Workflow: docs/worktrees.md. No target builds a file of its own name:
+## every target is .PHONY (declared here or next to the target).
 
 SHELL := /bin/bash
 COMPOSE_PROD := docker compose -f compose.yaml -f compose.prod.yaml
@@ -12,7 +14,7 @@ TAG ?= $(shell git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)
 # Hypothesis examples per property test (tests/conftest.py): dev = 50, ci = 200 (verify).
 HYPOTHESIS_PROFILE ?= dev
 
-.PHONY: help up down restart logs ps shell test test-smoke test-changed lint fmt smoke deploy rollback check verify tunnel ssh clean migrate worker-once remote hooks spec-verify-upstream seed web-install deploy-web-install web-dev web-build web-lint web-test web-types web-fmt web-e2e web-shots docs docs-check mcp-smoke mcp-token-create mcp-tokens mcp-token-revoke
+.PHONY: help up down restart logs ps psql shell deployed progress wait-local test test-smoke test-changed lint fmt smoke deploy rollback check verify tunnel ssh clean migrate worker-once remote hooks spec-verify-upstream seed web-install deploy-web-install web-dev web-build web-lint web-test web-types web-fmt web-e2e web-shots docs docs-check mcp-smoke mcp-token-create mcp-tokens mcp-token-revoke
 
 help: ## Show this help
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -105,7 +107,7 @@ mcp-token-revoke: ## Revoke a local MCP static token (ID=<id>) or OAuth grant (G
 		exit 1; \
 	fi
 
-test: runtime-check ## The FULL suite in the container (parallel; HYPOTHESIS_PROFILE=dev|ci), plus the harness script tests (runtime-check): nightly in CI, by hand before a PR
+test: runtime-check deploy-check ## The FULL suite in the container (parallel; HYPOTHESIS_PROFILE=dev|ci), plus the harness and deploy script tests (runtime-check, deploy-check): nightly in CI, by hand before a PR
 	./scripts/test-billing-status-check.sh
 	./scripts/test-pre-commit-lock.sh
 	./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) oneoff pytest -n auto
@@ -320,7 +322,7 @@ rollback: ## Roll the VPS back to the previous release (DRY_RUN=1 shows the plan
 check: ## Technical readiness in a validated task (full existing local checks)
 	python3 -B scripts/task_quality.py check
 
-.PHONY: format review-task show-task check-local
+.PHONY: format review-task show-task
 format: ## Format backend and frontend in a validated task
 	python3 -B scripts/task_quality.py format
 
@@ -330,14 +332,9 @@ review-task: ## Non-destructive review of task identity and local Git safety
 show-task: ## Show this task's issue (title, body, labels, comments) as JSON
 	python3 -B scripts/task_quality.py show-task
 
-check-local: check
-
-.PHONY: check-preflight guard-check
+.PHONY: check-preflight
 check-preflight: migrate
 	./scripts/task-compose run --rm oneoff pytest -q tests/test_migrations.py::test_alembic_upgrade_head_on_clean_database tests/test_migrations.py::test_cloned_test_databases_are_at_the_current_head tests/test_constraints.py tests/test_worker_schema.py
-
-guard-check:
-	.claude/hooks/test-guard.sh
 
 # The commit was tested by the pre-commit hook: deploying does not test again.
 deployed: ## Show the last deploy recorded by scripts/deploy.sh and the commits not deployed yet
@@ -394,30 +391,20 @@ docs-check: docs ## Fail if the committed docs/api/ or docs/db/ differ from a fr
 docs-links: ## Check Markdown links, anchors and the make targets and scripts the agent docs name (no Docker)
 	python3 -B scripts/docs_links.py
 
-runtime-check: ## The harness script tests (scripts/test_*.py, run in parallel, ~1.5 min), no Docker or secrets; the commit hook runs them when scripts/, Makefile or .claude/ change
-	python3 -B scripts/run_suites.py \
-		scripts/test_workflow_lifecycle.py \
-		scripts/test_task_finish.py \
-		scripts/test_task_pr.py \
-		scripts/test_task_git.py \
-		scripts/test_task_quality.py \
-		scripts/test_task_runtime.py \
-		scripts/test_diagnostics.py \
-		scripts/test_task_cleanup.py \
-		scripts/test_start_task.py \
-		scripts/test_task_telemetry.py \
-		scripts/test_task_usage.py \
-		scripts/test_task_collect.py \
-		scripts/test_agent_telemetry_hook.py \
-		scripts/test_task_facts.py \
-		scripts/test_task_summary.py \
-		scripts/test_script_quality.py \
-		scripts/test_docs_links.py \
-		scripts/test_progress_generate.py \
-		scripts/test_compose_prod.py \
-		scripts/test_deploy_rollback.py \
-		scripts/test_mcp_oauth_smoke.py \
-		scripts/test_audit_gate.py
+# Every scripts/test_*.py is a suite: a new file cannot be forgotten (test_smoke_retry.py
+# was, while the list was kept by hand). test_telemetry_database.py needs the running
+# telemetry database and is `make telemetry-test`.
+# The deploy script's suite is the longest by far and tests the human's deploy, not the
+# agents' workflow: it is `make deploy-check`, run when what it reads changes.
+DEPLOY_SUITES := scripts/test_deploy_rollback.py
+RUNTIME_SUITES := $(filter-out scripts/test_telemetry_database.py $(DEPLOY_SUITES),$(sort $(wildcard scripts/test_*.py)))
+
+runtime-check: ## The harness script tests (every scripts/test_*.py but the deploy suite, in parallel parts), no Docker or secrets; the commit hook runs them when scripts/, Makefile, .claude/ or .codex/ change
+	python3 -B scripts/run_suites.py $(RUNTIME_SUITES)
+
+.PHONY: deploy-check
+deploy-check: ## The deploy script's tests (scripts/test_deploy_rollback.py), no Docker or network; the commit hook runs them when the deploy or smoke scripts, the compose files or the Makefile change
+	python3 -B scripts/run_suites.py $(DEPLOY_SUITES)
 
 .PHONY: telemetry-collect telemetry-probe telemetry-watch
 telemetry-watch: export BSS_COLLECT_TASK = $(TASK)

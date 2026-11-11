@@ -14,9 +14,11 @@ import sys
 import time
 from pathlib import Path
 
-import start_task
+import task_board
 import task_pr
+import task_repo
 import task_telemetry
+import task_testmon
 from task_cleanup import command, docker, remove_leftovers
 from task_git import require, require_no_git_overrides, run
 from task_quality import context, paths, query, review
@@ -142,7 +144,7 @@ def settle_done(root, task, number):
     try:
         items = [
             item
-            for item in start_task.snapshot()
+            for item in task_board.snapshot()
             if (item.get("content") or {}).get("number") == number
         ]
         require(len(items) == 1, "task project item not found; check the BSS board")
@@ -151,8 +153,8 @@ def settle_done(root, task, number):
             "(merge and issue closure are confirmed)",
             file=sys.stderr,
         )
-        start_task.set_status({"item_id": items[0]["id"]}, start_task.DONE)
-    except start_task.StartupError as error:
+        task_board.set_status({"item_id": items[0]["id"]}, task_board.DONE)
+    except task_repo.StartupError as error:
         raise InvalidRuntime(
             f"task project state is not Done and could not be set: {error}"
         ) from None
@@ -208,7 +210,7 @@ def synchronize(primary):
         "primary checkout is dirty",
     )
     command(primary, "git", "fetch", "--prune", "--no-tags", "origin")
-    start_task.no_tracked_secrets(primary, "origin/master")
+    task_repo.no_tracked_secrets(primary, "origin/master")
     command(primary, "git", "merge-base", "--is-ancestor", "HEAD", "origin/master")
     command(primary, "git", "merge", "--ff-only", "origin/master")
     require(
@@ -375,8 +377,8 @@ def finish_steps(primary, common, slot):
             "invalid finish checkpoint",
         )
     task_pr.repository(primary)
-    trees = start_task.worktrees(primary)
-    secret = start_task.secret_file(task, trees, root)
+    trees = task_repo.worktrees(primary)
+    secret = task_repo.secret_file(task, trees, root)
     if state is None:
         require(root.exists() and not root.is_symlink(), "missing task worktree")
         previous = Path.cwd()
@@ -417,7 +419,7 @@ def finish_steps(primary, common, slot):
         record(task, "task-completed", 0, 0, slot=slot.name)
         if root.exists():
             require(
-                not root.is_symlink() and dict(start_task.worktrees(primary)).get(root) == task,
+                not root.is_symlink() and dict(task_repo.worktrees(primary)).get(root) == task,
                 "worktree registration mismatch",
             )
             require(
@@ -425,6 +427,10 @@ def finish_steps(primary, common, slot):
                 "task head changed during cleanup",
             )
             clean_task(root)
+            # The merged task's test-selection record seeds the next worktree.
+            saved = task_testmon.save(root, common)
+            if saved.startswith("not saved"):
+                print(f"finish-task: test-selection record {saved}", file=sys.stderr)
             runtime_inventory(root, task)
             command(root, str(root / "scripts/task-compose"), "--profile", "*", "down")
             require(runtime_inventory(root, task) == ([], []), "task runtime removal incomplete")
@@ -435,7 +441,7 @@ def finish_steps(primary, common, slot):
         require(
             state["runtime_stopped"]
             and not root.is_symlink()
-            and root not in dict(start_task.worktrees(primary)),
+            and root not in dict(task_repo.worktrees(primary)),
             "runtime/worktree cleanup not confirmed",
         )
         if secret.exists() or secret.is_symlink():
@@ -505,7 +511,7 @@ def main():
             task_pr.repository(root)
             outcome, result = merge(root, task)
         else:
-            primary, common = start_task.primary()
+            primary, common = task_repo.primary()
             location = slot_path(primary, os.environ.get("BSS_SLOT", ""))
             with contextlib.ExitStack() as stack:
                 for path in (common / "start-task.lock", location / "slot.lock"):
@@ -519,7 +525,7 @@ def main():
     except Reexec as handover:
         # The locks are released by now; the updated script takes them again.
         result = rerun(handover.root, "task_finish.py", operation)
-    except (InvalidRuntime, SlotError, start_task.StartupError) as error:
+    except (InvalidRuntime, SlotError, task_repo.StartupError) as error:
         print(f"task lifecycle: {error}", file=sys.stderr)
     except (
         OSError,
