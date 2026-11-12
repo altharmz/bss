@@ -59,6 +59,18 @@ def test_binding_hints_handle_aliases_arrays_and_insert_expressions():
     ) == {1: ("product", "id"), 2: ("product", "status"), 3: ("product", "billing_account_id")}
 
 
+def test_unqualified_update_id_belongs_to_outer_target_not_nested_select():
+    catalog = {
+        "billing_run": {"id": "uuid", "member_count": "int8"},
+        "billing_account": {"id": "uuid", "opened_at": "timestamptz"},
+    }
+    query = (
+        "UPDATE billing_run SET member_count=(SELECT count(*) FROM billing_account a"
+        " WHERE a.opened_at < $1) WHERE id=$2"
+    )
+    assert parameter_columns(query, catalog)[2] == ("billing_run", "id")
+
+
 def test_flags_find_nested_large_scans_and_estimate_errors_even_when_fast():
     document = {
         "Execution Time": 1.0,
@@ -274,6 +286,33 @@ def test_expression_types_reject_misleading_nearby_column_hints():
     assert catalog.compatible(date(2026, 11, 4), "date")
     assert not catalog.compatible("sweep", "boolean")
     assert catalog.compatible(timedelta(days=1), "interval")
+
+
+def test_run_samples_use_latest_daily_run_and_keep_command_runs_separate(migrated_db_url):
+    from datetime import date
+    from uuid import uuid4
+
+    daily_old, daily_latest, command_run = uuid4(), uuid4(), uuid4()
+    with psycopg.connect(
+        migrated_db_url, autocommit=True, row_factory=psycopg.rows.dict_row
+    ) as conn:
+        conn.execute("CREATE TEMP TABLE billing_run (id uuid, kind text, run_date date)")
+        with conn.cursor() as cur:
+            cur.executemany(
+                "INSERT INTO billing_run VALUES (%s,%s,%s)",
+                [
+                    (daily_old, "daily", date(2026, 11, 3)),
+                    (daily_latest, "daily", date(2026, 11, 4)),
+                    (command_run, "prepaidCommand", date(2026, 11, 10)),
+                ],
+            )
+        catalog = Catalog.__new__(Catalog)
+        catalog.conn, catalog.cache = conn, {}
+        catalog.columns = {"billing_run": {"id": "uuid", "kind": "text", "run_date": "date"}}
+        catalog.accounts = {"typical": {"id": uuid4()}}
+        assert catalog.sample("billing_run", "typical")["id"] == daily_latest
+        catalog.query = "SELECT * FROM billing_run WHERE kind='prepaidCommand'"
+        assert catalog.sample("billing_run", "typical")["id"] == command_run
 
 
 def test_sequence_restoration_covers_the_side_effect_that_rollback_does_not(migrated_db_url):

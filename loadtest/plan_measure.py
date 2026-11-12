@@ -73,6 +73,18 @@ def parameter_columns(query: str, catalog: dict) -> dict[int, tuple[str, str]]:
     tables, aliases = tables_and_aliases(query, catalog)
     ts = tokens(query)
     out = {}
+    levels, depth = [], 0
+    for part in ts:
+        if part == ")":
+            depth -= 1
+        levels.append(depth)
+        if part == "(":
+            depth += 1
+    target = None
+    if ts and ts[0].upper() == "UPDATE":
+        target = ts[1].strip('"')
+    elif len(ts) > 2 and ts[0].upper() == "DELETE" and ts[1].upper() == "FROM":
+        target = ts[2].strip('"')
     # INSERT ... (columns) VALUES (expressions), including cast/function expressions.
     match = re.search(r"\bINSERT\s+INTO\s+\"?(\w+)\"?\s*\(([^)]+)\)\s*VALUES\s*\(", query, re.I)
     if match and match[1] in catalog:
@@ -104,6 +116,9 @@ def parameter_columns(query: str, catalog: dict) -> dict[int, tuple[str, str]]:
                     out[int(t[1:])] = (table, c)
                     break
             candidates = [table for table in tables if c in catalog[table]]
+            if len(candidates) > 1 and levels[i] == 0 and target in candidates:
+                out[int(t[1:])] = (target, c)
+                break
             if len(candidates) == 1:
                 out[int(t[1:])] = (candidates[0], c)
                 break
@@ -367,13 +382,23 @@ class Catalog:
             self.unique.add((row["relname"], row["attname"]))
 
     def sample(self, table, profile):
-        key = table, profile
+        run_kind = "daily"
+        match = re.search(r"\bkind\s*=\s*'(daily|prepaidCommand)'", getattr(self, "query", ""))
+        if match:
+            run_kind = match[1]
+        key = table, profile, run_kind
         if key in self.cache:
             return self.cache[key]
         cols = self.columns[table]
         account = self.accounts[profile]
         if table == "billing_account":
             row = account
+        elif table == "billing_run":
+            row = self.conn.execute(
+                "SELECT * FROM billing_run WHERE kind=%s"
+                " ORDER BY run_date DESC NULLS LAST, id LIMIT 1",
+                (run_kind,),
+            ).fetchone()
         else:
             clause, params = sql.SQL(""), []
             if "billing_account_id" in cols:
@@ -458,6 +483,7 @@ class Catalog:
 
     def bindings(self, shape, types, profile):
         query = shape["query"]
+        self.query = query
         hints = parameter_columns(query, self.columns)
         values, provenance = [], []
         insert = query.lstrip().upper().startswith("INSERT")
@@ -559,7 +585,10 @@ class Catalog:
                 # a currency. Its column context supplies the correct width instead.
                 literal = self.literal(value) + (f"::{typ}" if typ != "character" else "")
             values.append(literal)
-            provenance.append({"parameter": i, "type": typ, "source": origin})
+            proxy = typ.removesuffix("[]") == "uuid" and origin == "typed example/default"
+            if proxy:
+                origin = "UUID proxy: sampled billing_account.id; target unresolved/empty"
+            provenance.append({"parameter": i, "type": typ, "source": origin, "uuid_proxy": proxy})
         return bind_literals(query, values), provenance
 
 
@@ -759,6 +788,10 @@ def main():
                 "percent": 100 * measured / max(len(results), 1),
                 "all_four_profiles": sum(len(r["samples"]) == 4 for r in results),
                 "partial_profiles": sum(0 < len(r["samples"]) < 4 for r in results),
+                "uuid_proxy_shapes": sum(
+                    any(b.get("uuid_proxy") for s in r["samples"] for b in s["bindings"])
+                    for r in results
+                ),
             },
             "sequence_restoration_verified": True,
             "accounts_before_after": [
@@ -766,6 +799,7 @@ def main():
                 conn.execute("SELECT count(*) AS n FROM billing_account").fetchone()["n"],
             ],
             "billing_dates": [str(cat.first_day), str(cat.day)],
+            "relation_rows_estimated": {t: cat.rows.get(t, 0) for t in cat.columns},
             "server_settings": conn.execute(
                 "SELECT current_setting('shared_buffers') AS shared_buffers,"
                 " current_setting('work_mem') AS work_mem, current_setting('jit') AS jit"

@@ -194,6 +194,8 @@ Days 1-10 took about 2.5 h more, partly before #292's fixes.
 
 ## SQL plan sweep (#327)
 
+Measured coverage, limitations and follow-up findings: [results](loadtest-plan-sweep.md).
+
 `make loadtest-plan-sweep` collects application statement shapes from the full test
 suite and runs `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` against the restored 100k
 dataset. This complements k6: it includes SQL reached by the suite outside its HTTP mix.
@@ -229,6 +231,13 @@ ordinary tests use its default 10k slots. A report with evictions or coverage be
 partial failures of the four account profiles remain visible and are not hidden.
 The coverage report separately counts all-four-profile and partial-profile successes.
 Nullable values stay nullable; the binder does not invent a foreign key for a NULL.
+The JSON separately counts shapes using typed UUID proxies from a sampled account when
+a feature table is empty or its target cannot be resolved. Those plans cover empty/
+missing-row paths, not performance with a populated feature table. Every such parameter
+is marked in its binding provenance; this limitation is separate from successful SQL
+execution coverage. Relation-size estimates are included for interpreting sparse data.
+Run-ID samples prefer the latest daily run, honoring an explicit prepaid-command kind,
+so daily bookkeeping is exercised with a daily run rather than a command run's ID.
 
 Flags: a sequential scan of a relation with over 10k estimated rows, execution over
 5 ms on per-request/account paths (conservative default), over 100 ms on recognized
