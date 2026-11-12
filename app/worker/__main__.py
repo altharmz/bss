@@ -1,7 +1,8 @@
 """The billing worker process: `python -m app.worker` (a loop) or `--once` (one wake-up).
 
 Refuses to start (exit 2) when BILLING_RUN_AT is not strictly between 00:00 and 02:00
-(D-W13) or WORKER_FAKE_NOW is set outside APP_ENV=test (Q14). Wakes at least every
+(D-W13), or WORKER_FAKE_NOW or BSS_STUB_USAGE_RATE is set outside APP_ENV=test (Q14,
+#281). Wakes at least every
 WAKE_SECONDS; SIGTERM (what `docker compose stop` / `up` send) and SIGINT finish the
 account in hand, leave the run running for the next worker, close the connection (which
 releases the ownership lock) and exit 0 (D-W11). The liveness file is touched on every
@@ -23,6 +24,7 @@ import psycopg
 
 from app import logsetup
 from app.config import settings
+from app.integrations.network.usage_load import LoadRefused, check_allowed
 from app.worker import db
 from app.worker.loop import tick
 from app.worker.runtime import StartRefused, check_run_at, clock_from_environment
@@ -41,7 +43,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         run_at = check_run_at(settings.billing_run_at)
         clock = clock_from_environment()
-    except StartRefused as refused:
+        check_allowed(settings.app_env, settings.stub_usage_rate)
+    except (StartRefused, LoadRefused) as refused:
         print(f"worker: refusing to start: {refused}", file=sys.stderr)
         return 2
     tz = ZoneInfo(settings.billing_tz)

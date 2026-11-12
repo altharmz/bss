@@ -144,7 +144,7 @@ DAYS ?= 90
 USAGE_DAYS ?= 30
 SEED_ARGS ?=
 LT_DATA := $(or $(XDG_DATA_HOME),$(HOME)/.local/share)/bss/loadtest
-.PHONY: loadtest-up loadtest-down loadtest-ps loadtest-logs loadtest-migrate loadtest-reset loadtest-secret loadtest-seed loadtest-dump loadtest-restore loadtest-pg-stats-reset loadtest-pg-stats loadtest-billing-run loadtest-growth
+.PHONY: loadtest loadtest-up loadtest-down loadtest-ps loadtest-logs loadtest-migrate loadtest-reset loadtest-secret loadtest-seed loadtest-dump loadtest-restore loadtest-pg-stats-reset loadtest-pg-stats loadtest-billing-run loadtest-growth
 
 loadtest-up: ## Start the load-test stack (lt-db, lt-app, lt-worker, lt-mcp; pinned to LOADTEST_SUT_CPUS, default 4-7), migrated
 	./scripts/task-compose build app
@@ -214,6 +214,11 @@ loadtest-pg-stats: ## Top 20 statements by total time since the last reset, also
 loadtest-growth: ## Rows and bytes per table, and rows per month of the growing tables (#282), also to loadtest/out/growth-<time>.txt
 	@mkdir -p loadtest/out
 	$(LT_PSQL) < loadtest/growth.sql | tee "loadtest/out/growth-$$(date +%Y%m%dT%H%M%S).txt"
+
+loadtest: ## Run a k6 scenario on the load-test stack (SCENARIO=smoke|steady|stress|soak|billing-night|prod-shaped [MULT=1] [DURATION=]); report in loadtest/out/
+	@test -n "$(SCENARIO)" || { echo "loadtest: SCENARIO=<name> is required" >&2; exit 2; }
+	@mkdir -p loadtest/out
+	python3 -B loadtest/run.py --scenario $(SCENARIO) --mult $(or $(MULT),1) $(if $(DURATION),--duration $(DURATION))
 
 loadtest-billing-run: ## Measure the daily billing run of DATE on the restored dataset (DATE=YYYY-MM-DD [CPUS=1]); report in loadtest/out/
 	@test -n "$(DATE)" || { echo "loadtest-billing-run: DATE=<run date> is required" >&2; exit 2; }

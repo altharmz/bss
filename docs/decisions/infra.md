@@ -650,3 +650,20 @@ review and secret scanning are paid on a private repository.
   2026-12-08, and #263 fixed them: Python pins bumped, pip removed from the runtime venv
   ("No pip in the runtime venv", above), base image digest bumped. Only
   the two zlib1g CVEs remain accepted, renewed, because no base image ships the fix yet.
+
+## k6 load-test harness (2026-11-12, #281; acceptance blocked)
+
+The local scenario runner uses the existing task load-test stack, separate SUT and k6
+CPU sets, a digest-pinned Grafana k6 image (Grafana's GHCR copy after Docker Hub daemon
+pulls failed), and per-run throwaway MCP and metrics tokens. Each ID pool shares
+individual rows through a k6 `SharedArray`; sharing one enclosing dataset object caused
+whole-dataset copies and an interrupted generator at 1x. API VUs reuse 20 sequentially
+created operator sessions; UI VUs sign in once, staggered, and cookies persist across
+iterations. A burst of password hashing for every API VU previously exhausted app memory.
+
+Reports require all seven endpoint groups, no dropped iterations, and an actual k6
+summary. Missing summaries cannot produce passing reports. These are harness fixes,
+not permission to lower the approved load. The existing worker feed's batch ceiling
+cannot sustain 23/s; the evidence and outstanding measurements are recorded in
+[loadtest-results.md](../loadtest-results.md). Issue #281 remains blocked under its
+fixed-decisions instruction until that capacity constraint is resolved.
