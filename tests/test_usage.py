@@ -119,6 +119,24 @@ def test_a_feed_batch_stores_records_once_even_when_resent(api, db_conn, world, 
 
 
 @pytest.mark.capability("worker.usageFeed")
+def test_a_resend_with_another_event_date_is_a_replay(api, db_conn, world, stub):
+    """The unique key is (network_record_id, event_date) since usage_record is partitioned
+    by date (#282). A record id that comes back with another date is found by the id alone
+    and answered with the stored record; the resend of the same date as well."""
+    product = line_on(api, db_conn, world.off, world.acc)
+    stub.inject_usage("rec-moved", "data", MIB, when(api), msisdn=MSISDN)
+    tick(db_conn, api.clock.now())
+    stub.inject_usage("rec-moved", "data", MIB, when(api), msisdn=MSISDN)  # the same date
+    stub.inject_usage("rec-moved", "data", 2 * MIB, when(api, 1), msisdn=MSISDN)  # next day
+    tick(db_conn, api.clock.now())
+    stored = db_conn.execute(
+        "SELECT event_date, quantity FROM usage_record WHERE network_record_id = 'rec-moved'"
+    ).fetchall()
+    assert stored == [(api.clock.today(), MIB)]
+    assert len(records(api, product)) == 1 and len(stub.usage_acked) == 3
+
+
+@pytest.mark.capability("worker.usageFeed")
 def test_records_map_to_the_product_that_held_the_number_across_a_number_change(
     api, db_conn, world, stub
 ):

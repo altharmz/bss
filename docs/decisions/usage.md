@@ -152,3 +152,43 @@ list per line), and at 2M records a day counting it would read the whole table. 
 it is bounded (about 600 records a month) and served by `usage_record (product_id,
 event_at DESC, id)` (migration 0070). Rejected records have no line; they are read by
 `id`.
+
+## Partitions (2026-11-11, #282)
+
+Approved by the human on 2026-11-09 for the load-test programme: at 2M records a day
+`usage_record` grows by about 730M rows a year. Migration `0076`.
+
+- **Monthly range partitions on `event_date`** (`usage_record_yYYYYmMM`). The primary key is
+  `(id, event_date)`. Reading one record by id probes each partition's key index.
+- **Idempotency:** `UNIQUE (network_record_id, event_date)`. A resend carries the same
+  `event_at`, so the same date, and the unique key catches it. `ingest` first looks the id up
+  through the plain index `usage_record_network_record_idx`. A record id that comes back
+  with another date is a replay: the stored record is answered (TMF635 POST) or skipped
+  (the feed), as before. **Accepted race:** two concurrent first inserts of one id with
+  different dates can both be stored. `by_network_id` then answers the first stored.
+- **No foreign key to `usage_record`** from `usage_charge.usage_record_id` or from
+  `usage_threshold.usage_record_id`. The columns stay, so an old partition can be dropped
+  while its charges (billing evidence) stay. The issue named `usage_charge`; the threshold's
+  key had the same problem (a foreign key to a partitioned table must include the partition
+  key, and it would forbid the drop), so it went the same way.
+- **Retention:** a partition whose month ended 13 months before the current month began is
+  dropped (`DROP TABLE`: instant, nothing to vacuum). On 2026-11-11, September 2025 goes and
+  October 2025 stays. Rated amounts survive in `usage_charge` and the ABRs. A drop waits at
+  most 5 s for the table's readers, else it is tried at the next wake-up.
+- **Made ahead:** the housekeeping calls `usage_record_partition(month)` (a database
+  function from migration 0076) for the current and the next two months every day. It
+  is idempotent. A `DEFAULT` partition is the safety net of a missing month. Its row count is
+  the `/metrics` gauge `bss_usage_record_default_rows`, with the alert
+  `BssUsageDefaultPartition` when it is above 0. A partition made for a month that the
+  DEFAULT partition already holds rows of takes those rows over: it is built beside the
+  table, the rows move in, then it is attached.
+- **Autovacuum per partition:** Postgres refuses storage parameters on a partitioned table
+  ("cannot specify storage parameters for a partitioned table; specify storage parameters for
+  its leaf partitions instead"), so the issue's "set on the parent, inherited by new
+  partitions" cannot be done as written. The same settings are set by
+  `usage_record_partition` on every partition it makes, and on the DEFAULT partition.
+- **The conversion** ran in the migration's one transaction: a new partitioned table,
+  partitions for every month from the oldest record to two months ahead, the copy, then the
+  keys and indexes (built once per partition after the copy), the drop of the old table.
+  Measured on the 100k dataset (6.8M records, `lt-db` on cpuset `4-7`): upgrade 493 s,
+  downgrade 921 s. Production holds far fewer records today.

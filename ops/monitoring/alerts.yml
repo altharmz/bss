@@ -54,6 +54,13 @@ groups:
         annotations:
           summary: "The queue {{ $labels.queue }} has rows that need an operator."
 
+      - alert: BssUsageDefaultPartition
+        expr: bss_usage_record_default_rows > 0
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: Usage records reached the DEFAULT partition; a monthly usage_record partition is missing.
+
       - alert: BssMcpErrors
         expr: |
           sum(rate(bss_mcp_tool_calls_total{outcome=~"server_error|timeout"}[15m])) > 0

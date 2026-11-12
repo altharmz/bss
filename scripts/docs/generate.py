@@ -758,6 +758,11 @@ def render_table(name: str, table: dict, tables: dict[str, dict]) -> str:
     lines = [HEADER, f"# `{name}`\n"]
     lines.append(f"Area: **{area_of(name)}** ([all tables](README.md))\n")
     lines.append(f"{table['comment']}\n")
+    if table.get("partition_key"):
+        lines.append(
+            f"Partitioned by {code(table['partition_key'])}; the partitions are not listed"
+            " (they are created and dropped by the worker's housekeeping).\n"
+        )
     lines.append("## Columns\n")
     lines.append("| Column | Type | Null | Default | Description |")
     lines.append("|---|---|---|---|---|")

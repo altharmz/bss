@@ -265,3 +265,12 @@ one CPU still does < 19 accounts/s.
   account, and `has_balance_ledger`'s `to_regclass` (older-schema migration tests
   need it). Together they are about 4 of the 17 statements. With the 3.7x margin they
   are not worth the risk.
+
+## Housekeeping (2026-11-11, #282)
+
+Step 8 of the wake-up, from 04:00 to 05:30 BILLING_TZ, in the worker that owns billing and
+never while a run is `running`: the usage_record partitions (made ahead, dropped after 13
+months) and the deletion of rows past their retention, in batches of 5000 rows per
+transaction, at most 45 s per wake-up. The rules and the reasons are in
+[data-model.md](data-model.md#retention-2026-11-11-282) and
+[usage.md](usage.md#partitions-2026-11-11-282).

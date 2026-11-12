@@ -40,7 +40,6 @@ BACKOFF = (
     timedelta(hours=12),
 )
 BATCH = 50
-RETENTION = timedelta(days=30)
 
 # (callback URL, JSON body) -> None on success, else why it failed
 Sender = Callable[[str, bytes], str | None]
@@ -148,9 +147,3 @@ def process(
         if heartbeat is not None:
             heartbeat()
     return result
-
-
-def purge(conn: psycopg.Connection, *, clock: Clock) -> int:
-    """Events whose deliveries all finished more than RETENTION ago go, with them."""
-    with conn.transaction():
-        return repo.purge(conn, clock.now() - RETENTION)

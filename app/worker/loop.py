@@ -13,8 +13,9 @@ was down (the 03:00 reboot, a deploy):
 5. the UI's queued requests, then prepaid work: due renewals are produced, retained
    commands dispatched and entitlement transitions observed (app/worker/prepaid.py);
 6. the customer notifications (app/worker/notify.py): events found, messages sent;
-7. the due event deliveries to hub callbacks (app/events/deliver.py), then the purge of
-   events delivered more than 30 days ago.
+7. the due event deliveries to hub callbacks (app/events/deliver.py);
+8. from 04:00 to 05:30, the housekeeping (app/worker/housekeeping.py): usage_record
+   partitions and the deletion of rows past their retention, never while a run is running.
 
 A `checkpoint` (SIGTERM, liveness) is honoured between accounts and between requests;
 Stopped leaves the run in hand running for the next worker. The `heartbeat` (liveness
@@ -32,6 +33,7 @@ import psycopg
 from app.clock import Clock
 from app.events import deliver
 from app.repository import account_review, billing
+from app.worker.housekeeping import Housekeeping, housekeep
 from app.worker.lifecycle import process_lifecycle
 from app.worker.notify import process_notifications
 from app.worker.plan import scheduled
@@ -65,6 +67,7 @@ class Tick:
     prepaid_commands: list[UUID] = field(default_factory=list)
     deliveries: int = 0  # event POSTs tried (step 6)
     reviewed: int | None = None  # accounts the per-account passes looked at; None: all
+    housekeeping: Housekeeping | None = None  # step 8; None when a stop came before it
     stopped: bool = False
 
 
@@ -165,7 +168,9 @@ def tick(
             account_review.finish(conn, review)
         sent = deliver.process(conn, clock=clock, checkpoint=checkpoint, heartbeat=heartbeat)
         result.deliveries = len(sent.delivered) + len(sent.retrying) + len(sent.failed)
-        deliver.purge(conn, clock=clock)
+        result.housekeeping = housekeep(
+            conn, clock=clock, tz=tz, checkpoint=checkpoint, heartbeat=heartbeat
+        )
     except Stopped as stopped:
         log.info("%s", stopped)
         result.stopped = True

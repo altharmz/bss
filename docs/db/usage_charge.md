@@ -10,7 +10,7 @@ The rating of one usage record of a pay-as-you-go line: the pass that rated it (
 
 | Column | Type | Null | Default | Description |
 |---|---|---|---|---|
-| `usage_record_id` | `uuid` | no |  |  |
+| `usage_record_id` | `uuid` | no |  | The rated usage record. No foreign key: the record's partition is dropped after 13 months and its charge stays as billing evidence. |
 | `command_id` | `uuid` | no |  |  |
 | `billing_account_id` | `uuid` | no |  |  |
 | `product_id` | `uuid` | no |  |  |
@@ -28,7 +28,6 @@ The rating of one usage record of a pay-as-you-go line: the pass that rated it (
 | `command_id` | [`prepaid_command`](prepaid_command.md) (id) | `usage_charge_command_id_fkey` |
 | `price_id` | [`product_offering_price`](product_offering_price.md) (id) | `usage_charge_price_id_fkey` |
 | `product_id` | [`product`](product.md) (id) | `usage_charge_product_id_fkey` |
-| `usage_record_id` | [`usage_record`](usage_record.md) (id) | `usage_charge_usage_record_id_fkey` |
 
 ## Constraints
 

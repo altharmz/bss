@@ -373,8 +373,10 @@ def test_cloned_test_databases_are_at_the_current_head(db_conn):
 
     head = ScriptDirectory.from_config(Config("alembic.ini")).get_current_head()
     assert db_conn.execute("SELECT version_num FROM alembic_version").fetchall() == [(head,)]
-    tables = db_conn.execute(
-        "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'"
+    tables = db_conn.execute(  # partitions are not domain tables (usage_record, #282)
+        "SELECT count(*) FROM pg_tables t JOIN pg_class c ON c.oid = format('%I.%I',"
+        " t.schemaname, t.tablename)::regclass WHERE t.schemaname = 'public'"
+        " AND NOT c.relispartition"
     ).fetchone()[0]
     assert tables == 83  # 82 domain tables + alembic_version
 
@@ -1212,3 +1214,60 @@ def test_0075_backfills_the_stored_run_counts(temp_db_url):
             )
         }
     assert columns.isdisjoint({"member_count", "ok_count", "failed_count", "blocked_count"})
+
+
+def test_0076_moves_usage_records_into_month_partitions_and_back(temp_db_url):
+    """The conversion copies every record into the partition of its event month (the
+    DEFAULT partition stays empty), with the new keys; downgrade puts them back into one
+    table with the old unique network id."""
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "0075")
+    rows = [
+        ("11111111-1111-1111-1111-111111111111", "net-a", date(2026, 3, 15)),
+        ("22222222-2222-2222-2222-222222222222", "net-b", date(2026, 10, 1)),
+    ]
+    with psycopg.connect(temp_db_url) as conn:
+        for uid, net, day in rows:
+            conn.execute(
+                "INSERT INTO usage_record (id, network_record_id, kind, quantity, msisdn,"
+                " event_at, event_date, status, rejection_reason, created_at)"
+                " VALUES (%s, %s, 'sms', 1, '79990000001', %s, %s, 'rejected', 'noLine', now())",
+                (uid, net, day, day),
+            )
+    command.upgrade(cfg, "0076")
+    with psycopg.connect(temp_db_url) as conn:
+        placed = conn.execute(
+            "SELECT tableoid::regclass::text, network_record_id FROM usage_record ORDER BY 2"
+        ).fetchall()
+        keys = conn.execute(
+            "SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint"
+            " WHERE conrelid = 'usage_record'::regclass AND contype IN ('p', 'u') ORDER BY 1"
+        ).fetchall()
+        foreign = conn.execute(
+            "SELECT count(*) FROM pg_constraint WHERE contype = 'f'"
+            " AND confrelid = 'usage_record'::regclass"
+        ).fetchone()
+        comment = conn.execute(
+            "SELECT col_description('usage_record'::regclass, 4)"  # quantity
+        ).fetchone()
+    assert placed == [("usage_record_y2026m03", "net-a"), ("usage_record_y2026m10", "net-b")]
+    assert keys == [
+        ("usage_record_network_record_id_event_date_key", "UNIQUE (network_record_id, event_date)"),
+        ("usage_record_pkey", "PRIMARY KEY (id, event_date)"),
+    ]
+    assert foreign == (0,)  # usage_charge and usage_threshold lost theirs
+    assert comment == ("Data in bytes, voice in seconds, sms in messages; always positive.",)
+    command.downgrade(cfg, "0075")
+    with psycopg.connect(temp_db_url) as conn:
+        back = conn.execute(
+            "SELECT id::text, network_record_id, event_date FROM usage_record ORDER BY 2"
+        ).fetchall()
+        kind = conn.execute(
+            "SELECT relkind FROM pg_class WHERE relname = 'usage_record'"
+        ).fetchone()
+        foreign = conn.execute(
+            "SELECT count(*) FROM pg_constraint WHERE contype = 'f'"
+            " AND confrelid = 'usage_record'::regclass"
+        ).fetchone()
+    assert back == rows and kind == ("r",) and foreign == (2,)
+    command.upgrade(cfg, "head")

@@ -15,7 +15,7 @@ An allowance threshold (80% or 100%) reached by a line in a plan period: one row
 | `allowance` | `text` | no |  |  |
 | `threshold` | `smallint` | no |  |  |
 | `period_end` | `date` | no |  |  |
-| `usage_record_id` | `uuid` | no |  |  |
+| `usage_record_id` | `uuid` | no |  | The record that reached the threshold. No foreign key: the record's partition is dropped after 13 months. |
 | `used` | `bigint` | no |  | Period usage when the threshold was reached, in the usage_record unit. |
 | `included` | `bigint` | no |  | The allowance at that time in the same unit (MB x 1048576 bytes, minutes x 60 seconds, messages), add-ons included. |
 | `reached_at` | `timestamp with time zone` | no |  |  |
@@ -25,7 +25,6 @@ An allowance threshold (80% or 100%) reached by a line in a plan period: one row
 | Columns | References | Name |
 |---|---|---|
 | `product_id` | [`product`](product.md) (id) | `usage_threshold_product_id_fkey` |
-| `usage_record_id` | [`usage_record`](usage_record.md) (id) | `usage_threshold_usage_record_id_fkey` |
 
 ## Constraints
 

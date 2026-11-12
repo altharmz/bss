@@ -38,6 +38,7 @@ Stored success response of a request carrying an Idempotency-Key, per operator, 
 
 | Name | Definition | Backs a constraint |
 |---|---|---|
+| `idempotency_key_created_idx` | `CREATE INDEX idempotency_key_created_idx ON idempotency_key USING btree (created_at)` | no |
 | `idempotency_key_location` | `CREATE INDEX idempotency_key_location ON idempotency_key USING btree (location) WHERE (location IS NOT NULL)` | no |
 | `idempotency_key_pkey` | `CREATE UNIQUE INDEX idempotency_key_pkey ON idempotency_key USING btree (operator, method, route, key)` | yes |
 

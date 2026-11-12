@@ -232,13 +232,26 @@ repeat it: stop app, worker and mcp, take a fresh dump, drop and recreate `bss`,
 upgrade, restore the fresh dump, start. There is **no `/backup-status` endpoint** in bss; backup
 monitoring, if any, belongs to vps-infra.
 
+**Dump size and time at 100k subscribers** (#282, 2026-11-11), measured in the local
+load-test stack on the dataset of #289/#293 (`make loadtest-restore NAME=seed100k`, migrated
+to `0076`, so `usage_record` partitioned): `pg_dump -Fc` of the bss database took **82.5 s**
+and wrote **580.9 MB** (database 4.6 GB, of which `usage_record` 2.8 GB with 6.8M rows,
+three days of usage). The same data at `0075`, unpartitioned, dumped to 580.7 MB. Workstation:
+Ryzen 5 PRO 4650U (6 cores / 12 threads), WSL2 with 15 GB; `lt-db` pinned to cpuset `4-7`
+(both threads of cores 2 and 3) with 3 GB; the dump piped from the container to the host.
+The `usage_record` partitions alone dumped to 281.6 MB in 35.2 s (about 41.5 bytes per
+record). At the target of 2M records a day that is about 83 MB of dump per day of usage,
+and the 13-month window holds about 790M records, about 33 GB of dump, before retention
+drops the oldest month. So the usage window, not the subscriber count, sets the nightly
+dump's size and time; the rest of the database at 100k dumps to about 300 MB.
+
 ## Monitoring
 
 | Signal | Where | Meaning |
 |---|---|---|
 | `GET /healthz` | app, unauthenticated | 200 when the app can reach the database, else 503 |
 | `GET /billing-status` | app, unauthenticated | billing freshness: 200 `ok`/`running`, 503 `stale`/`failed`/`running`(overdue)/`none` ([billing-worker.md](billing-worker.md#billing-status)) |
-| `GET /metrics` | app and mcp, bearer token ([ops/monitoring/](../ops/monitoring/README.md)) | Prometheus text format; 404 until `BSS_METRICS_TOKEN` is set. HTTP rate/latency by route template, queue depth and age, billing freshness, product counts (database series cached 30 s, `bss_db_up 0` when the read fails). Worker health shows through the queue and billing series. The app counts in Prometheus multiprocess mode (`PROMETHEUS_MULTIPROC_DIR`, default `/tmp/prometheus` on the tmpfs). A scrape sums all `WEB_CONCURRENCY` processes, and gauges are `livesum`, so `bss_build_info` equals the number of processes. There are no `process_*` / `python_*` series: container CPU and memory come from `docker stats`. mcp runs one process and is unchanged |
+| `GET /metrics` | app and mcp, bearer token ([ops/monitoring/](../ops/monitoring/README.md)) | Prometheus text format; 404 until `BSS_METRICS_TOKEN` is set. HTTP rate/latency by route template, queue depth and age, billing freshness, product counts, `bss_usage_record_default_rows` (usage records of a month without its partition; alert `BssUsageDefaultPartition` when > 0) (database series cached 30 s, `bss_db_up 0` when the read fails). Worker health shows through the queue and billing series. The app counts in Prometheus multiprocess mode (`PROMETHEUS_MULTIPROC_DIR`, default `/tmp/prometheus` on the tmpfs). A scrape sums all `WEB_CONCURRENCY` processes, and gauges are `livesum`, so `bss_build_info` equals the number of processes. There are no `process_*` / `python_*` series: container CPU and memory come from `docker stats`. mcp runs one process and is unchanged |
 | app healthcheck | `Dockerfile` | bash `/dev/tcp` probe of `/healthz` every 60 s |
 | worker healthcheck | `compose.prod.yaml` | `/tmp/worker-alive` younger than 180 s |
 | logs | `make logs` (local), json-file with rotation on the VPS | JSON lines, one per request; 500s with their traceback; see "Finding a request by its ID" |

@@ -180,9 +180,11 @@ def list_filters(operations: list[dict[str, Any]]) -> dict[str, list[str]]:
 
 
 CATALOG_TABLES = """
-    SELECT c.oid, c.relname AS name, obj_description(c.oid, 'pg_class') AS comment
+    SELECT c.oid, c.relname AS name, obj_description(c.oid, 'pg_class') AS comment,
+           CASE WHEN c.relkind = 'p' THEN pg_get_partkeydef(c.oid) END AS partition_key
     FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-    WHERE n.nspname = 'public' AND c.relkind = 'r'
+    -- a partitioned table is documented once; its partitions are made by the worker (#282)
+    WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') AND NOT c.relispartition
     ORDER BY c.relname
 """
 CATALOG_COLUMNS = """

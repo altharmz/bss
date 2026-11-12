@@ -60,7 +60,14 @@ def ingest(
     conn: psycopg.Connection, incoming: Incoming, *, now: datetime, tz: ZoneInfo
 ) -> tuple[Row, bool]:
     """Store the record once. Returns (row, created); a known network id returns the stored
-    row untouched. A matched record is checked against the plan allowance."""
+    row untouched. A matched record is checked against the plan allowance.
+
+    The unique key is (network_record_id, event_date), so a resend with another date is
+    found first by the id alone and treated as a replay. Two concurrent first inserts of one
+    id with different dates can both be stored: an accepted race (usage.md, "Partitions")."""
+    stored = repo.by_network_id(conn, incoming.network_record_id)
+    if stored is not None:
+        return stored, False
     day = incoming.event_at.astimezone(tz).date()
     if incoming.product_id is not None:
         product = repo.product_row(conn, incoming.product_id)

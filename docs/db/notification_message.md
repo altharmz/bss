@@ -72,8 +72,10 @@ One customer message (TMF681 CommunicationMessage): what was sent, to whom, on w
 | Name | Definition | Backs a constraint |
 |---|---|---|
 | `notification_message_account_idx` | `CREATE INDEX notification_message_account_idx ON notification_message USING btree (billing_account_id, created_at DESC)` | no |
+| `notification_message_created_idx` | `CREATE INDEX notification_message_created_idx ON notification_message USING btree (created_at)` | no |
 | `notification_message_customer_idx` | `CREATE INDEX notification_message_customer_idx ON notification_message USING btree (customer_id, created_at DESC)` | no |
 | `notification_message_dedupe_key_channel_key` | `CREATE UNIQUE INDEX notification_message_dedupe_key_channel_key ON notification_message USING btree (dedupe_key, channel)` | yes |
 | `notification_message_due_idx` | `CREATE INDEX notification_message_due_idx ON notification_message USING btree (next_attempt_at) WHERE (state = ANY (ARRAY['initial'::text, 'inProgress'::text]))` | no |
 | `notification_message_pkey` | `CREATE UNIQUE INDEX notification_message_pkey ON notification_message USING btree (id)` | yes |
 | `notification_message_product_idx` | `CREATE INDEX notification_message_product_idx ON notification_message USING btree (product_id, created_at DESC)` | no |
+| `notification_message_resend_idx` | `CREATE INDEX notification_message_resend_idx ON notification_message USING btree (resend_of) WHERE (resend_of IS NOT NULL)` | no |

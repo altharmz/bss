@@ -372,7 +372,9 @@ rollback or any 4xx/5xx leaves no key and concurrent duplicates queue, then repl
 Only committed 2xx responses are kept (a stored `rejected` order is a 201 and replays).
 Rows are retained; the single allowed change is a one-time `tombstoned_at`, set by the
 delete of the resource named in the stored Location, after which the key answers 409
-forever. The header is optional and wired to `POST /productOrder` (any account mode);
+forever. **Since #282 (2026-11-11)** the worker's housekeeping deletes a key 30 days after
+`created_at`, tombstoned or not: a replay after 30 days is a new request
+([data-model.md](data-model.md#retention-2026-11-11-282)). The header is optional and wired to `POST /productOrder` (any account mode);
 the balance-action POSTs reuse the helper in P4d-P4g. Downgrade refuses retained keys.
 Replays emit no events and post nothing; the internal command identity still guards posting.
 

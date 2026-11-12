@@ -87,3 +87,48 @@ Index: [README.md](README.md).
   Caddy.
 - Stage 1 runs the migration as a NOSUPERUSER database owner in a test, like vps-infra's
   `make add-db` does; `btree_gist` works because it is a trusted extension (PG13+).
+
+## Retention (2026-11-11, #282)
+
+Several tables grew with subscribers x time and had no retention: at the 100k target
+`usage_record` gains 2M rows a day and `billing_run_account` 100k. The design was
+approved by the human on 2026-11-09; the growth inventory of the 100k dataset
+(`make loadtest-growth`) is in the PR.
+
+- **Kept forever** (financial or legal record, never deleted): `applied_customer_billing_rate`,
+  `customer_bill` and its state changes and allocations, `payment`, `refund` and its
+  sources, `tax_transaction`, `balance_action` and reversals, every `funding_*` table,
+  `usage_charge`, every `prepaid_*` table, `payment_command`, `product*`, `party`,
+  `customer`, `billing_account`, `account_audit`, `app_user_audit`, `billing_run`, and the
+  non-ok rows of `billing_run_account` (they drive `blocked`).
+- **Deleted by the worker's housekeeping** (`app/repository/housekeeping.py` RULES):
+
+  | Table | Rule |
+  |---|---|
+  | `billing_run_account` | `ok` rows of completed runs with `run_date` more than 90 days back; the counts stay on `billing_run` (#284). The accounts list of such a run is then empty |
+  | `app_session` | absolute (`expires_at`) or idle expiry more than 1 day past |
+  | `idempotency_key` | `created_at` more than 30 days back, tombstoned or not: a replay after 30 days is a new request |
+  | `event_delivery` | finished (not pending) more than 30 days ago |
+  | `event` | `occurred_at` more than 90 days back and no delivery refers to it |
+  | `worker_request` | done more than 90 days ago |
+  | `notification_message` | created more than 13 months ago; one that a kept resend refers to (`resend_of`) stays until the resend goes |
+  | `sign_in_attempt` | already self-cleaning (#288) |
+  | `usage_record` | partitions older than 13 months are dropped ([usage.md](usage.md#partitions-2026-11-11-282)) |
+
+- **Housekeeping** (`app/worker/housekeeping.py`, step 8 of the wake-up): from 04:00 to
+  05:30 BILLING_TZ (after the run, the 02:15 backup and the 03:00 reboot), only in the
+  worker that owns billing, never while a billing run is `running`. Batches of at most
+  5000 rows, one transaction each, oldest first, 100 ms apart; each logs its table and
+  count. It stops at 05:30 and continues the next day. **Added in implementation:** a
+  wake-up gives it at most 45 s (`TICK_BUDGET`), so the usage feed and the event
+  deliveries keep their one-minute cadence during a long first clean-up; a table with
+  nothing left costs one indexed query per wake-up. Indexes for the batches (migration
+  0076): `idempotency_key (created_at)`, `event_delivery (finished_at)` of finished
+  deliveries, `notification_message (created_at)` and `(resend_of)`.
+- **`idempotency_key` stays protected:** its trigger still refuses every delete except in a
+  transaction that set `bss.housekeeping = 'on'` (only the housekeeping does).
+- **The old event purge is gone:** `deliver.purge` deleted an event with its deliveries 30
+  days after they all finished. Deliveries and events now follow the two rules above.
+- **Autovacuum:** `autovacuum_vacuum_scale_factor = 0.02` and
+  `autovacuum_analyze_scale_factor = 0.01` on `billing_run_account`, `app_session`, `event`,
+  `event_delivery`, `idempotency_key` and every `usage_record` partition.
