@@ -26,6 +26,8 @@ from alembic import command
 from app.config import settings
 from tests import scratch_db
 
+pytest_plugins = ["loadtest.plan_capture"] if os.environ.get("BSS_PLAN_CAPTURE_DIR") else []
+
 # Hypothesis profiles, picked by HYPOTHESIS_PROFILE (the Makefile sets it): `dev` for make
 # test and the pre-commit hook, `ci` for make verify. No example database: /app is not
 # writable in the container, and a failure prints its example anyway.
