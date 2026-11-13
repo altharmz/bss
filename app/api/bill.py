@@ -13,7 +13,8 @@ remainingAmount and appliedPayment come from the allocations.
 
 import base64
 import json
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
+from decimal import Decimal
 from typing import Any, Literal
 
 import psycopg
@@ -23,10 +24,9 @@ from app.api import listing
 from app.api.account import (
     CYCLE_BASE,
     CYCLE_ID,
+    _customer_party,
     account_ref,
-    customer_party,
     cycle_specification_body,
-    linked_financial,
 )
 from app.api.accounts import financial_ref
 from app.api.common import (
@@ -53,8 +53,8 @@ from app.api.tmfjson import TmfJSONResponse
 from app.billing import settlement
 from app.billing.adapter import settle_account
 from app.config import settings
-from app.repository import billing, catalog, parties
-from app.repository._sql import IS_NULL, NOT_NULL, Row, select_page
+from app.repository import accounts, billing
+from app.repository._sql import IS_NULL, NOT_NULL, Row, rows_by_id, select_page
 
 BASE = "/tmf-api/customerBillManagement/v5"
 router = APIRouter(prefix=BASE)
@@ -122,12 +122,6 @@ def bill_href(bill_id: Any) -> str:
     return f"{BASE}/customerBill/{bill_id}"
 
 
-def _account_ref(conn: psycopg.Connection, account_id: Any) -> dict[str, Any]:
-    account = parties.get_billing_account(conn, account_id)
-    assert account is not None  # foreign key
-    return account_ref(account)
-
-
 def payment_href(payment_id: Any) -> str:
     return f"{PAYMENT_BASE}/payment/{payment_id}"
 
@@ -138,12 +132,53 @@ def bill_no(bill_id: Any) -> str:
 
 
 def bill_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
+    return bill_bodies(conn, [row])[0]
+
+
+def bill_bodies(conn: psycopg.Connection, rows: list[Row]) -> list[dict[str, Any]]:
+    """Load each related entity once for the whole page, including single-bill reads."""
+    account_rows = rows_by_id(conn, "billing_account", [row["billing_account_id"] for row in rows])
+    financials = rows_by_id(
+        conn,
+        accounts.FINANCIAL,
+        [
+            row["financial_account_id"]
+            for row in account_rows.values()
+            if row["financial_account_id"]
+        ],
+    )
+    customers = rows_by_id(conn, "customer", [row["customer_id"] for row in account_rows.values()])
+    runs = rows_by_id(conn, "billing_run", [row["billing_run_id"] for row in rows])
+    ids = [row["id"] for row in rows]
+    allocated, payments = billing.bill_allocations_by_bill(conn, ids)
+    taxes = billing.bill_taxes_by_bill(conn, ids)
+    return [
+        _bill_body(
+            row,
+            account_rows[row["billing_account_id"]],
+            financials.get(account_rows[row["billing_account_id"]]["financial_account_id"]),
+            customers[account_rows[row["billing_account_id"]]["customer_id"]],
+            runs[row["billing_run_id"]],
+            allocated[row["id"]],
+            taxes[row["id"]],
+            payments[row["id"]],
+        )
+        for row in rows
+    ]
+
+
+def _bill_body(
+    row: Row,
+    account: Row,
+    financial: Row | None,
+    customer: Row,
+    run: Row,
+    allocated: Decimal,
+    taxes: tuple[Decimal, list[Row]],
+    payments: list[Row],
+) -> dict[str, Any]:
     currency = row["currency"]
-    account = parties.get_billing_account(conn, row["billing_account_id"])
-    assert account is not None  # foreign key
-    financial = linked_financial(conn, account)
-    allocated = billing.bill_allocated(conn, row["id"])
-    net, tax_lines = billing.bill_taxes(conn, row["id"])
+    net, tax_lines = taxes
     return {
         "id": str(row["id"]),
         "href": bill_href(row["id"]),
@@ -163,7 +198,7 @@ def bill_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
             }
             for t in tax_lines
         ],
-        **cycle_link(conn, row["billing_run_id"]),
+        **cycle_link(run),
         # the bill's own period ends on the next cycle day, whatever the account says today
         "nextBillDate": from_billing_date(row["bill_period"].upper),
         "remainingAmount": money(billing.remaining_amount(row, allocated), currency),
@@ -172,7 +207,7 @@ def bill_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
                 "appliedAmount": money(a["amount"], currency),
                 "payment": ref("Payment", payment_href(a["payment_id"]), a["payment_id"]),
             }
-            for a in billing.applied_payments(conn, row["id"])
+            for a in payments
         ],
         "category": row["category"],
         "runType": row["run_type"],
@@ -185,7 +220,7 @@ def bill_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
             if "defaultPaymentMethod" in account["details"]
             else {}
         ),
-        "relatedParty": [customer_party(conn, account)],
+        "relatedParty": [_customer_party(customer)],
         "lastUpdate": utc(row["updated_at"]),
         "@type": "CustomerBill",
     }
@@ -209,12 +244,29 @@ def _document_body(row: Row) -> dict[str, Any]:
 
 
 def rate_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
-    offering = (
-        catalog.get_product_offering(conn, row["product_offering_id"])
-        if row["product_offering_id"]
-        else {"name": billing.FEE_NAME}  # a transfer fee has no offering
+    return rate_bodies(conn, [row])[0]
+
+
+def rate_bodies(conn: psycopg.Connection, rows: list[Row]) -> list[dict[str, Any]]:
+    account_rows = rows_by_id(conn, "billing_account", [row["billing_account_id"] for row in rows])
+    offerings = rows_by_id(
+        conn,
+        "product_offering",
+        [row["product_offering_id"] for row in rows if row["product_offering_id"]],
     )
-    assert offering is not None  # foreign key
+    return [
+        _rate_body(
+            row,
+            account_rows[row["billing_account_id"]],
+            offerings[row["product_offering_id"]]
+            if row["product_offering_id"]
+            else {"name": billing.FEE_NAME},
+        )
+        for row in rows
+    ]
+
+
+def _rate_body(row: Row, account: Row, offering: Row) -> dict[str, Any]:
     name = row["charge_name"] or offering["name"]  # a product fee is shown under its price
     bill_id = row["customer_bill_id"]
     period = row["period"]
@@ -245,7 +297,7 @@ def rate_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
             "bill": ref("CustomerBill", bill_href(bill_id), bill_id, bill_no(bill_id))
             if bill_id
             else None,
-            "billingAccount": _account_ref(conn, row["billing_account_id"]),
+            "billingAccount": account_ref(account),
             "product": ref(
                 "Product", product_href(row["product_id"]), row["product_id"], offering["name"]
             )
@@ -274,7 +326,7 @@ def list_bills(request: Request, tx: Tx) -> TmfJSONResponse:
         rows, more = billing.page_bills(
             conn, where=query.where, offset=query.offset, limit=query.limit
         )
-        items = [bill_body(conn, row) for row in rows]
+        items = bill_bodies(conn, rows)
     return listing.list_response(items, more, query)
 
 
@@ -363,29 +415,32 @@ def _cycle_name(day: Any) -> str:
     return f"Daily billing {day}"
 
 
-def cycle_ref(conn: psycopg.Connection, run_id: Any) -> dict[str, Any]:
-    run = billing.get_run_by_id(conn, run_id)
-    assert run is not None  # foreign key
-    return ref("BillCycle", cycle_href(run_id), run_id, _cycle_name(run["run_date"]))
+def cycle_ref(run: Row) -> dict[str, Any]:
+    return ref("BillCycle", cycle_href(run["id"]), run["id"], _cycle_name(run["run_date"]))
 
 
-def cycle_link(conn: psycopg.Connection, run_id: Any) -> dict[str, Any]:
+def cycle_link(run: Row) -> dict[str, Any]:
     """Command documents have no daily bill cycle to link to."""
-    run = billing.get_run_by_id(conn, run_id)
-    assert run is not None
-    return {"billCycle": cycle_ref(conn, run_id)} if run["kind"] == "daily" else {}
+    return {"billCycle": cycle_ref(run)} if run["kind"] == "daily" else {}
 
 
 def cycle_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
+    return cycle_bodies(conn, [row])[0]
+
+
+def cycle_bodies(conn: psycopg.Connection, rows: list[Row]) -> list[dict[str, Any]]:
+    due_dates = billing.run_payment_due_dates(conn, [row["id"] for row in rows])
+    return [_cycle_body(row, due_dates.get(row["id"])) for row in rows]
+
+
+def _cycle_body(row: Row, due_date: date | None) -> dict[str, Any]:
     """A run charges, issues its bills and applies credit on its own date; its bills are
     due `BILL_PAYMENT_TERM_DAYS` later (the term they were issued with). Every run applies
     the one monthly policy, whatever an account's named specification calls it."""
     day = row["run_date"]
     on = from_billing_date(day)
     policy = cycle_specification_body()
-    due = billing.run_payment_due_date(conn, row["id"]) or day + timedelta(
-        days=settings.bill_payment_term_days
-    )
+    due = due_date or day + timedelta(days=settings.bill_payment_term_days)
     return {
         "id": str(row["id"]),
         "href": cycle_href(row["id"]),
@@ -439,7 +494,7 @@ def list_bill_cycles(request: Request, tx: Tx) -> TmfJSONResponse:
             offset=query.offset,
             limit=query.limit,
         )
-        items = [cycle_body(conn, row) for row in rows]
+        items = cycle_bodies(conn, rows)
     return listing.list_response(items, more, query)
 
 
@@ -470,7 +525,7 @@ def list_rates(request: Request, tx: Tx) -> TmfJSONResponse:
         rows, more = billing.page_abrs(
             conn, where=query.where, offset=query.offset, limit=query.limit
         )
-        items = [rate_body(conn, row) for row in rows]
+        items = rate_bodies(conn, rows)
     return listing.list_response(items, more, query)
 
 
