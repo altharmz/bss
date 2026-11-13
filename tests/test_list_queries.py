@@ -25,3 +25,23 @@ def test_billing_account_list(api, monkeypatch, three_customers):
     one = statements(api, monkeypatch, f"{apidata.ACCOUNT}?limit=1")
     hundred = statements(api, monkeypatch, f"{apidata.ACCOUNT}?limit=100")
     assert one == hundred
+
+
+def test_product_list(api, monkeypatch):
+    offering = apidata.sellable_offering(api)
+    account = apidata.account(api)
+    order = apidata.order(
+        api,
+        account,
+        *(apidata.add_item(offering, str(i)) for i in range(100)),
+        requestedStartDate="2026-10-02T00:00:00+03:00",
+    )
+    assert order["state"] == "completed", order.get("productOrderErrorMessage", order)
+    one = statements(api, monkeypatch, f"{apidata.PRODUCT}?limit=1")
+    hundred = statements(api, monkeypatch, f"{apidata.PRODUCT}?limit=100")
+    assert one == hundred
+    assert hundred <= 18
+    page = api.client.get(f"{apidata.PRODUCT}?limit=100").json()
+    assert len(page) == 100
+    for product in page:
+        assert api.client.get(product["href"]).json() == product
