@@ -1105,6 +1105,26 @@ payment uses 7 statements, saved cards 6, and usage 6 (unrated) or 7 (rated), in
 session authentication and pool checks. Full pages are compared with single-item
 responses, and payments/cards also with their creation responses.
 
+## Batched bill, rate and cycle bodies (2026-11-13, #300)
+
+`customerBill` loads accounts, linked financial accounts, customers and billing runs
+once per page. One allocation query supplies both the total (including credit-note
+allocations) and payment groups, retaining `ORDER BY min(allocated_at), payment_id`.
+One ABR query aggregates net amounts separately from expanded tax lines, so multiple
+taxes do not multiply the net; tax items retain category/rate ordering. Bill documents
+and the daily-run-only bill-cycle link are unchanged.
+
+`appliedCustomerBillingRate` batches accounts and offerings, retaining the no-product
+transfer-fee fallback. `billCycle` batches stored due dates, still considering only
+bills whose bill date equals their run's date and falling back to the configured term
+only when none exists. Every single-item builder uses the same loader with one row.
+
+`tests/test_list_queries.py` pins equal statement counts for pages of 1 and 100:
+11 for bills with financial links, 7 for rates and 6 for cycles, including session
+authentication and pool checks. It covers full pages, multiple products/tax lines and
+payments, empty pages, stored versus fallback terms, and single-item response equality.
+No contract change or migration is needed.
+
 ## Lists without counts (2026-11-10, #312)
 
 Decided by the human: no list counts its rows. A deliberate deviation from TMF630's
