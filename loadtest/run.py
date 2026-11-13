@@ -360,14 +360,15 @@ SETTLED_LAG = 120.0  # seconds: the feed has caught up with what the start-up le
 
 
 def settled(worker_log: str, feed: bool) -> bool:
-    """The worker finished a wake-up and, with the feed on, its latest fetch found the feed
+    """The worker finished a wake-up and, with the feed on, a later fetch found the feed
     caught up: the first wake-up after a restore is long, and what the generator makes
     meanwhile must not be counted as the measured run's lag."""
-    if "wake-up:" not in worker_log:
+    first, _, later = worker_log.partition("wake-up:")
+    if first == worker_log:
         return False
     if not feed:
         return True
-    lines = FEED_LINE.findall(worker_log)
+    lines = FEED_LINE.findall(later)
     return bool(lines) and float(lines[-1][3]) < SETTLED_LAG
 
 

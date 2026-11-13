@@ -170,11 +170,17 @@ const uuid = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) =
   const r = (Math.random() * 16) | 0;
   return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
 });
-const started = Date.now();
 
+// The load step of a stress run, from the scenario's own start: a VU that k6 adds later
+// (under overload) must not count its minutes from its own first iteration.
 function step() {
   if (SCENARIO !== 'stress') return '0';
-  const minutes = (Date.now() - started) / 60000;
+  let minutes = 0;
+  try {
+    minutes = (Date.now() - exec.scenario.startTime) / 60000;
+  } catch (e) {
+    return String(STEPS[0]); // setup(): before any scenario
+  }
   const per = STEP_MINUTES + 0.5;
   return String(STEPS[Math.min(STEPS.length - 1, Math.floor(minutes / per))]);
 }

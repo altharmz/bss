@@ -84,6 +84,8 @@ def test_the_run_waits_for_a_finished_wake_up_and_a_caught_up_feed():
     woke = 'lt-worker-1  | {"msg": "wake-up: Tick(...)"}\n'
     assert not settled(LOG, feed=True)  # no wake-up finished yet
     assert settled(woke, feed=False)
-    assert not settled(woke, feed=True)  # the feed has not been fetched
+    assert not settled(woke, feed=True)  # the feed has not been fetched since
+    # the first wake-up's own fetch says nothing about what was made while it ran
+    assert not settled(feed_line("2026-11-13T18:00:00.000Z", 0, 0, 0.0) + woke, feed=True)
     assert not settled(woke + feed_line("2026-11-13T18:07:00.000Z", 8000, 45000, 350.1), feed=True)
     assert settled(woke + LOG, feed=True)
