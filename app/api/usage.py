@@ -35,7 +35,7 @@ from app.api.prices import unit_text
 from app.api.tmfjson import TmfJSONResponse
 from app.network import usage as rules
 from app.repository import usage as repo
-from app.repository._sql import Row, fetch_one
+from app.repository._sql import Row, fetch_one, rows_by_id
 
 API = "TMF635"
 BASE = "/tmf-api/productUsageManagement/v5"
@@ -90,12 +90,11 @@ def characteristic(kind: str, name: str, value: Any) -> dict[str, Any]:
 CATALOG = "/tmf-api/productCatalogManagement/v5"
 
 
-def _applied_price(conn, row: Row) -> list[dict[str, Any]] | None:
+def _applied_price(row: Row, charge: Row | None) -> list[dict[str, Any]] | None:
     """`usageProductPrice` of a rated record: the usage price it was rated at (the price of
     one block, without tax: `dutyFreeAmount`), with the blocks charged for its group."""
     if row["status"] != "rated":
         return None
-    charge = repo.charges_of(conn, row["id"])
     if charge is None or charge["price_id"] is None:
         return []
     unit = charge["price_details"].get("unitOfMeasure") or {}
@@ -122,11 +121,20 @@ def _applied_price(conn, row: Row) -> list[dict[str, Any]] | None:
 
 
 def usage_body(conn, row: Row) -> dict[str, Any]:
-    product = (
-        fetch_one(conn, "SELECT id, name FROM product WHERE id = %s", (row["product_id"],))
-        if row["product_id"] is not None
-        else None
+    return usage_bodies(conn, [row])[0]
+
+
+def usage_bodies(conn, rows: list[Row]) -> list[dict[str, Any]]:
+    products = rows_by_id(
+        conn, "product", [row["product_id"] for row in rows if row["product_id"] is not None]
     )
+    charges = repo.charges_by_record(conn, [row["id"] for row in rows if row["status"] == "rated"])
+    return [
+        _usage_body(row, products.get(row["product_id"]), charges.get(row["id"])) for row in rows
+    ]
+
+
+def _usage_body(row: Row, product: Row | None, charge: Row | None) -> dict[str, Any]:
     traits = [
         characteristic("IntegerCharacteristic", "quantity", row["quantity"]),
         characteristic("StringCharacteristic", "unit", rules.UNITS[row["kind"]]),
@@ -146,7 +154,7 @@ def usage_body(conn, row: Row) -> dict[str, Any]:
             "id": str(row["id"]),
             "href": usage_href(row["id"]),
             "@type": "ProductUsage",
-            "usageProductPrice": _applied_price(conn, row),
+            "usageProductPrice": _applied_price(row, charge),
             "creationDate": utc(row["created_at"]),
             "lastUpdate": utc(row["created_at"]),
             "status": row["status"],
@@ -195,7 +203,7 @@ def list_usage(request: Request, tx: Tx) -> TmfJSONResponse:
         raise bad_request("productUsage list needs product.id or id")
     with tx() as conn:
         rows, more = repo.page(conn, query.where, query.offset, query.limit)
-        bodies = [usage_body(conn, row) for row in rows]
+        bodies = usage_bodies(conn, rows)
     return listing.list_response(bodies, more, query)
 
 

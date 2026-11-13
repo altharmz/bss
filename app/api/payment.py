@@ -46,7 +46,7 @@ from app.billing import settlement
 from app.billing.adapter import settle_account
 from app.events import emit
 from app.repository import billing, idempotency, parties, payments
-from app.repository._sql import Row
+from app.repository._sql import Row, rows_by_id
 
 BASE = "/tmf-api/payment/v4"
 router = APIRouter(prefix=BASE)
@@ -184,8 +184,18 @@ class PaymentCreate(TmfModel):
 
 
 def payment_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
-    account = parties.get_billing_account(conn, row["billing_account_id"])
-    assert account is not None  # foreign key
+    return payment_bodies(conn, [row])[0]
+
+
+def payment_bodies(conn: psycopg.Connection, rows: list[Row]) -> list[dict[str, Any]]:
+    accounts = rows_by_id(conn, "billing_account", [row["billing_account_id"] for row in rows])
+    items = billing.payment_items_by_payment(conn, [row["id"] for row in rows])
+    return [
+        _payment_body(row, accounts[row["billing_account_id"]], items[row["id"]]) for row in rows
+    ]
+
+
+def _payment_body(row: Row, account: Row, items: list[Row]) -> dict[str, Any]:
     total = money(row["amount"], row["currency"])
     tax = row.get("tax_amount", Decimal("0.00"))
     return {
@@ -206,13 +216,13 @@ def payment_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
         "totalAmount": total,
         "paymentMethod": method_body(row, row["payment_method_name"], row["payment_method_type"]),
         **documents_body(row, DOCUMENTS),
-        **_items(conn, row),
+        **_items(row, items),
         "@type": "Payment",
         **meta_body(row),
     }
 
 
-def _items(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
+def _items(row: Row, allocations: list[Row]) -> dict[str, Any]:
     """paymentItem[]: what the payment has paid so far, per bill (absent while nothing)."""
     items = [
         {
@@ -225,7 +235,7 @@ def _items(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
             "totalAmount": money(i["amount"], row["currency"]),
             "@type": "PaymentItem",
         }
-        for i in billing.payment_items(conn, row["id"])
+        for i in allocations
     ]
     return {"paymentItem": items} if items else {}
 
@@ -269,7 +279,7 @@ def list_payments(request: Request, tx: Tx) -> TmfJSONResponse:
         rows, more = payments.list_payments(
             conn, where=query.where, offset=query.offset, limit=query.limit
         )
-        items = [payment_body(conn, row) for row in rows]
+        items = payment_bodies(conn, rows)
     return listing.list_response(items, more, query)
 
 

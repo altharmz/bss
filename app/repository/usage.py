@@ -431,13 +431,22 @@ def insert_charge(
 
 def charges_of(conn: psycopg.Connection, record_id: UUID) -> Row | None:
     """How a rated record was charged: the price applied and its ABR."""
-    return fetch_one(
+    return charges_by_record(conn, [record_id]).get(record_id)
+
+
+def charges_by_record(conn: psycopg.Connection, record_ids: list[UUID]) -> dict[UUID, Row]:
+    """Applied prices of all rated records in a response page, in one query."""
+    if not record_ids:
+        return {}
+    rows = fetch_all(
         conn,
         "SELECT c.*, p.name AS price_name, p.amount AS price_amount, p.currency AS price_currency,"
         " p.usage_block, p.details AS price_details FROM usage_charge c"
-        " LEFT JOIN product_offering_price p ON p.id = c.price_id WHERE c.usage_record_id = %s",
-        (record_id,),
+        " LEFT JOIN product_offering_price p ON p.id = c.price_id"
+        " WHERE c.usage_record_id = ANY(%s)",
+        (record_ids,),
     )
+    return {row["usage_record_id"]: row for row in rows}
 
 
 def unrated_count(conn: psycopg.Connection, product_id: UUID) -> int:

@@ -194,6 +194,21 @@ def run_payment_due_date(conn: psycopg.Connection, run_id: UUID) -> date | None:
     return row["due"] if row else None
 
 
+def run_payment_due_dates(conn: psycopg.Connection, run_ids: list[UUID]) -> dict[UUID, date]:
+    """Stored terms of the bills issued on each run's own date, for a page of cycles."""
+    if not run_ids:
+        return {}
+    rows = fetch_all(
+        conn,
+        "SELECT b.billing_run_id, max(b.payment_due_date) AS due FROM customer_bill b"
+        " JOIN billing_run r ON r.id = b.billing_run_id"
+        " WHERE b.billing_run_id = ANY(%s) AND b.bill_date = r.run_date"
+        " GROUP BY b.billing_run_id",
+        (run_ids,),
+    )
+    return {row["billing_run_id"]: row["due"] for row in rows}
+
+
 def held_back_by(conn: psycopg.Connection) -> Row | None:
     """The earliest run that failed as a whole (failure_kind 'run'), or None. No later
     date is billed until it succeeds."""
@@ -1348,18 +1363,55 @@ def applied_payments(conn: psycopg.Connection, bill_id: UUID) -> list[Row]:
     )
 
 
+def bill_allocations_by_bill(
+    conn: psycopg.Connection, bill_ids: list[UUID]
+) -> tuple[dict[UUID, Decimal], dict[UUID, list[Row]]]:
+    """Allocation totals and applied payments for a page, including credit-note amounts
+    in the totals. Payment groups keep the single-bill query's ordering."""
+    totals = {key: Decimal(0) for key in bill_ids}
+    payments: dict[UUID, list[Row]] = {key: [] for key in bill_ids}
+    if not bill_ids:
+        return totals, payments
+    rows = fetch_all(
+        conn,
+        "SELECT customer_bill_id, payment_id, sum(amount) AS amount FROM bill_allocation"
+        " WHERE customer_bill_id = ANY(%s) GROUP BY customer_bill_id, payment_id"
+        " ORDER BY min(allocated_at), payment_id",
+        (bill_ids,),
+    )
+    for row in rows:
+        key = row["customer_bill_id"]
+        totals[key] += row["amount"]
+        if row["payment_id"] is not None:
+            payments[key].append(row)
+    return totals, payments
+
+
 def payment_items(conn: psycopg.Connection, payment_id: UUID) -> list[Row]:
     """Per bill, what this payment paid on it (TMF676 paymentItem), oldest bill first."""
-    return fetch_all(
+    return payment_items_by_payment(conn, [payment_id])[payment_id]
+
+
+def payment_items_by_payment(
+    conn: psycopg.Connection, payment_ids: list[UUID]
+) -> dict[UUID, list[Row]]:
+    """Allocations summed per payment and bill for a whole response page."""
+    groups: dict[UUID, list[Row]] = {key: [] for key in payment_ids}
+    if not payment_ids:
+        return groups
+    rows = fetch_all(
         conn,
         """
-        SELECT a.customer_bill_id, sum(a.amount) AS amount
+        SELECT a.payment_id, a.customer_bill_id, sum(a.amount) AS amount
         FROM bill_allocation a JOIN customer_bill b ON b.id = a.customer_bill_id
-        WHERE a.payment_id = %s
-        GROUP BY a.customer_bill_id, b.bill_date ORDER BY b.bill_date
+        WHERE a.payment_id = ANY(%s)
+        GROUP BY a.payment_id, a.customer_bill_id, b.bill_date ORDER BY b.bill_date
         """,
-        (payment_id,),
+        (payment_ids,),
     )
+    for row in rows:
+        groups[row["payment_id"]].append(row)
+    return groups
 
 
 def bill_sources(conn: psycopg.Connection, bill_id: UUID) -> list[Row]:
@@ -1417,6 +1469,44 @@ def bill_taxes(conn: psycopg.Connection, bill_id: UUID) -> tuple[Decimal, list[R
         (bill_id,),
     )
     return net["net"], lines
+
+
+def bill_taxes_by_bill(
+    conn: psycopg.Connection, bill_ids: list[UUID]
+) -> dict[UUID, tuple[Decimal, list[Row]]]:
+    """Net amounts and tax lines from the page's ABRs in one read. Aggregate the two
+    separately so expanding a rate's tax lines never multiplies its net amount."""
+    result: dict[UUID, tuple[Decimal, list[Row]]] = {key: (Decimal(0), []) for key in bill_ids}
+    if not bill_ids:
+        return result
+    rows = fetch_all(
+        conn,
+        """
+        WITH rates AS MATERIALIZED (
+            SELECT customer_bill_id, amount, applied_tax FROM applied_customer_billing_rate
+            WHERE customer_bill_id = ANY(%s)
+        ), net AS (
+            SELECT customer_bill_id, sum(amount) AS net FROM rates GROUP BY customer_bill_id
+        ), taxes AS (
+            SELECT customer_bill_id, t->>'taxCategory' AS category,
+                   (t->>'taxRate')::numeric AS rate, sum((t->>'taxAmount')::numeric) AS amount,
+                   true AS has_tax
+            FROM rates, jsonb_array_elements(applied_tax) t
+            GROUP BY customer_bill_id, category, rate
+        )
+        SELECT n.customer_bill_id, n.net, t.category, t.rate, t.amount, t.has_tax
+        FROM net n LEFT JOIN taxes t USING (customer_bill_id)
+        ORDER BY t.category, t.rate
+        """,
+        (bill_ids,),
+    )
+    for row in rows:
+        key = row["customer_bill_id"]
+        lines = result[key][1]
+        result[key] = (row["net"], lines)
+        if row["has_tax"]:
+            lines.append(row)
+    return result
 
 
 def settlement_summary(conn: psycopg.Connection, account_id: UUID, today: date) -> Row:
