@@ -9,7 +9,7 @@ usage against what the network was told and notes the 80% and 100% marks.
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 import psycopg
@@ -94,6 +94,106 @@ def ingest(
     if product is not None:
         check_thresholds(conn, row, now=now)
     return row, True
+
+
+def ingest_batch(
+    conn: psycopg.Connection, batch: list[Incoming], *, now: datetime, tz: ZoneInfo
+) -> int:
+    """The feed's path (#281): store a batch as `ingest` would store its records one after
+    another, with a few statements for the batch instead of several per record. Returns how
+    many records were new. A network id seen before (stored, or earlier in the batch) is a
+    replay; the matching, the plan periods, the allowances and the thresholds are those of
+    `ingest`, a threshold being noted at the record that reached it."""
+    first: dict[str, Incoming] = {}
+    for incoming in batch:
+        first.setdefault(incoming.network_record_id, incoming)
+    known = repo.known_network_ids(conn, list(first))
+    fresh = [incoming for key, incoming in first.items() if key not in known]
+    if not fresh:
+        return 0
+    days = [incoming.event_at.astimezone(tz).date() for incoming in fresh]
+    lines = repo.products_on(
+        conn,
+        [(incoming.msisdn, incoming.imsi, day) for incoming, day in zip(fresh, days, strict=True)],
+    )
+    stored = repo.insert_many(
+        conn,
+        [
+            {
+                "id": uuid4(),
+                "network_record_id": incoming.network_record_id,
+                "kind": incoming.kind,
+                "quantity": incoming.quantity,
+                "roaming": incoming.roaming,
+                "throttled": incoming.throttled,
+                "msisdn": incoming.msisdn,
+                "imsi": incoming.imsi,
+                "event_at": incoming.event_at,
+                "event_date": day,
+                "product_id": None if line is None else line["product_id"],
+                "billing_account_id": None if line is None else line["billing_account_id"],
+                "status": "rejected" if line is None else "notRated",
+                "rejection_reason": "noLine" if line is None else None,
+            }
+            for incoming, day, line in zip(fresh, days, lines, strict=True)
+        ],
+        now,
+    )
+    _check_thresholds_of(conn, [row for row in stored if row["product_id"] is not None], now=now)
+    return len(stored)
+
+
+def _check_thresholds_of(conn: psycopg.Connection, records: list[Row], *, now: datetime) -> None:
+    """`check_thresholds` for the batch's stored records, in their order."""
+    places = sorted({(row["product_id"], row["event_date"]) for row in records})
+    if not places:
+        return
+    periods = repo.periods_of(conn, places)
+    places = [place for place in places if place in periods]
+    told = repo.told_profiles(conn, sorted({product_id for product_id, _ in places}))
+    untold = [place for place in places if place[0] not in told]
+    offerings = repo.offerings_on(conn, untold) if untold else {}
+    by_offering = {
+        offering_id: network_orders.offering_profile(conn, offering_id)
+        for offering_id in set(offerings.values())
+    }
+    allowance = {
+        place: included(told[place[0]] if place[0] in told else by_offering[offerings[place]])
+        for place in places
+    }
+    # only the records whose kind has an allowance in their period can reach a threshold
+    counted = []
+    for row in records:
+        place = (row["product_id"], row["event_date"])
+        if place in periods and allowance[place][row["kind"]] > 0:
+            period = periods[place]
+            counted.append((row, (row["product_id"], period["period_start"], period["period_end"])))
+    if not counted:
+        return
+    totals = repo.used_many(conn, sorted({key for _, key in counted}))
+    # the totals hold the whole batch: walking it backwards gives each record the total
+    # that `ingest` would have seen right after storing it
+    reached = []
+    for row, key in reversed(counted):
+        total = totals[key][row["kind"]]
+        totals[key][row["kind"]] -= row["quantity"]
+        limit = allowance[(row["product_id"], row["event_date"])][row["kind"]]
+        reached.append((row, key, total, limit))
+    for row, key, total, limit in reversed(reached):
+        for pct in THRESHOLDS:
+            if total * 100 >= limit * pct:
+                repo.insert_threshold(
+                    conn,
+                    product_id=row["product_id"],
+                    period_start=key[1],
+                    period_end=key[2],
+                    allowance=row["kind"],
+                    threshold=pct,
+                    record_id=row["id"],
+                    used_amount=total,
+                    included=limit,
+                    now=now,
+                )
 
 
 def check_thresholds(conn: psycopg.Connection, record: Row, *, now: datetime) -> list[int]:

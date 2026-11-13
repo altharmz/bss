@@ -3,9 +3,12 @@
 
 from datetime import datetime, time, timedelta
 
+import psycopg
 import pytest
 
 from app.config import settings
+from app.network.usage import Incoming, ingest, ingest_batch
+from app.worker import usage as usage_feed
 from tests import apidata, contract, timeline
 from tests.apiclient import total
 from tests.apidata import ORDER
@@ -116,6 +119,109 @@ def test_a_feed_batch_stores_records_once_even_when_resent(api, db_conn, world, 
     assert names["quantity"] == 120 and names["unit"] == "seconds" and names["roaming"] is True
     assert voice["status"] == "notRated" and voice["product"]["id"] == product["id"]
     assert voice["externalIdentifier"][0]["owner"] == "network"
+
+
+@pytest.mark.capability("worker.usageFeed")
+def test_a_batch_is_stored_as_its_records_would_be_one_by_one(api, db_conn, world, stub):
+    line_on(api, db_conn, world.off, world.acc)  # 5000 MB, 300 min, 100 sms
+    at, hour = when(api), timedelta(hours=1)
+    batch = [
+        Incoming("b-1", "data", 3000 * MIB, at, msisdn=MSISDN),
+        Incoming("b-2", "sms", 79, at, msisdn=MSISDN),
+        Incoming("b-3", "data", 1000 * MIB, at + hour, msisdn=MSISDN),  # data: 80 %
+        Incoming("b-3", "data", 5 * MIB, at + 2 * hour, msisdn=MSISDN),  # the id again: a replay
+        Incoming("b-4", "sms", 30, at, msisdn=MSISDN),  # sms: 80 % and 100 % at once
+        Incoming("b-5", "voice", 60, at, msisdn="79990000001"),  # nobody's number
+        Incoming("b-6", "data", 1200 * MIB, at + 3 * hour, msisdn=MSISDN, roaming=True),  # 100 %
+        Incoming("b-7", "voice", 120, at, imsi="001010000000009", throttled=True),  # nobody's SIM
+        Incoming(
+            "b-8", "data", 1 * MIB, at - timedelta(days=400), msisdn=MSISDN
+        ),  # before the line
+    ]
+
+    def stored():
+        rows = db_conn.execute(
+            "SELECT network_record_id, kind, quantity, roaming, throttled, msisdn, imsi, event_at,"
+            " event_date, product_id, billing_account_id, status, rejection_reason"
+            " FROM usage_record WHERE network_record_id LIKE 'b-%' ORDER BY network_record_id"
+        ).fetchall()
+        marks = db_conn.execute(
+            "SELECT t.allowance, t.threshold, u.network_record_id, t.used, t.included,"
+            " t.period_start, t.period_end FROM usage_threshold t"
+            " JOIN usage_record u ON u.id = t.usage_record_id ORDER BY 1, 2"
+        ).fetchall()
+        return rows, marks
+
+    now = api.clock.now()
+    with db_conn.transaction() as one_by_one:
+        news = [ingest(db_conn, incoming, now=now, tz=timeline.TZ)[1] for incoming in batch]
+        expected = stored()
+        raise psycopg.Rollback(one_by_one)
+    assert news.count(True) == 8 and stored() == ([], [])
+    assert ingest_batch(db_conn, batch, now=now, tz=timeline.TZ) == 8
+    assert stored() == expected
+    assert [mark[:5] for mark in expected[1]] == [
+        ("data", 80, "b-3", 4000 * MIB, 5000 * MIB),
+        ("data", 100, "b-6", 5200 * MIB, 5000 * MIB),
+        ("sms", 80, "b-4", 109, 100),
+        ("sms", 100, "b-4", 109, 100),
+    ]
+    assert [row[11] for row in expected[0]].count("rejected") == 3
+    # the whole batch again (an acknowledgement was lost): nothing is new
+    assert ingest_batch(db_conn, batch, now=now, tz=timeline.TZ) == 0
+    assert stored() == expected
+    db_conn.rollback()
+
+
+def backlog(stub, api, count):
+    for index in range(count):
+        stub.inject_usage(f"bulk-{index}", "sms", 1, when(api), msisdn=MSISDN)
+
+
+@pytest.mark.capability("worker.usageFeed")
+def test_one_wake_up_works_off_a_backlog_batch_by_batch(api, db_conn, world, stub, monkeypatch):
+    product = line_on(api, db_conn, world.off, world.acc)
+    monkeypatch.setattr(usage_feed, "BATCH", 5)
+    acknowledged = []
+    ack = stub.ack_usage
+    monkeypatch.setattr(stub, "ack_usage", lambda ids: (acknowledged.append(len(ids)), ack(ids)))
+    backlog(stub, api, 12)
+    tick(db_conn, api.clock.now())
+    # every batch in its own transaction, acknowledged after it; the short one ends the tick
+    assert acknowledged == [5, 5, 2] and stub.usage_queue == []
+    assert len(records(api, product)) == 12
+
+
+@pytest.mark.capability("worker.usageFeed")
+def test_the_feed_budget_leaves_the_rest_of_a_backlog_to_the_next_wake_up(
+    api, db_conn, world, stub, monkeypatch
+):
+    line_on(api, db_conn, world.off, world.acc)
+    monkeypatch.setattr(usage_feed, "BATCH", 5)
+    monkeypatch.setattr(usage_feed, "FEED_BUDGET", timedelta(0))
+    backlog(stub, api, 12)
+    tick(db_conn, api.clock.now())
+    assert len(stub.usage_queue) == 7
+    tick(db_conn, api.clock.now())
+    assert len(stub.usage_queue) == 2
+    assert db_conn.execute("SELECT count(*) FROM usage_record").fetchone() == (10,)
+
+
+@pytest.mark.capability("worker.usageFeed")
+def test_a_batch_that_is_not_acknowledged_ends_the_wake_up_and_is_stored_once(
+    api, db_conn, world, stub, monkeypatch
+):
+    line_on(api, db_conn, world.off, world.acc)
+    monkeypatch.setattr(usage_feed, "BATCH", 5)
+    backlog(stub, api, 12)
+    with monkeypatch.context() as down:
+        down.setattr(stub, "ack_usage", lambda ids: (_ for _ in ()).throw(OSError("network")))
+        tick(db_conn, api.clock.now())  # the same batch is not fetched again and again
+    assert len(stub.usage_queue) == 12
+    assert db_conn.execute("SELECT count(*) FROM usage_record").fetchone() == (5,)
+    tick(db_conn, api.clock.now())  # resent: the stored five are replays
+    assert stub.usage_queue == []
+    assert db_conn.execute("SELECT count(*) FROM usage_record").fetchone() == (12,)
 
 
 @pytest.mark.capability("worker.usageFeed")

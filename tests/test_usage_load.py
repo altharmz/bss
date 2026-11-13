@@ -81,6 +81,21 @@ def test_records_follow_the_rate_and_name_assigned_numbers():
     assert night  # the hours in between were made too, ending at 04:00
 
 
+def test_a_pinned_hour_keeps_that_hours_rate_at_any_time_of_day():
+    # the peak hour's 70/s at 04:00, the night's 8/s at 20:00
+    assert expected(23, local(4), local(4, 1), MSK, hour=20) == pytest.approx(70 * 60, abs=30)
+    assert expected(23, local(20), local(20, 1), MSK, hour=4) == pytest.approx(8 * 60, abs=30)
+    clock = FixedClock(local(3))
+    gen = UsageLoad(
+        23.0, app_env="test", clock=clock, tz=MSK, numbers=lambda _day: ["1"], seed=1, hour=20
+    )
+    clock.set(local(6))
+    assert len(gen.due(queued=0)) == int(expected(23, local(3), local(6), MSK, hour=20))
+    assert len(gen.due(queued=0)) == 0
+    with pytest.raises(ValueError, match="0-23"):
+        UsageLoad(23.0, app_env="test", clock=clock, tz=MSK, numbers=lambda _day: [], hour=24)
+
+
 def test_the_stub_serves_generated_records_until_acknowledged_and_logs_the_lag(caplog):
     clock = FixedClock(local(12))
     stub = StubNetwork(load(clock, rate=1.0))
@@ -142,6 +157,5 @@ def test_the_worker_feed_stores_generated_usage_on_assigned_lines(
         " WHERE network_record_id LIKE 'lt-gen-%' GROUP BY 1, 2"
     ).fetchall()
     assert gen.made > 0
-    stored = min(gen.made, 500)  # one feed batch per tick
-    assert rows == [(MSISDN, product["id"], stored)]
+    assert rows == [(MSISDN, product["id"], gen.made)]
     assert start.astimezone(UTC) < clock.now()

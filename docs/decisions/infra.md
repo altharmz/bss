@@ -664,7 +664,7 @@ review and secret scanning are paid on a private repository.
   ("No pip in the runtime venv", above), base image digest bumped. Only
   the two zlib1g CVEs remain accepted, renewed, because no base image ships the fix yet.
 
-## k6 load-test harness (2026-11-12, #281; acceptance blocked)
+## k6 load-test harness (2026-11-13, #281)
 
 The local scenario runner uses the existing task load-test stack, separate SUT and k6
 CPU sets, a digest-pinned Grafana k6 image (Grafana's GHCR copy after Docker Hub daemon
@@ -676,7 +676,25 @@ iterations. A burst of password hashing for every API VU previously exhausted ap
 
 Reports require all seven endpoint groups, no dropped iterations, and an actual k6
 summary. Missing summaries cannot produce passing reports. These are harness fixes,
-not permission to lower the approved load. The existing worker feed's batch ceiling
-cannot sustain 23/s; the evidence and outstanding measurements are recorded in
-[loadtest-results.md](../loadtest-results.md). Issue #281 remains blocked under its
-fixed-decisions instruction until that capacity constraint is resolved.
+not permission to lower the approved load.
+
+Four findings of the first runs (2026-11-12) and what was decided for each:
+
+- **The feed.** One batch of 500 per wake-up is at most 8.3 records/s; the feed fell 47
+  min behind 23/s. The worker's feed step now takes batches until the feed is empty or
+  120 s have passed ([usage.md](usage.md#feed)). It is still the existing step: no new
+  process, queue or setting.
+- **The feed's rate in a scenario.** 1x is the peak load, so the peak scenarios (steady,
+  stress, soak, prod-shaped) run the feed at the peak hour's 70 records/s and
+  billing-night at the night's 8/s, whatever the time of day: `BSS_STUB_USAGE_HOUR` pins
+  the generator to one hour of its daily shape. Without it a run at 14:00 would test 21/s
+  and call that the peak.
+- **MCP's limit.** bss-mcp allows 60 calls a minute per principal; 2/s through one
+  service token is 120. The limit stays as in production: the runner spreads the mcp
+  group over enough throwaway read-only tokens to keep each under 40 a minute (3 at 1x).
+- **Billing-night's date.** The dataset's dates are frozen, so "today's run" is its first
+  unbilled date: one catch-up of that one date is one daily run of 100k accounts. The
+  worker leaves such a gap to the operator, so nothing else bills it first. The feed lag
+  is reported but not judged there: the feed waits while the worker bills.
+
+Results: [loadtest-results.md](../loadtest-results.md).

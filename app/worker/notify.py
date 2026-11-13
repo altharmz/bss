@@ -49,7 +49,12 @@ def process_notifications(
         except Exception:  # noqa: BLE001 - a broken detector must not stop billing
             log.exception("notification detector %s", name)
             continue
+        # the detectors find an event on every tick until it is too old: the ones told
+        # already are dropped in one statement, not looked up one by one (#281)
+        told = repo.existing_events(conn, [event.key for event in found])
         for event in found:
+            if event.key in told:
+                continue
             try:
                 with conn.transaction():
                     acted += [row["id"] for row in service.notify(conn, event, now=now, tz=tz)]

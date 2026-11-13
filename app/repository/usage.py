@@ -102,6 +102,156 @@ def insert(
     )
 
 
+# --- the feed's batches (#281): the statements above, for many records at once ---
+
+
+def known_network_ids(conn: psycopg.Connection, network_record_ids: list[str]) -> set[str]:
+    """Which of the network ids are stored already, whatever their event date."""
+    rows = fetch_all(
+        conn,
+        "SELECT DISTINCT network_record_id FROM usage_record WHERE network_record_id = ANY(%s)",
+        (network_record_ids,),
+    )
+    return {row["network_record_id"] for row in rows}
+
+
+def products_on(
+    conn: psycopg.Connection, keys: list[tuple[str | None, str | None, date]]
+) -> list[Row | None]:
+    """`product_on` for every (msisdn, imsi, day), in the order given."""
+    rows = fetch_all(
+        conn,
+        "SELECT i.n, m.product_id, m.billing_account_id"
+        " FROM unnest(%s::int[], %s::text[], %s::text[], %s::date[]) AS i(n, msisdn, imsi, day)"
+        " CROSS JOIN LATERAL (SELECT x.product_id, x.billing_account_id FROM ("
+        " (SELECT p.id AS product_id, p.billing_account_id, 0 AS rank FROM number_assignment a"
+        " JOIN subscriber_number n ON n.id = a.subscriber_number_id"
+        " JOIN product p ON p.id = a.product_id"
+        " WHERE n.resource_specification_id = 'msisdn' AND n.value = i.msisdn"
+        " AND a.cancelled_at IS NULL AND a.valid_for @> i.day"
+        " ORDER BY a.effective_from DESC LIMIT 1)"
+        " UNION ALL"
+        " (SELECT p.id AS product_id, p.billing_account_id, 1 AS rank FROM number_assignment a"
+        " JOIN subscriber_number n ON n.id = a.subscriber_number_id"
+        " JOIN product p ON p.id = a.product_id"
+        " WHERE n.resource_specification_id = 'imsi' AND n.value = i.imsi"
+        " AND a.cancelled_at IS NULL AND a.valid_for @> i.day"
+        " ORDER BY a.effective_from DESC LIMIT 1)"
+        " ) x ORDER BY x.rank LIMIT 1) m",
+        (
+            list(range(len(keys))),
+            [key[0] for key in keys],
+            [key[1] for key in keys],
+            [key[2] for key in keys],
+        ),
+    )
+    found: list[Row | None] = [None] * len(keys)
+    for row in rows:
+        found[row["n"]] = row
+    return found
+
+
+def insert_many(
+    conn: psycopg.Connection, records: list[dict[str, Any]], now: datetime
+) -> list[Row]:
+    """`insert` for many records in one statement: the rows stored, in the order given (a
+    record whose network id and date are stored already is left out)."""
+    columns = (
+        "id",
+        "network_record_id",
+        "kind",
+        "quantity",
+        "roaming",
+        "throttled",
+        "msisdn",
+        "imsi",
+        "event_at",
+        "event_date",
+        "product_id",
+        "billing_account_id",
+        "status",
+        "rejection_reason",
+    )
+    rows = fetch_all(
+        conn,
+        "INSERT INTO usage_record (id, network_record_id, kind, quantity, roaming, throttled,"
+        " msisdn, imsi, event_at, event_date, product_id, billing_account_id, status,"
+        " rejection_reason, created_at)"
+        " SELECT i.*, %s FROM unnest(%s::uuid[], %s::text[], %s::text[], %s::bigint[],"
+        " %s::bool[], %s::bool[], %s::text[], %s::text[], %s::timestamptz[], %s::date[],"
+        " %s::uuid[], %s::uuid[], %s::text[], %s::text[]) AS i"
+        " ON CONFLICT (network_record_id, event_date) DO NOTHING RETURNING *",
+        (now, *([record[name] for record in records] for name in columns)),
+    )
+    stored = {row["id"]: row for row in rows}
+    return [stored[record["id"]] for record in records if record["id"] in stored]
+
+
+def periods_of(
+    conn: psycopg.Connection, keys: list[tuple[UUID, date]]
+) -> dict[tuple[UUID, date], Row]:
+    """`period_of` for every (product, day) that has a plan period."""
+    rows = fetch_all(
+        conn,
+        "SELECT i.product_id, i.day, f.period_start, f.period_end"
+        " FROM unnest(%s::uuid[], %s::date[]) AS i(product_id, day)"
+        " CROSS JOIN LATERAL (SELECT lower(period) AS period_start, upper(period) AS period_end"
+        " FROM funded_interval WHERE product_id = i.product_id AND period @> i.day"
+        " ORDER BY lower(period) DESC, authorized_at DESC LIMIT 1) f",
+        ([key[0] for key in keys], [key[1] for key in keys]),
+    )
+    return {(row["product_id"], row["day"]): row for row in rows}
+
+
+def told_profiles(conn: psycopg.Connection, product_ids: list[UUID]) -> dict[UUID, dict[str, Any]]:
+    """`told_profile` for every product the network was told a profile for."""
+    rows = fetch_all(
+        conn,
+        "SELECT i.product_id, c.profile FROM unnest(%s::uuid[]) AS i(product_id)"
+        " CROSS JOIN LATERAL (SELECT profile FROM network_command"
+        " WHERE product_id = i.product_id AND state = 'confirmed'"
+        " AND kind IN ('activate', 'change_profile')"
+        " ORDER BY confirmed_at DESC, created_at DESC, (kind = 'change_profile') DESC LIMIT 1) c",
+        (product_ids,),
+    )
+    return {row["product_id"]: row["profile"] for row in rows}
+
+
+def offerings_on(
+    conn: psycopg.Connection, keys: list[tuple[UUID, date]]
+) -> dict[tuple[UUID, date], UUID]:
+    """Each product's offering on its day (`product_offering_on`)."""
+    rows = fetch_all(
+        conn,
+        "SELECT i.product_id, i.day, product_offering_on(i.product_id, i.day) AS id"
+        " FROM unnest(%s::uuid[], %s::date[]) AS i(product_id, day)",
+        ([key[0] for key in keys], [key[1] for key in keys]),
+    )
+    return {(row["product_id"], row["day"]): row["id"] for row in rows}
+
+
+def used_many(
+    conn: psycopg.Connection, keys: list[tuple[UUID, date, date]]
+) -> dict[tuple[UUID, date, date], dict[str, int]]:
+    """`used` for every (product, period start, period end)."""
+    rows = fetch_all(
+        conn,
+        "SELECT i.product_id, i.period_start, i.period_end, u.kind, u.total"
+        " FROM unnest(%s::uuid[], %s::date[], %s::date[])"
+        " AS i(product_id, period_start, period_end)"
+        " CROSS JOIN LATERAL (SELECT kind, sum(quantity)::bigint AS total FROM usage_record"
+        " WHERE product_id = i.product_id AND event_date >= i.period_start"
+        " AND event_date < i.period_end GROUP BY kind) u",
+        ([key[0] for key in keys], [key[1] for key in keys], [key[2] for key in keys]),
+    )
+    totals = {key: dict.fromkeys(KINDS, 0) for key in keys}
+    for row in rows:
+        totals[(row["product_id"], row["period_start"], row["period_end"])][row["kind"]] = row[
+            "total"
+        ]
+    return totals
+
+
 def period_of(conn: psycopg.Connection, product_id: UUID, day: date) -> Row | None:
     """The plan period (funded interval, half-open) covering `day`: the latest grant when a
     mid-period change left two."""

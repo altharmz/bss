@@ -17,7 +17,8 @@ const DURATION = __ENV.DURATION || '30m';
 const STEP = __ENV.STEP || '10m'; // stress: minutes per load step
 const STEPS = (__ENV.STEPS || '1,2,3,5').split(',').map(Number);
 const PASSWORD = __ENV.LOADTEST_OPERATOR_PASSWORD;
-const MCP_TOKEN = __ENV.LOADTEST_MCP_TOKEN;
+// several service tokens: bss-mcp limits each principal to 60 calls a minute
+const MCP_TOKENS = (__ENV.LOADTEST_MCP_TOKENS || '').split(',').filter(Boolean);
 const RUN_TAG = __ENV.RUN_TAG || '0'; // names of the run's new subscribers
 
 export const GROUPS = ['read', 'list', 'write', 'auth', 'ui', 'mcp', 'usage-post'];
@@ -423,7 +424,7 @@ export function mcp() {
   const res = http.post(MCP, JSON.stringify({
     jsonrpc: '2.0', id: mcpId, method: 'tools/call', params: { name: tool, arguments: args() },
   }), {
-    headers: { Authorization: `Bearer ${MCP_TOKEN}`, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
+    headers: { Authorization: `Bearer ${MCP_TOKENS[exec.scenario.iterationInTest % MCP_TOKENS.length]}`, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
     tags: tags('mcp', tool),
   });
   check(res, {
@@ -502,7 +503,7 @@ export function smoke(data) {
   usage_post(data);
   for (const [tool, args] of MCP_TOOLS) {
     const res = http.post(MCP, JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: tool, arguments: args() } }), {
-      headers: { Authorization: `Bearer ${MCP_TOKEN}`, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
+      headers: { Authorization: `Bearer ${MCP_TOKENS[0]}`, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
       tags: tags('mcp', tool),
     });
     check(res, { [`mcp ${tool}`]: (r) => r.status === 200 && !r.json().result.isError && JSON.parse(r.json().result.content[0].text).status < 300 });

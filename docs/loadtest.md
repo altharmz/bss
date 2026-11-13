@@ -13,7 +13,7 @@ targets use:
 
 | Service | What | Limits |
 |---|---|---|
-| `lt-db` | postgres 16, `max_connections=80`, `shared_buffers=2GB`, `pg_stat_statements`, fsync on, its own volume `lt_pgdata` | 3g |
+| `lt-db` | postgres 16, `max_connections=80`, `shared_buffers=1GB` (2GB did not fit the limit: [results](loadtest-results.md)), `pg_stat_statements`, fsync on, its own volume `lt_pgdata` | 3g |
 | `lt-app` | the runtime image (no reload), `APP_ENV=test` | 3.0 CPU, 1536m |
 | `lt-worker` | the billing worker, same image | 3.0 CPU, 1024m |
 | `lt-mcp` | the MCP connector, same image | 0.5 CPU, 256m |
@@ -210,10 +210,10 @@ and `data.json` (the ids k6 sampled; `loadtest/k6-data.sql`).
 | Scenario | What | Time |
 |---|---|---|
 | `smoke` | 1 VU, every request type once, all must pass; feed off | 1 min |
-| `steady` | the 1x mix for 30 min, feed at 23 records/s (daily shape) | 30 min |
+| `steady` | the 1x mix for 30 min, the feed at the peak hour's 70 records/s | 30 min |
 | `stress` | 1x, 2x, 3x, 5x for 10 min each; the report names the first step and group that break a target (`first_break`) | 42 min |
 | `soak` | 1x for 3 h; flags RSS growth > 20 % per container and any pool timeout | 3 h |
-| `billing-night` | 20 % of the mix, the feed at the night rate, one catch-up run of the next run date through `POST /internal/v1/billingRun/catchUp`; measures the run, the API latency while it runs, and a `pg_dump -Fc` started 105 min after the run start | 2 h |
+| `billing-night` | 20 % of the mix, the feed at the night's 8 records/s, one catch-up run of the first unbilled date through `POST /internal/v1/billingRun/catchUp`; measures the run, the API latency while it runs, and a `pg_dump -Fc` started 105 min after the run start | 2 h |
 | `prod-shaped` | steady at today's production limits (app 0.5 CPU / 384m / 1 process / pool 10, worker 0.25 CPU, postgres 512m, `shared_buffers` 128MB); its numbers are the current ceiling, not a verdict | 30 min |
 
 **The mix at 1x** (operations per second; `MULT` scales every rate and the UI VUs; open
@@ -225,7 +225,7 @@ model, `constant-arrival-rate`):
 | `list` | 5/s (inside the read budget of 30/s) | the first page or a random offset up to 5000 of customers, billing accounts, products, bills; productUsage of a product |
 | `write` | 5/s | 40 % top-up, 25 % payment, 20 % new subscriber (party, customer, postpaid account, number, order: 5 requests), 10 % plan change, 5 % termination. Changes and terminations are postpaid lines from disjoint pools, dated tomorrow noon |
 | `ui` | 20 VUs `lt-op-NN` | the account card (the account, then its panels in parallel) or the accounts list, 5-15 s think time |
-| `mcp` | 2/s | `get_*` tool calls through lt-mcp with a throwaway read-only static token |
+| `mcp` | 2/s | `get_*` tool calls through lt-mcp, spread over throwaway read-only static tokens: bss-mcp allows a principal 60 calls a minute, as in production, so the runner makes enough tokens to keep each under 40 (3 at 1x, 15 for stress) |
 | `usage-post` | 5/s | `POST /productUsage` |
 | `auth` | once per VU | the sign-in (`POST /internal/v1/session`) |
 
@@ -239,7 +239,8 @@ sign-in throttle of 20 a minute per address sees operators, not the one k6 conta
 **Pass criteria** (k6 thresholds; a missed one makes k6 exit 99 and the run fail): per
 group p95 < 1 s and p99 < 1.5 s; < 0.1 % failed requests overall and per group. The
 runner adds: the feed lag (the age of the oldest unacknowledged stub record, from the
-worker's `stub usage load:` lines) < 5 min; billing-night: the run < 90 min; soak: no
+worker's `stub usage load:` lines) < 5 min, except in billing-night, where it is only
+reported (the feed waits while the worker bills); billing-night: the run < 90 min; soak: no
 container's memory grows more than 20 % from the first to the last tenth of the run, and
 no pool timeout in the app log.
 
@@ -247,12 +248,16 @@ no pool timeout in the app log.
 `BSS_STUB_USAGE_RATE`: the stub network produces records at that daily average with a
 daily shape (70/s at 20:00, 8/s at 04:00 at 23/s), each for an MSISDN assigned that day,
 and the worker's existing feed step stores them
-(`app/integrations/network/usage_load.py`). It is refused unless `APP_ENV=test`. For
-billing-night the runner picks the average that gives 8/s at the hour the run starts.
+(`app/integrations/network/usage_load.py`). It is refused unless `APP_ENV=test`. 1x is
+the peak load, so the runner pins the generator to one hour of the shape
+(`LOADTEST_STUB_USAGE_HOUR`, the worker's `BSS_STUB_USAGE_HOUR`): hour 20 (70/s) in
+steady, stress, soak and prod-shaped, hour 4 (8/s) in billing-night, at any time of day.
+The feed step takes batches of 500 until the feed is empty or 120 s have passed
+([usage.md](decisions/usage.md#feed)).
 
 **Credentials** come only from the environment: the operators' password from
 `~/.config/bss/loadtest/operator-password` (`make loadtest-secret`), a fresh `/metrics`
-token per run, and a read-only MCP token created before k6 and revoked after it. None is
+token per run, and read-only MCP tokens created before k6 and revoked after it. None is
 written to `loadtest/out/`; the runner checks the run's files for them and deletes any
 file that holds one.
 
@@ -279,10 +284,9 @@ The agent runs all of it; long scenarios in the background.
    prod-shaped, a restore before each. The runner recreates lt-app, lt-worker and lt-mcp
    with the scenario's settings and waits for the worker's first wake-up to end before k6
    starts (the dataset is days old, so the first wake-up catches up on prepaid work).
-5. Billing-night requires a snapshot billed through yesterday, with today still unbilled.
-   Its worker startup must be coordinated with the catch-up trigger; this remains
-   unverified (see the results document). An old snapshot measures several days, and
-   allowing startup to bill today before the trigger measures no catch-up at all.
+5. Billing-night catches up the dataset's first unbilled date (5 November on `seed100k`):
+   one date, so one daily run of all 100k accounts. The worker does not bill that gap by
+   itself, so the run starts only when k6 asks for it, 30 s into the scenario.
 6. To prove the thresholds: `make loadtest SCENARIO=steady MULT=20 DURATION=3m` must fail
    (k6 exit 99).
 

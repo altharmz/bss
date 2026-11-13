@@ -52,6 +52,7 @@ def _usage_load():  # noqa: ANN202 - imported lazily, like the stub
         clock=SystemClock(),
         tz=ZoneInfo(settings.billing_tz),
         numbers=partial(assigned_numbers, settings.database_url),
+        hour=None if settings.stub_usage_hour < 0 else settings.stub_usage_hour,
     )
 
 

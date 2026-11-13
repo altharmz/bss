@@ -3,7 +3,9 @@
 `BSS_STUB_USAGE_RATE=<records/s>` makes the stub network produce usage records on its own,
 at that daily average with a daily shape: `SHAPE` has one factor per local hour of
 BILLING_TZ (mean 1; peak 3.04 at 20:00, 0.35 at 04:00, so 23/s gives about 70/s at 20:00
-and 8/s at 04:00), linear between the hours. Each record names an MSISDN assigned on the
+and 8/s at 04:00), linear between the hours. `BSS_STUB_USAGE_HOUR=<0-23>` keeps one hour's
+factor for the whole run instead (20: the peak, 4: the night), so a scenario measures the
+same feed at any time of day. Each record names an MSISDN assigned on the
 day, drawn from the database. The records wait in the stub's queue until the worker's
 existing feed step stores and acknowledges them; `usage_records` logs the age of the oldest
 unacknowledged record (the feed lag).
@@ -58,9 +60,14 @@ def factor(local: datetime) -> float:
     return (SHAPE[low] * (1 - part) + SHAPE[high] * part) / _MEAN
 
 
-def expected(rate: float, start: datetime, end: datetime, tz: ZoneInfo) -> float:
+def expected(
+    rate: float, start: datetime, end: datetime, tz: ZoneInfo, hour: int | None = None
+) -> float:
     """Records due in [start, end): the integral of the shaped rate. Exact for zones with
-    whole-hour offsets (pieces end on whole hours, where the shape's knots are)."""
+    whole-hour offsets (pieces end on whole hours, where the shape's knots are). With
+    `hour`, that hour's factor holds for the whole interval."""
+    if hour is not None:
+        return max(0.0, (end - start).total_seconds()) * SHAPE[hour] / _MEAN * rate
     total = 0.0
     at = start
     while at < end:
@@ -94,11 +101,15 @@ class UsageLoad:
         tz: ZoneInfo,
         numbers: Callable[[date], list[str]],
         seed: int | None = None,
+        hour: int | None = None,
     ) -> None:
         check_allowed(app_env, rate)
         if rate <= 0:
             raise ValueError("the usage rate must be positive")
+        if hour is not None and not 0 <= hour < len(SHAPE):
+            raise ValueError("the usage hour must be 0-23")
         self.rate = rate
+        self.hour = hour
         self.clock = clock
         self.tz = tz
         self.numbers = numbers
@@ -124,7 +135,7 @@ class UsageLoad:
         now = self.clock.now()
         if now <= self.since:
             return []
-        count_f = expected(self.rate, self.since, now, self.tz) + self.carry
+        count_f = expected(self.rate, self.since, now, self.tz, self.hour) + self.carry
         count = int(count_f)
         self.carry = count_f - count
         start, span = self.since, now - self.since

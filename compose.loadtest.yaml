@@ -16,13 +16,17 @@ services:
     image: postgres:16-alpine
     profiles: [loadtest]
     # Production-like durability (fsync on), unlike the test database `db`. Settings of the
-    # load-test profile: 80 connections, 2 GB shared buffers, pg_stat_statements.
+    # load-test profile: 80 connections, 1 GB shared buffers, pg_stat_statements. The
+    # programme's 2 GB of shared buffers did not fit the 3g limit with 60 app connections:
+    # 2.0 GB of shared memory and 0.9 GB of backends left nothing for the page cache, and
+    # the kernel killed a backend twice in the 30-minute steady run (#281,
+    # docs/loadtest-results.md).
     command:
       - postgres
       - -c
       - max_connections=80
       - -c
-      - shared_buffers=${LOADTEST_DB_SHARED_BUFFERS:-2GB}
+      - shared_buffers=${LOADTEST_DB_SHARED_BUFFERS:-1GB}
       - -c
       - effective_cache_size=${LOADTEST_DB_CACHE:-2GB}
       - -c
@@ -100,6 +104,8 @@ services:
       WORKER_FAKE_NOW: ${LOADTEST_WORKER_FAKE_NOW:-}
       # the stub network's usage feed (#281): records/s, daily average, shaped; 0 = off
       BSS_STUB_USAGE_RATE: ${LOADTEST_STUB_USAGE_RATE:-0}
+      # the hour of the daily shape the feed keeps (20 = the peak, 4 = the night); -1 = the clock
+      BSS_STUB_USAGE_HOUR: ${LOADTEST_STUB_USAGE_HOUR:--1}
     cpuset: ${LOADTEST_SUT_CPUS:-4-7}
     cpus: ${LOADTEST_WORKER_CPUS:-3.0}
     mem_limit: 1024m
@@ -188,7 +194,7 @@ services:
     memswap_limit: 2g
     environment:
       LOADTEST_OPERATOR_PASSWORD: ${LOADTEST_OPERATOR_PASSWORD:-}
-      LOADTEST_MCP_TOKEN: ${LOADTEST_MCP_TOKEN:-}
+      LOADTEST_MCP_TOKENS: ${LOADTEST_MCP_TOKENS:-}
     volumes:
       - ./loadtest/k6:/scripts:ro
       - ./loadtest/out:/out

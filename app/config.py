@@ -61,6 +61,14 @@ class Settings(BaseSettings):
     stub_usage_rate: float = Field(
         default=0, ge=0, validation_alias=AliasChoices("BSS_STUB_USAGE_RATE", "stub_usage_rate")
     )
+    # The local hour (0-23) whose share of the daily shape the generator keeps for the whole
+    # run: 20 is the peak, 4 the night. -1 = follow the clock.
+    stub_usage_hour: int = Field(
+        default=-1,
+        ge=-1,
+        le=23,
+        validation_alias=AliasChoices("BSS_STUB_USAGE_HOUR", "stub_usage_hour"),
+    )
     # Number Transfer PIN validity in days (docs/decisions/numbers.md); optional.
     number_transfer_pin_days: int = Field(
         default=7,

@@ -25,6 +25,7 @@ there, which the runner checks before it ends.
 
 import argparse
 import json
+import math
 import os
 import re
 import secrets
@@ -61,7 +62,10 @@ PROD_SHAPED = {
     "LOADTEST_DB_CACHE": "384MB",
 }
 FEED_RATE = 23.0  # records/s, daily average (2M a day)
-NIGHT_RATE = 8.0  # records/s at 04:00
+PEAK_HOUR, NIGHT_HOUR = 20, 4  # the shape's hours: 70 records/s and 8 records/s at 23/s
+# bss-mcp allows 60 calls a minute per principal (MCP_RATE_PER_MIN, as in production): the
+# mcp group's calls are spread over enough service tokens to keep each one under this
+MCP_RATE, MCP_PER_TOKEN = 2.0, 40.0  # calls/s at 1x; calls a minute one token carries
 
 
 def run(cmd: list[str], env: dict[str, str] | None = None, **kw) -> str:
@@ -223,10 +227,20 @@ def container_stats(path: Path) -> dict:
     return out
 
 
-def feed_lag(worker_log: str) -> dict:
-    lags = [float(x) for x in re.findall(r"lag_seconds=([\d.]+)", worker_log)]
-    queued = [int(x) for x in re.findall(r"stub usage load: queued=(\d+)", worker_log)]
-    made = [int(x) for x in re.findall(r" made=(\d+)", worker_log)]
+FEED_LINE = re.compile(
+    r'"ts": "([^"]+)".*stub usage load: queued=(\d+) made=(\d+) dropped=\d+ lag_seconds=([\d.]+)'
+)
+
+
+def feed_lag(worker_log: str, since: datetime | None = None) -> dict:
+    """The feed's lag from the worker's `stub usage load:` lines; with `since`, only the
+    lines logged from then on (the measured window, not the worker's start-up)."""
+    lines = [
+        (int(queued), int(made), float(lag))
+        for ts, queued, made, lag in FEED_LINE.findall(worker_log)
+        if since is None or datetime.fromisoformat(ts.replace("Z", "+00:00")) >= since
+    ]
+    queued, made, lags = ([line[i] for line in lines] for i in range(3))
     return {
         "samples": len(lags),
         "max_lag_seconds": max(lags) if lags else None,
@@ -342,38 +356,65 @@ def window_latency(csv_gz: Path, start: str, end: str) -> dict:
 # ---------- main ----------
 
 
-def settle(since: str, timeout: float) -> float:
-    """Wait until the worker logs a finished wake-up after `since`; returns the wait."""
+SETTLED_LAG = 120.0  # seconds: the feed has caught up with what the start-up left waiting
+
+
+def settled(worker_log: str, feed: bool) -> bool:
+    """The worker finished a wake-up and, with the feed on, its latest fetch found the feed
+    caught up: the first wake-up after a restore is long, and what the generator makes
+    meanwhile must not be counted as the measured run's lag."""
+    if "wake-up:" not in worker_log:
+        return False
+    if not feed:
+        return True
+    lines = FEED_LINE.findall(worker_log)
+    return bool(lines) and float(lines[-1][3]) < SETTLED_LAG
+
+
+def settle(since: str, timeout: float, feed: bool) -> float:
+    """Wait until the worker has settled after `since`; returns the wait."""
     t0 = time.monotonic()
     while time.monotonic() - t0 < timeout:
         out = subprocess.run(
             [*LT, "logs", "--since", since, "lt-worker"], capture_output=True, text=True
         ).stdout
-        if "wake-up:" in out:
+        if settled(out, feed):
             return time.monotonic() - t0
         time.sleep(10)
-    raise SystemExit(f"loadtest: the worker did not finish a wake-up in {timeout:.0f} s")
+    raise SystemExit(f"loadtest: the worker did not settle in {timeout:.0f} s")
 
 
-def feed_rate_now(scenario: str, tz: ZoneInfo) -> float:
+def feed_of(scenario: str) -> tuple[float, int]:
+    """(daily average in records/s, the shape's hour) of the scenario's usage feed: off in
+    smoke, the night rate in billing-night, the peak everywhere else (1x is the peak)."""
     if scenario == "smoke":
-        return 0.0
-    if scenario != "billing-night":
-        return FEED_RATE
-    # the night rate now: the average that makes the shaped rate NIGHT_RATE at this hour
-    sys.path.insert(0, str(Path.cwd()))
-    from app.integrations.network.usage_load import factor  # pure; no settings read
+        return 0.0, -1
+    return FEED_RATE, NIGHT_HOUR if scenario == "billing-night" else PEAK_HOUR
 
-    return round(NIGHT_RATE / factor(datetime.now(tz)), 2)
+
+def mcp_tokens(scenario: str, mult: float, steps: list[float]) -> int:
+    """How many service tokens keep every principal under bss-mcp's rate limit."""
+    if scenario == "stress":
+        top = max(steps)
+    elif scenario == "billing-night" and mult == 1:
+        top = 0.2
+    else:
+        top = mult
+    return max(1, math.ceil(MCP_RATE * top * 60 / MCP_PER_TOKEN))
 
 
 def billing_date(last: str, today: date) -> date:
-    """A measured daily catch-up needs yesterday completed and today still unbilled."""
-    if not last or date.fromisoformat(last) != today - timedelta(days=1):
+    """The date billing-night catches up: the first unbilled one. The dataset's dates are
+    frozen, so this is the day after its last run, not the calendar's today; the worker
+    leaves such a gap to the operator, and one catch-up of one date is one daily run."""
+    if not last:
+        raise ValueError("billing-night needs a dataset with at least one daily run")
+    run_date = date.fromisoformat(last) + timedelta(days=1)
+    if run_date >= today:
         raise ValueError(
-            "billing-night requires a snapshot billed through yesterday, with today unbilled"
+            f"billing-night needs an unbilled date before today; the last run is {last}"
         )
-    return today
+    return run_date
 
 
 def main() -> int:
@@ -400,7 +441,11 @@ def main() -> int:
     run_date = None
     if args.scenario == "billing-night":
         last = psql("SELECT max(run_date) FROM billing_run WHERE kind = 'daily'").strip()
-        run_date = billing_date(last, datetime.now(tz).date())
+        try:
+            run_date = billing_date(last, datetime.now(tz).date())
+        except ValueError as error:
+            print(f"loadtest: {error}", file=sys.stderr)
+            return 2
 
     env = {
         **os.environ,
@@ -412,15 +457,16 @@ def main() -> int:
         env.pop(key, None)
     if args.scenario == "prod-shaped":
         env.update(PROD_SHAPED)
-    rate = feed_rate_now(args.scenario, tz)
+    rate, hour = feed_of(args.scenario)
     env["LOADTEST_STUB_USAGE_RATE"] = str(rate)
+    env["LOADTEST_STUB_USAGE_HOUR"] = str(hour)
     metrics_token = secrets.token_urlsafe(24)
     env["LOADTEST_METRICS_TOKEN"] = metrics_token
 
-    log(f"{name}: starting the SUT (feed {rate} records/s average)")
+    log(f"{name}: starting the SUT (feed {rate} records/s average, the shape's hour {hour})")
     since = datetime.now(UTC).isoformat(timespec="seconds")
     # a fresh lt-app and lt-worker (new token, rate): memory starts from zero in each run
-    settled = 0.0
+    settled_after = 0.0
     if not args.reuse:
         subprocess.run([*LT, "up", "-d", "--wait", "lt-db"], env=env, check=True)
         subprocess.run(
@@ -428,27 +474,30 @@ def main() -> int:
             env=env,
             check=True,
         )
-        log("waiting for the worker's first wake-up to end")
-        settled = settle(since, args.settle_timeout)
-        log(f"worker settled after {settled:.0f} s")
+        log("waiting for the worker to settle (its first wake-up, the feed caught up)")
+        settled_after = settle(since, args.settle_timeout, bool(rate))
+        log(f"worker settled after {settled_after:.0f} s")
 
     ctx = context(env)
     (rundir / "context.json").write_text(json.dumps(ctx, indent=1))
     (rundir / "data.json").write_text(psql(Path("loadtest/k6-data.sql").read_text()).strip())
 
-    token_out = subprocess.run(
-        [*LT, "exec", "-T", "lt-mcp", "python", "-m", "bss_mcp.tokens", "create",
-         f"lt-k6-{stamp.lower()}", "--scope", "read"],
-        capture_output=True, text=True, check=True,
-    )  # fmt: skip
-    mcp_token = token_out.stdout.splitlines()[0].strip()
-    token_id = re.search(r"id (\S+)", token_out.stderr).group(1)
+    steps = [float(s) for s in os.environ.get("STEPS", "1,2,3,5").split(",")]
+    tokens, token_ids = [], []
+    for i in range(mcp_tokens(args.scenario, float(args.mult), steps)):
+        token_out = subprocess.run(
+            [*LT, "exec", "-T", "lt-mcp", "python", "-m", "bss_mcp.tokens", "create",
+             f"lt-k6-{stamp.lower()}-{i}", "--scope", "read"],
+            capture_output=True, text=True, check=True,
+        )  # fmt: skip
+        tokens.append(token_out.stdout.splitlines()[0].strip())
+        token_ids.append(re.search(r"id (\S+)", token_out.stderr).group(1))
 
     billing: dict = {}
     k6_env = {
         **env,
         "LOADTEST_OPERATOR_PASSWORD": password,
-        "LOADTEST_MCP_TOKEN": mcp_token,
+        "LOADTEST_MCP_TOKENS": ",".join(tokens),
     }
     extra = []
     if args.scenario == "billing-night":
@@ -495,10 +544,11 @@ def main() -> int:
         stop.set()
     stats.stop.set()
     subprocess.run(["docker", "stop", scrape_name], capture_output=True, check=False)
-    subprocess.run(
-        [*LT, "exec", "-T", "lt-mcp", "python", "-m", "bss_mcp.tokens", "revoke", token_id],
-        capture_output=True, check=False,
-    )  # fmt: skip
+    for token_id in token_ids:
+        subprocess.run(
+            [*LT, "exec", "-T", "lt-mcp", "python", "-m", "bss_mcp.tokens", "revoke", token_id],
+            capture_output=True, check=False,
+        )  # fmt: skip
 
     pg_stats = psql(Path("loadtest/pg-stats.sql").read_text())
     (rundir / "pg-stats.txt").write_text(pg_stats)
@@ -519,13 +569,15 @@ def main() -> int:
         "started": started.isoformat(timespec="seconds"),
         "ended": ended.isoformat(timespec="seconds"),
         "seconds": round(seconds),
-        "worker_settle_seconds": round(settled),
+        "worker_settle_seconds": round(settled_after),
         "feed_rate": rate,
+        "feed_hour": hour,
+        "mcp_tokens": len(tokens),
         "k6_exit": k6.returncode,
         "context": ctx,
         "groups": groups_of(summary, seconds),
         "containers": container_stats(rundir / "stats.jsonl"),
-        "feed": feed_lag(worker_log),
+        "feed": feed_lag(worker_log, started),
         "pool_timeouts": len(re.findall(r"PoolTimeout|couldn't get a connection", app_log)),
         "pg_stats": pg_stats,
     }
@@ -539,7 +591,8 @@ def main() -> int:
         "all endpoint groups measured": set(report["groups"]) == set(GROUPS),
         "no dropped iterations": (metric(summary, "dropped_iterations") or {}).get("count", 0) == 0,
     }
-    if rate:
+    if rate and run_date is None:
+        # billing-night only reports the lag: the feed waits while the worker bills
         lag = report["feed"]["max_lag_seconds"]
         checks["feed lag < 5 min"] = lag is not None and lag < LAG_LIMIT
     if args.scenario == "soak":
@@ -573,7 +626,7 @@ def main() -> int:
         for p in rundir.iterdir()
         if p.is_file()
         and p.suffix != ".gz"
-        and any(s in p.read_text(errors="ignore") for s in (password, mcp_token, metrics_token))
+        and any(s in p.read_text(errors="ignore") for s in (password, *tokens, metrics_token))
     ]
     if leaked:
         for p in leaked:

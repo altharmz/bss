@@ -111,6 +111,18 @@ def insert(
     )
 
 
+def existing_events(conn: psycopg.Connection, dedupe_keys: list[str]) -> set[str]:
+    """Which of the events have a message already, in one statement."""
+    if not dedupe_keys:
+        return set()
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT DISTINCT dedupe_key FROM notification_message WHERE dedupe_key = ANY(%s)",
+            (dedupe_keys,),
+        )
+        return {row[0] for row in cur.fetchall()}
+
+
 def event_exists(conn: psycopg.Connection, dedupe_key: str) -> bool:
     return (
         fetch_one(
