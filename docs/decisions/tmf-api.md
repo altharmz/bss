@@ -1076,6 +1076,20 @@ allocates `amount + taxAmount`, which `totalAmount` (if sent) must equal
   does a name filter; status/state filters get none (low selectivity). Each list's filters
   and the index serving them are listed in the PR of #286.
 
+## Batched order bodies (2026-11-13, #299)
+
+`productOrder` loads each related table once for the page: accounts, items, error
+messages, offerings, quoted prices and prepaid commands. The single-order builder
+uses the same loader with a page of one, including write responses and event bodies.
+Items retain `ORDER BY position`; error messages retain
+`ORDER BY product_order_item_id NULLS FIRST, occurred_at, code, id`.
+Prepaid tax quotes still come from the command's stored intervals, falling back to
+the quoted catalog price as before. No response attribute or nested array order changes.
+
+`cancelProductOrder` needs no related rows; its existing row builder already serves
+both list and single-item responses. `tests/test_list_queries.py` pins the statement
+counts for full pages and compares list bodies with creation and single-item responses.
+
 ## Lists without counts (2026-11-10, #312)
 
 Decided by the human: no list counts its rows. A deliberate deviation from TMF630's

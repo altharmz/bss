@@ -110,7 +110,7 @@ mcp-token-revoke: ## Revoke a local MCP static token (ID=<id>) or OAuth grant (G
 test: runtime-check deploy-check ## The FULL suite in the container (parallel; HYPOTHESIS_PROFILE=dev|ci), plus the harness and deploy script tests (runtime-check, deploy-check): nightly in CI, by hand before a PR
 	./scripts/test-billing-status-check.sh
 	./scripts/test-pre-commit-lock.sh
-	./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) oneoff pytest -n auto
+	./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) $(if $(PLAN_CAPTURE_DIR),-e BSS_PLAN_CAPTURE_DIR=$(PLAN_CAPTURE_DIR)) oneoff pytest -n auto
 
 test-smoke: ## The smoke subset (pytest -m smoke) and the scripts' own cases: what CI runs on pull requests and master
 	./scripts/test-billing-status-check.sh
@@ -145,6 +145,11 @@ USAGE_DAYS ?= 30
 SEED_ARGS ?=
 LT_DATA := $(or $(XDG_DATA_HOME),$(HOME)/.local/share)/bss/loadtest
 .PHONY: loadtest loadtest-up loadtest-down loadtest-ps loadtest-logs loadtest-migrate loadtest-reset loadtest-secret loadtest-seed loadtest-dump loadtest-restore loadtest-pg-stats-reset loadtest-pg-stats loadtest-billing-run loadtest-growth
+
+.PHONY: loadtest-plan-sweep
+loadtest-plan-sweep: ## Collect full-suite SQL and EXPLAIN on seed100k (PHASE=all|collect|measure [SWEEP=plan-sweep-<stamp>]); restore seed100k first
+	@mkdir -p loadtest/out
+	python3 -B loadtest/plan_sweep.py --phase $(or $(PHASE),all) $(if $(SWEEP),--run $(SWEEP))
 
 loadtest-up: ## Start the load-test stack (lt-db, lt-app, lt-worker, lt-mcp; pinned to LOADTEST_SUT_CPUS, default 4-7), migrated
 	./scripts/task-compose build app

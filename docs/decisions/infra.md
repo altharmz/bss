@@ -575,6 +575,19 @@ dedicated VPS on 2026-11-09. How to use it: [loadtest.md](../loadtest.md).
   to find what an interrupted day already created, and for its own `loadtest_config` and
   `loadtest_progress` tables.
 
+## SQL plan sweep (2026-11-12, #327)
+
+The suite-wide SQL plan sweep (#327, 2026-11-12) uses the local test server's
+`pg_stat_statements` plus an opt-in psycopg attribution hook; normal tests do not
+collect attribution. A dedicated collection run reserves one million statistics slots
+for the cloned databases; normal local tests use 10k. Source lines and test IDs come
+from successful application-issued statements, while DDL and fixture-only statements
+remain in a separate export. Measurement runs offline on the restored `lt-db`, with
+real account profiles, catalog-inferred bind types and explicit binding provenance.
+Writes are rolled back and sequence values restored; constraints stay enabled.
+Unsupported statements remain unbound and coverage below 90% fails. The runbook is
+[loadtest.md](../loadtest.md#sql-plan-sweep-327).
+
 ## App processes and pools (2026-11-09, #288)
 
 - **Processes.** `WEB_CONCURRENCY`, uvicorn's own variable, sets the number of app

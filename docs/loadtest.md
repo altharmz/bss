@@ -295,3 +295,70 @@ entire exported dataset into each VU.
 What to watch while it runs: `make loadtest-ps` (health), `make loadtest-logs` (the app's
 errors and the worker's `stub usage load:` lines), `tail -f loadtest/out/<run>/stats.jsonl`.
 After it: `report.md`, then fill in [loadtest-results.md](loadtest-results.md).
+
+## SQL plan sweep (#327)
+
+Measured coverage, limitations and follow-up findings: [results](loadtest-plan-sweep.md).
+
+`make loadtest-plan-sweep` collects application statement shapes from the full test
+suite and runs `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` against the restored 100k
+dataset. This complements k6: it includes SQL reached by the suite outside its HTTP mix.
+
+1. `make up` builds the local development image.
+2. `make loadtest-restore NAME=seed100k` restores, migrates and analyzes the task's own
+   load-test database. Other tasks' databases are never used.
+3. `make loadtest-plan-sweep` collects the full suite, exports server statistics, stops
+   this task's load-test app/worker/MCP and measures on `lt-db` with four account profiles:
+   median-id account, most lines, prepaid and postpaid.
+
+Output is under `loadtest/out/plan-sweep-<UTC timestamp>/`: per-process attribution,
+`shapes.json` (server query IDs, normalized shapes, calls, source lines and tests),
+`report.json` (full plans and every profile's binding provenance/errors), and
+`report.md` sorted by worst execution time. Fixture-only, utility and unattributed
+server statements are retained separately with an exclusion reason. Query IDs from
+cloned test databases are grouped by a literal-independent SQL fingerprint; query IDs
+are not assumed stable across databases or PostgreSQL versions.
+
+For iteration, `make loadtest-plan-sweep PHASE=collect` collects only, and
+`make loadtest-plan-sweep PHASE=measure SWEEP=plan-sweep-<timestamp>` reuses the shapes.
+`PHASE=export` rebuilds the shape export from the completed attribution and still-live
+test-server statistics. Repeated measurement attempts archive the previous reports.
+`PHASE=prepare` only resets statistics and creates the run directory; it prints the
+instrumented `make test` command. The same capture variables can be passed to
+`make commit` when its normal hook already selects the full suite (for example, a
+Compose change): the hook's tests and selection remain unchanged. Export after that
+hook finishes, then measure. This records the exact committed snapshot without an
+extra full-suite run solely for attribution.
+A collection run increases the test server's statistics capacity to avoid eviction;
+ordinary tests use its default 10k slots. A report with evictions or coverage below
+90% fails the command. Failed/unsupported shapes remain **unbound**, with the error;
+partial failures of the four account profiles remain visible and are not hidden.
+The coverage report separately counts all-four-profile and partial-profile successes.
+Nullable values stay nullable; the binder does not invent a foreign key for a NULL.
+The JSON separately counts shapes using typed UUID proxies from a sampled account when
+a feature table is empty or its target cannot be resolved. Those plans cover empty/
+missing-row paths, not performance with a populated feature table. Every such parameter
+is marked in its binding provenance; this limitation is separate from successful SQL
+execution coverage. Relation-size estimates are included for interpreting sparse data.
+Run-ID samples prefer the latest daily run, honoring an explicit prepaid-command kind,
+so daily bookkeeping is exercised with a daily run rather than a command run's ID.
+
+Flags: a sequential scan of a relation with over 10k estimated rows, execution over
+5 ms on per-request/account paths (conservative default), over 100 ms on recognized
+once-per-tick/run functions, or a row estimate off by more than 100x. Inspect both
+the flag and the plan: an unfiltered bulk operation can legitimately scan a large table.
+Estimate comparisons skip unexecuted or partially consumed nodes (for example an
+index scan stopped by `LIMIT`); blocking sorts/hash builds still consume and check
+their full inputs. The excerpt records whether an estimate comparison is meaningful.
+Known findings are marked `known (#310)` or `known (#311)`; the sweep fixes no queries.
+
+Every analyzed statement runs in its own transaction and is rolled back. Sequence
+values are restored after the offline sweep, because PostgreSQL sequences do not roll
+back with a transaction. Session-lock and external-effect functions are unbound.
+Sequence restoration is verified, with a database-identity-bound recovery journal if
+the process is interrupted. The account count is checked before and after measurement.
+Statement and lock timeouts bound each attempt. No constraint/trigger is disabled,
+and a failed INSERT is never counted as a successful analyzed write. These repeated,
+mostly warm-cache plans are diagnostic timings, not concurrent-load capacity results.
+Deferred constraint triggers that fire only at commit are outside a rolled-back
+statement's execution time; these plans do not replace commit-time or end-to-end tests.

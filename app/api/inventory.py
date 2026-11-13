@@ -54,13 +54,13 @@ from app.api.errors import bad_request, conflict, not_found, unprocessable
 from app.api.prices import monthly_price, tax_on, total_rate
 from app.api.tmfjson import TmfJSONResponse
 from app.billing.core import cycle_period, product_charge_period
-from app.billing.model import MissingPrice
+from app.billing.model import MissingPrice, OfferingChange
 from app.config import settings
 from app.events import emit
 from app.network import device
 from app.ordering.process import ItemRequest, OrderRefused, OrderRequest, place_order
-from app.repository import billing, catalog, devices, orders, parties, products
-from app.repository._sql import Row
+from app.repository import billing, catalog, orders, parties, products
+from app.repository._sql import Row, fetch_all, rows_by_id, rows_grouped_by
 
 API = "TMF637"
 BASE = "/tmf-api/productInventory/v5"
@@ -112,9 +112,7 @@ def order_href(order_id: Any) -> str:
 ROLES = {"add": "creation", "modify": "modification", "delete": "termination"}
 
 
-def _related_order_item(conn: psycopg.Connection, item_id: UUID) -> dict[str, Any]:
-    item = orders.get_order_item(conn, item_id)
-    assert item is not None  # foreign key
+def _related_order_item(item: Row) -> dict[str, Any]:
     return {
         "orderId": str(item["product_order_id"]),
         "orderHref": order_href(item["product_order_id"]),
@@ -143,42 +141,143 @@ def _with_device(details: dict[str, Any], current: Row | None) -> dict[str, Any]
     return {k: v for k, v in details.items() if k != "productCharacteristic"}
 
 
-def product_body(conn: psycopg.Connection, row: Row, today: date) -> dict[str, Any]:
-    account = parties.get_billing_account(conn, row["billing_account_id"])
-    if account["rating_type"] == "prepaid":
-        from app.billing.entitlement import view
-
-        row = row | {"status": view(conn, row, account, today)["status"]}
-    # the offering valid today (on the start date for a product that starts later)
-    changes = billing.offering_changes(conn, [row["id"]]).get(row["id"], ())
-    core = billing.core_product(row, changes)
-    offering = catalog.get_product_offering(conn, core.offering_on(max(today, row["start_date"])))
-    assert account is not None and offering is not None  # foreign keys
-    item_ids = [
-        row["created_by_item_id"],
-        *products.change_items(conn, row["id"]),
-        *(c["changed_by_item_id"] for c in products.status_changes_of(conn, row["id"])),
-        row["terminated_by_item_id"],
+def product_bodies(conn: psycopg.Connection, rows: list[Row], today: date) -> list[dict[str, Any]]:
+    """Load each relation once for the page; rendering never queries per product."""
+    if not rows:
+        return []
+    ids = [row["id"] for row in rows]
+    accounts = rows_by_id(conn, "billing_account", [r["billing_account_id"] for r in rows])
+    offering_items = rows_grouped_by(
+        conn, "product_offering_change", "product_id", ids, "change_date"
+    )
+    changes = {
+        uid: tuple(OfferingChange(c["change_date"], c["product_offering_id"]) for c in group)
+        for uid, group in offering_items.items()
+    }
+    cores = {r["id"]: billing.core_product(r, changes.get(r["id"], ())) for r in rows}
+    offering_ids = list({uid for core in cores.values() for uid in core.offering_ids})
+    offerings = rows_by_id(conn, "product_offering", offering_ids)
+    specifications = rows_by_id(
+        conn,
+        "product_specification",
+        [
+            o["product_specification_id"]
+            for o in offerings.values()
+            if o["product_specification_id"] is not None
+        ],
+    )
+    customers = rows_by_id(conn, "customer", [a["customer_id"] for a in accounts.values()])
+    status_items = rows_grouped_by(conn, "product_status_change", "product_id", ids, "change_date")
+    numbers = rows_grouped_by(
+        conn, "number_assignment", "product_id", ids, "resource_specification_id DESC"
+    )
+    current_devices = {
+        r["product_id"]: r
+        for r in fetch_all(
+            conn,
+            "SELECT * FROM product_device WHERE product_id = ANY(%s) AND ended_at IS NULL",
+            (ids,),
+        )
+    }
+    grants = {
+        r["product_id"]: r
+        for r in fetch_all(
+            conn,
+            "SELECT DISTINCT ON (product_id) * FROM funded_interval WHERE product_id = ANY(%s)"
+            " ORDER BY product_id, lower(period) DESC, authorized_at DESC",
+            (ids,),
+        )
+    }
+    item_ids = {}
+    for row in rows:
+        uid = row["id"]
+        item_ids[uid] = [
+            row["created_by_item_id"],
+            *(c["changed_by_item_id"] for c in offering_items[uid]),
+            *(c["changed_by_item_id"] for c in status_items[uid]),
+            row["terminated_by_item_id"],
+        ]
+        if row.get("requires_msisdn") or row.get("requires_imsi"):
+            item_ids[uid].extend(
+                sorted(
+                    {
+                        n["assigned_by_item_id"]
+                        for n in numbers[uid]
+                        if n["cancelled_at"] is None
+                        and n["assigned_by_item_id"] != row["created_by_item_id"]
+                    }
+                )
+            )
+    items = rows_by_id(
+        conn, "product_order_item", [i for group in item_ids.values() for i in group if i]
+    )
+    creating_orders = rows_by_id(
+        conn, "product_order", [items[r["created_by_item_id"]]["product_order_id"] for r in rows]
+    )
+    recurring = billing.load_recurring_prices(conn, offering_ids)
+    price_rows = rows_grouped_by(
+        conn, "product_offering_price", "product_offering_id", offering_ids, "id"
+    )
+    return [
+        _product_body(
+            row,
+            today,
+            accounts[row["billing_account_id"]],
+            changes.get(row["id"], ()),
+            cores[row["id"]],
+            offerings,
+            specifications,
+            customers,
+            item_ids[row["id"]],
+            items,
+            creating_orders,
+            recurring,
+            price_rows,
+            current_devices.get(row["id"]),
+            numbers[row["id"]],
+            grants.get(row["id"]),
+        )
+        for row in rows
     ]
-    if row.get("requires_msisdn") or row.get("requires_imsi"):
-        number_items = conn.execute(
-            """SELECT DISTINCT assigned_by_item_id
-            FROM number_assignment WHERE product_id = %s AND cancelled_at IS NULL
-            AND assigned_by_item_id <> %s ORDER BY assigned_by_item_id""",
-            (row["id"], row["created_by_item_id"]),
-        ).fetchall()
-        item_ids.extend(item[0] for item in number_items)
+
+
+def product_body(conn: psycopg.Connection, row: Row, today: date) -> dict[str, Any]:
+    return product_bodies(conn, [row], today)[0]
+
+
+def _product_body(
+    row,
+    today,
+    account,
+    changes,
+    core,
+    offerings,
+    specifications,
+    customers,
+    item_ids,
+    items,
+    creating_orders,
+    recurring,
+    price_rows,
+    current_device,
+    numbers,
+    grant,
+):
+    if account["rating_type"] == "prepaid":
+        from app.billing.entitlement import effective_state
+
+        row = row | {"status": effective_state(row, account, grant, today)[0]}
+        core = billing.core_product(row, changes)
+    # the offering valid today (on the start date for a product that starts later)
+    offering = offerings[core.offering_on(max(today, row["start_date"]))]
     terminated = row["termination_date"]
     # creationDate: the creating order's order_date - the injected clock of the request
     # that wrote the product (products are written only by orders), not created_at
-    creating_item = orders.get_order_item(conn, row["created_by_item_id"])
-    assert creating_item is not None  # foreign key
-    creating_order = orders.get_order(conn, creating_item["product_order_id"])
-    assert creating_order is not None  # foreign key
-    spec_id = offering["product_specification_id"]  # None: an offering without one
-    specification = None if spec_id is None else catalog.get_product_specification(conn, spec_id)
-    customer = parties.get_customer(conn, account["customer_id"])
-    assert customer is not None
+    creating_item = items[row["created_by_item_id"]]
+    creating_order = creating_orders[creating_item["product_order_id"]]
+    spec_id = offering["product_specification_id"]
+    specification = specifications.get(spec_id)
+    customer = customers[account["customer_id"]]
     prices = []
     if row["status"] not in ("cancelled", "aborted") and (
         terminated is None or terminated > row["start_date"]
@@ -190,7 +289,6 @@ def product_body(conn: psycopg.Connection, row: Row, today: date) -> dict[str, A
             cycle_period(day, account["bill_cycle_day"]).start,
             *(c.day for c in changes if c.day <= day),
         )
-        recurring = billing.load_recurring_prices(conn, list(core.offering_ids))
         try:
             priced_on = max(
                 row["start_date"],
@@ -206,12 +304,15 @@ def product_body(conn: psycopg.Connection, row: Row, today: date) -> dict[str, A
             )
         except MissingPrice:
             pass  # the lookup below returns no price, as before
-        price = catalog.price_at(
-            conn,
-            product_offering_id=core.offering_on(priced_on),
-            price_type="recurring",
-            currency=account["currency"],
-            at=from_billing_date(priced_on),
+        price = next(
+            (
+                p
+                for p in price_rows[core.offering_on(priced_on)]
+                if p["price_type"] == "recurring"
+                and p["currency"] == account["currency"]
+                and from_billing_date(priced_on) in p["valid_for"]
+            ),
+            None,
         )
         if price is not None:
             taxes = billing.price_taxes(price["details"])
@@ -229,20 +330,19 @@ def product_body(conn: psycopg.Connection, row: Row, today: date) -> dict[str, A
                     unit_of_measure=price["details"].get("unitOfMeasure"),
                 )
             ]
-    details = _with_device(dict(row["details"]), devices.current(conn, row["id"]))
+    details = _with_device(dict(row["details"]), current_device)
     if row.get("requires_msisdn") or row.get("requires_imsi"):
-        claims = conn.execute(
-            """SELECT subscriber_number_id FROM number_assignment
-            WHERE product_id = %s AND cancelled_at IS NULL AND valid_for @> %s::date
-            ORDER BY resource_specification_id DESC""",
-            (row["id"], max(today, row["start_date"])),
-        ).fetchall()
+        claims = [
+            n
+            for n in numbers
+            if n["cancelled_at"] is None and max(today, row["start_date"]) in n["valid_for"]
+        ]
         details["realizingResource"] = [
             {
-                "id": str(claim[0]),
+                "id": str(claim["subscriber_number_id"]),
                 "@type": "ResourceRef",
                 "@referredType": "LogicalResource",
-                "href": f"/tmf-api/resourceInventory/v5/resource/{claim[0]}",
+                "href": f"/tmf-api/resourceInventory/v5/resource/{claim['subscriber_number_id']}",
             }
             for claim in claims
         ]
@@ -278,7 +378,7 @@ def product_body(conn: psycopg.Connection, row: Row, today: date) -> dict[str, A
             ],
             "productOffering": offering_ref(offering),
             "productOrderItem": [
-                _related_order_item(conn, item_id) for item_id in item_ids if item_id
+                _related_order_item(items[item_id]) for item_id in item_ids if item_id
             ],
             "@type": "Product",
         }
@@ -301,7 +401,7 @@ def list_products(request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
             conn, where=query.where, offset=query.offset, limit=query.limit, today=clock.today()
         )
         today = clock.today()
-        items = [product_body(conn, row, today) for row in rows]
+        items = product_bodies(conn, rows, today)
     return listing.list_response(items, more, query)
 
 
