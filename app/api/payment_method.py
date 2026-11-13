@@ -35,7 +35,7 @@ from app.api.tmfjson import TmfJSONResponse
 from app.events import emit
 from app.repository import parties
 from app.repository import payment_methods as repo
-from app.repository._sql import Row, fetch_one
+from app.repository._sql import Row, fetch_one, rows_by_id
 
 API = "TMF670"
 BASE = "/tmf-api/paymentMethod/v4"
@@ -88,8 +88,15 @@ def method_href(method_id: Any) -> str:
 
 
 def method_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
-    account = parties.get_billing_account(conn, row["billing_account_id"])
-    assert account is not None  # foreign key
+    return method_bodies(conn, [row])[0]
+
+
+def method_bodies(conn: psycopg.Connection, rows: list[Row]) -> list[dict[str, Any]]:
+    accounts = rows_by_id(conn, "billing_account", [row["billing_account_id"] for row in rows])
+    return [_method_body(row, accounts[row["billing_account_id"]]) for row in rows]
+
+
+def _method_body(row: Row, account: Row) -> dict[str, Any]:
     body = {
         "id": str(row["id"]),
         "href": method_href(row["id"]),
@@ -143,7 +150,7 @@ def list_payment_methods(request: Request, tx: Tx) -> TmfJSONResponse:
     )
     with tx() as conn:
         rows, more = repo.page(conn, query.where, query.offset, query.limit)
-        items = [method_body(conn, row) for row in rows]
+        items = method_bodies(conn, rows)
     return listing.list_response(items, more, query)
 
 
