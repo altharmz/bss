@@ -45,3 +45,60 @@ def test_product_list(api, monkeypatch):
     assert len(page) == 100
     for product in page:
         assert api.client.get(product["href"]).json() == product
+
+
+def test_product_order_list(api, monkeypatch):
+    offering = apidata.sellable_offering(api, tax=[apidata.tax_item("VAT", 20)])
+    account = apidata.account(api)
+    expected = {}
+    for _ in range(100):
+        order = apidata.order(
+            api,
+            account,
+            apidata.add_item(
+                offering, "parent", productOrderItem=[apidata.add_item(offering, "child")]
+            ),
+            requestedStartDate="2026-10-02T00:00:00+03:00",
+        )
+        assert order["state"] == "completed", order
+        expected[order["id"]] = order
+    one = statements(api, monkeypatch, f"{apidata.ORDER}?limit=1")
+    hundred = statements(api, monkeypatch, f"{apidata.ORDER}?limit=100")
+    assert one == hundred
+    assert hundred == 10  # page + five related reads + session auth and pool checks
+    page = api.client.get(f"{apidata.ORDER}?limit=100").json()
+    assert len(page) == 100
+    for order in page:
+        assert order == expected[order["id"]]
+        assert api.client.get(order["href"]).json() == order
+
+
+def test_cancel_product_order_list(api, monkeypatch):
+    offering = apidata.sellable_offering(api)
+    account = apidata.account(api)
+    url = f"{apidata.ORDER.rsplit('/', 1)[0]}/cancelProductOrder"
+    expected = {}
+    for _ in range(100):
+        order = apidata.order(
+            api, account, apidata.add_item(offering), requestedInitialState="draft"
+        )
+        response = api.post(
+            url,
+            {
+                "@type": "CancelProductOrder",
+                "productOrder": {"id": order["id"], "@type": "ProductOrderRef"},
+                "cancellationReason": "query count regression",
+            },
+        )
+        assert response.status_code == 201, response.text
+        body = response.json()
+        expected[body["id"]] = body
+    one = statements(api, monkeypatch, f"{url}?limit=1")
+    hundred = statements(api, monkeypatch, f"{url}?limit=100")
+    assert one == hundred
+    assert hundred == 5  # page + session auth and pool checks; no related reads
+    page = api.client.get(f"{url}?limit=100").json()
+    assert len(page) == 100
+    for cancellation in page:
+        assert cancellation == expected[cancellation["id"]]
+        assert api.client.get(cancellation["href"]).json() == cancellation

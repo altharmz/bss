@@ -65,8 +65,8 @@ from app.network import device
 from app.ordering import cancel as cancellation
 from app.ordering import process
 from app.ordering.process import ItemRequest, OrderRefused, OrderRequest, place_order
-from app.repository import billing, catalog, idempotency, orders, parties, prepaid_commands
-from app.repository._sql import Row
+from app.repository import billing, idempotency, orders
+from app.repository._sql import Row, rows_by_id, rows_grouped_by
 
 router = APIRouter(prefix=BASE)
 API = "TMF622"
@@ -458,22 +458,77 @@ def _check_items_server_set(sent: list[ItemSent], body: dict[str, Any]) -> None:
                 )
 
 
-def _quoted_taxes(conn: psycopg.Connection, item: Row, account: Row | None) -> tuple[Tax, ...]:
+@dataclass(frozen=True)
+class OrderPage:
+    accounts: dict[Any, Row]
+    items: dict[Any, list[Row]]
+    errors: dict[Any, list[Row]]
+    offerings: dict[Any, Row]
+    prices: dict[Any, Row]
+    commands: dict[Any, Row]
+
+    @classmethod
+    def load(cls, conn: psycopg.Connection, rows: list[Row]) -> "OrderPage":
+        ids = [row["id"] for row in rows]
+        accounts = rows_by_id(
+            conn,
+            "billing_account",
+            [row["billing_account_id"] for row in rows if row["billing_account_id"] is not None],
+        )
+        items = rows_grouped_by(conn, "product_order_item", "product_order_id", ids, "position")
+        flat = [item for group in items.values() for item in group]
+        return cls(
+            accounts,
+            items,
+            rows_grouped_by(
+                conn,
+                "product_order_error_message",
+                "product_order_id",
+                ids,
+                "product_order_item_id NULLS FIRST, occurred_at, code, id",
+            ),
+            rows_by_id(
+                conn,
+                "product_offering",
+                [
+                    item["product_offering_id"]
+                    for item in flat
+                    if item["product_offering_id"] is not None
+                ],
+            ),
+            rows_by_id(
+                conn,
+                "product_offering_price",
+                [item["quoted_price_id"] for item in flat if item["quoted_price_id"] is not None],
+            ),
+            rows_by_id(
+                conn,
+                "prepaid_command",
+                [
+                    row["id"]
+                    for row in rows
+                    if accounts.get(row["billing_account_id"], {}).get("rating_type") == "prepaid"
+                ],
+            ),
+        )
+
+
+def _quoted_taxes(page: OrderPage, item: Row, account: Row | None) -> tuple[Tax, ...]:
     """The tax items of the price an item was quoted at: they cannot change once the
     offering is ordered (a price's tax is part of its charge)."""
     if account is not None and account["rating_type"] == "prepaid":
-        command = prepaid_commands.get(conn, item["product_order_id"])
+        command = page.commands.get(item["product_order_id"])
         if command is not None:
             for quote in command["request"].get("intervals", []):
                 if quote["product_id"] == str(item["product_id"]):
                     return tuple(Tax(t["category"], Decimal(t["rate"])) for t in quote["taxes"])
-    price = catalog.get_product_offering_price(conn, item["quoted_price_id"])
+    price = page.prices[item["quoted_price_id"]]
     assert price is not None  # foreign key
     return billing.price_taxes(price["details"])
 
 
-def _quoted_period(conn: psycopg.Connection, item: Row) -> dict[str, Any]:
-    price = catalog.get_product_offering_price(conn, item["quoted_price_id"])
+def _quoted_period(page: OrderPage, item: Row) -> dict[str, Any]:
+    price = page.prices[item["quoted_price_id"]]
     assert price is not None
     return {
         "recurring_period": price["recurring_period"],
@@ -481,15 +536,15 @@ def _quoted_period(conn: psycopg.Connection, item: Row) -> dict[str, Any]:
     }
 
 
-def _quoted_unit(conn: psycopg.Connection, item: Row) -> dict[str, Any] | None:
+def _quoted_unit(page: OrderPage, item: Row) -> dict[str, Any] | None:
     """The unitOfMeasure of the price an item was quoted at, if it has one."""
-    price = catalog.get_product_offering_price(conn, item["quoted_price_id"])
+    price = page.prices[item["quoted_price_id"]]
     assert price is not None  # foreign key
     return price["details"].get("unitOfMeasure")
 
 
 def _item_body(
-    conn: psycopg.Connection, row: Row, account: Row | None, children: dict[Any, list[Row]]
+    page: OrderPage, row: Row, account: Row | None, children: dict[Any, list[Row]]
 ) -> dict[str, Any]:
     body: dict[str, Any] = {
         "id": row["item_id"],
@@ -502,7 +557,7 @@ def _item_body(
         # an item's account must be the order's, so it is the order's
         body["billingAccount"] = account_ref(account)
     if row["product_offering_id"] is not None:
-        offering = catalog.get_product_offering(conn, row["product_offering_id"])
+        offering = page.offerings[row["product_offering_id"]]
         assert offering is not None  # foreign key
         body["productOffering"] = ref(
             "ProductOffering",
@@ -524,10 +579,10 @@ def _item_body(
     body |= extra
     nested = children.get(row["id"], [])
     if nested:
-        body["productOrderItem"] = [_item_body(conn, item, account, children) for item in nested]
+        body["productOrderItem"] = [_item_body(page, item, account, children) for item in nested]
     body["@type"] = "ProductOrderItem"
     if row["quoted_price_id"] is not None:
-        taxes = _quoted_taxes(conn, row, account)
+        taxes = _quoted_taxes(page, row, account)
         price = monthly_price(
             row["quoted_amount"],
             row["quoted_currency"],
@@ -536,9 +591,9 @@ def _item_body(
             name=row["quoted_price_name"],
             tax=tax_on(row["quoted_amount"], taxes),
             tax_rate=total_rate(taxes),
-            unit_of_measure=_quoted_unit(conn, row),
+            unit_of_measure=_quoted_unit(page, row),
             billing_account=body.get("billingAccount"),
-            **_quoted_period(conn, row),
+            **_quoted_period(page, row),
         )
         body["itemPrice"] = [price]
         body["itemTotalPrice"] = [price]  # quantity is always 1
@@ -567,29 +622,35 @@ def _error_body(message: Row, items_by_id: dict[Any, Row], order_id: Any) -> dic
 
 
 def order_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
+    return order_bodies(conn, [row])[0]
+
+
+def order_bodies(conn: psycopg.Connection, rows: list[Row]) -> list[dict[str, Any]]:
+    page = OrderPage.load(conn, rows)
+    return [_order_body(page, row) for row in rows]
+
+
+def _order_body(page: OrderPage, row: Row) -> dict[str, Any]:
     account = None
     if row["billing_account_id"] is not None:  # None: a draft that names none yet
-        account = parties.get_billing_account(conn, row["billing_account_id"])
+        account = page.accounts[row["billing_account_id"]]
         assert account is not None  # foreign key
-    items = orders.items_of(conn, row["id"])
+    items = page.items[row["id"]]
     items_by_id = {item["id"]: item for item in items}
     children: dict[Any, list[Row]] = {}
     for item in items:
         children.setdefault(item["parent_id"], []).append(item)
-    errors = [
-        _error_body(message, items_by_id, row["id"])
-        for message in orders.error_messages(conn, row["id"])
-    ]
+    errors = [_error_body(message, items_by_id, row["id"]) for message in page.errors[row["id"]]]
     completion = row["completion_date"]
     adds = [item for item in items if item["action"] == "add"]
     total = None
     if row["state"] == "completed" and adds and all(i["quoted_price_id"] for i in adds):
         assert account is not None  # a processed order has one
-        taxes = [_quoted_taxes(conn, i, account) for i in adds]
+        taxes = [_quoted_taxes(page, i, account) for i in adds]
         rates = {total_rate(t) for t in taxes}
         # one price for all items: the total comes from it, in its unit
         prices = {(i["quoted_price_id"], i["quoted_price_name"]) for i in adds}
-        units = [_quoted_unit(conn, i) for i in adds]
+        units = [_quoted_unit(page, i) for i in adds]
         ((price_id, price_name),) = prices if len(prices) == 1 else ((None, None),)
         total = [
             monthly_price(
@@ -597,7 +658,7 @@ def order_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
                 account["currency"],
                 resource_type="OrderPrice",
                 name="New subscriptions monthly total"
-                if _quoted_period(conn, adds[0])
+                if _quoted_period(page, adds[0])
                 == {"recurring_period": "monthly", "recurring_period_length": 1}
                 else "New subscriptions recurring total",
                 tax=sum(
@@ -609,15 +670,15 @@ def order_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
                 price_name=price_name,
                 unit_of_measure=units[0] if all(u == units[0] for u in units) else None,
                 billing_account=account_ref(account),
-                **_quoted_period(conn, adds[0]),
+                **_quoted_period(page, adds[0]),
             )
         ]
         # Different recurring intervals cannot be added into one recurring amount.
-        if any(_quoted_period(conn, item) != _quoted_period(conn, adds[0]) for item in adds):
+        if any(_quoted_period(page, item) != _quoted_period(page, adds[0]) for item in adds):
             total = [
                 entry
                 for item in adds
-                for entry in _item_body(conn, item, account, children).get("itemTotalPrice", [])
+                for entry in _item_body(page, item, account, children).get("itemTotalPrice", [])
             ]
     start = row["requested_start_date"]
     return without_nulls(
@@ -631,7 +692,7 @@ def order_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
             "requestedInitialState": row["requested_initial_state"],
             "billingAccount": account_ref(account) if account else None,
             "productOrderItem": [
-                _item_body(conn, item, account, children) for item in children.get(None, [])
+                _item_body(page, item, account, children) for item in children.get(None, [])
             ],
             "productOrderErrorMessage": errors or None,
             "orderTotalPrice": total,
@@ -661,7 +722,7 @@ def list_orders(request: Request, tx: Tx) -> TmfJSONResponse:
         rows, more = orders.list_orders(
             conn, where=query.where, offset=query.offset, limit=query.limit
         )
-        items = [order_body(conn, row) for row in rows]
+        items = order_bodies(conn, rows)
     return listing.list_response(items, more, query)
 
 
