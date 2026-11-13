@@ -1350,16 +1350,29 @@ def applied_payments(conn: psycopg.Connection, bill_id: UUID) -> list[Row]:
 
 def payment_items(conn: psycopg.Connection, payment_id: UUID) -> list[Row]:
     """Per bill, what this payment paid on it (TMF676 paymentItem), oldest bill first."""
-    return fetch_all(
+    return payment_items_by_payment(conn, [payment_id])[payment_id]
+
+
+def payment_items_by_payment(
+    conn: psycopg.Connection, payment_ids: list[UUID]
+) -> dict[UUID, list[Row]]:
+    """Allocations summed per payment and bill for a whole response page."""
+    groups: dict[UUID, list[Row]] = {key: [] for key in payment_ids}
+    if not payment_ids:
+        return groups
+    rows = fetch_all(
         conn,
         """
-        SELECT a.customer_bill_id, sum(a.amount) AS amount
+        SELECT a.payment_id, a.customer_bill_id, sum(a.amount) AS amount
         FROM bill_allocation a JOIN customer_bill b ON b.id = a.customer_bill_id
-        WHERE a.payment_id = %s
-        GROUP BY a.customer_bill_id, b.bill_date ORDER BY b.bill_date
+        WHERE a.payment_id = ANY(%s)
+        GROUP BY a.payment_id, a.customer_bill_id, b.bill_date ORDER BY b.bill_date
         """,
-        (payment_id,),
+        (payment_ids,),
     )
+    for row in rows:
+        groups[row["payment_id"]].append(row)
+    return groups
 
 
 def bill_sources(conn: psycopg.Connection, bill_id: UUID) -> list[Row]:

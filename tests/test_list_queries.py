@@ -1,10 +1,21 @@
 """A list endpoint runs the same number of statements for a page of 1 or of 100 (#285):
 the related rows of a page are read in one query each, never once per row."""
 
+from datetime import date, timedelta
+
 import pytest
 
 from tests import apidata
 from tests.querycount import statements
+from tests.test_api_bill_settlement import account_with_bills
+from tests.test_payg_rating import (  # noqa: F401 - fixtures
+    build,
+    next_day,
+    payg,
+    report,
+    stubs,
+)
+from tests.test_payment_gateway import METHODS, save
 
 
 @pytest.fixture
@@ -102,3 +113,82 @@ def test_cancel_product_order_list(api, monkeypatch):
     for cancellation in page:
         assert cancellation == expected[cancellation["id"]]
         assert api.client.get(cancellation["href"]).json() == cancellation
+
+
+def test_payment_list(api, db_conn, monkeypatch):
+    offering = apidata.sellable_offering(api, value=300)
+    accounts = [
+        account_with_bills(api, db_conn, offering, date(2026, 12, 1), date(2027, 1, 1))
+        for _ in range(2)
+    ]
+    expected = {}
+    for index in range(100):
+        payment = apidata.payment(
+            api,
+            accounts[index % 2],
+            value=350 if index < 2 else 10,
+            description=f"Payment {index}",
+            taxAmount={"unit": "USD", "value": 1},
+        )
+        expected[payment["id"]] = payment
+    assert any(len(p.get("paymentItem", [])) == 2 for p in expected.values())
+    assert any("paymentItem" not in p for p in expected.values())
+    one = statements(api, monkeypatch, f"{apidata.PAYMENT}?limit=1")
+    hundred = statements(api, monkeypatch, f"{apidata.PAYMENT}?limit=100")
+    assert one == hundred == 7  # page, accounts, allocations, auth and pool checks
+    page = api.client.get(f"{apidata.PAYMENT}?limit=100").json()
+    assert len(page) == 100
+    for payment in page:
+        assert payment == expected[payment["id"]]
+        assert api.client.get(payment["href"]).json() == payment
+
+
+def test_payment_method_list(api, monkeypatch):
+    accounts = [apidata.account(api, name=f"Cards {i}") for i in range(2)]
+    expected = {}
+    for index in range(100):
+        method = save(api, accounts[index % 2], token=f"tok_{index}", name=f"Card {index}")
+        expected[method["id"]] = method
+    one = statements(api, monkeypatch, f"{METHODS}?limit=1")
+    hundred = statements(api, monkeypatch, f"{METHODS}?limit=100")
+    assert one == hundred == 6  # page, accounts, auth and pool checks
+    page = api.client.get(f"{METHODS}?limit=100").json()
+    assert len(page) == 100
+    for method in page:
+        assert method == expected[method["id"]]
+        assert api.client.get(method["href"]).json() == method
+
+
+@pytest.mark.usefixtures("stubs")
+@pytest.mark.parametrize("rated", [False, True])
+def test_product_usage_list(api, db_conn, monkeypatch, payg, rated):  # noqa: F811 - fixture
+    world = payg("10", kinds=("data",))
+    start = api.clock.now()
+    for index in range(100):
+        report(
+            api,
+            world.product,
+            "data" if index % 2 else "sms",
+            1,
+            start + timedelta(seconds=index),
+            record=f"batch-{index}",
+        )
+    if rated:
+        next_day(api, db_conn)
+    url = "/tmf-api/productUsageManagement/v5/productUsage"
+    url += f"?product.id={world.product['id']}"
+    # Advancing to the rating day expires the session; the checked client renews it
+    # before the raw client measures SQL (without counting a login).
+    assert api.get(f"{url}&limit=1").status_code == 200
+    one = statements(api, monkeypatch, f"{url}&limit=1")
+    hundred = statements(api, monkeypatch, f"{url}&limit=100")
+    assert one == hundred == (7 if rated else 6)
+    page = api.client.get(f"{url}&limit=100").json()
+    assert len(page) == 100
+    if rated:
+        assert any(p["usageProductPrice"] == [] for p in page)
+        assert any(p["usageProductPrice"] for p in page)
+    else:
+        assert all("usageProductPrice" not in p for p in page)
+    for usage in page:
+        assert api.client.get(usage["href"]).json() == usage
