@@ -754,6 +754,20 @@ items:
   - {id: ui.subscriber.consent.sms, area: ui, stage: 5, title: "Marketing SMS consent: current choice and Opt in / Opt out"}
   - {id: ui.subscriber.consent.email, area: ui, stage: 5, title: "Marketing email consent: current choice and Opt in / Opt out"}
   - {id: ui.subscriber.consent.record, area: ui, stage: 5, title: "Record consent dialog: the source, POST /internal/v1/notification/consent"}
+  - {id: ui.subscriber.security, area: ui, stage: 5, title: "Security tab of a subscriber: account PIN, line locks and audit log of the customer, loaded only when opened"}
+  - {id: ui.subscriber.security.pin, area: ui, stage: 5, title: "Account PIN status: set, set by and at, reason, wrong attempts, lockout end (never the PIN)"}
+  - {id: ui.subscriber.security.setPin, area: ui, stage: 5, title: "Set PIN / Reset PIN button on the Security tab"}
+  - {id: ui.subscriber.security.pinDialog, area: ui, stage: 5, title: "Set or reset the account PIN with a mandatory reason (PUT /internal/v1/security/pin/{customerId})"}
+  - {id: ui.subscriber.security.locks, area: ui, stage: 5, title: "SIM swap and port-out locks of each live line (GET /internal/v1/security/lock/{productId})"}
+  - {id: ui.subscriber.security.changeLocks, area: ui, stage: 5, title: "Change locks button on a line of the Security tab"}
+  - {id: ui.subscriber.security.lockDialog, area: ui, stage: 5, title: "Line locks dialog: both flags and a reason; clearing a lock asks for the account PIN (PUT /internal/v1/security/lock/{productId})"}
+  - {id: ui.security.audit, area: ui, stage: 5, title: "Read-only audit log of a customer: when, who, action, outcome, reason, verification, line; newest first, paged"}
+  - {id: ui.security.audit.action, area: ui, stage: 5, title: "Audit log: action filter"}
+  - {id: ui.security.audit.outcome, area: ui, stage: 5, title: "Audit log: outcome filter"}
+  - {id: ui.security.audit.next, area: ui, stage: 5, title: "Audit log: next page"}
+  - {id: ui.security.audit.previous, area: ui, stage: 5, title: "Audit log: previous page"}
+  - {id: ui.security.accountPin, area: ui, stage: 5, title: "Account PIN field (X-Account-Pin header) on number change, SIM swap, contact edit and lock clearing"}
+  - {id: ui.parties.customerAudit, area: ui, stage: 5, title: "Customer dialog: show the customer's audit log on request"}
 
 excluded:
   - {id: api.service.root, area: api, method: GET, path: /, reason: "template status root, not a product feature"}

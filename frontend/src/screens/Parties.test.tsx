@@ -1,7 +1,16 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { App } from '../app/App';
-import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } from '../test/fetch';
+import {
+  CONTEXT,
+  json,
+  NAV_RUNS,
+  noRuns,
+  stubFetch,
+  tmfCodeError,
+  tmfError,
+  type Handler,
+} from '../test/fetch';
 import { expectUi } from '../test/expectUi';
 
 const PARTY = '/tmf-api/partyManagement/v5';
@@ -376,6 +385,66 @@ describe('party and customer dialogs', () => {
           '"externalIdentifierType":"crmId","id":"CRM-9"}]}',
       ],
     ]);
+  });
+
+  it('asks for the account PIN only with a contact change and sends it as a header', async () => {
+    const { fetchMock } = backend({
+      [`GET ${PARTY}/individual/${OLGA}`]: () => json(INDIVIDUALS[1]),
+      [`PATCH ${PARTY}/individual/${OLGA}`]: () =>
+        tmfCodeError(403, 'pinNotSet', 'the customer has no account PIN yet'),
+    });
+    await open();
+    fireEvent.click(await screen.findByText('Olga Kuznetsova'));
+    const dialog = await screen.findByRole('dialog', { name: 'Olga Kuznetsova' });
+    await within(dialog).findByText('Given name');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Edit' }));
+    fireEvent.change(within(dialog).getByLabelText('Family name'), {
+      target: { value: 'Kuznetsova-Lee' },
+    });
+    expect(within(dialog).queryByLabelText('Account PIN')).toBeNull();
+    fireEvent.change(within(dialog).getByLabelText('City'), { target: { value: 'Boston' } });
+    fireEvent.change(within(dialog).getByLabelText('Account PIN'), {
+      target: { value: '482913' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    expect(await within(dialog).findByText(/has no account PIN yet. Set one/)).toBeTruthy();
+    const patch = fetchMock.mock.calls.find(([, init]) => init?.method === 'PATCH');
+    expect((patch?.[1]?.headers as Record<string, string>)['X-Account-Pin']).toBe('482913');
+    expect(String(patch?.[1]?.body)).not.toContain('482913');
+  });
+
+  it('shows a customer audit log only when asked for', async () => {
+    const audit = `GET /internal/v1/security/audit?customer.id=${C_ORPHAN}&offset=0&limit=25`;
+    const { calls } = backend({
+      [`GET ${CUSTOMERS}/${C_ORPHAN}`]: () => json(CUSTOMER_ROWS[1]),
+      [audit]: () =>
+        json([
+          {
+            id: 'a0000001-0000-4000-8000-000000000001',
+            at: '2026-10-01T07:00:00Z',
+            operator: 'i.petrova',
+            role: 'admin',
+            customer: { id: C_ORPHAN, href: '' },
+            billingAccount: null,
+            product: null,
+            action: 'contact_change',
+            outcome: 'done',
+            reason: null,
+            verification: 'pin',
+            detail: {},
+          },
+        ]),
+    });
+    await open();
+    tab('Customers');
+    fireEvent.click(await screen.findByText('Ivan Second'));
+    const dialog = await screen.findByRole('dialog', { name: 'Ivan Second' });
+    await within(dialog).findByText('Engaged party');
+    expect(calls.some((c) => c.includes('/security/'))).toBe(false);
+    fireEvent.click(expectUi('ui.parties.customerAudit'));
+    await within(dialog).findByText('Contact change');
+    expect(calls).toContain(audit);
+    expect(within(dialog).getByText('PIN')).toBeTruthy();
   });
 
   it('creates a customer from a party with its name and Active status', async () => {

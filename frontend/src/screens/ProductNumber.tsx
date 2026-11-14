@@ -20,6 +20,7 @@ import { ErrorBlock } from '../ui/states';
 import { NumberPicker } from './Numbers';
 import { SimActivationCode } from './SimActivationCode';
 import { simState, simType } from '../api/sims';
+import { AccountPinField } from './SecurityTab';
 
 export function ProductNumber({
   accountId,
@@ -64,6 +65,7 @@ export function NumberModal({
   );
   const [numberId, setNumberId] = useState('');
   const [imsiId, setImsiId] = useState('');
+  const [accountPin, setAccountPin] = useState('');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState('');
   const [code, setCode] = useState<string | undefined>();
@@ -109,7 +111,7 @@ export function NumberModal({
     setProblem('');
     setCode(undefined);
     try {
-      const result = await changeNumber(accountId, productId, ids);
+      const result = await changeNumber(accountId, productId, ids, accountPin);
       if (result.state === 'completed') {
         onClose();
         onDone(
@@ -226,6 +228,9 @@ export function NumberModal({
               subject to quarantine. No price change.
             </p>
           </>
+        )}
+        {(editable || simEditable) && (
+          <AccountPinField value={accountPin} onChange={setAccountPin} />
         )}
       </fieldset>
     </Dialog>

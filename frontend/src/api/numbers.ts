@@ -1,6 +1,6 @@
 import type { components as T639 } from './generated/tmf639';
 import type { components as T637 } from './generated/tmf637';
-import { getAll, getJson, getPage, patchJson, postJson, request } from './client';
+import { accountPinHeader, getAll, getJson, getPage, patchJson, postJson, request } from './client';
 import { PATHS } from './bss';
 
 export const NUMBERS = '/tmf-api/resourceInventory/v5/resource';
@@ -151,25 +151,32 @@ export function loadNumberProducts(id: string, signal: AbortSignal) {
   );
 }
 
+/** A number change or SIM swap order. On a prepaid line the server asks for the customer's
+ * account PIN (`X-Account-Pin`, sent only when typed) and rejects the order without it. */
 export async function changeNumber(
   accountId: string,
   productId: string,
   numberId: string | string[],
+  accountPin = '',
 ) {
   return postJson<{
     id: string;
     state: string;
     productOrderErrorMessage?: { code?: string; reason?: string }[];
-  }>(PATHS.orders, {
-    '@type': 'ProductOrder',
-    billingAccount: { id: accountId, '@type': 'BillingAccountRef' },
-    productOrderItem: [
-      {
-        '@type': 'ProductOrderItem',
-        id: '1',
-        action: 'modify',
-        product: { ...numberProduct(numberId), id: productId },
-      },
-    ],
-  });
+  }>(
+    PATHS.orders,
+    {
+      '@type': 'ProductOrder',
+      billingAccount: { id: accountId, '@type': 'BillingAccountRef' },
+      productOrderItem: [
+        {
+          '@type': 'ProductOrderItem',
+          id: '1',
+          action: 'modify',
+          product: { ...numberProduct(numberId), id: productId },
+        },
+      ],
+    },
+    accountPinHeader(accountPin),
+  );
 }

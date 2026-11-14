@@ -48,6 +48,7 @@ import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 import { PageFooter, usePageOffset, useSettled } from '../ui/paging';
 import { AddBillingAccountModal, CUSTOMER_STATUSES, Field } from './SubscriberForms';
+import { AccountPinField, AuditLog } from './SecurityTab';
 import { uncertain } from './submissionKey';
 import './screens.css';
 
@@ -683,6 +684,7 @@ function PartyModal({
   const [editing, setEditing] = useState<PartyDetail | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [newCustomer, setNewCustomer] = useState(false);
+  const [accountPin, setAccountPin] = useState('');
   const own = party.customers;
   const accounts = party.accounts;
   const before = detail.status === 'ok' ? detail.data : null;
@@ -744,6 +746,15 @@ function PartyModal({
           />
         </section>
         <ContactFieldsForm value={editing} onChange={set} ui="ui.parties.contactMedia" />
+        {changes?.contactMedium !== undefined && (
+          <section className="bss-form">
+            <AccountPinField
+              value={accountPin}
+              onChange={setAccountPin}
+              help="A contact or address change of a customer with a live prepaid line needs the customer's account PIN (6 to 8 digits)."
+            />
+          </section>
+        )}
         <section className="bss-form" data-ui="ui.parties.identification">
           <Field label="Identification type">
             <TextInput
@@ -851,6 +862,7 @@ function PartyModal({
             <Button
               onClick={() => {
                 setEditing(null);
+                setAccountPin('');
                 write.clear();
               }}
             >
@@ -862,7 +874,13 @@ function PartyModal({
               onClick={() =>
                 changes &&
                 void write.run(async () => {
-                  await patchParty(party.kind, party.id, changes);
+                  await patchParty(
+                    party.kind,
+                    party.id,
+                    changes,
+                    changes.contactMedium === undefined ? '' : accountPin,
+                  );
+                  setAccountPin('');
                   return `${party.name} saved`;
                 })
               }
@@ -964,6 +982,7 @@ function CustomerModal({
   const [editing, setEditing] = useState<CustomerDetail | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [addingAccount, setAddingAccount] = useState(false);
+  const [showAudit, setShowAudit] = useState(false);
   const accountsRef = useRef<HTMLDivElement>(null);
   const accounts = customer.accounts;
   const before = detail.status === 'ok' ? detail.data : null;
@@ -996,8 +1015,30 @@ function CustomerModal({
               <CustomerAccounts links={accounts} onDone={onDone} />
             </div>,
           ],
+          [
+            'Security',
+            <Button
+              key="audit"
+              small
+              data-ui="ui.parties.customerAudit"
+              aria-expanded={showAudit}
+              onClick={() => setShowAudit((shown) => !shown)}
+            >
+              {showAudit ? 'Hide audit log' : 'Audit log'}
+            </Button>,
+          ],
         ]}
       />
+    );
+  // the read-only audit log loads only when asked for (no request on opening the dialog)
+  const shownBody =
+    body !== null && editing === null && showAudit ? (
+      <>
+        {body}
+        <AuditLog customerId={customer.id} />
+      </>
+    ) : (
+      body
     );
 
   return (
@@ -1016,7 +1057,7 @@ function CustomerModal({
         state={detail.status}
         {...(detail.status === 'error' ? { error: detail.error } : {})}
         retry={detail.retry}
-        body={body}
+        body={shownBody}
         write={write}
         onClose={onClose}
         onRefresh={onDone.bind(null, 'Refreshed')}
