@@ -762,6 +762,20 @@ of an IMSI. **Change SIM** is the swap: the order waits for the network, the ord
 follows it, and a refusal changes nothing. The three stock operations are not MCP tools
 (`scope.yaml`), so no parity entry is needed.
 
+Devices (issue #225, [network.md](decisions/network.md#device-issue-194)): a prepaid product's
+**Device…** item opens the line's current device (IMEI, whether the network confirmed it works,
+the reasons of an unconfirmed one) and its history (`GET /internal/v1/device?product.id=`,
+newest first). **Check device** asks the network about a typed IMEI and stores nothing
+(`GET /internal/v1/device/check?imei=`). **Change device** (active or suspended lines) places a
+modify order whose item carries only the `imei` characteristic; `deviceIncompatible` refuses it
+with the network's reasons and an unconfirmed device is accepted with the warning in the toast.
+Add product, for a prepaid line with a SIM, has an optional **Device IMEI** field (the add item's
+`imei` characteristic, kept in a draft); the same warning follows the order. Both inputs check
+15 digits and the Luhn digit before enabling the buttons; the server checks again
+(`invalidImei`). The Products detail shows the current device from the TMF637 characteristics.
+Requests are pinned in `ProductDevice.test.tsx` and `SubscriberCard.prepaid.test.tsx` and
+replayed in `tests/test_device.py`.
+
 `make web-test`: vitest, run twice - in UTC and with `TZ=America/New_York` - so every
 request body is proven independent of the browser's zone. `make web-lint`: tsc, eslint,
 prettier. `make web-e2e`: Playwright against the built UI and the seeded local stack,

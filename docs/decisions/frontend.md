@@ -806,6 +806,30 @@ Design: [network.md](network.md). No backend change; the UI reads and writes wha
 - **Retry** (`ui.network.retry`) is a bodiless POST, offered only for `exhausted`; a refusal shows a note that it is final (a new order is the fix), and a 409 is shown with the button kept. The API never sends: the worker does on its next tick, so the panel re-reads and shows `pending`.
 - Tests: `Catalog.test.tsx` (profile and narrowing bodies), `Orders.test.tsx`, `Products.test.tsx`; `test/fetch.ts` answers the two list queries with an empty list by default; `tests/test_ui_requests.py` replays the bodies and reads. `list_network_commands` and `retry_network_command` left `tests/ui-mcp-allowlist.txt` (the UI calls them); `get_network_command` stays, the list rows carry every field shown.
 
+## Device UI (2026-11-14, issue #225)
+
+Design: [network.md](network.md#device-issue-194). No backend change; the UI reads and writes
+what #194 built.
+
+- **Where.** A **Device…** item on every prepaid product's menu opens `DeviceDialog`
+  (`screens/ProductDevice.tsx`, `api/devices.ts`); the history is read when the dialog opens,
+  not per card row (the card's internal product list carries no device, and a request per row
+  would break the per-page rule). The Products detail shows the current device from the TMF637
+  `imei` / `deviceCompatibility` / `deviceReasons` characteristics.
+- **Check device** is a read (`GET /internal/v1/device/check`), offered on any prepaid product;
+  **Change device** only on active or suspended lines and not for the current IMEI. Both are
+  enabled only for 15 digits with a correct Luhn digit (`imeiProblem`); the server still decides
+  (`invalidImei`).
+- **Add product** shows the optional IMEI field for a prepaid offering whose specification needs
+  an IMSI (a line); the add item carries `imei` next to `simType`, a draft keeps it, and the
+  order builders take `{ simType, imei }` instead of a positional `simType`.
+- **Warning.** An accepted order whose item echoes `deviceCompatibility: unknown` adds the
+  network's reasons to the toast (`OrderOutcome.deviceWarning`); `deviceIncompatible` keeps the
+  dialog open with the server's reason.
+- Tests: `ProductDevice.test.tsx`, `SubscriberCard.prepaid.test.tsx`, `Products.test.tsx`;
+  `tests/test_device.py::test_device_requests_as_the_ui_sends_them` replays the bodies.
+  `list_devices` and `check_device` left `tests/ui-mcp-allowlist.txt`.
+
 ## Screens page on the server (2026-11-10, issue #314)
 
 Follows "Lists without counts" ([tmf-api.md](tmf-api.md#lists-without-counts-2026-11-10-312)):

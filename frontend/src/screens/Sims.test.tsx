@@ -220,7 +220,9 @@ describe('add order with a SIM type', () => {
     const { fetchMock } = stubFetch({
       [`POST ${PATHS.orders}`]: () => json({ id: 'o1', state: 'completed' }, { status: 201 }),
     });
-    await orderAdd('acc', 'off', '2026-11-07', 'UTC', ['msisdn-id'], undefined, 'esim');
+    await orderAdd('acc', 'off', '2026-11-07', 'UTC', ['msisdn-id'], undefined, {
+      simType: 'esim',
+    });
     const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
     expect(body.productOrderItem[0].product).toEqual({
       '@type': 'ProductRefOrValue',
