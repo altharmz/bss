@@ -401,6 +401,50 @@ class CollectionTests(unittest.TestCase):
             collect.main()
         self.assertEqual(run.call_args.args[:3], (TASK, None, None))
 
+    def test_primary_checkout_without_task_prints_one_line_and_no_traceback(self):
+        import task_quality
+        from task_runtime import InvalidRuntime
+
+        blocked = InvalidRuntime("use a linked task worktree; primary is administration-only")
+        for argv in (["task_collect.py"], ["task_collect.py", "--watch"]):
+            err = io.StringIO()
+            with (
+                self.subTest(argv=argv),
+                patch("sys.argv", argv),
+                patch.dict(os.environ, {"BSS_COLLECT_TASK": ""}),
+                patch.object(collect, "current", return_value=("claude", SID)),
+                patch.object(task_quality, "context", side_effect=blocked),
+                patch.object(collect, "collect") as run,
+                patch.object(collect, "watch") as tail,
+                contextlib.redirect_stdout(io.StringIO()),
+                contextlib.redirect_stderr(err),
+            ):
+                self.assertEqual(collect.main(), 1)
+            self.assertEqual(err.getvalue(), collect.NO_WORKTREE + "\n")
+            self.assertIn("TASK=<task-id>", err.getvalue())
+            run.assert_not_called()
+            tail.assert_not_called()
+
+    def test_explicit_task_collects_and_watches_without_a_worktree(self):
+        import task_quality
+
+        done = [{"client": "claude", "status": "complete", "reason": None}]
+        for argv, target in (
+            (["task_collect.py", "--task", TASK], "collect"),
+            (["task_collect.py", "--watch", "--task", TASK], "watch"),
+        ):
+            with (
+                self.subTest(argv=argv),
+                patch("sys.argv", argv),
+                patch.object(collect, "current", return_value=("claude", SID)),
+                patch.object(task_quality, "context", side_effect=AssertionError("worktree")),
+                patch.object(collect, target, return_value=done) as run,
+                contextlib.redirect_stdout(io.StringIO()) as out,
+            ):
+                self.assertEqual(collect.main(), 0)
+            self.assertEqual(run.call_args.args[0], TASK)
+            self.assertEqual(json.loads(out.getvalue()), {"collections": done})
+
     def test_kimi_cache_write_tokens_are_counted(self):
         rows = fixture("kimi")
         rows[2]["usage"]["inputCacheCreation"] = 20

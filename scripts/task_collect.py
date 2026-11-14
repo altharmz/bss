@@ -840,6 +840,7 @@ def automatic(task, operation, client=None, result=0, pr_number=None):
                 "later lifecycle targets capture it",
                 file=sys.stderr,
             )
+        return results
     except (
         OSError,
         ValueError,
@@ -853,6 +854,12 @@ def automatic(task, operation, client=None, result=0, pr_number=None):
             "telemetry: collection failed; retry make telemetry-collect after make telemetry-up",
             file=sys.stderr,
         )
+
+
+NO_WORKTREE = (
+    "telemetry: no task worktree here; run make telemetry-collect TASK=<task-id> "
+    "(or make telemetry-watch TASK=<task-id> for the final tail after finish-task)"
+)
 
 
 def main():
@@ -898,8 +905,13 @@ def main():
             client, session = explicit_client, explicit_session
         if not task:
             from task_quality import context
+            from task_runtime import InvalidRuntime
 
-            task = context()[2]
+            try:
+                task = context()[2]
+            except InvalidRuntime:
+                print(NO_WORKTREE, file=sys.stderr)
+                return 1
         if args.watch:
             print(json.dumps({"collections": watch(task)}, sort_keys=True))
             return 0
