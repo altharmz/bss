@@ -9,7 +9,15 @@ import psycopg
 from psycopg import sql
 
 from app.repository import billing
-from app.repository._sql import Row, fetch_all, fetch_one, returning, select_page, update_by_id
+from app.repository._sql import (
+    Row,
+    fetch_all,
+    fetch_one,
+    returning,
+    rows_grouped_by,
+    select_page,
+    update_by_id,
+)
 from app.repository.parties import with_details
 
 FINANCIAL = "financial_account"
@@ -103,18 +111,42 @@ def linked_accounts(conn: psycopg.Connection, uid: UUID) -> list[Row]:
     )
 
 
-def linked_billing_accounts(conn: psycopg.Connection, uid: UUID) -> list[Row]:
-    return fetch_all(
+def linked_accounts_of(conn: psycopg.Connection, uids: list[UUID]) -> dict[UUID, list[Row]]:
+    """`linked_accounts` of a page of financial accounts in one query (#303), each list in
+    the same creation order."""
+    if not uids:
+        return {}
+    groups: dict[UUID, list[Row]] = {uid: [] for uid in uids}
+    rows = fetch_all(
         conn,
-        "SELECT * FROM billing_account WHERE financial_account_id = %s ORDER BY created_at, id",
-        (uid,),
+        """
+        SELECT financial_account_id, id, name, kind, created_at FROM (
+            SELECT financial_account_id, id, name, 'BillingAccount' AS kind, created_at
+            FROM billing_account WHERE financial_account_id = ANY(%(ids)s)
+            UNION ALL
+            SELECT financial_account_id, id, name, kind::text, created_at FROM party_account
+            WHERE financial_account_id = ANY(%(ids)s)
+        ) linked ORDER BY created_at, id
+        """,
+        {"ids": list(set(uids))},
     )
+    for row in rows:
+        groups[row.pop("financial_account_id")].append(row)
+    return groups
 
 
-def balances(conn: psycopg.Connection, uid: UUID) -> dict[str, Decimal]:
-    """currency -> the sum of the linked billing accounts' balances, by currency."""
-    totals: dict[str, Decimal] = {}
-    for account in linked_billing_accounts(conn, uid):
-        balance = billing.account_balance(conn, account["id"])
-        totals[account["currency"]] = totals.get(account["currency"], Decimal(0)) + balance
-    return dict(sorted(totals.items()))
+def balances_of(conn: psycopg.Connection, uids: list[UUID]) -> dict[UUID, dict[str, Decimal]]:
+    """financial account -> currency -> the sum of its linked billing accounts' balances,
+    for a page: the accounts and their balances are each read in one query (#303)."""
+    linked = rows_grouped_by(
+        conn, "billing_account", "financial_account_id", uids, "created_at, id"
+    )
+    amounts = billing.account_balances(conn, [a["id"] for group in linked.values() for a in group])
+    result: dict[UUID, dict[str, Decimal]] = {}
+    for uid in uids:
+        totals: dict[str, Decimal] = {}
+        for account in linked.get(uid, []):
+            currency = account["currency"]
+            totals[currency] = totals.get(currency, Decimal(0)) + amounts[account["id"]]
+        result[uid] = dict(sorted(totals.items()))
+    return result

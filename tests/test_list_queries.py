@@ -12,6 +12,7 @@ from tests.querycount import statements
 from tests.test_api_adjust import post as adjust
 from tests.test_api_bill_settlement import account_with_bills
 from tests.test_api_financial_account import financial, link
+from tests.test_api_party_account import create as create_party_account
 from tests.test_api_reserve import post as reserve
 from tests.test_api_topup import BASE as BALANCE
 from tests.test_api_topup import post as topup
@@ -295,6 +296,153 @@ def test_bill_cycle_list(api, db_conn, monkeypatch, hundred_bills):
         assert api.client.get(body["href"]).json() == body
     assert sorted(terms) == [17] * 50 + [30] * 50
     assert api.client.get(f"{url}?offset=100").json() == []
+
+
+def _same_bodies(api, url: str, expected: dict | None = None) -> list[dict]:
+    """The full page, each body equal to its single-item read (and to `expected`, by id)."""
+    page = api.client.get(f"{url}{'&' if '?' in url else '?'}limit=100").json()
+    for body in page:
+        if expected is not None:
+            assert body == expected[body["id"]]
+        assert api.client.get(body["href"]).json() == body
+    return page
+
+
+def test_communication_message_list(api, monkeypatch):
+    url = "/tmf-api/communicationManagement/v4/communicationMessage"
+    expected = {}
+    for index in range(12):
+        body = {
+            "@type": "CommunicationMessage",
+            "messageType": "SMS",
+            "content": f"Message {index}",
+            "receiver": [{"@type": "Receiver", "phoneNumber": f"1212555{index:04d}"}],
+            "sender": {"@type": "Sender", "name": "ops"},
+        }
+        response = api.post(url, body)
+        assert response.status_code == 201, response.text
+        expected[response.json()["id"]] = response.json()
+    one = statements(api, monkeypatch, f"{url}?limit=1")
+    hundred = statements(api, monkeypatch, f"{url}?limit=100")
+    assert one == hundred == 5  # page, session auth and pool checks; no related reads
+    assert len(_same_bodies(api, url, expected)) == 12
+
+
+def test_product_offering_list(api, monkeypatch):
+    url = f"{apidata.CATALOG}/productOffering"
+    specs = [
+        apidata._post(
+            api,
+            f"{apidata.CATALOG}/productSpecification",
+            {"@type": "ProductSpecification", "name": f"Spec {i}", "lifecycleStatus": "Active"},
+        )
+        for i in range(2)
+    ]
+    offerings = []
+    for index in range(12):
+        prices = [
+            apidata._post(
+                api,
+                f"{apidata.CATALOG}/productOfferingPrice",
+                {
+                    "@type": "ProductOfferingPrice",
+                    "name": f"Price {index}.{n}",
+                    "lifecycleStatus": "Active",
+                    "priceType": "oneTime",
+                    "price": {"unit": ("USD", "EUR")[n], "value": n + 1},
+                },
+            )
+            for n in range(2 - index % 3)
+        ]
+        body = {
+            "@type": "ProductOffering",
+            "name": f"Offering {index}",
+            "lifecycleStatus": "Active",
+            "productOfferingPrice": [
+                {"id": p["id"], "@type": "ProductOfferingPriceRef"} for p in prices
+            ],
+        }
+        if index % 4 != 3:
+            spec = specs[index % 2]
+            body["productSpecification"] = {"id": spec["id"], "@type": "ProductSpecificationRef"}
+        offerings.append(apidata._post(api, url, body))
+    for name, members in (("Home", offerings[::2]), ("Business", offerings[::3][:3])):
+        apidata._post(
+            api,
+            f"{apidata.CATALOG}/category",
+            {"name": name, "productOffering": [{"id": o["id"]} for o in members]},
+        )
+    one = statements(api, monkeypatch, f"{url}?limit=1")
+    hundred = statements(api, monkeypatch, f"{url}?limit=100")
+    assert one == hundred == 8  # page, specs, prices, categories, auth and pool checks
+    page = _same_bodies(api, url)
+    assert len(page) == 12
+    assert {len(o["productOfferingPrice"]) for o in page} == {0, 1, 2}
+    assert {len(o["category"]) for o in page} == {0, 1, 2}
+    assert sum("productSpecification" in o for o in page) == 9
+    for body in page:
+        assert [p["name"] for p in body["productOfferingPrice"]] == sorted(
+            p["name"] for p in body["productOfferingPrice"]
+        )
+
+
+def test_financial_account_list(api, monkeypatch):
+    url = "/tmf-api/accountManagement/v5/financialAccount"
+    for index in range(6):
+        party = apidata.individual(api, given=f"Owner {index}")
+        fa = financial(api, party, name=f"Receivables {index}")
+        if index == 5:
+            continue  # nothing linked: no balance, no relationship
+        customer = apidata.customer(api, party, name=f"Customer {index}")
+        usd = apidata.account(api, customer, name=f"USD {index}", financialAccount=link(fa))
+        apidata.payment(api, usd, 10 * (index + 1))
+        if index % 2 == 0:
+            eur = apidata.account(
+                api, customer, name=f"EUR {index}", currency="EUR", financialAccount=link(fa)
+            )
+            apidata.payment(api, eur, index + 1, unit="EUR")
+            create_party_account(api, "partyAccount", party, financialAccount=link(fa))
+    one = statements(api, monkeypatch, f"{url}?limit=1")
+    hundred = statements(api, monkeypatch, f"{url}?limit=100")
+    # page, owners, linked, billing accounts, ledger check, balances, auth and pool checks
+    assert one == hundred == 10
+    page = _same_bodies(api, url)
+    assert len(page) == 6
+    assert {len(b["accountBalance"]) for b in page} == {0, 1, 2}
+    assert {len(b["accountRelationship"]) for b in page} == {0, 1, 3}
+
+
+@pytest.mark.parametrize("resource", ["partyAccount", "settlementAccount"])
+def test_party_account_list(api, monkeypatch, resource):
+    url = f"/tmf-api/accountManagement/v5/{resource}"
+    expected = {}
+    for index in range(6):
+        party = apidata.individual(api, given=f"Partner {index}")
+        extra = {}
+        if index % 2 == 0:
+            extra["financialAccount"] = link(financial(api, party, name=f"Payouts {index}"))
+        body = create_party_account(api, resource, party, name=f"Account {index}", **extra)
+        expected[body["id"]] = body
+    assert api.get(f"{url}?limit=1").status_code == 200  # warm the typed kind filter
+    one = statements(api, monkeypatch, f"{url}?limit=1")
+    hundred = statements(api, monkeypatch, f"{url}?limit=100")
+    assert one == hundred == 7  # page, owners, financial accounts, auth and pool checks
+    page = _same_bodies(api, url, expected)
+    assert sum("financialAccount" in b for b in page) == 3
+
+
+def test_bill_on_demand_list(api, monkeypatch):
+    url = "/tmf-api/customerBillManagement/v5/customerBillOnDemand"
+    expected = {}
+    for index in range(6):
+        account = apidata.account(api, name=f"On demand {index}")
+        response = api.post(url, {"billingAccount": {"id": account["id"]}})
+        assert response.status_code == 201, response.text
+        expected[response.json()["id"]] = response.json()
+    one = statements(api, monkeypatch, f"{url}?limit=1")
+    hundred = statements(api, monkeypatch, f"{url}?limit=100")
+    assert one == hundred == 6  # page, accounts, session auth and pool checks
+    assert len(_same_bodies(api, url, expected)) == 6
 
 
 @pytest.fixture
