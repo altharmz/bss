@@ -651,7 +651,7 @@ change.
 The admin UI (stage 5) lives in `frontend/`: Vite + React + TypeScript, built to static
 files and served by the shared Caddy on :8445 (same origin as the API, same basic auth -
 no CORS). It never enters the backend image (`.dockerignore`). `design-ref/` is the design
-handoff: a pristine reference, never edited (settings.json deny + guard.sh). Types come
+handoff: a pristine reference, never edited (settings.json deny; `.codex/patch-guard.sh` for Codex). Types come
 from `spec/` (TMF and `spec/internal/`), never from `/openapi.json`. Fonts are
 self-hosted (`@fontsource`), no CDN at runtime. Every dependency needs a stated reason:
 `package.json` carries them under `"//"`.

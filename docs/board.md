@@ -70,7 +70,7 @@ unchanged (see [worktrees.md](worktrees.md#normal-agent-workflow)). Preserve one
 priority label per issue and leave other agents' owned work untouched.
 
 Use `gh issue edit <n> --remove-label <old> --add-label <new>` for an approved priority
-change. For approved BSS board ordering, the guard permits this narrow inline form:
+change. For approved BSS board ordering, use this inline form:
 
 ```sh
 gh api graphql -f query='mutation { updateProjectV2ItemPosition(input: {projectId: "PVT_kwHOEpM-b84BpHA0", itemId: "<item id>"}) { clientMutationId } }'
@@ -79,10 +79,9 @@ gh api graphql -f query='mutation { updateProjectV2ItemPosition(input: {projectI
 Omitting `afterId` moves the item first; add `, afterId: "<preceding item id>"` after
 `itemId` to place it after another item. Read item IDs from the board snapshot and
 confirm the resulting order afterward. Use `make start-task` to claim/start work.
-These board-administration operations have no lifecycle Make target. The guard allows
-only this BSS reorder mutation, not arbitrary GraphQL writes or combined mutations.
-The shell hook cannot verify conversation approval; agents must enforce that requirement,
-as they do the existing human-review rules. There is no approval flag or general bypass.
+These board-administration operations have no lifecycle Make target. No hook checks them:
+the approval requirement rests on the agent, as the human-review rules do. Run only this
+reorder mutation, never another GraphQL write.
 
 `make new-priority-task TITLE=... BODY=... [LABELS=...]` creates an explicitly approved
 P0 issue first in Ready and stops. It does not claim ownership, check slot availability,
@@ -124,9 +123,9 @@ new commits require renewed approval. How to pass it:
 [worktrees.md](worktrees.md#task-pull-requests-and-readiness).
 
 **Never**, for any PR: `gh pr merge --admin`, merging with failing or pending checks, a
-direct push to `master`, a force-push. The allow list cannot check labels or paths, so the
-two self-merge exclusions above rest on you; the guard blocks `--admin`, API merges and
-force pushes.
+direct push to `master`, a force-push. No hook checks labels, paths, `--admin` or API
+merges, so these rules rest on you; `make merge-task` is the only supported way to merge,
+and the guard blocks force pushes.
 
 **Red master.** If `master` goes red (a push run or the nightly full run), the first step of
 the next "continue" is: revert the offending PR (on a branch, as a PR), open an issue for
