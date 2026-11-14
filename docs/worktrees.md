@@ -9,7 +9,7 @@ board work). Never switch branches in a task worktree or touch sibling worktrees
 ## Normal agent workflow
 
 Every regular operation has a Make target; use it instead of the equivalent raw Git, GitHub
-or Docker commands (`make help` lists them). Targets validate task identity, run the hooks
+or Docker commands (`make help` lists the common ones, `make help GROUP=all` every target). Targets validate task identity, run the hooks
 and record telemetry; raw commands skip that. Nothing blocks you from using a plain command
 where no target exists (source reading, `git diff`, `git log`, `rg`). Run each target as a
 standalone command, with its required variables.
