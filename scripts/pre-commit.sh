@@ -72,19 +72,22 @@ if [[ -n "$staged" ]] && ! grep -vE '\.md$' <<<"$staged" | grep -q . &&
   exit 0
 fi
 
-# One run at a time per repository (all its worktrees: the lock is in the common git
+# One test run at a time on the workstation (all worktrees: the lock is in the common git
 # directory): two suites side by side (two sessions committing at once, 2026-10-23) took
-# 12.5 minutes instead of 5 and failed the timing-sensitive worker tests. The lock is
-# released when the hook and the checks it started end, killed or not. 30 minutes at
-# most: a run never takes that long, so a holder that old is stuck. After a wait the
+# 12.5 minutes instead of 5 and failed the timing-sensitive worker tests. The heavy make
+# targets take the same lock through scripts/with-test-lock when run by hand (#348);
+# BSS_TEST_LOCK_HELD=1 lets the ones this hook runs pass, as it holds the lock already.
+# The lock is released when the hook and the checks it started end, killed or not. 60
+# minutes at most: a waiter can stand behind more than one queued run. After a wait the
 # tree is checked again: a session sharing this checkout may have changed it meanwhile.
 exec 9>>"$(git rev-parse --path-format=absolute --git-common-dir)/pre-commit.lock"
 if ! flock -n 9; then
-  echo "pre-commit: another commit's checks are running - waiting for them" | tee -a "$log"
-  flock -w "${PRE_COMMIT_LOCK_WAIT:-1800}" 9 ||
-    fail "another commit's checks still hold the lock after ${PRE_COMMIT_LOCK_WAIT:-1800} s"
+  echo "pre-commit: other test runs hold the lock - waiting for them" | tee -a "$log"
+  flock -w "${PRE_COMMIT_LOCK_WAIT:-3600}" 9 ||
+    fail "another test run still holds the lock after ${PRE_COMMIT_LOCK_WAIT:-3600} s"
   check_tree
 fi
+export BSS_TEST_LOCK_HELD=1
 
 # run gives every check </dev/null: docker compose run only allocates a pty when stdin is
 # actually a tty, so this keeps the hook from ever blocking on stdin in a non-interactive
