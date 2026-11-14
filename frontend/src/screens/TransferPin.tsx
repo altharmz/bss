@@ -4,7 +4,8 @@ import { explain } from '../api/client';
 import { businessDate } from '../format/dates';
 import { useResource } from '../api/useResource';
 import { useSystemContext } from '../app/context';
-import { Button, Dialog, Field, TextInput, submitDialogPrimary, useToast } from '../ui/kit';
+import { Button, Dialog, submitDialogPrimary, useToast } from '../ui/kit';
+import { AccountPinField } from './SecurityTab';
 import { Note } from '../ui/Note';
 import { ErrorBlock } from '../ui/states';
 
@@ -90,18 +91,7 @@ export function TransferPinDialog({
             previous one.
           </p>
         )}
-        <Field
-          label="Account PIN"
-          help="Prepaid lines: the customer's account PIN, checked by the server."
-        >
-          <TextInput
-            type="password"
-            aria-label="Account PIN"
-            autoComplete="off"
-            value={accountPin}
-            onChange={(e) => setAccountPin(e.target.value)}
-          />
-        </Field>
+        <AccountPinField value={accountPin} onChange={setAccountPin} />
         {pins.status === 'error' && (
           <ErrorBlock title="Failed to load PINs" error={pins.error} onRetry={pins.retry} />
         )}

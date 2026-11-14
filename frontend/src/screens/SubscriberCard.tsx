@@ -73,6 +73,7 @@ import {
 } from './SubscriberForms';
 import { SubscriberOrders } from './SubscriberOrders';
 import { MessagesTab } from './MessagesTab';
+import { SecurityTab } from './SecurityTab';
 import { UsageTab } from './UsageTab';
 import './screens.css';
 
@@ -341,6 +342,7 @@ function Card({
         ]
       : []),
     { key: 'messages', label: 'Messages' },
+    { key: 'security', label: 'Security' },
     { key: 'account', label: 'Account' },
   ];
   const tab = options.some((option) => option.key === hash) ? hash : 'overview';
@@ -741,6 +743,17 @@ function Card({
         // mounted only while shown: no message or consent request until the tab is opened
         tab === 'messages' && (
           <MessagesTab customerId={account.customerId} customerName={account.customerName} />
+        ),
+      )}
+      {pane(
+        'security',
+        // mounted only while shown: no PIN, lock or audit request until the tab is opened
+        tab === 'security' && (
+          <SecurityTab
+            customerId={account.customerId}
+            prepaid={account.ratingType === 'prepaid'}
+            products={products}
+          />
         ),
       )}
       <History account={account} charges={charges} transactions={transactions} tab={tab} />

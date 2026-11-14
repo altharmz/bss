@@ -1760,6 +1760,17 @@
   gap: var(--space-sm);
 }
 
+/* Security tab (SecurityTab.tsx) */
+.security-negative {
+  color: var(--color-negative);
+}
+.security-audit-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  margin-bottom: var(--space-sm);
+}
+
 /* Messages tab (MessagesTab.tsx) */
 .consent-row {
   display: grid;

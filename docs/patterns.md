@@ -237,7 +237,7 @@ double padding. Escape, overlay clicks and the close button preserve closing beh
 
 ### Ledger write footer (slice 3b2b2b2)
 
-`Footer` keeps Cancel/Close and write buttons as direct children. It disables buttons while busy, reserves space for the write action’s spinner and both labels to keep its width stable while busy, and replaces write actions with primary Refresh when unsure. Refusals use a negative Note with “Refused.”; uncertain outcomes use the D7 warning and `useWrite.failedCall`. Optional `write.code` is presentation data; current ApiError has no code, so live refusals omit it. Editable forms using Footer wrap fields in a disabled fieldset while busy. UI kit shows idle, busy, refused and unsure dialogs; Numbers is included in reference captures.
+`Footer` keeps Cancel/Close and write buttons as direct children. It disables buttons while busy, reserves space for the write action’s spinner and both labels to keep its width stable while busy, and replaces write actions with primary Refresh when unsure. Refusals use a negative Note with “Refused.”; uncertain outcomes use the D7 warning and `useWrite.failedCall`. Optional `write.code` is presentation data. `ApiError.code` holds the TMF Error's business code when the server sends one; `explain` turns the account security codes into operator sentences (issue 226). Editable forms using Footer wrap fields in a disabled fieldset while busy. UI kit shows idle, busy, refused and unsure dialogs; Numbers is included in reference captures.
 
 ### Ledger shell (slice 4)
 
@@ -328,6 +328,15 @@ SubscriberOrders reuses loadOrderPage for each of draft, acknowledged and inProg
 ### Ledger billing runs (R8)
 
 The latest-run band and selected compact history share the existing loaded run list. Outcomes replaces the dialog but keeps its lazy detail/account loaders, firstFilter and exact filter queries: activate Accounts or select a history row. Key the outcomes owner by run id so selection resets its filter. Run details stays in a disclosure; account names link to cards beside copyable Id controls. The next-run countdown uses zonedDateTime for latest date + 1 at billingRunAt, including the target date's DST offset, and context.now only. Outcomes/history wrap below the band when their compact tables cannot fit side by side.
+
+### Account PIN on sensitive writes (issue 226)
+
+A dialog whose request the server may verify (`docs/decisions/accounts.md`) renders
+`AccountPinField` (`screens/SecurityTab.tsx`, marker `ui.security.accountPin`) and passes the
+value to its API function. That function adds `accountPinHeader(pin)`, which is `{}` when the
+field is empty, to `postJson`/`patchJson`/`request`. The PIN never goes in a body, a URL or a
+toast, and the field is cleared after a successful write. Refusal copy comes from
+`ACCOUNT_SECURITY_ERRORS`, which `orderRefusal` and `explain` both use.
 
 **Theme (slice 14).** `app/theme.ts` keeps System / Light / Dark under localStorage `bss.theme`
 (every access in try/catch; a throwing storage means System) and sets `data-theme` on `<html>`

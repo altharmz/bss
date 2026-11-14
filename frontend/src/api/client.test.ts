@@ -1,6 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
-import { json, stubFetch, tmfError } from '../test/fetch';
-import { AMOUNT, ApiError, getAll, getJson, getPage, jsonWithAmount } from './client';
+import { json, stubFetch, tmfCodeError, tmfError } from '../test/fetch';
+import {
+  accountPinHeader,
+  AMOUNT,
+  ApiError,
+  explain,
+  getAll,
+  getJson,
+  getPage,
+  jsonWithAmount,
+} from './client';
 
 const PATH = '/tmf-api/accountManagement/v5/billingAccount';
 
@@ -26,6 +35,23 @@ describe('errors', () => {
   it('falls back to the status phrase when the body is not a TMF error (HTTP/2 has none)', async () => {
     stubFetch({ [`GET ${PATH}`]: () => new Response('<html>bad gateway</html>', { status: 502 }) });
     await expect(getJson(PATH)).rejects.toThrow(`GET ${PATH} → 502 Bad Gateway`);
+  });
+
+  it('keeps a business code and explains an account security refusal in operator words', async () => {
+    stubFetch({ [`GET ${PATH}`]: () => tmfCodeError(403, 'pinLocked', 'too many wrong PINs') });
+    const error = (await getJson(PATH).catch((e: unknown) => e)) as ApiError;
+    expect(error.code).toBe('pinLocked');
+    expect(explain(error)).toMatch(/^Too many wrong account PINs/);
+    // a bare status in `code` is no business code; an unknown code keeps the server's words
+    stubFetch({ [`GET ${PATH}`]: () => tmfError(409, 'Conflict') });
+    expect(((await getJson(PATH).catch((e: unknown) => e)) as ApiError).code).toBeUndefined();
+    stubFetch({ [`GET ${PATH}`]: () => tmfCodeError(403, 'somethingNew', 'a new refusal') });
+    expect(explain(await getJson(PATH).catch((e: unknown) => e))).toBe('a new refusal');
+  });
+
+  it('sends the account PIN header only when one is typed', () => {
+    expect(accountPinHeader(' 482913 ')).toEqual({ 'X-Account-Pin': '482913' });
+    expect(accountPinHeader('  ')).toEqual({});
   });
 
   it('reports a network failure', async () => {

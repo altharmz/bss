@@ -1,3 +1,4 @@
+import { ACCOUNT_SECURITY_ERRORS } from './orderErrors';
 import { writeLock } from './WriteLock';
 
 // Fetch wrapper for the TMF and internal APIs (same origin: Vite's proxy locally, the
@@ -10,8 +11,16 @@ export class ApiError extends Error {
   readonly status: number; // 0 = no response (network)
   readonly reason: string;
   readonly detail: string; // the TMF Error's `message`: what exactly was wrong ('' if none)
+  readonly code: string | undefined; // the TMF Error's business `code` (not a bare status)
 
-  constructor(method: string, path: string, status: number, reason: string, detail = '') {
+  constructor(
+    method: string,
+    path: string,
+    status: number,
+    reason: string,
+    detail = '',
+    code?: string,
+  ) {
     super(`${method} ${path} → ${status === 0 ? '' : `${status} `}${reason}`.trim());
     this.name = 'ApiError';
     this.method = method;
@@ -19,13 +28,18 @@ export class ApiError extends Error {
     this.status = status;
     this.reason = reason;
     this.detail = detail;
+    this.code = code;
   }
 }
 
-/** What to tell an operator about a failed action: the server's own words if it gave
- * any (a 422's message), else the call and its status. */
+/** What to tell an operator about a failed action: the operator sentence of an account
+ * security refusal (`pinRequired`...), else the server's own words if it gave any (a 422's
+ * message), else the call and its status. */
 export function explain(error: unknown): string {
-  if (error instanceof ApiError) return error.detail || error.message;
+  if (error instanceof ApiError) {
+    const known = error.code === undefined ? undefined : ACCOUNT_SECURITY_ERRORS[error.code];
+    return known ?? (error.detail || error.message);
+  }
   return error instanceof Error ? error.message : String(error);
 }
 
@@ -49,17 +63,21 @@ const PHRASES: Record<number, string> = {
 async function failure(method: string, path: string, response: Response): Promise<ApiError> {
   let reason = '';
   let detail = '';
+  let code: string | undefined;
   try {
     const body: unknown = await response.clone().json();
     if (body && typeof body === 'object') {
       if ('reason' in body && typeof body.reason === 'string') reason = body.reason;
       if ('message' in body && typeof body.message === 'string') detail = body.message;
+      // a business code replaces the status there (TmfError(code=...)); a bare status is none
+      if ('code' in body && typeof body.code === 'string' && !/^\d+$/.test(body.code))
+        code = body.code;
     }
   } catch {
     // not JSON (a proxy's HTML page, an empty body): fall through
   }
   reason ||= response.statusText || PHRASES[response.status] || 'Error';
-  return new ApiError(method, path, response.status, reason, detail === reason ? '' : detail);
+  return new ApiError(method, path, response.status, reason, detail === reason ? '' : detail, code);
 }
 
 export async function request(
@@ -108,6 +126,13 @@ export async function request(
   }
 }
 
+/** The customer's account PIN as the `X-Account-Pin` header (docs/decisions/accounts.md):
+ * sent only when typed, never in a body or URL. */
+export function accountPinHeader(pin: string): Record<string, string> {
+  const trimmed = pin.trim();
+  return trimmed ? { 'X-Account-Pin': trimmed } : {};
+}
+
 /** POST a JSON body. The caller passes the JSON text when it must control number tokens
  * (amounts); otherwise an object is serialised here. */
 export async function postJson<T>(
@@ -124,10 +149,14 @@ export async function postJson<T>(
 
 /** PATCH as JSON Merge Patch - the only PATCH our TMF APIs accept (415 otherwise). As
  * with postJson, a string body is sent as is (exact amount tokens). */
-export async function patchJson<T>(path: string, body: unknown): Promise<T> {
+export async function patchJson<T>(
+  path: string,
+  body: unknown,
+  headers: Record<string, string> = {},
+): Promise<T> {
   const response = await request('PATCH', path, {
     body: typeof body === 'string' ? body : JSON.stringify(body),
-    headers: { 'Content-Type': 'application/merge-patch+json' },
+    headers: { 'Content-Type': 'application/merge-patch+json', ...headers },
   });
   return (await response.json()) as T;
 }

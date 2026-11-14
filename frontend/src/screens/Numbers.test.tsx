@@ -463,6 +463,93 @@ describe('number inventory', () => {
     ]);
   });
 
+  it('sends the account PIN with a SIM swap and explains a PIN refusal', async () => {
+    const msisdn = { ...stock, id: 'num', value: '12025550122' };
+    const oldSim = {
+      ...stock,
+      id: 'oldsim',
+      value: '001010123456780',
+      allocationStatus: 'allocated',
+      resourceSpecification: { id: 'imsi', '@type': 'ResourceSpecificationRef' },
+    };
+    const newSim = {
+      ...stock,
+      id: 'newsim',
+      name: 'IMSI 001010123456781',
+      value: '001010123456781',
+      resourceSpecification: { id: 'imsi', '@type': 'ResourceSpecificationRef' },
+    };
+    const { fetchMock } = stubFetch({
+      [`GET ${PATHS.products}/product`]: () =>
+        json({
+          id: 'product',
+          status: 'active',
+          productSpecification: { id: 'spec' },
+          realizingResource: [{ id: 'num' }, { id: 'oldsim' }],
+        }),
+      ['GET /tmf-api/productCatalogManagement/v5/productSpecification/spec']: () =>
+        json({ resourceSpecification: [{ id: 'msisdn' }, { id: 'imsi' }] }),
+      ...inventoryOf([msisdn, oldSim, newSim]),
+      [`POST ${PATHS.orders}`]: () =>
+        json({
+          state: 'rejected',
+          productOrderErrorMessage: [
+            { code: 'pinInvalid', reason: 'the account PIN is not valid' },
+          ],
+        }),
+    });
+    render(<ProductNumber accountId="account" productId="product" onDone={() => {}} />);
+    fireEvent.click(screen.getByText('Subscriber number'));
+    const imsi = await screen.findByRole('combobox', { name: 'IMSI' });
+    await waitFor(() => expect(imsi.hasAttribute('disabled')).toBe(false));
+    pickOption(imsi, newSim.value);
+    expectUi('ui.security.accountPin');
+    fireEvent.change(screen.getByLabelText('Account PIN'), { target: { value: ' 482913 ' } });
+    fireEvent.click(screen.getByText('Change SIM'));
+    expect(
+      await screen.findByText(
+        'The account PIN is wrong. Repeated wrong PINs lock the verification.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText('pinInvalid')).toBeTruthy();
+    const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect((post?.[1]?.headers as Record<string, string>)['X-Account-Pin']).toBe('482913');
+    // the PIN never travels in the body
+    expect(String(post?.[1]?.body)).not.toContain('482913');
+  });
+
+  it('sends no PIN header when no account PIN is typed', async () => {
+    const { fetchMock } = stubFetch({
+      [`GET ${PATHS.products}/product`]: () =>
+        json({
+          id: 'product',
+          status: 'active',
+          productSpecification: { id: 'spec' },
+          realizingResource: [{ id: 'old', name: '12025550122' }],
+        }),
+      ['GET /tmf-api/productCatalogManagement/v5/productSpecification/spec']: () =>
+        json({ resourceSpecification: [{ id: 'msisdn' }] }),
+      ...inventoryOf([
+        stock,
+        { ...stock, id: 'old', value: '12025550122', allocationStatus: 'allocated' },
+      ]),
+      [`POST ${PATHS.orders}`]: () =>
+        json({
+          state: 'rejected',
+          productOrderErrorMessage: [{ code: 'pinRequired', reason: 'needs the PIN' }],
+        }),
+    });
+    render(<ProductNumber accountId="account" productId="product" onDone={() => {}} />);
+    fireEvent.click(screen.getByText('Subscriber number'));
+    const picker = await screen.findByRole('combobox', { name: 'Subscriber number' });
+    await waitFor(() => expect(picker.hasAttribute('disabled')).toBe(false));
+    pickOption(picker, stock.value);
+    fireEvent.click(screen.getByText('Change number'));
+    expect(await screen.findByText(/Ask the customer for their account PIN/)).toBeTruthy();
+    const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(post?.[1]?.headers as Record<string, string>).not.toHaveProperty('X-Account-Pin');
+  });
+
   it('pages the inventory with Previous and Next', async () => {
     const many = Array.from({ length: 51 }, (_, i) => ({
       ...stock,

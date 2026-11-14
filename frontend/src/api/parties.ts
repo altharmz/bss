@@ -4,7 +4,7 @@
 // settlement accounts through their owner), so the delete rules are visible in the data.
 // Design: docs/ui.md.
 
-import { getJson, getPage, patchJson, postJson, request } from './client';
+import { accountPinHeader, getJson, getPage, patchJson, postJson, request } from './client';
 import { PATHS, type PartyKind } from './bss';
 import { businessDate, zonedDateTime } from '../format/dates';
 import {
@@ -354,12 +354,15 @@ export function customerChanges(before: CustomerDetail, after: CustomerDetail) {
   return Object.keys(changes).length ? changes : null;
 }
 
+/** A contact change of a prepaid customer's party needs the customer's account PIN
+ * (`X-Account-Pin`, sent only when typed; docs/decisions/accounts.md). */
 export async function patchParty(
   kind: PartyKind,
   id: string,
   changes: Record<string, unknown>,
+  accountPin = '',
 ): Promise<void> {
-  await patchJson(`${PARTY_PATH[kind]}/${id}`, changes);
+  await patchJson(`${PARTY_PATH[kind]}/${id}`, changes, accountPinHeader(accountPin));
 }
 
 export async function patchCustomer(id: string, changes: Record<string, string>): Promise<void> {
