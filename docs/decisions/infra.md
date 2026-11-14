@@ -428,8 +428,8 @@ remote `DEPLOYED` matches: `commit`, `tag`, `subject`, `migration` (newest file 
 `alembic/versions/` of that commit, from git, not the working tree), `deployed_at` (UTC)
 and `checks=running`; after the last step it is rewritten with `checks=passed`. Written
 via a temp file and `mv`. `make deployed` prints it and `git log <commit>..HEAD`. Agents
-never write it: Claude's Edit deny rule, `.codex/patch-guard.sh` and a guard.sh rule
-against shell writes (cases in `guard-cases.txt`). The VPS's `~/bss/DEPLOYED` stays the
+never write it: this is a rule for the agent; Claude's Edit deny rule and
+`.codex/patch-guard.sh` (for Codex patches) block file edits, and no hook checks shell writes. The VPS's `~/bss/DEPLOYED` stays the
 authority; `.deployed` is the workstation's copy of the last deploy made from it.
 
 ## Metrics (2026-11-07)
