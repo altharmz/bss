@@ -23,6 +23,8 @@ services:
       # and tests/test_ui_mcp_parity.py (every call the UI makes, scanned by the script)
       - ./frontend/src:/app/frontend/src:ro
       - ./scripts/ui_mcp_parity.py:/app/scripts/ui_mcp_parity.py:ro
+      # read by tests/conftest.py: which test files may read which data files (#344)
+      - ./scripts/hook_selection.py:/app/scripts/hook_selection.py:ro
       - ./pyproject.toml:/app/pyproject.toml:ro
       - ./alembic:/app/alembic
       - ./alembic.ini:/app/alembic.ini:ro

@@ -50,7 +50,8 @@ for test speed - not crash-safe; recover with `make clean && make up` ([decision
 
 - **Pre-commit** (`scripts/pre-commit.sh`, installed by `make hooks`): refuses the commit
   unless the working tree is exactly what is committed, then runs lint, the smoke tests and
-  the tests the change affects, plus UI and generated-docs checks when their sources change.
+  the tests the change affects (the whole backend suite for specs, pins, migrations or the
+  worker), plus UI and generated-docs checks when their sources change.
   It is the one local test run of a development cycle; the full `make test` is nightly in CI
   and by hand before a PR that touches billing, migrations or the API. Never skipped.
 - **Pre-push** (`scripts/pre-push.sh`): scans only the commits being pushed and refuses a

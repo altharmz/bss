@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Cases for the run lock of scripts/pre-commit.sh. Run by `make test` (on the host, a few
-# seconds): the real hook in a throwaway repository, with a `make` that only records its
-# targets, while another process holds the lock or not.
+# Cases for the run lock of scripts/pre-commit.sh and for the test runs it plans. Run by
+# `make test` (on the host, a few seconds): the real hook in a throwaway repository, with a
+# `make` that only records its targets, while another process holds the lock or not.
 set -uo pipefail
 
 hook="$(cd "$(dirname "$0")" && pwd)/pre-commit.sh"
@@ -65,6 +65,28 @@ git -C "${repo}" checkout -q -- tracked.txt
 
 hold 3
 PRE_COMMIT_LOCK_WAIT=1 expect 1 "" "a lock held past the wait limit fails the commit"
+
+# The test runs planned for the staged files (scripts/hook_selection.py, #344).
+mkdir -p "${repo}/frontend/src" "${repo}/alembic"
+echo a >"${repo}/frontend/src/a.ts"
+git -C "${repo}" add frontend
+expect 0 "lint test-smoke test-changed test-files web-lint web-test" \
+  "a UI source runs the backend tests that read it, not the whole suite"
+
+echo m >"${repo}/alembic/m.py"
+git -C "${repo}" add alembic
+expect 0 "lint test-recorded docs-check web-lint web-test" \
+  "a migration runs the whole suite, recorded, without the harness and deploy suites"
+
+mkdir -p "${repo}/.testmon"
+(cd "${repo}" && python3 -B "$(dirname "${hook}")/hook_selection.py" digest) >"${repo}/.testmon/full-suite"
+expect 0 "lint test-smoke test-changed test-files docs-check web-lint web-test" \
+  "a retry on the content the whole suite ran on runs the failed and affected tests"
+
+echo fixed >"${repo}/alembic/m.py"
+git -C "${repo}" add alembic
+expect 0 "lint test-recorded docs-check web-lint web-test" \
+  "a changed migration runs the whole suite again"
 
 if ((failed > 0)); then
   printf 'pre-commit lock: %d of %d cases failed\n' "${failed}" "${total}" >&2

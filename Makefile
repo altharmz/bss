@@ -123,8 +123,26 @@ test-smoke: ## The smoke subset (pytest -m smoke) and the scripts' own cases: wh
 test-changed: ## Only the tests affected by the change since their last run (pytest-testmon); the pre-commit hook runs it after test-smoke
 	./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) oneoff pytest -n auto --testmon
 
+# The whole backend suite for the commit hook (scripts/hook_selection.py), recorded by
+# testmon (--testmon-noselect: every test runs), so a failure is followed by a short retry.
+# When pytest ran every test (exit 0 or 1), the digest of the files that called for the
+# suite goes to .testmon/full-suite (emptied first); the hook then knows this content was
+# tested in full. Without runtime-check and deploy-check: the hook runs those by its own
+# path rules.
+.PHONY: test-recorded test-files
+test-recorded: ## The hook's full backend suite, recorded for testmon (no harness or deploy suites; by hand use make test)
+	./scripts/test-billing-status-check.sh
+	./scripts/test-pre-commit-lock.sh
+	@: >.testmon/full-suite
+	./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) -e FULL_SUITE_DIGEST="$$(python3 -B scripts/hook_selection.py digest)" oneoff sh -c 'pytest -n auto --testmon-noselect; status=$$?; if [ $$status -le 1 ]; then echo "$$FULL_SUITE_DIGEST" >/testmon/full-suite; fi; exit $$status'
+
+comma := ,
+test-files: ## The listed test files (TESTS=tests/a.py,tests/b.py): the hook runs the readers of a staged data file
+	@test -n "$(TESTS)" || { echo "TESTS=tests/a.py,tests/b.py is required" >&2; exit 2; }
+	./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) oneoff pytest -n auto $(subst $(comma), ,$(TESTS))
+
 .PHONY: testmon-dir
-test test-smoke test-changed check-preflight: | testmon-dir
+test test-smoke test-changed test-recorded test-files check-preflight: | testmon-dir
 testmon-dir:
 	@# Recover only an empty directory auto-created by Docker; preserve existing data.
 	@if [ -d .testmon ] && [ ! -w .testmon ]; then rmdir .testmon; fi
