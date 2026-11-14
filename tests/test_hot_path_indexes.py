@@ -82,12 +82,6 @@ def sorts(text: str) -> bool:
             (SINCE,),
             "network_command_sim_swapped_idx",
         ),
-        (
-            "SELECT 1 FROM prepaid_command c WHERE c.kind = 'renewal'"
-            " AND c.request->>'previous_interval_id' = %s",
-            (str(NIL),),
-            "prepaid_command_previous_interval_idx",
-        ),
         # billing runs
         (
             "SELECT 1 AS x FROM billing_run WHERE status = 'running' LIMIT 1",

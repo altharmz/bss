@@ -8,9 +8,11 @@ From the EXPLAIN review of the 100k load-test dataset (#310) and the SQL plan sw
 
 - **Worker hot paths**, run every wake-up or for every billed account: the ABRs of a
   product (both existing product_id indexes are partial), the auto top-up and renewal
-  card candidates, the PAYG rating selectors (grantless top-level lines), the
-  notification detectors (each reads the rows since its watermark) and the
-  no-renewal-yet anti-join on `request->>'previous_interval_id'`.
+  card candidates, the PAYG rating selectors (grantless top-level lines) and the
+  notification detectors (each reads the rows since its watermark). An expression index
+  for the no-renewal-yet anti-join on `request->>'previous_interval_id'` was measured and
+  left out: its nested-loop probes were slower than the hash anti-join (the query's cost
+  is the DISTINCT ON over every funded interval).
 - **Admin list sorts**: each list's exact order, so a page reads the index instead of
   sorting the table. `ORDER BY created_at DESC, id` (payment, network commands,
   notifications) needs `(created_at DESC, id)`; `created_at DESC, id DESC` and
@@ -54,9 +56,6 @@ INDEXES = {
     "payment_command_declined_idx": "payment_command (created_at) WHERE state = 'declined'",
     "network_command_sim_swapped_idx": (
         "network_command (confirmed_at) WHERE kind = 'swap_sim' AND state = 'confirmed'"
-    ),
-    "prepaid_command_previous_interval_idx": (
-        "prepaid_command ((request->>'previous_interval_id')) WHERE kind = 'renewal'"
     ),
     # admin list sorts
     "applied_customer_billing_rate_created_at_id_idx": (

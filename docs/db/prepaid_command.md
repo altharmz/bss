@@ -55,7 +55,6 @@ Durable internal prepaid command journal; no runtime dispatcher or public API ye
 | `prepaid_command_due_date_id_idx` | `CREATE INDEX prepaid_command_due_date_id_idx ON prepaid_command USING btree (due_date, id) WHERE (state <> 'completed'::text)` | no |
 | `prepaid_command_grant_owner` | `CREATE UNIQUE INDEX prepaid_command_grant_owner ON prepaid_command USING btree (id, billing_account_id, kind)` | yes |
 | `prepaid_command_pkey` | `CREATE UNIQUE INDEX prepaid_command_pkey ON prepaid_command USING btree (id)` | yes |
-| `prepaid_command_previous_interval_idx` | `CREATE INDEX prepaid_command_previous_interval_idx ON prepaid_command USING btree (((request ->> 'previous_interval_id'::text))) WHERE (kind = 'renewal'::text)` | no |
 | `prepaid_command_renewed_idx` | `CREATE INDEX prepaid_command_renewed_idx ON prepaid_command USING btree (attempted_at) WHERE ((kind = 'renewal'::text) AND (state = 'completed'::text))` | no |
 
 ## Triggers
