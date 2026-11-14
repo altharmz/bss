@@ -11,27 +11,27 @@ the single schema exception). Actions that an order or a renewal owns are listed
 from fastapi import APIRouter, Request
 
 from app.api import listing
-from app.api.adjust import adjust_body
+from app.api.adjust import adjust_bodies
 from app.api.balance import BASE
 from app.api.common import parse_id
 from app.api.deps import Tx
 from app.api.errors import not_found
-from app.api.reserve import reserve_body
+from app.api.reserve import reserve_bodies
 from app.api.tmfjson import TmfJSONResponse
-from app.api.topup import topup_body
-from app.api.transfer import transfer_body
+from app.api.topup import topup_bodies
+from app.api.transfer import transfer_bodies
 from app.repository import balance_actions as repo
-from app.repository._sql import Row
+from app.repository._sql import Row, rows_by_id
 
 RESOURCE = "balanceActionHistory"
 router = APIRouter(prefix=BASE)
 
-# Each kind's body and the TMF654 subclass it is.
+# Each kind's page builder and the TMF654 subclass it is.
 KINDS = {
-    "topup": (topup_body, "TopupBalance"),
-    "reservation": (reserve_body, "ReserveBalance"),
-    "adjustment": (adjust_body, "AdjustBalance"),
-    "transfer": (transfer_body, "TransferBalance"),
+    "topup": (topup_bodies, "TopupBalance"),
+    "reservation": (reserve_bodies, "ReserveBalance"),
+    "adjustment": (adjust_bodies, "AdjustBalance"),
+    "transfer": (transfer_bodies, "TransferBalance"),
 }
 ATTRIBUTES = (
     "confirmationDate",
@@ -63,13 +63,19 @@ ATTRIBUTES = (
 )
 
 
-def history_body(conn, row: Row) -> dict:
-    build, subclass = KINDS[row["kind"]]
-    body = build(conn, row)
-    body["href"] = f"{BASE}/{RESOURCE}/{row['id']}"
-    body["@type"] = subclass
-    body["@baseType"] = "BalanceActionHistory"
-    return body
+def history_bodies(conn, rows: list[Row]) -> list[dict]:
+    """The entries of a page, in its order: the page's accounts are read once and each
+    kind's rows are built from them, so a page costs the same whatever its size (#302)."""
+    accounts = rows_by_id(conn, "billing_account", [row["billing_account_id"] for row in rows])
+    bodies: dict = {}
+    for kind, (build, subclass) in KINDS.items():
+        of_kind = [row for row in rows if row["kind"] == kind]
+        for row, body in zip(of_kind, build(conn, of_kind, accounts), strict=True):
+            body["href"] = f"{BASE}/{RESOURCE}/{row['id']}"
+            body["@type"] = subclass
+            body["@baseType"] = "BalanceActionHistory"
+            bodies[row["id"]] = body
+    return [bodies[row["id"]] for row in rows]
 
 
 @router.get(f"/{RESOURCE}")
@@ -87,7 +93,7 @@ def list_history(request: Request, tx: Tx) -> TmfJSONResponse:
     )
     with tx() as conn:
         rows, more = repo.page(conn, query.where, query.offset, query.limit, kind=None)
-        bodies = [history_body(conn, row) for row in rows]
+        bodies = history_bodies(conn, rows)
     return listing.list_response(bodies, more, query)
 
 
@@ -98,5 +104,5 @@ def get_history(history_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
         row = repo.get(conn, parse_id(RESOURCE, history_id), kind=None)
         if row is None:
             raise not_found(RESOURCE, history_id)
-        body = history_body(conn, row)
+        body = history_bodies(conn, [row])[0]
     return TmfJSONResponse(listing.select_fields(body, fields))

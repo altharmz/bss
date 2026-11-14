@@ -1141,6 +1141,21 @@ same loaders with one row; no response attribute or nested array order changes.
 compares full pages with single-item reads (and creation responses where nothing
 changed since).
 
+## Batched prepaid balance action bodies (2026-11-14, #302)
+
+The TMF654 `topupBalance`, `adjustBalance`, `reserveBalance` and `transferBalance`
+lists load their billing accounts once per page (`*_bodies`). `balanceActionHistory`
+loads the accounts of the whole page once and passes them to each kind's builder, so a
+page mixing kinds costs the same as a page of one; entries keep the page order
+(`ORDER BY requested_at, id`). Single-item reads, write responses and event bodies use
+the same builders with one row. No response attribute changes; no migration is needed.
+
+`tests/test_list_queries.py` compares pages of 1 and 100 through the raw client for all
+five lists (6 statements each, including session authentication and pool checks), on two
+accounts with every kind, refused actions and transfers in both directions. Full pages
+are compared with single-item responses, and the four kind lists with their creation
+responses.
+
 ## Lists without counts (2026-11-10, #312)
 
 Decided by the human: no list counts its rows. A deliberate deviation from TMF630's

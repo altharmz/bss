@@ -9,9 +9,15 @@ from app.config import settings
 from app.repository import billing
 from tests import apidata
 from tests.querycount import statements
+from tests.test_api_adjust import post as adjust
 from tests.test_api_bill_settlement import account_with_bills
 from tests.test_api_financial_account import financial, link
 from tests.test_api_party_account import create as create_party_account
+from tests.test_api_reserve import post as reserve
+from tests.test_api_topup import BASE as BALANCE
+from tests.test_api_topup import post as topup
+from tests.test_api_transfer import pair
+from tests.test_api_transfer import post as transfer
 from tests.test_billing_db import add, at, bill
 from tests.test_payg_rating import (  # noqa: F401 - fixtures
     build,
@@ -437,3 +443,47 @@ def test_bill_on_demand_list(api, monkeypatch):
     hundred = statements(api, monkeypatch, f"{url}?limit=100")
     assert one == hundred == 6  # page, accounts, session auth and pool checks
     assert len(_same_bodies(api, url, expected)) == 6
+
+
+@pytest.fixture
+def balance_actions(api, db_conn):
+    """Top-ups, adjustments, holds and transfers in both directions on two prepaid
+    accounts, keyed by the API resource (the creation responses)."""
+    tx, rx = pair(api, db_conn)
+    created: dict[str, list[dict]] = {name: [] for name in BALANCE_LISTS}
+    for acc, other in ((tx, rx), (rx, tx)):
+        for _ in range(3):
+            created["topupBalance"].append(topup(api, acc, 20).json())
+        for value in (2, -1, 999):  # a credit, a debit and a refused debit
+            created["adjustBalance"].append(adjust(api, acc, value).json())
+        for value in (1, 2, 999):  # the last is refused
+            created["reserveBalance"].append(reserve(api, acc, value).json())
+        for _ in range(3):
+            created["transferBalance"].append(transfer(api, acc, other, 1).json())
+    return created
+
+
+BALANCE_LISTS = ("topupBalance", "adjustBalance", "reserveBalance", "transferBalance")
+
+
+@pytest.mark.parametrize("name", [*BALANCE_LISTS, "balanceActionHistory"])
+def test_balance_action_lists(api, monkeypatch, balance_actions, name):
+    url = f"{BALANCE}/{name}"
+    one = statements(api, monkeypatch, f"{url}?limit=1")
+    hundred = statements(api, monkeypatch, f"{url}?limit=100")
+    assert one == hundred == 6  # page, accounts, session auth and pool checks
+    page = api.client.get(f"{url}?limit=100").json()
+    created = [
+        body for kind in BALANCE_LISTS if name in (kind, "balanceActionHistory")
+        for body in balance_actions[kind]
+    ]  # fmt: skip
+    assert sorted(b["id"] for b in page) == sorted(b["id"] for b in created)
+    assert {b["partyAccount"]["id"] for b in page} == {
+        b["partyAccount"]["id"] for b in created
+    } and len({b["partyAccount"]["id"] for b in page}) == 2
+    for body in page:
+        assert api.client.get(body["href"]).json() == body
+    if name != "balanceActionHistory":
+        by_id = {b["id"]: b for b in page}
+        for body in created:
+            assert by_id[body["id"]] == body
