@@ -3,6 +3,7 @@ import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { useRef, useState } from 'react';
 import { requirements } from '../api/numbers';
+import { imeiProblem } from '../api/devices';
 import { createPortIn, type PortInData } from '../api/ports';
 import { NumberPicker } from './Numbers';
 import {
@@ -56,6 +57,7 @@ export interface DraftToEdit {
   numberId: string;
   imsiId?: string;
   simType?: SimType;
+  imei?: string;
 }
 
 export function AddProductModal({
@@ -94,6 +96,8 @@ export function AddProductModal({
   const [imsiId, setImsiId] = useState(draft?.imsiId ?? '');
   // '' = a specific SIM from the picker; else the server picks one of that type from stock
   const [simChoice, setSimChoice] = useState<'' | SimType>(draft?.simType ?? '');
+  // optional: the device of a prepaid line, checked by the network when the order is placed
+  const [imei, setImei] = useState(draft?.imei ?? '');
   const [uncertain, setUncertain] = useState(false);
   // port-in: the customer brings a number. The port request is created first, then the order
   // takes the number it made; the request id is kept so a retried order does not create it twice
@@ -160,6 +164,14 @@ export function AddProductModal({
   const needsImsi = requirement.status === 'ok' && requirement.data.imsi;
   // one reference per required kind
   const simType = needsImsi && simChoice !== '' ? simChoice : undefined;
+  // a device is recorded on prepaid lines only (the server refuses it elsewhere)
+  const asksDevice = account.ratingType === 'prepaid' && needsImsi;
+  const typedImei = asksDevice ? imei.trim() : '';
+  const imeiError = typedImei === '' ? null : imeiProblem(typedImei);
+  const chosenCharacteristics = {
+    ...(simType ? { simType } : {}),
+    ...(typedImei ? { imei: typedImei } : {}),
+  };
   const portingNumber = needsNumber && porting;
   const resources = [needsNumber && !porting && numberId, needsImsi && !simType && imsiId].filter(
     Boolean,
@@ -167,7 +179,8 @@ export function AddProductModal({
   const chosenResources = resources.length === 0 ? undefined : resources;
   const complete =
     (!needsNumber || (porting ? portComplete : numberId !== '')) &&
-    (!needsImsi || simType !== undefined || imsiId !== '');
+    (!needsImsi || simType !== undefined || imsiId !== '') &&
+    imeiError === null;
   const shortNow =
     account.ratingType === 'prepaid' &&
     start === today &&
@@ -193,7 +206,7 @@ export function AddProductModal({
           context.timeZone,
           chosenResources,
           draft.itemId,
-          simType,
+          chosenCharacteristics,
         );
         if (result.state === 'rejected') {
           setProblem([result.refusal.problem]);
@@ -209,7 +222,7 @@ export function AddProductModal({
           context.timeZone,
           chosenResources,
           newIdempotencyKey(),
-          simType,
+          chosenCharacteristics,
         );
         if (result.state === 'rejected') {
           setProblem([result.refusal.problem]);
@@ -271,19 +284,20 @@ export function AddProductModal({
         context.timeZone,
         ordered,
         undefined,
-        simType,
+        chosenCharacteristics,
       );
+      const warning = result.deviceWarning === null ? '' : ` · ${result.deviceWarning}`;
       if (result.state === 'completed') {
         onOrdered(
           `${chosen.name} ordered · first charge ${formatAmount(first.amount.value)}` +
-            ` ${first.amount.unit} in the run of ${first.chargeRunDate}`,
+            ` ${first.amount.unit} in the run of ${first.chargeRunDate}${warning}`,
         );
       } else if (result.state === 'inProgress') {
         // a prepaid order: accepted, and the billing worker completes it (OrderWatch follows)
-        onOrdered(`${chosen.name} ordered: accepted, the billing worker completes it shortly`, {
-          id: result.id,
-          label: `Order for ${chosen.name}`,
-        });
+        onOrdered(
+          `${chosen.name} ordered: accepted, the billing worker completes it shortly${warning}`,
+          { id: result.id, label: `Order for ${chosen.name}` },
+        );
       } else {
         setProblem([result.refusal.problem]);
         setCode(result.refusal.code);
@@ -475,6 +489,27 @@ export function AddProductModal({
               )}
               {needsImsi && simChoice === '' && (
                 <NumberPicker kind="imsi" value={imsiId} onChange={setImsiId} />
+              )}
+              {asksDevice && (
+                <Field
+                  label="Device IMEI (optional)"
+                  help={
+                    imeiError === null
+                      ? 'Checked with the network when the order is placed; an incompatible device is refused.'
+                      : undefined
+                  }
+                  error={imeiError ?? undefined}
+                >
+                  <TextInput
+                    aria-label="Device IMEI"
+                    data-ui="ui.subscriber.addProductImei"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    maxLength={15}
+                    value={imei}
+                    onChange={(e) => setImei(e.target.value)}
+                  />
+                </Field>
               )}
               <Field
                 label="Start date"

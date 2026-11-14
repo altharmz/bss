@@ -6,6 +6,7 @@ import { orderRefusal, type OrderError } from './orderErrors';
 
 import { toCents } from '../format/money';
 import { numberProduct } from './numbers';
+import { deviceWarning, imeiCharacteristic } from './devices';
 import type { SimType } from './sims';
 import { contactMedia, EMPTY_CONTACT } from './partyDocuments';
 import { addDays, businessDate, zonedDateTime } from '../format/dates';
@@ -1759,6 +1760,8 @@ export interface OrderOutcome {
   state: string; // completed | inProgress (prepaid: the worker finishes it) | rejected
   errors: OrderError[];
   refusal: ReturnType<typeof orderRefusal>;
+  /** The network could not confirm the ordered device works (accepted with a warning). */
+  deviceWarning: string | null;
 }
 
 function outcome(order: OrderBody): OrderOutcome {
@@ -1767,6 +1770,7 @@ function outcome(order: OrderBody): OrderOutcome {
     state: need(order.state, 'order state'),
     errors: order.productOrderErrorMessage ?? [],
     refusal: orderRefusal(order.productOrderErrorMessage ?? [], order.state),
+    deviceWarning: deviceWarning(order.productOrderItem),
   };
 }
 
@@ -1778,25 +1782,34 @@ export function requestedDate(day: string, timeZone: string): string {
 
 export type { SimType };
 
-/** The product part of an add item: the chosen resources, or (instead of an IMSI) the
- * `simType` characteristic that lets the server pick a SIM of that type from stock. */
-function addProduct(numberId: string | string[] | undefined, simType?: SimType) {
-  if (!numberId && !simType) return {};
+/** What an add item may carry besides its resources: the SIM kind (instead of an IMSI, the
+ * server picks a SIM of that type from stock) and the device IMEI. */
+export interface AddCharacteristics {
+  simType?: SimType;
+  imei?: string;
+}
+
+/** The product part of an add item: the chosen resources and the `simType` and `imei`
+ * characteristics. */
+function addProduct(numberId: string | string[] | undefined, chosen: AddCharacteristics) {
+  const characteristics = [
+    ...(chosen.simType
+      ? [
+          {
+            '@type': 'StringCharacteristic',
+            name: 'simType',
+            valueType: 'string',
+            value: chosen.simType,
+          },
+        ]
+      : []),
+    ...(chosen.imei ? [imeiCharacteristic(chosen.imei)] : []),
+  ];
+  if (!numberId && characteristics.length === 0) return {};
   return {
     product: {
       ...(numberId ? numberProduct(numberId) : { '@type': 'ProductRefOrValue' }),
-      ...(simType
-        ? {
-            productCharacteristic: [
-              {
-                '@type': 'StringCharacteristic',
-                name: 'simType',
-                valueType: 'string',
-                value: simType,
-              },
-            ],
-          }
-        : {}),
+      ...(characteristics.length ? { productCharacteristic: characteristics } : {}),
     },
   };
 }
@@ -1805,14 +1818,14 @@ function addItem(
   offeringId: string,
   numberId: string | string[] | undefined,
   id = '1',
-  simType?: SimType,
+  chosen: AddCharacteristics = {},
 ) {
   return {
     '@type': 'ProductOrderItem',
     id,
     action: 'add',
     productOffering: { id: offeringId, '@type': 'ProductOfferingRef' },
-    ...addProduct(numberId, simType),
+    ...addProduct(numberId, chosen),
   };
 }
 
@@ -1825,7 +1838,7 @@ export async function orderAdd(
   timeZone: string,
   numberId?: string | string[],
   draftKey?: string,
-  simType?: SimType,
+  chosen: AddCharacteristics = {},
 ): Promise<OrderOutcome> {
   const order = await postJson<OrderBody>(
     PATHS.orders,
@@ -1834,7 +1847,7 @@ export async function orderAdd(
       billingAccount: { id: accountId, '@type': 'BillingAccountRef' },
       requestedStartDate: requestedDate(startDate, timeZone),
       ...(draftKey !== undefined ? { requestedInitialState: 'draft' } : {}),
-      productOrderItem: [addItem(offeringId, numberId, '1', simType)],
+      productOrderItem: [addItem(offeringId, numberId, '1', chosen)],
     },
     draftKey !== undefined ? { 'Idempotency-Key': draftKey } : {},
   );
@@ -1880,10 +1893,10 @@ export async function replaceDraft(
   timeZone: string,
   numberId: string | string[] | undefined,
   itemId: string,
-  simType?: SimType,
+  chosen: AddCharacteristics = {},
 ): Promise<OrderOutcome> {
   const order = await patchJson<OrderBody>(`${PATHS.orders}/${orderId}`, {
-    productOrderItem: [addItem(offeringId, numberId, itemId, simType)],
+    productOrderItem: [addItem(offeringId, numberId, itemId, chosen)],
     requestedStartDate: requestedDate(startDate, timeZone),
   });
   return outcome(order);

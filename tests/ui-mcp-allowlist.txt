@@ -41,8 +41,6 @@ list_communication_messages: the Messages tab is issue 192b (222)
 get_communication_message: the Messages tab is issue 192b (222)
 create_communication_message: an operator-written message; the UI action is issue 192b (222)
 patch_communication_message: cancelling an unsent message; the UI action is issue 192b (222)
-list_devices: the device on the product is issue 194b (225)
-check_device: the Check device action is issue 194b (225)
 
 # Global lists the UI reads through the internal paged searches instead (#314): prefix
 # search on the server and the page's figures, rather than the TMF lists filtered client side.

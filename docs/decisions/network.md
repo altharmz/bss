@@ -85,8 +85,8 @@ The stub answers a repeated key with the first answer.
 ## Device (issue #194)
 
 Activation records the device and refuses one that does not work on the network. Design
-approved by the human's standing delegation (decided following TMF). The UI half is issue 194b
-(#225).
+approved by the human's standing delegation (decided following TMF). The UI is issue #225
+([frontend.md](frontend.md#device-ui-2026-11-14-issue-225)).
 
 - **IMEI** = 15 digits with a Luhn check digit (`app/network/device.py`). An invalid value is a
   422 at the API (`invalidImei` in the order engine). It is **optional**: orders without one behave
@@ -113,7 +113,7 @@ approved by the human's standing delegation (decided following TMF). The UI half
 - **Stub fixture:** TAC (first 8 digits) `35000000`-`35999999` compatible, `99000000`-`99000099`
   incompatible (band 71, carrier lock, VoLTE), `98000000`-`98999999` temporary error (recorded
   unknown), anything else unknown.
-- **Not in this slice:** the UI (194b); a mandatory IMEI at activation (a later setting if wanted);
+- **Not in this slice:** a mandatory IMEI at activation (a later setting if wanted);
   a real device database (#203).
 
 ## Not in this slice
