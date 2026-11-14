@@ -1,5 +1,7 @@
 import { submitDialogPrimary } from '../ui/kit';
 import { NetworkCommands } from './NetworkCommands';
+import { characteristicOf } from '../api/devices';
+import { Note } from '../ui/Note';
 import { useState } from 'react';
 import {
   loadNumberValues,
@@ -290,6 +292,20 @@ function ProductDetail({ product, onClose }: { product: InventoryProduct; onClos
         )}
       </section>
       {id !== '' && <NetworkCommands owner={{ productId: id }} />}
+      {characteristicOf(p, 'imei') !== undefined && (
+        <section className="bss-dialog-section" data-ui="ui.products.device">
+          <h3>Device</h3>
+          <p>
+            IMEI <span className="bss-mono">{characteristicOf(p, 'imei')}</span> ·{' '}
+            {characteristicOf(p, 'deviceCompatibility') === 'compatible'
+              ? 'works on the network'
+              : 'not confirmed by the network'}
+          </p>
+          {characteristicOf(p, 'deviceReasons') !== undefined && (
+            <Note tone="warning">{characteristicOf(p, 'deviceReasons')}</Note>
+          )}
+        </section>
+      )}
       <section className="bss-dialog-section" data-ui="ui.products.resource">
         <h3>Realizing resource</h3>
         {resources.length === 0 && <p>None.</p>}

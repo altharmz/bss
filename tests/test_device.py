@@ -351,3 +351,81 @@ def test_the_stub_is_deterministic_by_tac():
     assert network.check_device(COMPATIBLE).result == "compatible"
     assert network.check_device(INCOMPATIBLE).result == "incompatible"
     assert network.check_device(UNKNOWN).result == "unknown"
+
+
+# --- the admin UI's requests (frontend/src/api/devices.ts, bss.ts; issue #225) ---
+
+
+def ui_imei(imei):
+    """The imei characteristic exactly as the UI sends it (`imeiCharacteristic`)."""
+    return {"@type": "StringCharacteristic", "name": "imei", "valueType": "string", "value": imei}
+
+
+def test_device_requests_as_the_ui_sends_them(api, db_conn, world, stub):
+    """Bodies pinned by ProductDevice.test.tsx and AddProduct.test.tsx, replayed verbatim."""
+    # Add product with the optional IMEI: the add item's product carries the number and imei
+    item = apidata.add_item(world.off)
+    item["product"] = {
+        "@type": "ProductRefOrValue",
+        "realizingResource": refs(number(api, value="79991234500")["id"]),
+        "productCharacteristic": [ui_imei(UNKNOWN)],
+    }
+    response = api.post(ORDER, apidata.order_body(world.acc, item))
+    assert response.status_code == 201, response.text
+    order = response.json()
+    assert order["state"] == "inProgress", errors(order)
+    # the warning the UI shows in its toast is echoed on the item
+    echoed = order["productOrderItem"][0]["product"]
+    assert characteristic(echoed, "deviceCompatibility") == "unknown"
+    assert characteristic(echoed, "deviceReasons")
+    tick(db_conn, api.clock.now())
+    (pid,) = db_conn.execute("SELECT id FROM product").fetchone()
+    pid = str(pid)
+    # Check device (nothing stored)
+    checked = api.get(f"{CHECK}?imei={INCOMPATIBLE}")
+    assert checked.status_code == 200
+    assert checked.json()["result"] == "incompatible" and checked.json()["reasons"]
+    # Change device: a modify item with only the imei characteristic
+    change = {
+        "@type": "ProductOrder",
+        "billingAccount": {"id": world.acc["id"], "@type": "BillingAccountRef"},
+        "productOrderItem": [
+            {
+                "@type": "ProductOrderItem",
+                "id": "1",
+                "action": "modify",
+                "product": {
+                    "@type": "ProductRefOrValue",
+                    "id": pid,
+                    "productCharacteristic": [ui_imei(COMPATIBLE)],
+                },
+            }
+        ],
+    }
+    refused = api.post(
+        ORDER,
+        {
+            **change,
+            "productOrderItem": [
+                {
+                    **change["productOrderItem"][0],
+                    "product": {
+                        **change["productOrderItem"][0]["product"],
+                        "productCharacteristic": [ui_imei(INCOMPATIBLE)],
+                    },
+                }
+            ],
+        },
+    )
+    assert refused.status_code == 201 and errors(refused.json()) == ["deviceIncompatible"]
+    changed = api.post(ORDER, change)
+    assert changed.status_code == 201, changed.text
+    assert changed.json()["state"] == "completed", errors(changed.json())
+    # the history the Device dialog reads, newest first
+    history = api.get(f"{DEVICE}?product.id={pid}").json()
+    assert [(h["imei"], h["compatibility"]) for h in history] == [
+        (COMPATIBLE, "compatible"),
+        (UNKNOWN, "unknown"),
+    ]
+    assert history[0]["endedAt"] is None and history[1]["endedAt"] is not None
+    assert characteristic(shown(api, pid), "imei") == COMPATIBLE

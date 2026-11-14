@@ -168,6 +168,7 @@ describe('product actions', () => {
     expect(items(funding)).toEqual([
       'Subscriber number',
       'Number Transfer PIN…',
+      'Device…',
       'Top up',
       'Deactivate',
       'Change offering…',
@@ -178,6 +179,7 @@ describe('product actions', () => {
     expect(items(productRow('Fiber 100'))).toEqual([
       'Subscriber number',
       'Number Transfer PIN…',
+      'Device…',
       'Deactivate',
       'Change offering…',
       'End on a date…',
@@ -186,6 +188,7 @@ describe('product actions', () => {
     expect(items(productRow('Manual 1'))).toEqual([
       'Subscriber number',
       'Number Transfer PIN…',
+      'Device…',
       'Deactivate',
       'Resume…',
       'Change offering…',

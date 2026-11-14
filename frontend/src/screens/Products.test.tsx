@@ -150,6 +150,34 @@ describe('products screen', () => {
     expect(within(detail).queryByRole('button', { name: 'Retry' })).toBeNull();
   });
 
+  it('shows the current device from the product characteristics', async () => {
+    const NET = '/internal/v1/network/command';
+    const withDevice = {
+      ...first,
+      productCharacteristic: [
+        { name: 'imei', value: '356938035643809', '@type': 'StringCharacteristic' },
+        { name: 'deviceCompatibility', value: 'unknown', '@type': 'StringCharacteristic' },
+        {
+          name: 'deviceReasons',
+          value: 'not in the device database',
+          '@type': 'StringCharacteristic',
+        },
+      ],
+    };
+    backend({
+      [`GET ${PRODUCTS}?${PAGE}`]: () => json([withDevice, second], { total: 2 }),
+      [`GET ${PRODUCTS}/${P1}`]: () => json(withDevice),
+      [`GET ${NET}?product.id=${P1}&offset=0&limit=100`]: () => json([], { total: 0 }),
+    });
+    open('/products');
+    fireEvent.click(await screen.findByText('Basic 10'));
+    const detail = await screen.findByRole('dialog');
+    const device = await waitFor(() => expectUi('ui.products.device'));
+    expect(within(device).getByText(/not confirmed by the network/)).toBeTruthy();
+    expect(within(device).getByText('not in the device database')).toBeTruthy();
+    expect(within(detail).getByText('356938035643809')).toBeTruthy();
+  });
+
   it('maps product states to their pill families and shows PRD- ids', async () => {
     backend({ [`GET ${PRODUCTS}?${PAGE}`]: () => json([first, second], { total: 2 }) });
     open('/products');

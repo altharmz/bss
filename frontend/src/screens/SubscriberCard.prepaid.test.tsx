@@ -1,6 +1,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { json, stubFetch, tmfError, type Handler } from '../test/fetch';
+import { json, pending, stubFetch, tmfError, type Handler } from '../test/fetch';
+import { NUMBERS } from '../api/numbers';
 import { expectUi } from '../test/expectUi';
 import { accountBody } from '../test/fixtures';
 import {
@@ -1298,5 +1299,101 @@ describe('prepaid first-charge preview in Add product', () => {
     expect(within(dialog).queryByText('Shortfall')).toBeNull();
     expect(within(dialog).queryByText(/Insufficient funds/)).toBeNull();
     expect(document.querySelector('[data-ui="ui.addProduct.topUpShortfall"]')).toBeNull();
+  });
+
+  it("opens a prepaid product's Device dialog from its menu", async () => {
+    stubbed({
+      [`GET /internal/v1/device?product.id=${P1}`]: () =>
+        json([
+          {
+            id: 'd1',
+            product: { id: P1 },
+            imei: '356938035643809',
+            compatibility: 'compatible',
+            reasons: [],
+            checkedAt: '2026-10-01T09:00:00Z',
+            startedAt: '2026-10-01T09:00:00Z',
+            endedAt: null,
+            recordedByItem: { id: 'i1' },
+          },
+        ]),
+    });
+    await open();
+    const row = await waitFor(() => productRow('Mobile L'));
+    const item = productAction(row, 'Device…');
+    expect(item.getAttribute('data-ui')).toBe('ui.subscriber.deviceItem');
+    expectUi('ui.subscriber.deviceItem');
+    fireEvent.click(item);
+    const dialog = await screen.findByRole('dialog', { name: 'Device' });
+    expect(await within(dialog).findByText(/Works on the network · since 2026-10-01/)).toBeTruthy();
+  });
+
+  it('sends the optional device IMEI of a line and shows the unconfirmed-device warning', async () => {
+    const IMEI = '356938035643809'; // Luhn-valid
+    const { fetchMock } = stubbed({
+      'GET /tmf-api/productCatalogManagement/v5/productOffering?lifecycleStatus=Active&isSellable=true&offset=0&limit=100':
+        () =>
+          json([{ ...OFFER, productSpecification: { id: 'spec-line', name: 'Mobile' } }], {
+            total: 1,
+          }),
+      'GET /tmf-api/productCatalogManagement/v5/productSpecification/spec-line': () =>
+        json({ id: 'spec-line', resourceSpecification: [{ id: 'imsi' }] }),
+      [`GET ${NUMBERS}?resourceSpecification.id=imsi&administrativeState=unlocked&allocationStatus=available&offset=0&limit=50`]:
+        pending,
+      [urlOf('2026-10-01')]: () =>
+        json(
+          firstCharge({
+            available: usd(900),
+            shortfall: usd(0),
+            balanceAfter: usd(120),
+            exceedsCreditLimit: false,
+          }),
+        ),
+      [`POST ${ORDERS}`]: () =>
+        json(
+          {
+            id: 'o-imei',
+            state: 'completed',
+            '@type': 'ProductOrder',
+            productOrderItem: [
+              {
+                id: '1',
+                action: 'add',
+                product: {
+                  productCharacteristic: [
+                    { name: 'imei', value: IMEI },
+                    { name: 'deviceCompatibility', value: 'unknown' },
+                    { name: 'deviceReasons', value: 'device not in the database' },
+                  ],
+                },
+              },
+            ],
+          },
+          { status: 201 },
+        ),
+    });
+    const dialog = await chooseOffering();
+    fireEvent.change(await within(dialog).findByLabelText('SIM'), { target: { value: 'esim' } });
+    const field = expectUi('ui.subscriber.addProductImei');
+    const add = within(dialog).getByRole('button', { name: 'Add Fiber 100' }) as HTMLButtonElement;
+    fireEvent.change(field, { target: { value: '356938035643801' } }); // wrong check digit
+    expect(within(dialog).getByText('The check digit (the last one) is wrong.')).toBeTruthy();
+    await within(dialog).findByTestId('prepaid-required');
+    expect(add.disabled).toBe(true);
+    fireEvent.change(field, { target: { value: IMEI } });
+    await waitFor(() => expect(add.disabled).toBe(false));
+    fireEvent.click(add);
+    expect(
+      await screen.findByText(/could not confirm the device works: device not in the database/),
+    ).toBeTruthy();
+    const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    const body = JSON.parse(String(post?.[1]?.body));
+    expect(body.productOrderItem[0].product).toEqual({
+      '@type': 'ProductRefOrValue',
+      productCharacteristic: [
+        { '@type': 'StringCharacteristic', name: 'simType', valueType: 'string', value: 'esim' },
+        { '@type': 'StringCharacteristic', name: 'imei', valueType: 'string', value: IMEI },
+      ],
+    });
   });
 });

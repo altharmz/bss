@@ -15,6 +15,7 @@ import {
 } from '../api/bss';
 import { explain, getJson } from '../api/client';
 import { PATHS } from '../api/bss';
+import { characteristicOf } from '../api/devices';
 import {
   findOrderCommand,
   loadCancellations,
@@ -380,11 +381,13 @@ const PRIORITIES = ['0', '1', '2', '3', '4'];
 
 /** The draft's add item as Add product reopens it, or null for a draft of another shape
  * (those are edited through the API). */
-function simTypeFields(product: unknown): { simType?: SimType } {
-  const value = (
-    product as { productCharacteristic?: { name?: string; value?: unknown }[] } | undefined
-  )?.productCharacteristic?.find((c) => c.name === 'simType')?.value;
-  return value === 'physical' || value === 'esim' ? { simType: value } : {};
+function addCharacteristicFields(product: unknown): { simType?: SimType; imei?: string } {
+  const value = characteristicOf(product, 'simType');
+  const imei = characteristicOf(product, 'imei');
+  return {
+    ...(value === 'physical' || value === 'esim' ? { simType: value } : {}),
+    ...(imei !== undefined ? { imei } : {}),
+  };
 }
 
 function draftToEdit(order: Order, timeZone: string): DraftToEdit | null {
@@ -412,7 +415,7 @@ function draftToEdit(order: Order, timeZone: string): DraftToEdit | null {
         : businessDate(order.requestedStartDate, timeZone),
     numberId: resource?.id ?? '',
     imsiId: resources?.[1]?.id ?? '',
-    ...simTypeFields(item.product),
+    ...addCharacteristicFields(item.product),
   };
 }
 
