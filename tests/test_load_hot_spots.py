@@ -3,7 +3,7 @@ new prepaid account is created without the UPDATE that fired the account-mode gu
 
 import pytest
 
-from app.repository import buckets, parties
+from app.repository import billing, buckets, parties
 from tests import apidata
 
 
@@ -71,3 +71,36 @@ def test_a_prepaid_account_is_created_without_changing_its_mode(api, monkeypatch
     assert response.status_code == 201, response.text
     assert response.json()["ratingType"] == "prepaid"
     assert "rating_type" not in changed
+
+
+@pytest.mark.parametrize("status", ["failed", "blocked"])
+def test_a_page_of_failed_or_blocked_outcomes_reads_the_unresolved_index(
+    db_conn, monkeypatch, status
+):
+    """#333: the status filter compares the enum, so the partial index of the not-ok
+    outcomes serves it; as text it read every outcome of a 100k-account run (37 ms)."""
+    seen, real = [], billing.fetch_all
+    monkeypatch.setattr(
+        billing, "fetch_all", lambda c, q, p=None: seen.append((q, p)) or real(c, q, p)
+    )
+    billing.page_run_outcomes(db_conn, apidata.NIL, status=status, offset=0, limit=20)
+    ((query, params),) = seen
+    text = plan(db_conn, query, params)
+    assert "billing_run_account_unresolved" in text, text
+
+
+def test_a_page_of_cycles_reads_only_its_runs(db_conn, monkeypatch):
+    """#333: the page's run ids restrict billing_run too; with the bills' side alone the
+    planner hashed every run, prepaid command runs included (145 ms at 100k accounts)."""
+    import uuid
+
+    seen, real = [], billing.fetch_all
+    monkeypatch.setattr(
+        billing, "fetch_all", lambda c, q, p=None: seen.append((q, p)) or real(c, q, p)
+    )
+    billing.run_payment_due_dates(db_conn, [uuid.uuid4(), uuid.uuid4()])
+    ((query, params),) = seen
+    text = plan(db_conn, query, params)
+    assert " on billing_run r" in text, text
+    run_node = text.split(" on billing_run r", 1)[1].split("->", 1)[0]
+    assert "ANY" in run_node, text

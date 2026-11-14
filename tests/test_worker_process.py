@@ -371,6 +371,29 @@ def test_an_account_opened_at_the_run_dates_midnight_is_not_a_member(db_conn, me
     assert billing.finish_run(db_conn, run["id"], now=NOW)["status"] == "completed"
 
 
+@pytest.mark.parametrize("second_status", ["ok", "failed"])
+def test_closing_a_run_reads_its_gaps_once_and_lists_no_members(
+    db_conn, members, monkeypatch, second_status
+):
+    """#333: every member's outcome is scanned once, under the run's lock (it was scanned
+    in close_run, then again in finish_run), and the failure message counts the members in
+    the database instead of loading every id."""
+    run, first, second = members
+    billing.record_outcome(db_conn, run["id"], first, "ok", now=NOW)
+    error = "boom" if second_status == "failed" else None
+    billing.record_outcome(db_conn, run["id"], second, second_status, now=NOW, error=error)
+    gaps, real = [], billing.outcome_gaps
+    monkeypatch.setattr(billing, "outcome_gaps", lambda *a: gaps.append(a) or real(*a))
+    monkeypatch.setattr(billing, "run_members", lambda *a: pytest.fail("ids loaded"))
+    closed = process.close_run(db_conn, run, clock=FixedClock(NOW), tz=TZ)
+    assert len(gaps) == 1
+    if second_status == "ok":
+        assert (closed["status"], closed["error"]) == ("completed", None)
+    else:
+        assert (closed["status"], closed["failure_kind"]) == ("failed", "accounts")
+        assert closed["error"] == "1 of 2 accounts not billed (1 failed)"
+
+
 @pytest.mark.capability("worker.completedAllOk")
 def test_a_run_with_a_failed_or_blocked_account_closes_failed(api, worker):
     scenario(api, worker, broken=True)

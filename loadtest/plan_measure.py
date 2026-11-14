@@ -271,6 +271,7 @@ def cadence(locations: list[str]) -> tuple[str, float]:
         "_column_types",
         "_enum_labels",
         "run_members",
+        "run_member_total",
         "outcome_gaps",
         "outcomes",
         "announce_changes",

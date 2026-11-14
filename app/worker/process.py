@@ -160,12 +160,15 @@ class DateRun:
 
 
 def close_run(conn: psycopg.Connection, run: Row, *, clock: Clock, tz: ZoneInfo) -> Row:
-    """Completed when every member is ok, else failed because of accounts."""
+    """Completed when every member is ok, else failed because of accounts. finish_run
+    reads the gaps once, under the run's lock; it used to be read here first as well, a
+    second scan of every member (#333)."""
     with conn.transaction():
-        gaps = billing.outcome_gaps(conn, run["id"], run["run_date"], tz.key)
-        if not gaps:
+        try:
             return billing.finish_run(conn, run["id"], now=clock.now(), tz=tz.key)
-        total = len(billing.run_members(conn, run["run_date"], tz.key))
+        except billing.RunNotComplete as incomplete:
+            gaps = incomplete.gaps
+        total = billing.run_member_total(conn, run["run_date"], tz.key)
         detail = ", ".join(f"{n} {status}" for status, n in sorted(gaps.items()))
         return billing.fail_run(
             conn,
