@@ -185,6 +185,15 @@ and `system` cleanup by agents. `make clean-tasks` (list by default, `CONFIRM=1`
 applies the same function to earlier leftovers of finished tasks and reports abandoned work
 as kept.
 
+## Help output is grouped
+
+Every help comment in the `Makefile` starts with a group tag (`target: ## [group] text`,
+#307). `make help` shows the daily groups (task, stack, test, ui, docs, mcp);
+`make help GROUP=<name>` shows one of the others (loadtest, telemetry, ops) or `all`, and
+`make help-ops` shows the human-only deploy and VPS targets. The grouping only changes the
+listing and restricts nothing. `scripts/test_make_help.py` fails when a target has no valid
+tag, so a new target cannot be left out of the list.
+
 ## Script modules
 
 `start_task.py` is an entry point, not a library. What other lifecycle scripts need from it
