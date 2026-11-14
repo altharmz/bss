@@ -33,7 +33,13 @@ indefinitely.
 ## Collecting usage
 
 `make start-task` binds the client session; later lifecycle targets collect automatically.
-On resume or hand-off run `make telemetry-collect`. Kimi agents always pass the session:
+On resume or hand-off run `make telemetry-collect` in the task worktree; with no
+arguments it finds the task there. From the primary checkout (after `finish-task` the
+worktree is gone) pass the task: `make telemetry-collect TASK=<task-id>`, or normally
+`make telemetry-watch TASK=<task-id>` for the final tail. Both read the stored bindings and
+the source files and need no worktree. Do not add `CLIENT=`/`SESSION_ID=` for a task that is
+already bound: that is the registration path. Without `TASK=` outside a worktree the
+collector says so in one line and never guesses the task. Kimi agents always pass the session:
 `make telemetry-collect CLIENT=kimi SESSION_ID=<uuid>` (if automatic discovery fails at
 startup, `BSS_TELEMETRY_SESSION_ID=<uuid> make start-task BSS_TASK_OWNER=kimi`).
 
@@ -57,7 +63,9 @@ child to whichever issue it bound last. An unrelated source is never attributed 
 or slot. An explicit rebinding closes the previous window; a sample already stored for one
 task is skipped by any other. `finish-task` closes all windows and
 starts a bounded two-minute final-tail collector. A missing final counter leaves the
-collection `partial / final_counter_pending`.
+collection `partial / final_counter_pending`; `finish-task` then adds
+`"telemetry_next_command": "make telemetry-watch TASK=<task-id>"` to its JSON, to run from
+the primary checkout.
 
 Other commands: `make telemetry-watch TASK=<task>` (retry the final tail),
 `make telemetry-probe CLIENT= SESSION_ID=` (validate a source without attributing it) and

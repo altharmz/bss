@@ -846,6 +846,17 @@ what #194 built.
   `tests/test_device.py::test_device_requests_as_the_ui_sends_them` replays the bodies.
   `list_devices` and `check_device` left `tests/ui-mcp-allowlist.txt`.
 
+## Account security UI (2026-11-14, issue #226)
+
+This is the UI half of #193 ([accounts.md](accounts.md#account-security-pin-verification-locks-and-audit-issue-193-epic-182)). Screen detail is in `docs/ui.md`. There is no backend change.
+
+- **Where.** A Security tab on **every** subscriber card, after Messages, mounted only while shown. A postpaid customer can have a PIN and locks too; the server decides when they are asked for. The audit log is filtered by `customer.id`, so a customer's two accounts show the same log. The Parties customer dialog shows the same `AuditLog` behind a button, so opening the dialog adds no request.
+- **Locks per line.** The card's product list carries no lock, so each live line's lock row reads `GET /security/lock/{id}`. That is one request per line, while the Security tab is open; accounts have few lines, and a batch read would need a new endpoint.
+- **PIN field.** `AccountPinField` appears on the dialogs whose request the server may verify: number change and SIM swap (one dialog), Number Transfer PIN, the party edit when the contact media change, and clearing a lock. It is always offered there, not only for prepaid lines, because the server alone knows whether the customer is protected. The value travels only in `X-Account-Pin`, sent when typed (`accountPinHeader`), and is cleared after a successful write.
+- **Codes.** `ApiError` keeps the TMF Error's `code` when it is not a bare status. `explain` maps the six account security codes to operator sentences, so every 403 path (party edit, Transfer PIN, lock clearing) shows them without its own mapping. `ORDER_ERRORS` includes them for rejected orders. `tests/test_order_error_codes.py` now also reads `guard.MESSAGES`, so the exported code list follows the guard.
+- **Not here.** Submitting a draft order that swaps a SIM (`PATCH state acknowledged`) sends no PIN. The order detail has no PIN field, so such a draft is rejected with `pinRequired` and the operator places the swap from the Subscriber number dialog instead. There is no MCP parity work: the security operations are operator-only (`EXCLUDED`).
+- Tests: `SubscriberCard.security.test.tsx`, `Numbers.test.tsx` (header and refusal), `Parties.test.tsx` (contact PIN, customer audit), `client.test.ts` (code, `explain`) and the replay `tests/test_account_security.py::test_security_requests_as_the_ui_sends_them`.
+
 ## Screens page on the server (2026-11-10, issue #314)
 
 Follows "Lists without counts" ([tmf-api.md](tmf-api.md#lists-without-counts-2026-11-10-312)):

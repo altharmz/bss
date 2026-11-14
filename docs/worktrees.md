@@ -9,7 +9,7 @@ board work). Never switch branches in a task worktree or touch sibling worktrees
 ## Normal agent workflow
 
 Every regular operation has a Make target; use it instead of the equivalent raw Git, GitHub
-or Docker commands (`make help` lists them). Targets validate task identity, run the hooks
+or Docker commands (`make help` lists the common ones, `make help GROUP=all` every target). Targets validate task identity, run the hooks
 and record telemetry; raw commands skip that. Nothing blocks you from using a plain command
 where no target exists (source reading, `git diff`, `git log`, `rg`). Run each target as a
 standalone command, with its required variables.
@@ -20,6 +20,7 @@ standalone command, with its required variables.
 | Start a specific Ready issue, with explicit human approval | `make start-task BSS_TASK_OWNER=<client> ISSUE=<n> HUMAN_APPROVAL=<n>` | primary |
 | Create an approved P0 issue in Ready | `make new-priority-task TITLE="..." BODY="..." [LABELS="a,b"]` (`BODY_FILE=/abs/path` for long text; `ISSUE=<n>` finishes a preserved one) | primary |
 | Resume / hand off a session | `make telemetry-collect` | task |
+| Finish usage after `finish-task` (its `telemetry_next_command`) | `make telemetry-watch TASK=<task-id>` (or `make telemetry-collect TASK=<task-id>`; no `CLIENT=`/`SESSION_ID=`) | primary |
 | Install UI dependencies (first time) | `make web-install` | task |
 | Refresh the primary checkout's UI dependencies for `make deploy` (the human) | `make deploy-web-install` | primary |
 | Format backend and UI | `make format` | task |

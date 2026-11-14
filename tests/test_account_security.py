@@ -453,6 +453,43 @@ def test_the_audit_log_is_read_only_filterable_and_paged(api, db_conn, line):
         db_conn.rollback()
 
 
+# --- the admin UI (issue 226) ---
+
+
+def test_security_requests_as_the_ui_sends_them(api, db_conn, line):
+    """The request strings pinned in frontend/src/screens/SubscriberCard.security.test.tsx."""
+    json_type = {"Content-Type": "application/json"}
+
+    def put(url, text, pin=None):
+        return api.request("PUT", url, content=text, headers={**json_type, **head(pin)})
+
+    reset = put(
+        f"{SEC}/pin/{line.customer}", '{"pin":"482913","reason":"identity checked at the counter"}'
+    )
+    assert reset.status_code == 200, reset.text
+    assert reset.json()["set"] is True and "pin" not in reset.json()
+    assert api.get(f"{SEC}/pin/{line.customer}").json()["reason"] == (
+        "identity checked at the counter"
+    )
+    # setting a lock needs no PIN; clearing it does, sent as X-Account-Pin
+    url = f"{SEC}/lock/{line.product}"
+    assert put(url, '{"simSwap":false,"portOut":true,"reason":"fraud report"}').status_code == 200
+    clear = '{"simSwap":false,"portOut":false,"reason":"customer called"}'
+    refused = put(url, clear)
+    assert refused.status_code == 403 and refused.json()["code"] == "pinRequired"
+    cleared = put(url, clear, pin=PIN)
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["portOut"] is False and cleared.json()["reason"] == "customer called"
+    # the audit log reads, with the UI's filters and paging
+    page = api.get(f"{SEC}/audit?customer.id={line.customer}&offset=0&limit=25")
+    assert page.status_code == 200, page.text
+    actions = [e["action"] for e in page.json()]
+    assert actions[:4] == ["lock_cleared", "lock_cleared", "lock_set", "pin_reset"]
+    query = f"customer.id={line.customer}&action=lock_cleared&outcome=refused&offset=0&limit=25"
+    (entry,) = api.get(f"{SEC}/audit?{query}").json()
+    assert entry["reason"] == "pinRequired" and entry["verification"] == "none"
+
+
 # --- alerts ---
 
 

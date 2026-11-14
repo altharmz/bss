@@ -45,6 +45,14 @@ export function tmfError(status: number, reason: string): Response {
   );
 }
 
+/** A TMF Error with a business code, as the server sends a refusal like `pinRequired`. */
+export function tmfCodeError(status: number, code: string, message: string): Response {
+  return json(
+    { '@type': 'Error', code, reason: 'Forbidden', message, status: String(status) },
+    { status },
+  );
+}
+
 // The subscriber card's Payment methods panel (issue 185b) loads the saved cards and the
 // auto top-up rule on every render; a test that is not about them gets an empty answer.
 function paymentPanelDefault(key: string): Handler | undefined {
