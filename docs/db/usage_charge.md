@@ -42,6 +42,7 @@ The rating of one usage record of a pay-as-you-go line: the pass that rated it (
 | Name | Definition | Backs a constraint |
 |---|---|---|
 | `usage_charge_abr_idx` | `CREATE INDEX usage_charge_abr_idx ON usage_charge USING btree (abr_id) WHERE (abr_id IS NOT NULL)` | no |
+| `usage_charge_billing_account_id_idx` | `CREATE INDEX usage_charge_billing_account_id_idx ON usage_charge USING btree (billing_account_id)` | no |
 | `usage_charge_command_idx` | `CREATE INDEX usage_charge_command_idx ON usage_charge USING btree (command_id)` | no |
 | `usage_charge_pkey` | `CREATE UNIQUE INDEX usage_charge_pkey ON usage_charge USING btree (usage_record_id)` | yes |
 

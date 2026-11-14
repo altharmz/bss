@@ -39,6 +39,7 @@ TMF622 productOrderErrorMessage: why an order was rejected - one row per reason,
 |---|---|---|
 | `product_order_error_message_pkey` | `CREATE UNIQUE INDEX product_order_error_message_pkey ON product_order_error_message USING btree (id)` | yes |
 | `product_order_error_message_product_order_id_idx` | `CREATE INDEX product_order_error_message_product_order_id_idx ON product_order_error_message USING btree (product_order_id)` | no |
+| `product_order_error_message_product_order_item_id_idx` | `CREATE INDEX product_order_error_message_product_order_item_id_idx ON product_order_error_message USING btree (product_order_item_id) WHERE (product_order_item_id IS NOT NULL)` | no |
 
 ## Triggers
 

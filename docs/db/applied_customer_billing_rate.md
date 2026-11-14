@@ -74,9 +74,11 @@ SID AppliedCustomerBillingRate, ABR (TMF678 appliedCustomerBillingRate): a recur
 | `applied_customer_billing_rate_balance_action_id_key` | `CREATE UNIQUE INDEX applied_customer_billing_rate_balance_action_id_key ON applied_customer_billing_rate USING btree (balance_action_id)` | yes |
 | `applied_customer_billing_rate_billing_account_id_idx` | `CREATE INDEX applied_customer_billing_rate_billing_account_id_idx ON applied_customer_billing_rate USING btree (billing_account_id)` | no |
 | `applied_customer_billing_rate_billing_run_id_idx` | `CREATE INDEX applied_customer_billing_rate_billing_run_id_idx ON applied_customer_billing_rate USING btree (billing_run_id)` | no |
+| `applied_customer_billing_rate_created_at_id_idx` | `CREATE INDEX applied_customer_billing_rate_created_at_id_idx ON applied_customer_billing_rate USING btree (created_at, id)` | no |
 | `applied_customer_billing_rate_customer_bill_id_idx` | `CREATE INDEX applied_customer_billing_rate_customer_bill_id_idx ON applied_customer_billing_rate USING btree (customer_bill_id)` | no |
 | `applied_customer_billing_rate_id_product_id_key` | `CREATE UNIQUE INDEX applied_customer_billing_rate_id_product_id_key ON applied_customer_billing_rate USING btree (id, product_id)` | yes |
 | `applied_customer_billing_rate_pkey` | `CREATE UNIQUE INDEX applied_customer_billing_rate_pkey ON applied_customer_billing_rate USING btree (id)` | yes |
+| `applied_customer_billing_rate_product_id_idx` | `CREATE INDEX applied_customer_billing_rate_product_id_idx ON applied_customer_billing_rate USING btree (product_id)` | no |
 | `applied_customer_billing_rate_product_offering_id_idx` | `CREATE INDEX applied_customer_billing_rate_product_offering_id_idx ON applied_customer_billing_rate USING btree (product_offering_id)` | no |
 | `applied_customer_billing_rate_refunds_rate_id_key` | `CREATE UNIQUE INDEX applied_customer_billing_rate_refunds_rate_id_key ON applied_customer_billing_rate USING btree (refunds_rate_id)` | yes |
 

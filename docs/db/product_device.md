@@ -45,5 +45,7 @@ The devices a prepaid line has had, one row each: the IMEI the order gave and th
 | Name | Definition | Backs a constraint |
 |---|---|---|
 | `product_device_current_idx` | `CREATE UNIQUE INDEX product_device_current_idx ON product_device USING btree (product_id) WHERE (ended_at IS NULL)` | no |
+| `product_device_ended_by_item_id_idx` | `CREATE INDEX product_device_ended_by_item_id_idx ON product_device USING btree (ended_by_item_id) WHERE (ended_by_item_id IS NOT NULL)` | no |
 | `product_device_pkey` | `CREATE UNIQUE INDEX product_device_pkey ON product_device USING btree (id)` | yes |
 | `product_device_product_idx` | `CREATE INDEX product_device_product_idx ON product_device USING btree (product_id, started_at DESC)` | no |
+| `product_device_recorded_by_item_id_idx` | `CREATE INDEX product_device_recorded_by_item_id_idx ON product_device USING btree (recorded_by_item_id)` | no |

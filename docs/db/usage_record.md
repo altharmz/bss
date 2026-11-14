@@ -56,6 +56,7 @@ Partitioned by `RANGE (event_date)`; the partitions are not listed (they are cre
 
 | Name | Definition | Backs a constraint |
 |---|---|---|
+| `usage_record_account_date_idx` | `CREATE INDEX usage_record_account_date_idx ON ONLY usage_record USING btree (billing_account_id, event_date)` | no |
 | `usage_record_network_record_id_event_date_key` | `CREATE UNIQUE INDEX usage_record_network_record_id_event_date_key ON ONLY usage_record USING btree (network_record_id, event_date)` | yes |
 | `usage_record_network_record_idx` | `CREATE INDEX usage_record_network_record_idx ON ONLY usage_record USING btree (network_record_id)` | no |
 | `usage_record_pkey` | `CREATE UNIQUE INDEX usage_record_pkey ON ONLY usage_record USING btree (id, event_date)` | yes |
