@@ -433,7 +433,8 @@ def announce_changes(
     """Mark the offering changes in effect on `run_date` whose event is still due - those
     the run sees (their order completed before `visible_before`) - and return their
     products. Idempotent: a retried run marks nothing twice. A prepaid change is applied
-    by its funded renewal instead."""
+    by its funded renewal instead. NOT EXISTS, not NOT IN: the plan starts from the few
+    pending changes instead of scanning every order (#332, 84 -> 2 ms on 100k accounts)."""
     rows = fetch_all(
         conn,
         """
@@ -441,8 +442,9 @@ def announce_changes(
         FROM product_order_item i JOIN product_order o ON o.id = i.product_order_id
         WHERE i.id = c.changed_by_item_id AND c.effect_announced_at IS NULL
           AND c.change_date <= %(day)s AND o.completion_date < %(before)s
-          AND o.billing_account_id NOT IN (
-              SELECT id FROM billing_account WHERE rating_type = 'prepaid')
+          AND o.billing_account_id IS NOT NULL AND NOT EXISTS (
+              SELECT FROM billing_account a
+               WHERE a.id = o.billing_account_id AND a.rating_type = 'prepaid')
         RETURNING c.product_id
         """,
         {"at": at, "day": run_date, "before": visible_before},
