@@ -87,7 +87,7 @@ from app.billing.core import tax_of
 from app.events import emit
 from app.network import kind, profile, usage_price
 from app.repository import catalog, classification
-from app.repository._sql import Row, count_references
+from app.repository._sql import Row, count_references, rows_by_id, rows_grouped_by
 
 API = "TMF620"
 BASE = "/tmf-api/productCatalogManagement/v5"
@@ -906,10 +906,37 @@ def price_entries(body: dict[str, Any]) -> tuple[list[PriceEntry], list[Problem]
     return entries, problems
 
 
+def offering_bodies(conn: psycopg.Connection, rows: list[Row]) -> list[dict[str, Any]]:
+    """The bodies of a page of offerings: specifications, prices and categories are read
+    for the whole page at once, so a list costs the same queries for 1 or 100 rows (#303)."""
+    ids = [row["id"] for row in rows]
+    specs = rows_by_id(
+        conn,
+        "product_specification",
+        [r["product_specification_id"] for r in rows if r["product_specification_id"]],
+    )
+    prices = rows_grouped_by(
+        conn, "product_offering_price", "product_offering_id", ids, "created_at, id"
+    )
+    categories = classification.memberships_of(conn, "offering", ids)
+    return [
+        _offering_body(
+            row,
+            specs.get(row["product_specification_id"]),
+            prices[row["id"]],
+            categories[row["id"]],
+        )
+        for row in rows
+    ]
+
+
 def offering_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
-    spec_id = row["product_specification_id"]
-    spec = None if spec_id is None else catalog.get_product_specification(conn, spec_id)
-    prices = catalog.prices_of_offering(conn, row["id"])
+    return offering_bodies(conn, [row])[0]
+
+
+def _offering_body(
+    row: Row, spec: Row | None, prices: list[Row], categories: list[Row]
+) -> dict[str, Any]:
     body = without_nulls(
         {
             "id": str(row["id"]),
@@ -934,7 +961,7 @@ def offering_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
             ],
             "category": [
                 versioned(ref("Category", _href("category", c["id"]), c["id"], c["name"]), c)
-                for c in classification.memberships(conn, "offering", row["id"])
+                for c in categories
             ],
             "lastUpdate": utc(row["updated_at"]),
         }
@@ -1127,7 +1154,7 @@ def list_offerings(request: Request, tx: Tx) -> TmfJSONResponse:
         rows, more = catalog.list_product_offerings(
             conn, where=query.where, offset=query.offset, limit=query.limit
         )
-        items = [offering_body(conn, row) for row in rows]
+        items = offering_bodies(conn, rows)
     return listing.list_response(items, more, query)
 
 

@@ -21,6 +21,7 @@ Party and settlement accounts share one table and one shape; each has its own pa
 docs/decisions/accounts.md.
 """
 
+from decimal import Decimal
 from typing import Any, Literal, NamedTuple
 from uuid import UUID
 
@@ -62,7 +63,7 @@ from app.api.party import party_href, party_name
 from app.api.tmfjson import TmfJSONResponse
 from app.events import emit
 from app.repository import accounts, parties
-from app.repository._sql import Row, count_references, select_by_id
+from app.repository._sql import Row, count_references, rows_by_id, select_by_id
 
 API = "TMF666"
 BASE = "/tmf-api/accountManagement/v5"
@@ -222,9 +223,7 @@ def owner_party(conn: psycopg.Connection, owner: OwnerParty) -> Row:
     return row
 
 
-def owner_body(conn: psycopg.Connection, row: Row) -> list[dict[str, Any]]:
-    party = parties.get_party(conn, row["party_id"])
-    assert party is not None  # foreign key
+def owner_body(row: Row, party: Row) -> list[dict[str, Any]]:
     anchor = {
         "role": OWNER_ROLE,
         "partyOrPartyRole": ref(
@@ -348,7 +347,27 @@ class PartyAccountPatch(AccountPatchFields, PartyDocuments):
     financial_account: FinancialAccountRef | None = None
 
 
+def financial_bodies(conn: psycopg.Connection, rows: list[Row]) -> list[dict[str, Any]]:
+    """The bodies of a page of financial accounts: owners, linked accounts and balances
+    are read for the whole page at once, so a list costs the same queries for 1 or 100
+    rows (#303)."""
+    ids = [row["id"] for row in rows]
+    owners = rows_by_id(conn, "party", [row["party_id"] for row in rows])
+    linked = accounts.linked_accounts_of(conn, ids)
+    balances = accounts.balances_of(conn, ids)
+    return [
+        _financial_body(row, owners[row["party_id"]], linked[row["id"]], balances[row["id"]])
+        for row in rows
+    ]
+
+
 def financial_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
+    return financial_bodies(conn, [row])[0]
+
+
+def _financial_body(
+    row: Row, owner: Row, linked: list[Row], balances: dict[str, Decimal]
+) -> dict[str, Any]:
     body = {
         "id": str(row["id"]),
         "href": financial_href(row["id"]),
@@ -356,7 +375,7 @@ def financial_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
         "description": row["description"],
         "accountType": row["account_type"],
         "state": row["state"],
-        "relatedParty": owner_body(conn, row),
+        "relatedParty": owner_body(row, owner),
         "creditLimit": credit_limit_body(row),
         "accountBalance": [
             {
@@ -365,11 +384,10 @@ def financial_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
                 "amount": money(amount.quantize(CENT), currency),
                 "@type": "AccountBalance",
             }
-            for currency, amount in accounts.balances(conn, row["id"]).items()
+            for currency, amount in balances.items()
         ],
         "accountRelationship": [
-            relationship(account["kind"], RESOURCE[account["kind"]], account)
-            for account in accounts.linked_accounts(conn, row["id"])
+            relationship(account["kind"], RESOURCE[account["kind"]], account) for account in linked
         ],
         **details_body(row),
         "lastUpdate": utc(row["updated_at"]),
@@ -394,7 +412,7 @@ def list_financial_accounts(request: Request, tx: Tx) -> TmfJSONResponse:
         rows, more = accounts.page_financial(
             conn, where=query.where, offset=query.offset, limit=query.limit
         )
-        items = [financial_body(conn, row) for row in rows]
+        items = financial_bodies(conn, rows)
     return listing.list_response(items, more, query)
 
 
@@ -514,12 +532,28 @@ def delete_financial_account(
 # --- partyAccount and settlementAccount: one shape, `kind` = @type ---
 
 
-def party_account_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
-    financial = (
-        None
-        if row["financial_account_id"] is None
-        else accounts.get_financial(conn, row["financial_account_id"])
+def party_account_bodies(conn: psycopg.Connection, rows: list[Row]) -> list[dict[str, Any]]:
+    """The bodies of a page of party or settlement accounts: owners and financial
+    accounts are read for the whole page at once (#303)."""
+    owners = rows_by_id(conn, "party", [row["party_id"] for row in rows])
+    financials = rows_by_id(
+        conn,
+        accounts.FINANCIAL,
+        [r["financial_account_id"] for r in rows if r["financial_account_id"]],
     )
+    return [
+        _party_account_body(
+            row, owners[row["party_id"]], financials.get(row["financial_account_id"])
+        )
+        for row in rows
+    ]
+
+
+def party_account_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
+    return party_account_bodies(conn, [row])[0]
+
+
+def _party_account_body(row: Row, owner: Row, financial: Row | None) -> dict[str, Any]:
     body = {
         "id": str(row["id"]),
         "href": f"{BASE}/{RESOURCE[row['kind']]}/{row['id']}",
@@ -527,7 +561,7 @@ def party_account_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
         "description": row["description"],
         "accountType": row["account_type"],
         "state": row["state"],
-        "relatedParty": owner_body(conn, row),
+        "relatedParty": owner_body(row, owner),
         "creditLimit": credit_limit_body(row),
         "financialAccount": None if financial is None else financial_ref(financial),
         # no ledger: never a balance
@@ -555,7 +589,7 @@ def _list_party_accounts(request: Request, tx: Tx, kind: str) -> TmfJSONResponse
         rows, more = accounts.page_party_accounts(
             conn, kind, where=query.where, offset=query.offset, limit=query.limit
         )
-        items = [party_account_body(conn, row) for row in rows]
+        items = party_account_bodies(conn, rows)
     return listing.list_response(items, more, query)
 
 
