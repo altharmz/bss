@@ -276,6 +276,8 @@ def cadence(locations: list[str]) -> tuple[str, float]:
         "announce_changes",
         "flip_statuses",
         "apply_status_changes",
+        "process_lifecycle",
+        "_entitlement_accounts",
     }
     for loc in locations:
         path, line = loc.rsplit(":", 1)

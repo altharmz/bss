@@ -46,4 +46,4 @@ One event to one subscription: pending until the worker delivers it or gives up.
 | `event_delivery_event_id_subscription_id_key` | `CREATE UNIQUE INDEX event_delivery_event_id_subscription_id_key ON event_delivery USING btree (event_id, subscription_id)` | yes |
 | `event_delivery_finished_idx` | `CREATE INDEX event_delivery_finished_idx ON event_delivery USING btree (finished_at) WHERE (state <> 'pending'::event_delivery_state)` | no |
 | `event_delivery_pkey` | `CREATE UNIQUE INDEX event_delivery_pkey ON event_delivery USING btree (id)` | yes |
-| `event_delivery_subscription_idx` | `CREATE INDEX event_delivery_subscription_idx ON event_delivery USING btree (subscription_id)` | no |
+| `event_delivery_subscription_last_idx` | `CREATE INDEX event_delivery_subscription_last_idx ON event_delivery USING btree (subscription_id, last_attempt_at DESC, id DESC)` | no |

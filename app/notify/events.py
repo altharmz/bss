@@ -211,7 +211,7 @@ def _renewals(conn: psycopg.Connection, since: datetime) -> list[Event]:
     done = fetch_all(
         conn,
         "SELECT c.id, c.billing_account_id, f.product_id, p.name FROM prepaid_command c"
-        " JOIN funded_interval f ON f.id::text = c.request->>'previous_interval_id'"
+        " JOIN funded_interval f ON f.id = (c.request->>'previous_interval_id')::uuid"
         " JOIN product p ON p.id = f.product_id WHERE c.kind = 'renewal'"
         " AND c.state = 'completed' AND c.result->>'outcome' = 'funded'"
         " AND c.attempted_at >= %s ORDER BY c.attempted_at, c.id",
@@ -235,7 +235,7 @@ def _renewals(conn: psycopg.Connection, since: datetime) -> list[Event]:
         "SELECT DISTINCT ON (c.id) c.id, c.billing_account_id, f.product_id, p.name,"
         " s.required - s.available AS shortfall, a.currency FROM prepaid_funding_shortfall s"
         " JOIN prepaid_command c ON c.id = s.command_id"
-        " JOIN funded_interval f ON f.id::text = c.request->>'previous_interval_id'"
+        " JOIN funded_interval f ON f.id = (c.request->>'previous_interval_id')::uuid"
         " JOIN product p ON p.id = f.product_id JOIN billing_account a"
         " ON a.id = c.billing_account_id WHERE c.kind = 'renewal' AND c.state = 'pending'"
         " AND s.observed_at >= %s ORDER BY c.id, s.observed_at DESC",

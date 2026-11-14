@@ -309,7 +309,7 @@ changes; only repeated reads go.
   starts in the past, an attached price is never in the past, an ordered offering's
   prices only get their validFor ended, and a price that priced nothing is on no
   product of the run). Other `bill_account` callers read the prices as before.
-- **The balance ledger check runs once per account and transaction** (migration 0077).
+- **The balance ledger check runs once per account and transaction** (migration 0078).
   `balance_ledger_bounds` notes each checked account in the transaction-local setting
   `bss.ledger_checked` and skips an account it has checked. A statement-level BEFORE
   trigger on the same eleven tables empties the note at the start of every write

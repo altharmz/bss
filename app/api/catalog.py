@@ -87,7 +87,13 @@ from app.billing.core import tax_of
 from app.events import emit
 from app.network import kind, profile, usage_price
 from app.repository import catalog, classification
-from app.repository._sql import Row, count_references, rows_by_id, rows_grouped_by
+from app.repository._sql import (
+    Row,
+    count_references,
+    is_referenced,
+    rows_by_id,
+    rows_grouped_by,
+)
 
 API = "TMF620"
 BASE = "/tmf-api/productCatalogManagement/v5"
@@ -1011,7 +1017,7 @@ def _offering_code(documents: dict[str, Any]) -> str | None:
 
 
 def _ever_ordered(conn: psycopg.Connection, offering_id: UUID) -> bool:
-    return any(count_references(conn, offering_id, ORDERED).values())
+    return is_referenced(conn, offering_id, ORDERED)
 
 
 def _network_spec(details: dict[str, Any]) -> None:

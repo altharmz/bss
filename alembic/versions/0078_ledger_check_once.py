@@ -1,7 +1,7 @@
 """The balance ledger check runs once per account and transaction (#305).
 
-Revision ID: 0077
-Revises: 0076
+Revision ID: 0078
+Revises: 0077
 
 `balance_ledger_bounds` is a deferred constraint trigger on eleven tables: at commit it
 ran `balance_ledger_check` once per written row, so a prepaid transaction that writes a
@@ -19,8 +19,8 @@ mean an extra check. The check itself is unchanged.
 
 from alembic import op
 
-revision = "0077"
-down_revision = "0076"
+revision = "0078"
+down_revision = "0077"
 branch_labels = None
 depends_on = None
 

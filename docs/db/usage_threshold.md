@@ -41,3 +41,4 @@ An allowance threshold (80% or 100%) reached by a line in a plan period: one row
 | Name | Definition | Backs a constraint |
 |---|---|---|
 | `usage_threshold_pkey` | `CREATE UNIQUE INDEX usage_threshold_pkey ON usage_threshold USING btree (product_id, period_start, allowance, threshold)` | yes |
+| `usage_threshold_reached_idx` | `CREATE INDEX usage_threshold_reached_idx ON usage_threshold USING btree (reached_at)` | no |

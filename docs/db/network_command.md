@@ -53,8 +53,10 @@ Durable outbound provisioning command of one prepaid order item; sent by the bil
 
 | Name | Definition | Backs a constraint |
 |---|---|---|
+| `network_command_created_at_id_idx` | `CREATE INDEX network_command_created_at_id_idx ON network_command USING btree (created_at DESC, id)` | no |
 | `network_command_due_idx` | `CREATE INDEX network_command_due_idx ON network_command USING btree (due_date, id) WHERE (state = 'pending'::text)` | no |
 | `network_command_order_idx` | `CREATE INDEX network_command_order_idx ON network_command USING btree (product_order_id)` | no |
 | `network_command_pkey` | `CREATE UNIQUE INDEX network_command_pkey ON network_command USING btree (id)` | yes |
 | `network_command_product_idx` | `CREATE INDEX network_command_product_idx ON network_command USING btree (product_id) WHERE (product_id IS NOT NULL)` | no |
 | `network_command_product_order_item_id_key` | `CREATE UNIQUE INDEX network_command_product_order_item_id_key ON network_command USING btree (product_order_item_id)` | yes |
+| `network_command_sim_swapped_idx` | `CREATE INDEX network_command_sim_swapped_idx ON network_command USING btree (confirmed_at) WHERE ((kind = 'swap_sim'::text) AND (state = 'confirmed'::text))` | no |

@@ -28,11 +28,14 @@ from app.worker.runs import ensure_ownership
 
 log = logging.getLogger("app.worker")
 
+# A semi-join, not DISTINCT over a join: no aggregate over every open line (#332, 210 -> 151 ms
+# on 100k accounts). The full pass runs once per business date; its two scans are intended.
 ACCOUNTS = (
-    "SELECT DISTINCT a.id FROM billing_account a JOIN product p ON p.billing_account_id = a.id"
+    "SELECT a.id FROM billing_account a"
     " WHERE a.rating_type = 'prepaid' AND a.state = 'Active'"
+    " AND EXISTS (SELECT FROM product p WHERE p.billing_account_id = a.id"
     " AND p.status NOT IN ('terminated', 'cancelled', 'aborted') AND p.termination_date IS NULL"
-    " AND (p.parent_product_id IS NULL)"
+    " AND p.parent_product_id IS NULL)"
 )
 
 

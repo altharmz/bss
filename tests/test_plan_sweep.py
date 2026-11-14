@@ -193,6 +193,29 @@ def test_per_account_queries_keep_the_tight_budget_inside_a_tick(monkeypatch):
     assert cadence([once, per_account])[1] == 5
 
 
+def test_the_prepaid_account_sweeps_have_the_once_per_tick_budget():
+    """#332: the lifecycle and entitlement passes select their accounts once per tick; each
+    account's own reads stay on the per-account budget."""
+    import ast
+    from pathlib import Path
+
+    from loadtest.plan_measure import cadence
+
+    def lines(path):
+        return {
+            node.name: f"{path}:{node.lineno + 1}"
+            for node in ast.walk(ast.parse(Path(path).read_text()))
+            if isinstance(node, ast.FunctionDef)
+        }
+
+    lifecycle = lines("app/worker/lifecycle.py")
+    assert cadence([lifecycle["process_lifecycle"]])[1] == 100
+    assert cadence([lifecycle["_account"]])[1] == 5
+    prepaid = lines("app/worker/prepaid.py")
+    assert cadence([prepaid["_entitlement_accounts"]])[1] == 100
+    assert cadence([prepaid["observe_entitlements"]])[1] == 5
+
+
 def test_parameter_examples_do_not_persist_hashes_pins_or_opaque_credentials():
     assert example("a" * 64) == {"text": True}
     assert example("123456") == {"text": True}

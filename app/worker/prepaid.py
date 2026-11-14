@@ -23,7 +23,7 @@ from app.clock import Clock
 from app.events import emit
 from app.repository import balance_actions, billing, funding
 from app.repository import prepaid_commands as commands
-from app.repository._sql import fetch_all, fetch_one
+from app.repository._sql import Row, fetch_all, fetch_one
 from app.repository.prepaid_commands import renewal_id
 from app.worker import network, payments, rating, usage
 from app.worker import ports as port_numbers
@@ -107,7 +107,7 @@ def _renewal_blocked(conn, cmd, today) -> str | None:
         " OR p.termination_date <= %s AS ended,"
         " a.state <> 'Active' OR (p.manually_suspended AND NOT p.lifecycle_suspended) AS blocked"
         " FROM funded_interval f JOIN product p ON p.id = f.product_id"
-        " JOIN billing_account a ON a.id = f.billing_account_id WHERE f.id::text = %s",
+        " JOIN billing_account a ON a.id = f.billing_account_id WHERE f.id = %s::uuid",
         (today, cmd["request"].get("previous_interval_id")),
     )
     if row is None:
@@ -115,7 +115,7 @@ def _renewal_blocked(conn, cmd, today) -> str | None:
     if not row["ended"] and not row["blocked"]:
         product = fetch_one(
             conn,
-            "SELECT product_id FROM funded_interval WHERE id::text = %s",
+            "SELECT product_id FROM funded_interval WHERE id = %s::uuid",
             (cmd["request"].get("previous_interval_id"),),
         )
         if product is not None and network.waiting_for_profile(conn, product["product_id"]):
@@ -162,7 +162,7 @@ def process_commands(
     candidates = fetch_all(
         conn,
         "SELECT c.* FROM prepaid_command c LEFT JOIN funded_interval f"
-        " ON f.id::text = c.request->>'previous_interval_id'"
+        " ON f.id = (c.request->>'previous_interval_id')::uuid"
         " LEFT JOIN product p ON p.id = f.product_id"
         " LEFT JOIN LATERAL (SELECT observed_at FROM prepaid_funding_shortfall"
         " WHERE command_id = c.id ORDER BY observed_at DESC LIMIT 1) s ON true"
@@ -413,22 +413,24 @@ def _complete_transfer(conn, cmd, action_id, now, tz) -> None:
     commands.complete(conn, cmd["id"], result, now=now)
 
 
+def _entitlement_accounts(conn, accounts) -> list[Row]:
+    """The prepaid accounts of an entitlement pass, read once per pass (#332)."""
+    if accounts is None:
+        return fetch_all(
+            conn, "SELECT id FROM billing_account WHERE rating_type = 'prepaid' ORDER BY id"
+        )
+    return fetch_all(
+        conn,
+        "SELECT id FROM billing_account WHERE rating_type = 'prepaid' AND id = ANY(%s) ORDER BY id",
+        (accounts,),
+    )
+
+
 def observe_entitlements(conn, *, clock, tz, checkpoint=None, heartbeat=None, accounts=None):
     """Persist observed entitlement transitions once, under account/product locks.
     `accounts` limits the pass to those accounts (app/repository/account_review.py)."""
     ensure_ownership(conn)
-    if accounts is None:
-        rows = fetch_all(
-            conn, "SELECT id FROM billing_account WHERE rating_type = 'prepaid' ORDER BY id"
-        )
-    else:
-        rows = fetch_all(
-            conn,
-            "SELECT id FROM billing_account WHERE rating_type = 'prepaid' AND id = ANY(%s)"
-            " ORDER BY id",
-            (accounts,),
-        )
-    for account in rows:
+    for account in _entitlement_accounts(conn, accounts):
         if checkpoint is not None and checkpoint():
             break
         with conn.transaction():
