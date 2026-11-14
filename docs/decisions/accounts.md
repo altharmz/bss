@@ -327,8 +327,8 @@ request.
 
 ## Not in this slice
 
-UI (193b, #226): security panel on the subscriber card, PIN field on the dialogs, audit tab. A
-verification endpoint without an action, per-operator PIN reset permissions, PINs per line, a
+The UI was delivered by #226 ([frontend.md](frontend.md#account-security-ui-2026-11-14-issue-226)).
+Not built: a verification endpoint without an action, per-operator PIN reset permissions, PINs per line, a
 lock expiry, and counting the carrier's wrong Number Transfer PINs.
 
 ## Tests

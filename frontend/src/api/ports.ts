@@ -1,4 +1,4 @@
-import { getAll, getJson, postJson } from './client';
+import { accountPinHeader, getAll, getJson, postJson } from './client';
 
 // Number pool, port requests and Number Transfer PINs (docs/decisions/numbers.md): ours, not
 // TMF, so all under /internal/v1. The API never contacts the carrier; the billing worker does.
@@ -103,11 +103,7 @@ export function requestPool(areaCode: string, count: number): Promise<PoolResult
 
 /** A prepaid line needs the customer's account PIN, sent as a header and never stored. */
 export function createPin(productId: string, accountPin = ''): Promise<TransferPin> {
-  return postJson<TransferPin>(
-    `${BASE}/port/pin`,
-    { productId },
-    accountPin ? { 'X-Account-Pin': accountPin } : {},
-  );
+  return postJson<TransferPin>(`${BASE}/port/pin`, { productId }, accountPinHeader(accountPin));
 }
 
 export function loadPins(productId: string, signal: AbortSignal): Promise<TransferPin[]> {

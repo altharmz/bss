@@ -1,5 +1,21 @@
+/** Account security refusals (docs/decisions/accounts.md): a rejected order's code, or a 403's
+ * `code` on the internal and party/account writes. `explain` (api/client) uses them too. */
+export const ACCOUNT_SECURITY_ERRORS: Record<string, string> = {
+  pinRequired: 'Ask the customer for their account PIN and enter it in the Account PIN field.',
+  pinInvalid: 'The account PIN is wrong. Repeated wrong PINs lock the verification.',
+  pinNotSet:
+    'The customer has no account PIN yet. Set one on the subscriber card’s Security tab first.',
+  pinLocked:
+    'Too many wrong account PINs: verification is locked for a while. Try later or reset the PIN.',
+  simSwapLocked:
+    'This line has a SIM swap lock. Clear it on the subscriber card’s Security tab first.',
+  portOutLocked:
+    'This line has a port-out lock. Clear it on the subscriber card’s Security tab first.',
+};
+
 /** Operator explanations for every TMF622 business refusal. Unknown codes retain the server reason. */
 export const ORDER_ERRORS: Record<string, string> = {
+  ...ACCOUNT_SECURITY_ERRORS,
   accountNotActive: 'The billing account must be active for this order.',
   addOnParentNotActive: 'The plan has no paid period running today. Renew it first.',
   addOnParentNotPlan: 'Choose a plan product for the add-on, not another add-on.',

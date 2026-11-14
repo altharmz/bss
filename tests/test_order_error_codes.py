@@ -1,4 +1,5 @@
-"""The operator copy must cover every business refusal emitted by TMF622."""
+"""The operator copy must cover every business refusal emitted by TMF622, including the
+account security refusals the order screen takes from `app/security/guard.py` (issue 226)."""
 
 import ast
 import json
@@ -39,6 +40,12 @@ def test_order_refusal_codes_have_operator_explanations():
                 "msisdn",
                 "imsi",
             }
+    # the guard's refusals reach a rejected order's productOrderErrorMessage (and the 403s)
+    tree = ast.parse((root / "app" / "security" / "guard.py").read_text())
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") == "MESSAGES":
+            assert isinstance(node.value, ast.Dict)
+            codes |= {k.value for k in node.value.keys if isinstance(k, ast.Constant)}
     exported = json.loads((root / "frontend/src/api/orderErrors.codes.json").read_text())
     assert codes == set(exported)
     assert len(exported) == len(set(exported))
