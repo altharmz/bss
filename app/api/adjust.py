@@ -50,7 +50,7 @@ from app.billing.funding import InsufficientFunds
 from app.events import emit
 from app.repository import balance_actions as repo
 from app.repository import funding, idempotency, parties
-from app.repository._sql import Row
+from app.repository._sql import Row, rows_by_id
 
 API = "TMF654"
 RESOURCE = "adjustBalance"
@@ -129,11 +129,23 @@ def adjust_href(action_id) -> str:
 
 
 def adjust_body(conn: psycopg.Connection, row: Row) -> dict:
+    return adjust_bodies(conn, [row])[0]
+
+
+def adjust_bodies(
+    conn: psycopg.Connection, rows: list[Row], accounts: dict | None = None
+) -> list[dict]:
+    """The bodies of a whole page: its billing accounts are read once (#302), or come
+    from the caller (the history, which reads them once for every kind)."""
+    if accounts is None:
+        accounts = rows_by_id(conn, "billing_account", [r["billing_account_id"] for r in rows])
+    return [_adjust_body(row, accounts[row["billing_account_id"]]) for row in rows]
+
+
+def _adjust_body(row: Row, account: Row) -> dict:
     """The adjustment as TMF654 AdjustBalance. `reason` is the client's; a refused one
     without it states why."""
     request = row["request"]
-    account = parties.get_billing_account(conn, row["billing_account_id"])
-    assert account is not None  # foreign key
     body = {
         "id": str(row["id"]),
         "href": adjust_href(row["id"]),
@@ -186,7 +198,7 @@ def list_adjust_balances(request: Request, tx: Tx) -> TmfJSONResponse:
     )
     with tx() as conn:
         rows, more = repo.page(conn, query.where, query.offset, query.limit, kind=KIND)
-        bodies = [adjust_body(conn, row) for row in rows]
+        bodies = adjust_bodies(conn, rows)
     return listing.list_response(bodies, more, query)
 
 

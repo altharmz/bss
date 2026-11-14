@@ -46,7 +46,7 @@ from app.api.tmfjson import TmfJSONResponse
 from app.events import emit
 from app.repository import balance_actions as repo
 from app.repository import buckets, idempotency, parties
-from app.repository._sql import Row, fetch_all
+from app.repository._sql import Row, fetch_all, rows_by_id
 
 API = "TMF654"
 RESOURCE = "topupBalance"
@@ -175,11 +175,23 @@ def topup_href(action_id: Any) -> str:
 
 
 def topup_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
+    return topup_bodies(conn, [row])[0]
+
+
+def topup_bodies(
+    conn: psycopg.Connection, rows: list[Row], accounts: dict | None = None
+) -> list[dict[str, Any]]:
+    """The bodies of a whole page: its billing accounts are read once (#302), or come
+    from the caller (the history, which reads them once for every kind)."""
+    if accounts is None:
+        accounts = rows_by_id(conn, "billing_account", [r["billing_account_id"] for r in rows])
+    return [_topup_body(row, accounts[row["billing_account_id"]]) for row in rows]
+
+
+def _topup_body(row: Row, account: Row) -> dict[str, Any]:
     """The top-up as TMF654 TopupBalance. `reason` is the client's; a refused top-up
     without one states why it was refused."""
     request = row["request"]
-    account = parties.get_billing_account(conn, row["billing_account_id"])
-    assert account is not None  # foreign key
     body = {
         "id": str(row["id"]),
         "href": topup_href(row["id"]),
@@ -318,7 +330,7 @@ def list_topup_balances(request: Request, tx: Tx) -> TmfJSONResponse:
     )
     with tx() as conn:
         rows, more = repo.page(conn, query.where, query.offset, query.limit)
-        bodies = [topup_body(conn, row) for row in rows]
+        bodies = topup_bodies(conn, rows)
     return listing.list_response(bodies, more, query)
 
 
