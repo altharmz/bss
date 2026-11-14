@@ -43,10 +43,12 @@ in the invoking worktree):
 - takes a repository-wide `flock` (`pre-commit.lock` in the common git directory), so two
   sessions never run two suites at once (that took 12.5 minutes instead of 5 and broke the
   timing-sensitive worker tests); a waiter checks the tree again, 30 minutes at most;
-- `make lint`, then `make test-smoke` + `make test-changed` ([below](#tests-in-the-hook-smoke-plus-affected)),
-  or the full `make test` when a data file the tests read changes (`spec/`, `frontend/src`,
-  `docs/progress/scope.yaml`, `scripts/ui_mcp_parity.py`, dependency pins, `Dockerfile`,
-  compose files), `app/worker/` or `alembic/`;
+- `make lint`, then the test runs `scripts/hook_selection.py` plans for the staged files
+  ([below](#tests-in-the-hook-smoke-plus-affected)): `make test-smoke` + `make test-changed`,
+  plus `make test-files` for the tests that read a staged data file (`frontend/src`,
+  `docs/progress/scope.yaml`, `scripts/ui_mcp_parity.py`); or the whole backend suite,
+  recorded (`make test-recorded`), for `spec/`, dependency pins, `Dockerfile`, compose files,
+  `app/worker/` or `alembic/`;
 - `make docs-check` (about 7 s) when `app/`, `alembic/`, `spec/`, `scripts/docs/` or
   `tests/docs_collect*` change: a stale `docs/api` or `docs/db` is refused;
 - `make docs-links` when any Markdown file is staged: every relative link and `#anchor`
@@ -221,6 +223,28 @@ worktree that does not ignore `.testmon/`, leaves the old behaviour (the whole s
 Measured 2026-11-11: a fresh worktree seeded from another task's record selected no tests
 in 28 s.
 
+**What testmon cannot see** (#344, `scripts/hook_selection.py`). Until 2026-11-14 any staged
+data file sent the commit to the full `make test`: a commit of UI sources, docs and
+`scope.yaml` ran 2,638 backend tests for 11 min 46 s, plus 116 s of harness and deploy suites
+it had not touched, and a retry after its one failure paid all of it again. Now:
+
+- **Data files few tests read** are mapped to those test files (`DATA`): the hook adds
+  `make test-files TESTS=...` to smoke and affected. The map cannot fall behind:
+  `tests/conftest.py` installs an audit hook, and a test file that opens or lists a mapped
+  path without being listed fails at the read with the line to add
+  (`tests/test_hook_selection.py`). Reads during a module's import count for that module; a
+  read in a subprocess is not seen. A change to the map itself runs every mapped test.
+- **What any test may depend on** (`FULL`: the specs, which the app and the response
+  validator read; the pins, image and compose files; `app/worker/`; `alembic/`) still runs
+  every backend test, as `make test-recorded`: `pytest -n auto --testmon-noselect`, which
+  runs everything and records it. When pytest ran every test (exit 0 or 1), the target
+  writes the digest of the `FULL` files in the index to `.testmon/full-suite`. A later
+  commit whose `FULL` files have exactly that content - the retry after a failure - gets the
+  usual plan, and testmon selects the tests that failed and the ones the fix affects. Any
+  other content of those files, or a missing stamp, is the whole suite again.
+- `make test-recorded` has no `runtime-check` or `deploy-check`: the hook runs those by its
+  own path rules, once. `make test` (by hand, nightly) is unchanged.
+
 testmon limits: selection is off under `-m` and `-k` (so smoke and affected are separate runs);
 the first run on a checkout without a seeded record, or after deleting `.testmon/`, is the
 whole suite; it follows
@@ -246,6 +270,25 @@ taken under load is not comparable (the same smoke run took 84 to 219 s).
 | Smoke subset (`make test-smoke`, the pytest part) | 89 and 95 s | 84 and 89 s | the kept template database ([infra.md](infra.md#conventions)) |
 | UI unit tests (`make web-test`, one timezone) | 123 and 125 s | 103 and 104 s | the two largest test files split |
 | Full backend suite (`make test`, the pytest part) | 10 min 42 s | not measured again | the docs said 7 minutes; the suite grew |
+
+**2026-11-14 (#344).** The same workstation, under load from two other tasks, so only the
+per-test phases below are comparable (summed `--durations` of `tests/test_api_parties.py`,
+38 tests, serial, alternated twice):
+
+| What | Before | After | Change |
+|---|---|---|---|
+| A commit of UI sources and `scope.yaml`, backend tests | all 2,638 tests, 11 min 46 s, again on a retry | smoke + affected + 4 mapped test files | the data-file map |
+| Harness and deploy suites in the hook's full-suite run | 116 s every time | only when their files are staged | `make test-recorded` |
+| Fixture setup per `api` test | about 307 ms | about 205 ms | the test user's stored hash names the smallest scrypt cost (the check was 110 ms); one kept connection creates and drops the databases (30 ms a connection) |
+| Fixture teardown per `api` test | about 57 ms | about 37 ms | the kept connection |
+
+Where a test's fixed cost goes after that (measured): the clone of the template about
+210 ms under load (`CREATE DATABASE ... TEMPLATE`, 14 MB; `STRATEGY FILE_COPY` was slower,
+368 ms), the drop 60 ms, two connections of 30 ms. Not done: cloning ahead and dropping in a
+background thread. It only moves that work off the test, and the full suite already keeps
+every CPU busy (707 s x 12 workers / 2,638 tests = 3.2 worker-seconds a test, of which the
+fixtures are about a tenth), so the gain would be a few percent for a thread under every
+test's database.
 
 **The UI split.** vitest runs files side by side but one file's tests in order, and
 `SubscriberCard.test.tsx` (168 tests, 121 s) alone set the wall time while all files

@@ -91,19 +91,21 @@ fi
 # context (GUI clients, editors) as well as a plain terminal commit.
 run make lint || fail "make lint"
 
-# Tests: the smoke subset (always) plus the tests this change affects (pytest-testmon, which
-# follows the Python code each test ran). The full suite is nightly in CI and `make test`
-# by hand (2026-10-28). testmon cannot see data files, so a commit that changes one the
-# tests read - the specs, the scope file, the UI sources, the dependency pins, the
-# image or compose files - runs the full suite instead. So does app/worker/ (its tests
-# run it in subprocesses, which testmon does not follow) and alembic/ (migrations are too
-# costly to trust to selection).
-if grep -qE '^(spec|frontend/src|app/worker|alembic)/|^(docs/progress/scope\.yaml|scripts/ui_mcp_parity\.py|pyproject\.toml|requirements.*\.txt|constraints.*\.txt|Dockerfile|compose.*\.yaml)$' <<<"$staged"; then
-  run make test || fail "make test"
-else
-  run make test-smoke || fail "make test-smoke"
-  run make test-changed || fail "make test-changed"
-fi
+# Tests: the plan of scripts/hook_selection.py for the staged files (#344). Usually the
+# smoke subset plus the tests this change affects (pytest-testmon, which follows the Python
+# code each test ran), plus the tests that read a staged data file testmon cannot see (the
+# UI sources, the scope file). The whole suite (make test-recorded) only for what any test
+# may depend on - the specs, the dependency pins, the image or compose files, app/worker/
+# (its tests run it in subprocesses), alembic/ - and not again when it already ran to its
+# end on that content: a retry then runs the failed and the affected tests. The full
+# `make test` is nightly in CI and by hand (2026-10-28).
+plan="$(python3 -B "$(dirname "${BASH_SOURCE[0]}")/hook_selection.py" plan 2>&1)" ||
+  fail "scripts/hook_selection.py plan: ${plan}"
+while IFS= read -r step; do
+  [[ -n "$step" ]] || continue
+  # shellcheck disable=SC2086 # a step is a make target and its variables
+  run make $step || fail "make ${step}"
+done <<<"$plan"
 
 # The generated docs/api and docs/db (~7 s), when their sources change: regenerated here,
 # so a commit that leaves them stale is refused with the files to stage.
@@ -112,7 +114,8 @@ if grep -qE '^(app|alembic|spec|scripts/docs)/|^tests/docs_collect' <<<"$staged"
 fi
 
 # The harness script tests, only when the commit touches the harness (the same paths as the
-# CI harness job). `make test` (so the nightly run) includes them too.
+# CI harness job). `make test` (so the nightly run) includes them too; the hook's own
+# full-suite run (make test-recorded) does not, so they never run twice or unasked.
 if grep -qE '^(scripts/|\.claude/|\.codex/|Makefile$)' <<<"$staged"; then
   run make runtime-check || fail "make runtime-check"
 fi

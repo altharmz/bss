@@ -1,6 +1,7 @@
 # ruff: noqa: E402 - PROMETHEUS_MULTIPROC_DIR must be set before the imports below
 import logging
 import os
+import sys
 import tempfile
 
 # app/metrics.py counts in Prometheus multiprocess mode (#288). Each test process (xdist
@@ -93,6 +94,46 @@ def _record_written_tables(url: str) -> None:
         _tables.update(row[0] for row in rows)
 
 
+# --- data files testmon cannot follow (scripts/hook_selection.py, #344) ---
+# The commit hook runs, for a staged data file, exactly the test files DATA lists for it.
+# So a read of such a file by any other test file is refused here, at the read: the list
+# cannot fall behind the tests. Reads while a module is collected (its imports) count for
+# that module. A subprocess is not seen; a test that starts one names its data here itself.
+# (This file is imported twice, as conftest and tests.conftest; only the plugin's copy
+# is told which test runs, so the other's hook does nothing.)
+sys.path.insert(0, str(Path("scripts").resolve()))
+import hook_selection
+
+_ROOT = str(Path.cwd()) + os.sep
+_READS = ("open", "os.listdir", "os.scandir")
+_reader: list[str | None] = [None]  # the test file now collected or run
+
+
+def _audit(event: str, args: tuple) -> None:
+    if event in _READS and _reader[0] is not None:
+        hook_selection.check_read(args[0], _reader[0], _ROOT)
+
+
+sys.addaudithook(_audit)
+
+
+def pytest_collectstart(collector) -> None:
+    if isinstance(collector, pytest.Module):
+        _reader[0] = collector.nodeid
+
+
+def pytest_collectreport(report) -> None:
+    _reader[0] = None
+
+
+def pytest_runtest_logstart(nodeid, location) -> None:
+    _reader[0] = location[0]
+
+
+def pytest_runtest_logfinish(nodeid, location) -> None:
+    _reader[0] = None
+
+
 def pytest_sessionstart(session) -> None:
     """Drops the databases earlier runs left behind (tests/scratch_db.py). Once per run:
     not in the xdist workers, which start while their controller's session is open."""
@@ -119,12 +160,33 @@ def _progress_record(request) -> Iterator[None]:
     )
 
 
+_admin_connection: list[psycopg.Connection] = []
+
+
+def _admin() -> psycopg.Connection:
+    """This process's connection for creating and dropping databases, opened once: a new
+    one for every statement cost 30 ms each, twice a test (#344)."""
+    if not _admin_connection or _admin_connection[0].closed:
+        _admin_connection[:] = [psycopg.connect(ADMIN_URL, autocommit=True)]
+    return _admin_connection[0]
+
+
+def _admin_execute(statement) -> None:
+    conn = _admin()
+    try:
+        conn.execute(statement)
+    except psycopg.OperationalError:
+        if not conn.broken:
+            raise
+        # the kept connection was lost (a test cut the server's sessions): once more
+        _admin().execute(statement)
+
+
 def _create_database(name: str, template: str | None = None) -> str:
     statement = sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name))
     if template is not None:
         statement += sql.SQL(" TEMPLATE {}").format(sql.Identifier(template))
-    with psycopg.connect(ADMIN_URL, autocommit=True) as conn:
-        conn.execute(statement)
+    _admin_execute(statement)
     return ADMIN_URL.rsplit("/", 1)[0] + f"/{name}"
 
 
@@ -134,10 +196,7 @@ def _drop_database(name: str) -> None:
     # the app's pool for this database (app/db.py): closed first, else its workers would
     # keep reconnecting to a database that no longer exists
     db.close(ADMIN_URL.rsplit("/", 1)[0] + f"/{name}")
-    with psycopg.connect(ADMIN_URL, autocommit=True) as conn:
-        conn.execute(
-            sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(name))
-        )
+    _admin_execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(name)))
 
 
 @pytest.fixture
@@ -220,9 +279,17 @@ def db_conn(migrated_db_url) -> Iterator[psycopg.Connection]:
 
 @cache
 def _test_password_hash():
-    from bss_mcp.passwords import hash_password
+    """The test user's stored hash, with the smallest scrypt cost. A stored hash names its
+    own cost (bss_mcp/passwords.py), so every test still signs in through the real session
+    endpoint and password check; at the production cost that check alone took 110 ms of
+    every test (#344). Users a test creates itself keep the production cost."""
+    import hashlib
 
-    return hash_password("test-password-123")
+    from bss_mcp import passwords
+
+    salt = b"test-user-salt--"
+    key = hashlib.scrypt(b"test-password-123", salt=salt, n=2, r=8, p=1)
+    return f"scrypt.2.8.1.{passwords._b64(salt)}.{passwords._b64(key)}"
 
 
 def install_test_user(conn):
