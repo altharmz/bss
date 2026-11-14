@@ -630,6 +630,22 @@ integer bounds, changed fields only, retained refusal values, and Refresh after 
 No backend or policy changes. Component tests cover projections and settings, and
 `tests/test_ui_requests.py` replays the exact partial PUT including zero and the upper bound.
 
+## Messages tab and consent (2026-11-14, issue #222)
+
+The UI half of #192 ([notifications.md](notifications.md)); screen detail in `docs/ui.md`.
+Decisions: the tab is on **every** subscriber card, not only prepaid ones, because consent and
+operator messages are the customer's and postpaid customers have them too; the triggers stay
+prepaid-only on the server. The list is filtered by `receiver.party.id` (the customer), not
+`billingAccount.id`: operator messages and resends of them carry no account, and a customer's
+consent covers all its accounts. Consent sits on the same tab (one place for "what may we send
+and what did we send"), not in the Edit form, because it is an append-only record with a source,
+not an attribute. The UI calls all four TMF681 tools (list, get, create, patch), so their
+UI/MCP parity allowlist lines are gone; consent and resend stay operator-only (scope excluded,
+no MCP tool). The UI offers Cancel only in `initial`/`inProgress` and Resend only outside them,
+matching the server's 409s; it decides nothing else. The message sender is the constant
+`bss admin` (TMF681 requires a sender). A new `message` status kind maps TMF681 states to existing pill families. No backend
+change.
+
 ## Frontend conventions
 
 The admin UI (stage 5) lives in `frontend/`: Vite + React + TypeScript, built to static

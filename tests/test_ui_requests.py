@@ -2751,3 +2751,88 @@ def test_ui_card_requests(api, db_conn):
     assert rule.json()["enabled"] is True
     assert api.patch(f"{base}/autoTopup", {"enabled": False}).json()["enabled"] is False
     assert api.delete(f"{methods}/{card['id']}").status_code == 409  # a charge is pending
+
+
+def test_messages_and_consent_as_the_ui_sends_them(api, db_conn):
+    """The Messages tab (issue 192b, frontend/src/api/messages.ts): the list and detail reads,
+    the New message, Cancel, Resend and consent bodies pinned in
+    SubscriberCard.messages.test.tsx, replayed against the real TMF681 and internal API."""
+    from tests.test_api_topup import prepaid
+    from tests.test_notifications import contact, customer_of
+
+    msg = "/tmf-api/communicationManagement/v4/communicationMessage"
+    consent = "/internal/v1/notification/consent"
+    _, account = prepaid(api, db_conn)
+    contact(db_conn, account, phone="12125550123", email="olga@example.org")
+    customer = str(customer_of(db_conn, account))
+    listed = f"{msg}?receiver.party.id={customer}&offset=0&limit=25"
+    assert api.get(listed).json() == []
+    assert api.get(f"{consent}?customer.id={customer}").json()["marketing"] == {
+        "sms": None,
+        "email": None,
+    }
+
+    def new(channel, category, content, subject=None):
+        body = {
+            "@type": "CommunicationMessage",
+            "messageType": channel,
+            **({"subject": subject} if subject is not None else {}),
+            "content": content,
+            "characteristic": [
+                {"@type": "StringCharacteristic", "name": "category", "value": category}
+            ],
+            "receiver": [
+                {"@type": "Receiver", "party": {"id": customer, "@referredType": "Customer"}}
+            ],
+            "sender": {"@type": "Sender", "name": "bss admin"},
+        }
+        response = api.post(msg, body)
+        assert response.status_code == 201, response.text
+        return response.json()
+
+    def trait(message, name):
+        return next((c["value"] for c in message["characteristic"] if c["name"] == name), None)
+
+    # a transactional SMS is queued to the customer's phone contact
+    sms = new("SMS", "transactional", "Hello")
+    assert sms["state"] == "initial"
+    assert sms["receiver"][0]["phoneNumber"] == "12125550123"
+    # marketing without an opt-in is cancelled at once, never sent
+    refused = new("Email", "marketing", "Half price this week", subject="Offer")
+    assert refused["state"] == "cancelled" and trait(refused, "stateReason") == "noConsent"
+    assert refused["receiver"][0]["email"] == "olga@example.org"
+    rows = api.get(listed).json()
+    # both rows on the first page (the fixture's clock is fixed, so their order is by id)
+    assert sorted(m["id"] for m in rows) == sorted([refused["id"], sms["id"]])
+    assert api.get(f"{msg}/{sms['id']}").json()["content"] == "Hello"
+    # Cancel: the exact merge patch, only while unsent
+    cancelled = api.patch(
+        f"{msg}/{sms['id']}", {"@type": "CommunicationMessage", "state": "cancelled"}
+    )
+    assert cancelled.status_code == 200, cancelled.text
+    assert cancelled.json()["state"] == "cancelled"
+    assert trait(cancelled.json(), "stateReason") == "operator"
+    # Resend: an empty JSON body; the copy refers to the original
+    copy = api.post(f"/internal/v1/notification/message/{sms['id']}/resend", {})
+    assert copy.status_code == 201, copy.text
+    assert trait(copy.json(), "resendOf") == sms["id"]
+    assert copy.json()["state"] == "initial"
+    # an open message cannot be resent: the dialog offers Cancel there instead
+    again = api.post(f"/internal/v1/notification/message/{copy.json()['id']}/resend", {})
+    assert again.status_code == 409
+    # consent: the exact opt-in body, then marketing email is queued
+    recorded = api.post(
+        consent,
+        {
+            "customer": {"id": customer},
+            "channel": "email",
+            "optedIn": True,
+            "source": "call 2026-10-01",
+        },
+    )
+    assert recorded.status_code == 201, recorded.text
+    current = api.get(f"{consent}?customer.id={customer}").json()
+    assert current["marketing"]["email"]["optedIn"] is True
+    assert current["marketing"]["sms"] is None
+    assert [e["source"] for e in current["history"]] == ["call 2026-10-01"]
+    assert new("Email", "marketing", "Half price", subject="Offer")["state"] == "initial"

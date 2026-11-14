@@ -1759,3 +1759,25 @@
   align-items: center;
   gap: var(--space-sm);
 }
+
+/* Messages tab (MessagesTab.tsx) */
+.consent-row {
+  display: grid;
+  grid-template-columns: 80px 1fr auto;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-xs) 0;
+}
+.consent-history-title {
+  margin: var(--space-md) 0 var(--space-xs);
+}
+.message-content {
+  font: var(--type-code);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: var(--space-sm) 0;
+}
+.message-text {
+  width: 100%;
+  resize: vertical;
+}

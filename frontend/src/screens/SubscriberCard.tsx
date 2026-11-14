@@ -71,6 +71,7 @@ import {
   EditSubscriberModal,
 } from './SubscriberForms';
 import { SubscriberOrders } from './SubscriberOrders';
+import { MessagesTab } from './MessagesTab';
 import { UsageTab } from './UsageTab';
 import './screens.css';
 
@@ -337,6 +338,7 @@ function Card({
           },
         ]
       : []),
+    { key: 'messages', label: 'Messages' },
     { key: 'account', label: 'Account' },
   ];
   const tab = options.some((option) => option.key === hash) ? hash : 'overview';
@@ -731,6 +733,13 @@ function Card({
             onOpen={setBalanceAction}
           />,
         )}
+      {pane(
+        'messages',
+        // mounted only while shown: no message or consent request until the tab is opened
+        tab === 'messages' && (
+          <MessagesTab customerId={account.customerId} customerName={account.customerName} />
+        ),
+      )}
       <History account={account} charges={charges} transactions={transactions} tab={tab} />
 
       {balanceAction !== null && (

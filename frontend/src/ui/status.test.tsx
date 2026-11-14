@@ -94,6 +94,11 @@ const cases: [StatusKind, string, string, string][] = [
   ['usage', 'notRated', 'queued', 'Not rated'],
   ['usage', 'rated', 'live', 'Rated'],
   ['usage', 'rejected', 'failed', 'Rejected'],
+  ['message', 'initial', 'queued', 'Queued'],
+  ['message', 'inProgress', 'moving', 'Retrying'],
+  ['message', 'completed', 'live', 'Sent'],
+  ['message', 'cancelled', 'ended', 'Cancelled'],
+  ['message', 'failed', 'failed', 'Failed'],
 ];
 
 describe('D4 status families', () => {
