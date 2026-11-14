@@ -20,6 +20,7 @@ standalone command, with its required variables.
 | Start a specific Ready issue, with explicit human approval | `make start-task BSS_TASK_OWNER=<client> ISSUE=<n> HUMAN_APPROVAL=<n>` | primary |
 | Create an approved P0 issue in Ready | `make new-priority-task TITLE="..." BODY="..." [LABELS="a,b"]` (`BODY_FILE=/abs/path` for long text; `ISSUE=<n>` finishes a preserved one) | primary |
 | Resume / hand off a session | `make telemetry-collect` | task |
+| Finish usage after `finish-task` (its `telemetry_next_command`) | `make telemetry-watch TASK=<task-id>` (or `make telemetry-collect TASK=<task-id>`; no `CLIENT=`/`SESSION_ID=`) | primary |
 | Install UI dependencies (first time) | `make web-install` | task |
 | Refresh the primary checkout's UI dependencies for `make deploy` (the human) | `make deploy-web-install` | primary |
 | Format backend and UI | `make format` | task |

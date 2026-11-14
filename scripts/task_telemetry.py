@@ -266,7 +266,10 @@ def record(
     ci_state=None,
     client=None,
 ):
-    """Fail open, with a visible but content-free warning. Never print DB stderr."""
+    """Fail open, with a visible but content-free warning. Never print DB stderr.
+
+    Returns the usage collections when they were gathered, otherwise None.
+    """
     try:
         sql(
             event_sql(
@@ -287,7 +290,7 @@ def record(
         try:
             from task_collect import automatic
 
-            automatic(task, operation, client, result=result, pr_number=pr_number)
+            return automatic(task, operation, client, result=result, pr_number=pr_number)
         except ImportError:
             print(
                 "telemetry: collection helper unavailable; synchronize client instructions",

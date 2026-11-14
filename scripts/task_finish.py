@@ -161,6 +161,16 @@ def settle_done(root, task, number):
     require(board_done(root, number), "task project state is not Done after setting it")
 
 
+def final_tail_command(task, results):
+    """The follow-up for finish-task when a closed session's last counter has not arrived."""
+    if any(
+        r.get("status") == "partial" and r.get("reason") == "final_counter_pending"
+        for r in results or ()
+    ):
+        return f"make telemetry-watch TASK={task}"
+    return None
+
+
 def completed(root, task, head):
     data = merged_pr(root, task)
     require(
@@ -416,7 +426,7 @@ def finish_steps(primary, common, slot):
         reexec_if_scripts_changed(primary, before)
         run(primary, "merge-base", "--is-ancestor", commit, "HEAD")
         # Record task outcome and end timestamps before any disposable resources vanish.
-        record(task, "task-completed", 0, 0, slot=slot.name)
+        collections = record(task, "task-completed", 0, 0, slot=slot.name)
         if root.exists():
             require(
                 not root.is_symlink() and dict(task_repo.worktrees(primary)).get(root) == task,
@@ -467,7 +477,7 @@ def finish_steps(primary, common, slot):
         # Retain the task-specific checkpoint for diagnosis, even across slot reuse.
         active.unlink()
         result = 0
-        return {
+        outcome = {
             "status": "finished",
             "task": task,
             "slot": slot.name,
@@ -476,6 +486,11 @@ def finish_steps(primary, common, slot):
             "next_command": "make start-task BSS_TASK_OWNER="
             + os.environ.get("BSS_TASK_OWNER", "<client>"),
         }
+        # A closed session's last counter arrives after this response; say how to finish it.
+        tail = final_tail_command(task, collections)
+        if tail:
+            outcome["telemetry_next_command"] = tail
+        return outcome
     except Reexec:
         handed_over = True
         raise
