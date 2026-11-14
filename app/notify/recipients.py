@@ -6,7 +6,7 @@ from uuid import UUID
 
 import psycopg
 
-from app.repository._sql import fetch_one
+from app.repository._sql import fetch_all, fetch_one
 
 PHONE = re.compile(r"^[1-9][0-9]{7,14}$")
 EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -88,6 +88,22 @@ def line_number(conn: psycopg.Connection, product_id: UUID) -> str | None:
         (product_id,),
     )
     return None if row is None else row["value"]
+
+
+def line_numbers(conn: psycopg.Connection, product_ids: list[UUID]) -> dict[UUID, str]:
+    """`line_number` of each product that has one, in one statement: the detectors that
+    look back over every line read them per event before (#305)."""
+    if not product_ids:
+        return {}
+    rows = fetch_all(
+        conn,
+        "SELECT DISTINCT ON (a.product_id) a.product_id, n.value FROM number_assignment a"
+        " JOIN subscriber_number n ON n.id = a.subscriber_number_id"
+        " WHERE a.product_id = ANY(%s) AND n.resource_specification_id = 'msisdn'"
+        " AND a.cancelled_at IS NULL ORDER BY a.product_id, a.effective_from DESC",
+        (sorted(set(product_ids)),),
+    )
+    return {row["product_id"]: row["value"] for row in rows}
 
 
 def account_line_number(conn: psycopg.Connection, account_id: UUID) -> str | None:

@@ -167,7 +167,7 @@ DAYS ?= 90
 USAGE_DAYS ?= 30
 SEED_ARGS ?=
 LT_DATA := $(or $(XDG_DATA_HOME),$(HOME)/.local/share)/bss/loadtest
-.PHONY: loadtest loadtest-up loadtest-down loadtest-ps loadtest-logs loadtest-migrate loadtest-reset loadtest-secret loadtest-seed loadtest-dump loadtest-restore loadtest-pg-stats-reset loadtest-pg-stats loadtest-billing-run loadtest-growth
+.PHONY: loadtest loadtest-round-trips loadtest-up loadtest-down loadtest-ps loadtest-logs loadtest-migrate loadtest-reset loadtest-secret loadtest-seed loadtest-dump loadtest-restore loadtest-pg-stats-reset loadtest-pg-stats loadtest-billing-run loadtest-growth
 
 .PHONY: loadtest-plan-sweep
 loadtest-plan-sweep: ## Collect full-suite SQL and EXPLAIN on seed100k (PHASE=all|collect|measure [SWEEP=plan-sweep-<stamp>]); restore seed100k first
@@ -247,6 +247,15 @@ loadtest: ## Run a k6 scenario on the load-test stack (SCENARIO=smoke|steady|str
 	@test -n "$(SCENARIO)" || { echo "loadtest: SCENARIO=<name> is required" >&2; exit 2; }
 	@mkdir -p loadtest/out
 	python3 -B loadtest/run.py --scenario $(SCENARIO) --mult $(or $(MULT),1) $(if $(DURATION),--duration $(DURATION))
+
+loadtest-round-trips: ## Statements per billed account, swept account and usage record, and ledger checks per prepaid transaction, on the restored dataset, rolled back (DATE=YYYY-MM-DD [ACCOUNTS=2000] [RECORDS=5000] [LEDGER=500]); report in loadtest/out/
+	@test -n "$(DATE)" || { echo "loadtest-round-trips: DATE=<run date> is required" >&2; exit 2; }
+	@mkdir -p loadtest/out
+	@# nothing else may write the dataset while it is measured
+	$(LT) rm --stop --force lt-app lt-worker lt-mcp
+	$(LT) up -d --wait lt-db
+	$(LT) run --rm lt-tools python -m loadtest.round_trips --date $(DATE) \
+	  --accounts $(or $(ACCOUNTS),2000) --records $(or $(RECORDS),5000) --ledger $(or $(LEDGER),500)
 
 loadtest-billing-run: ## Measure the daily billing run of DATE on the restored dataset (DATE=YYYY-MM-DD [CPUS=1]); report in loadtest/out/
 	@test -n "$(DATE)" || { echo "loadtest-billing-run: DATE=<run date> is required" >&2; exit 2; }

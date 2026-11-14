@@ -63,6 +63,7 @@ SID Payment (TMF676 v4 payment): money received on a billing account. Never chan
 
 - `account_review`: `CREATE TRIGGER account_review AFTER INSERT OR DELETE OR UPDATE ON payment FOR EACH ROW EXECUTE FUNCTION account_review_by_column('billing_account_id')`
 - `balance_ledger_bounds`: `CREATE CONSTRAINT TRIGGER balance_ledger_bounds AFTER INSERT OR UPDATE ON payment DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION balance_ledger_bounds()`
+- `balance_ledger_unchecked`: `CREATE TRIGGER balance_ledger_unchecked BEFORE INSERT OR UPDATE ON payment FOR EACH STATEMENT EXECUTE FUNCTION balance_ledger_unchecked()`
 - `funding_hold_bounds`: `CREATE CONSTRAINT TRIGGER funding_hold_bounds AFTER INSERT OR UPDATE ON payment DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION funding_hold_bounds()`
 - `funding_source_account_lock`: `CREATE TRIGGER funding_source_account_lock BEFORE UPDATE ON payment FOR EACH ROW EXECUTE FUNCTION credit_account_lock()`
 - `payment_set_updated_at`: `CREATE TRIGGER payment_set_updated_at BEFORE UPDATE ON payment FOR EACH ROW EXECUTE FUNCTION set_updated_at()`

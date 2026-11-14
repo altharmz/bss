@@ -59,6 +59,7 @@ Exact source amounts consumed by debits, outgoing transfer principal and credit 
 - `account_review`: `CREATE TRIGGER account_review AFTER INSERT OR DELETE OR UPDATE ON funding_consumption FOR EACH ROW EXECUTE FUNCTION account_review_by_column('billing_account_id')`
 - `balance_ledger_bounds`: `CREATE CONSTRAINT TRIGGER balance_ledger_bounds AFTER INSERT OR UPDATE ON funding_consumption DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION balance_ledger_bounds()`
 - `balance_ledger_retained`: `CREATE TRIGGER balance_ledger_retained BEFORE DELETE OR UPDATE ON funding_consumption FOR EACH ROW EXECUTE FUNCTION balance_ledger_retained()`
+- `balance_ledger_unchecked`: `CREATE TRIGGER balance_ledger_unchecked BEFORE INSERT OR UPDATE ON funding_consumption FOR EACH STATEMENT EXECUTE FUNCTION balance_ledger_unchecked()`
 - `credit_account_lock`: `CREATE TRIGGER credit_account_lock BEFORE INSERT ON funding_consumption FOR EACH ROW EXECUTE FUNCTION credit_account_lock()`
 
 ## Referenced by

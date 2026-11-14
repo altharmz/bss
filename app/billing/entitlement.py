@@ -1,6 +1,6 @@
 """Prepaid effective state at an injected business date; reads never emit events."""
 
-from app.repository._sql import fetch_one
+from app.repository._sql import fetch_all, fetch_one
 
 
 def effective_state(product, account, grant, today):
@@ -32,6 +32,19 @@ def latest_grant(conn, product_id):
         " ORDER BY lower(period) DESC, authorized_at DESC LIMIT 1",
         (product_id,),
     )
+
+
+def latest_grants(conn, product_ids):
+    """`latest_grant` of each product that has one, in one statement (#305)."""
+    if not product_ids:
+        return {}
+    rows = fetch_all(
+        conn,
+        "SELECT DISTINCT ON (product_id) * FROM funded_interval WHERE product_id = ANY(%s)"
+        " ORDER BY product_id, lower(period) DESC, authorized_at DESC",
+        (sorted(set(product_ids)),),
+    )
+    return {row["product_id"]: row for row in rows}
 
 
 def view(conn, product, account, today):

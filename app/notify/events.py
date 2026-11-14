@@ -44,6 +44,13 @@ def line(conn: psycopg.Connection, product_id: UUID | None) -> str:
     return f"+{number}" if number else "your line"
 
 
+def lines(conn: psycopg.Connection, product_ids: list[UUID | None]) -> Callable[[UUID | None], str]:
+    """`line` for many products, read in one statement (#305): the detectors that look back
+    over every line find the same events on every tick."""
+    numbers = recipients.line_numbers(conn, [p for p in product_ids if p is not None])
+    return lambda product_id: f"+{numbers[product_id]}" if product_id in numbers else "your line"
+
+
 def detectors(
     now: datetime, tz: ZoneInfo, accounts: list[UUID] | None = None
 ) -> list[tuple[str, Callable[[psycopg.Connection], list[Event]]]]:
@@ -85,14 +92,17 @@ def _account_ids(conn: psycopg.Connection, only: list[UUID] | None) -> list[UUID
 def _accounts(conn: psycopg.Connection, today: date, only: list[UUID] | None) -> list[Event]:
     """Low balance and grace: both need the account's funding, read under its lock."""
     events: list[Event] = []
-    for account_id in _account_ids(conn, only):
+    ids = _account_ids(conn, only)
+    if not ids:
+        return events
+    # once per pass (#305): a change of the settings applies from the next pass
+    lifecycle_settings = lifecycle_repo.settings(conn)
+    for account_id in ids:
         with conn.transaction():
-            billing.load_account(conn, account_id)
-            account = fetch_one(conn, "SELECT * FROM billing_account WHERE id = %s", (account_id,))
-            assert account is not None
-            spendable = funding.load(conn, account_id).spendable
+            account = billing.load_account_row(conn, account_id)
+            spendable = funding.load(conn, account_id, locked=account).spendable
             events += _low_balance(conn, account, spendable)
-            events += _grace(conn, account, spendable, today)
+            events += _grace(conn, account, spendable, today, lifecycle_settings)
     return events
 
 
@@ -124,7 +134,13 @@ def _low_balance(conn: psycopg.Connection, account: Row, spendable: Decimal) -> 
     ]
 
 
-def _grace(conn: psycopg.Connection, account: Row, spendable: Decimal, today: date) -> list[Event]:
+def _grace(
+    conn: psycopg.Connection,
+    account: Row,
+    spendable: Decimal,
+    today: date,
+    settings_row: plan.Settings,
+) -> list[Event]:
     rows = fetch_all(
         conn,
         "SELECT p.* FROM product p WHERE p.billing_account_id = %s AND p.parent_product_id IS NULL"
@@ -132,7 +148,6 @@ def _grace(conn: psycopg.Connection, account: Row, spendable: Decimal, today: da
         " AND p.termination_date IS NULL ORDER BY p.id",
         (account["id"],),
     )
-    settings_row = lifecycle_repo.settings(conn)
     events = []
     for product in rows:
         if product["manually_suspended"] and not product["lifecycle_suspended"]:
@@ -202,8 +217,9 @@ def _renewals(conn: psycopg.Connection, since: datetime) -> list[Event]:
         " AND c.attempted_at >= %s ORDER BY c.attempted_at, c.id",
         (since,),
     )
+    grants = entitlement.latest_grants(conn, [row["product_id"] for row in done])
     for row in done:
-        grant = entitlement.latest_grant(conn, row["product_id"])
+        grant = grants.get(row["product_id"])
         through = grant["period"].upper if grant else None
         events.append(
             Event(
@@ -250,7 +266,10 @@ def _lifecycle(conn: psycopg.Connection, since: datetime) -> list[Event]:
         " AND o.completion_date >= %s ORDER BY o.completion_date, e.id",
         (since,),
     )
+    if not rows:
+        return []
     suspension_days = lifecycle_repo.settings(conn).suspension_days
+    line_of = lines(conn, [row["product_id"] for row in rows])
     events = []
     for row in rows:
         suspended = row["action"] == "suspend"
@@ -263,7 +282,7 @@ def _lifecycle(conn: psycopg.Connection, since: datetime) -> list[Event]:
                 row["product_id"],
                 {
                     "plan": row["name"],
-                    "line": line(conn, row["product_id"]),
+                    "line": line_of(row["product_id"]),
                     "date": day(deactivation),
                 },
                 sms_to_line=suspended,
@@ -279,13 +298,14 @@ def _usage(conn: psycopg.Connection, since: datetime) -> list[Event]:
         " ON p.id = t.product_id WHERE t.reached_at >= %s ORDER BY t.reached_at, t.threshold",
         (since,),
     )
+    line_of = lines(conn, [row["product_id"] for row in rows])
     return [
         Event(
             f"usage_{row['threshold']}",
             f"usage:{row['product_id']}:{row['period_start']}:{row['allowance']}:{row['threshold']}",
             row["billing_account_id"],
             row["product_id"],
-            {"allowance": ALLOWANCE[row["allowance"]], "line": line(conn, row["product_id"])},
+            {"allowance": ALLOWANCE[row["allowance"]], "line": line_of(row["product_id"])},
         )
         for row in rows
     ]
@@ -351,13 +371,14 @@ def _sim_swaps(conn: psycopg.Connection, since: datetime) -> list[Event]:
         " AND c.confirmed_at >= %s ORDER BY c.confirmed_at, c.id",
         (since,),
     )
+    line_of = lines(conn, [row["product_id"] for row in rows])
     return [
         Event(
             "sim_swap",
             f"sim_swap:{row['id']}",
             row["billing_account_id"],
             row["product_id"],
-            {"line": line(conn, row["product_id"])},
+            {"line": line_of(row["product_id"])},
         )
         for row in rows
     ]
@@ -368,7 +389,9 @@ def _security(conn: psycopg.Connection, since: datetime) -> list[Event]:
     customer, once per audit entry. A contact change goes to the addresses on record before
     the change (kept in the entry), so it cannot redirect its own alert."""
     events = []
-    for row in security_repo.audit_since(conn, since):
+    audit = security_repo.audit_since(conn, since)
+    line_of = lines(conn, [row["product_id"] for row in audit])
+    for row in audit:
         kind = row["action"]
         if kind == "port_out" and row["outcome"] == "refused":
             kind = "port_out_blocked"
@@ -393,7 +416,7 @@ def _security(conn: psycopg.Connection, since: datetime) -> list[Event]:
                 f"security:{row['id']}",
                 account_id,
                 row["product_id"],
-                {"line": line(conn, row["product_id"])},
+                {"line": line_of(row["product_id"])},
                 contact=contact,
                 urgent=True,
             )
