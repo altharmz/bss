@@ -276,19 +276,32 @@ callback validation; a blanket claim of identical request behavior would be inco
 The agent runs all of it; long scenarios in the background.
 
 1. `make loadtest-secret` (once) and `make loadtest-up`.
-2. `make loadtest-restore NAME=seed100k` before every measured scenario: each one writes
-   to the database. The restore takes about 30 min (the load, the migrations, `ANALYZE`).
-3. `make loadtest SCENARIO=smoke` must pass first: it proves every request type against
+2. **Settle the dataset for today, once a day.** `make loadtest-restore NAME=seed100k`
+   (about 30 min: the load, the migrations, `ANALYZE`), `make loadtest-up`, and wait until
+   the worker has logged three `wake-up:` lines (`make loadtest-logs`). The dataset is
+   days old: the first wake-up produces and attempts the missed prepaid renewals (2 h
+   55 min after nine days, #340), the second evaluates the accounts that changed. Then
+   stop lt-app, lt-worker and lt-mcp and `make loadtest-dump NAME=seed100k-settled-<date>`.
+   The same happens again after every midnight (the unfunded renewals are attempted once
+   a day, 81 min), so make the settled dump on the day of the runs and do not let a
+   measured run cross 00:00.
+3. `make loadtest-restore NAME=seed100k-settled-<date>` before every measured scenario:
+   each one writes to the database. This restore takes about 5 min.
+4. `make loadtest SCENARIO=smoke` must pass first: it proves every request type against
    the restored data.
-4. `make loadtest SCENARIO=<name>` for steady, stress, soak, billing-night and
+5. `make loadtest SCENARIO=<name>` for steady, stress, soak, billing-night and
    prod-shaped, a restore before each. The runner recreates lt-app, lt-worker and lt-mcp
-   with the scenario's settings and waits for the worker's first wake-up to end before k6
-   starts (the dataset is days old, so the first wake-up catches up on prepaid work).
-5. Billing-night catches up the dataset's first unbilled date (5 November on `seed100k`):
+   with the scenario's settings and waits for the worker to settle before k6 starts: one
+   finished wake-up, then a feed fetch that finds the feed less than 120 s behind (about
+   70 s on a settled dump). For prod-shaped, run smoke first on the restored dump and do
+   not restore in between: the settling then happens at the normal limits.
+6. Billing-night catches up the dataset's first unbilled date (5 November on `seed100k`):
    one date, so one daily run of all 100k accounts. The worker does not bill that gap by
    itself, so the run starts only when k6 asks for it, 30 s into the scenario.
-6. To prove the thresholds: `make loadtest SCENARIO=steady MULT=20 DURATION=3m` must fail
-   (k6 exit 99).
+7. To prove the thresholds: `make loadtest SCENARIO=steady MULT=6 DURATION=3m` must fail
+   with k6 exit 99. (At 20x k6 itself is killed at its 2g limit and writes no summary.)
+8. Run nothing else on the machine during a measured run: a commit's test run uses every
+   CPU. The report lists the other containers and their CPU at the start.
 
 Dropped iterations also fail the k6 thresholds: latency alone does not prove that the
 generator delivered the requested arrival rate. An interrupted k6 process without a

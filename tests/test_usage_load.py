@@ -108,6 +108,7 @@ def test_the_stub_serves_generated_records_until_acknowledged_and_logs_the_lag(c
     stub.ack_usage([r.id for r in first])
     rest = stub.usage_records(500)
     assert rest and rest[0].id not in {r.id for r in first}
+    assert stub.usage_acked == []  # a soak acknowledges millions: they are not kept
 
 
 @pytest.mark.parametrize("app_env", ["prod", "dev", "staging"])

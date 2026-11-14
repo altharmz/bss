@@ -127,7 +127,8 @@ class StubNetwork:
         return self.usage_queue[:limit]
 
     def ack_usage(self, ids: list[str]) -> None:
-        self.usage_acked.extend(ids)
+        if self.load is None:  # a load test acknowledges millions: do not keep them (#281)
+            self.usage_acked.extend(ids)
         acked = set(ids)  # once, not per queued record: the load-test feed acks 500 at a time
         self.usage_queue = [r for r in self.usage_queue if r.id not in acked]
 
