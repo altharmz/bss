@@ -23,7 +23,7 @@ from app.clock import Clock
 from app.events import emit
 from app.repository import balance_actions, billing, funding
 from app.repository import prepaid_commands as commands
-from app.repository._sql import fetch_all, fetch_one
+from app.repository._sql import Row, fetch_all, fetch_one
 from app.repository.prepaid_commands import renewal_id
 from app.worker import network, payments, rating, usage
 from app.worker import ports as port_numbers
@@ -413,22 +413,24 @@ def _complete_transfer(conn, cmd, action_id, now, tz) -> None:
     commands.complete(conn, cmd["id"], result, now=now)
 
 
+def _entitlement_accounts(conn, accounts) -> list[Row]:
+    """The prepaid accounts of an entitlement pass, read once per pass (#332)."""
+    if accounts is None:
+        return fetch_all(
+            conn, "SELECT id FROM billing_account WHERE rating_type = 'prepaid' ORDER BY id"
+        )
+    return fetch_all(
+        conn,
+        "SELECT id FROM billing_account WHERE rating_type = 'prepaid' AND id = ANY(%s) ORDER BY id",
+        (accounts,),
+    )
+
+
 def observe_entitlements(conn, *, clock, tz, checkpoint=None, heartbeat=None, accounts=None):
     """Persist observed entitlement transitions once, under account/product locks.
     `accounts` limits the pass to those accounts (app/repository/account_review.py)."""
     ensure_ownership(conn)
-    if accounts is None:
-        rows = fetch_all(
-            conn, "SELECT id FROM billing_account WHERE rating_type = 'prepaid' ORDER BY id"
-        )
-    else:
-        rows = fetch_all(
-            conn,
-            "SELECT id FROM billing_account WHERE rating_type = 'prepaid' AND id = ANY(%s)"
-            " ORDER BY id",
-            (accounts,),
-        )
-    for account in rows:
+    for account in _entitlement_accounts(conn, accounts):
         if checkpoint is not None and checkpoint():
             break
         with conn.transaction():

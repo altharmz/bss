@@ -61,3 +61,20 @@ attribution, binding provenance and archived attempts are retained as
 finish (`/home/petrg/projects/bss-agents/worker2/state/issue327-plans/`).
 The generated output is intentionally outside version control; the linked findings
 retain the reviewable SQL and measured excerpts.
+
+## Worker account selection and product transitions (#332)
+
+Re-measured on 2026-11-14 on `seed100k` restored and migrated to head (0076), warm
+cache, the same lt-db settings. Before/after are the second of two runs. Query results
+were compared on the dataset: identical (69,450 lifecycle accounts; 524 offering-change
+rows over a widened window, since the run's own window has none).
+
+| Shape | Where | Before | After | Disposition |
+| --- | --- | ---: | ---: | --- |
+| 5 | `app/worker/lifecycle.py` `ACCOUNTS` | 210.5 ms | 151.3 ms | Rewritten as a semi-join (`EXISTS`): the hash aggregate over every open line goes. The full pass runs once per business date (#292; later ticks pass the reviewed accounts) and then works ~70k accounts in their own transactions, so the two remaining scans of `billing_account` and `product` are intended. Not indexed: a partial index would save ~100 ms once a day. Budget: once per tick |
+| 13 | `app/repository/products.py` `announce_changes` | 83.6 ms | 1.7 ms | `NOT IN (prepaid accounts)` became `IS NOT NULL AND NOT EXISTS`: the plan now starts from the pending changes (109 rows) instead of scanning `product_order` against a hashed set of 70k ids. NULL accounts stay excluded, as before. The 200x estimate error was on an empty result: estimate-only |
+| 31 | `app/repository/products.py` `flip_statuses` | 40.9 ms | 29.2 ms (unchanged SQL) | Accepted: once per billing run, within its 100 ms budget. Two scans of `product` by status that find nothing due on the dataset; a partial index is not worth a migration at this cost |
+| 52 | `app/worker/prepaid.py` entitlement accounts | 19.0 ms | 17.0 ms (unchanged SQL) | Reclassified: an index-only scan run once per pass, now `_entitlement_accounts`, so the sweep applies the once-per-tick budget. Measured under the per-account default before |
+
+The sweep's cadence list (`loadtest/plan_measure.py`) now includes `process_lifecycle` and
+`_entitlement_accounts`; shape 5 was measured against the 5 ms per-account default before.
