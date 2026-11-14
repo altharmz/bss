@@ -67,6 +67,21 @@ the run.
 
 The results are in [billing-worker.md](billing-worker.md#capacity).
 
+## Round trips
+
+`make loadtest-round-trips DATE=<run date> [ACCOUNTS=2000] [RECORDS=5000] [LEDGER=500]`
+(#305, `loadtest/round_trips.py`, run in `lt-tools`) counts the statements of the
+worker's per-account paths on the restored dataset: per billed account (the daily run
+of DATE, one account per step), per swept account (the lifecycle, entitlement and
+notification passes over the first ACCOUNTS active prepaid accounts), and per usage
+record (the feed's batches and the one-record path). It also counts the
+`balance_ledger_check` calls per prepaid transaction. It stops `lt-app`, `lt-worker`
+and `lt-mcp` first and runs in one transaction that it rolls back, so the dataset stays
+as it was and the code before and after a change is measured on the same rows. The run
+of DATE-1 must exist and DATE must have no run. The report, with the 25 most frequent
+statements of each path, goes to `loadtest/out/round-trips-<time>.json`. The results
+are in [billing-worker.md](billing-worker.md#round-trips).
+
 ## The dataset
 
 `make loadtest-seed N=<subscribers> [PROCESSES=4] [DAYS=90] [USAGE_DAYS=30]` runs

@@ -434,10 +434,7 @@ def observe_entitlements(conn, *, clock, tz, checkpoint=None, heartbeat=None, ac
         if checkpoint is not None and checkpoint():
             break
         with conn.transaction():
-            billing.load_account(conn, account["id"])
-            account = fetch_one(
-                conn, "SELECT * FROM billing_account WHERE id = %s", (account["id"],)
-            )
+            account = billing.load_account_row(conn, account["id"])
             rows = fetch_all(
                 conn,
                 "SELECT * FROM product WHERE billing_account_id = %s"

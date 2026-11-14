@@ -54,6 +54,7 @@ Internal source-pinned funding hold foundation; no public API.
 
 - `account_review`: `CREATE TRIGGER account_review AFTER INSERT OR DELETE OR UPDATE ON funding_hold_source FOR EACH ROW EXECUTE FUNCTION account_review_by_column('billing_account_id')`
 - `balance_ledger_bounds`: `CREATE CONSTRAINT TRIGGER balance_ledger_bounds AFTER INSERT OR UPDATE ON funding_hold_source DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION balance_ledger_bounds()`
+- `balance_ledger_unchecked`: `CREATE TRIGGER balance_ledger_unchecked BEFORE INSERT OR UPDATE ON funding_hold_source FOR EACH STATEMENT EXECUTE FUNCTION balance_ledger_unchecked()`
 - `credit_account_lock`: `CREATE TRIGGER credit_account_lock BEFORE INSERT OR UPDATE ON funding_hold_source FOR EACH ROW EXECUTE FUNCTION credit_account_lock()`
 - `funding_hold_bounds`: `CREATE CONSTRAINT TRIGGER funding_hold_bounds AFTER INSERT OR UPDATE ON funding_hold_source DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION funding_hold_bounds()`
 - `funding_hold_retained`: `CREATE TRIGGER funding_hold_retained BEFORE DELETE OR UPDATE ON funding_hold_source FOR EACH ROW EXECUTE FUNCTION funding_hold_retained()`
