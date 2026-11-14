@@ -73,6 +73,12 @@ messages need no consent. **Quiet hours** apply to SMS only: `BSS_NOTIFY_QUIET_S
 (21:00/08:00 in the billing time zone, equal = off); an SMS created or due inside them is scheduled
 for their end. A broken detector or event is logged and skipped: billing never waits for a message.
 
+The detectors find an event on every wake-up for as long as its fact is recent. The worker
+drops the ones that have a message already with one statement per detector
+(`existing_events`), then looks up recipients only for new events. Before #281 it looked each
+one up: on the 100k dataset about 47,500 told events, two statements and a commit each, some
+100 s of every wake-up.
+
 ## Internal API (ours)
 
 `GET`/`POST /internal/v1/notification/consent` (customer's consent per channel and history; record

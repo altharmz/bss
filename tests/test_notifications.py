@@ -15,6 +15,7 @@ from pydantic import ValidationError
 from app.config import Settings, settings
 from app.integrations import notify as notify_module
 from app.integrations.notify import adapter as sender
+from app.notify import service as notify_service
 from app.notify import templates
 from tests import timeline
 from tests.apiclient import total
@@ -153,6 +154,23 @@ def test_low_balance_is_told_once_per_top_up_episode(api, db_conn, numbered):
     assert counts(api)["low_balance"] == 2
     top_up(api, db_conn, numbered.acc, "20", api.clock.today(), ticks=2)  # 23.00: fine
     assert counts(api)["low_balance"] == 2
+
+
+def test_a_told_event_is_not_looked_up_again_on_the_next_tick(api, db_conn, numbered, monkeypatch):
+    # #281: the detectors find a told event on every tick; nothing is read for it again
+    assert counts(api)["low_balance"] == 1
+    told = {row[0] for row in db_conn.execute("SELECT dedupe_key FROM notification_message")}
+    asked = []
+    known = notify_service.notify
+
+    def spy(conn, event, **kw):
+        asked.append(event.key)
+        return known(conn, event, **kw)
+
+    monkeypatch.setattr(notify_service, "notify", spy)
+    go(api, db_conn, api.clock.today() + timedelta(days=1))
+    assert counts(api)["low_balance"] == 1  # found again, told once
+    assert told and not told & set(asked)
 
 
 def test_a_failed_renewal_and_the_renewal_after_a_top_up_are_each_told_once(api, db_conn, numbered):

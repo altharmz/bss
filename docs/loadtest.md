@@ -1,8 +1,9 @@
-# Load test: the local stack and the dataset
+# Load test: the local stack, the dataset and the k6 runbook
 
 The load-test programme (#281-#289) runs entirely on the workstation (changed by the human
 on 2026-11-09; no VPS is involved). This page covers the stack and the dataset generator
-(#289). The k6 scenarios and their runbook are added by #281.
+(#289), and the k6 scenarios with their runbook (#281, [below](#the-k6-scenarios-281)).
+The recorded results are in [loadtest-results.md](loadtest-results.md).
 
 ## The stack
 
@@ -12,16 +13,19 @@ targets use:
 
 | Service | What | Limits |
 |---|---|---|
-| `lt-db` | postgres 16, `max_connections=80`, `shared_buffers=2GB`, `pg_stat_statements`, fsync on, its own volume `lt_pgdata` | 3g |
+| `lt-db` | postgres 16, `max_connections=80`, `shared_buffers=1GB` (2GB did not fit the limit: [results](loadtest-results.md)), `pg_stat_statements`, fsync on, its own volume `lt_pgdata` | 3g |
 | `lt-app` | the runtime image (no reload), `APP_ENV=test` | 3.0 CPU, 1536m |
 | `lt-worker` | the billing worker, same image | 3.0 CPU, 1024m |
 | `lt-mcp` | the MCP connector, same image | 0.5 CPU, 256m |
 | `lt-tools` | one-off commands (migrations, the generator), the dev image with the sources mounted read-only; writes only `loadtest/out/` | not pinned |
+| `lt-k6` | k6 1.3.0, the official image pinned by digest (Grafana's GHCR copy), started per scenario by `make loadtest` | `LOADTEST_K6_CPUS` (default `8-9`), 2g |
+| `lt-scrape` | scrapes lt-app's `/metrics` every 15 s during a scenario (`loadtest/scrape.py`) | `LOADTEST_K6_CPUS`, 256m |
 
 The system under test (`lt-db`, `lt-app`, `lt-worker`, `lt-mcp`) shares one cpuset,
 `LOADTEST_SUT_CPUS`, which defaults to `4-7`: 4 logical CPUs, both threads of cores 2 and
-3 (`lscpu -e`), emulating a 4-core host. k6 will get `LOADTEST_K6_CPUS` (#281). CPUs 0-3
-and 10-11 stay free for WSL and the other containers. Set either variable in the
+3 (`lscpu -e`), emulating a 4-core host. k6 and the scraper get `LOADTEST_K6_CPUS`,
+which defaults to `8-9` (both threads of core 4), a 2 vCPU load generator that does not
+overlap the SUT. CPUs 0-3 and 10-11 stay free for WSL and the other containers. Set either variable in the
 environment of the `make` call to move a set, then recreate the containers
 (`make loadtest-down loadtest-up`).
 
@@ -191,6 +195,123 @@ Days 1-10 took about 2.5 h more, partly before #292's fixes.
 - **More days** can be added later. `make loadtest-seed N=100000 DAYS=35 USAGE_DAYS=7` on a
   restored dump continues at day 32: the generator resumes, and its parameters must stay
   the same.
+
+## The k6 scenarios (#281)
+
+`make loadtest SCENARIO=<name> [MULT=1] [DURATION=...]` runs one scenario
+(`loadtest/run.py` on the host, `loadtest/k6/main.js` in `lt-k6`). The target is always
+this task's load-test stack. A run writes `loadtest/out/<scenario>-<time>/` (ignored by
+git): `report.md` and `report.json` (the verdict), `k6-summary.json`, `context.json`
+(`lscpu -e`, the cpusets and limits, the host's other containers with their CPU %),
+`stats.jsonl` (`docker stats` every 10 s), `metrics.prom` (`/metrics` every 15 s),
+`pg-stats.txt` (the top 20 statements of the run), `worker.log`, `app.log`, `k6.log`
+and `data.json` (the ids k6 sampled; `loadtest/k6-data.sql`).
+
+| Scenario | What | Time |
+|---|---|---|
+| `smoke` | 1 VU, every request type once, all must pass; feed off | 1 min |
+| `steady` | the 1x mix for 30 min, the feed at the peak hour's 70 records/s | 30 min |
+| `stress` | 1x, 2x, 3x, 5x for 10 min each; the report names the first step and group that break a target (`first_break`) | 42 min |
+| `soak` | 1x for 3 h; flags RSS growth > 20 % per container and any pool timeout | 3 h |
+| `billing-night` | 20 % of the mix, the feed at the night's 8 records/s, one catch-up run of the first unbilled date through `POST /internal/v1/billingRun/catchUp`; measures the run, the API latency while it runs, and a `pg_dump -Fc` started 105 min after the run start | 2 h |
+| `prod-shaped` | steady at today's production limits (app 0.5 CPU / 384m / 1 process / pool 10, worker 0.25 CPU, postgres 512m, `shared_buffers` 128MB); its numbers are the current ceiling, not a verdict | 30 min |
+
+**The mix at 1x** (operations per second; `MULT` scales every rate and the UI VUs; open
+model, `constant-arrival-rate`):
+
+| Group | Rate | Requests |
+|---|---|---|
+| `read` | 25/s | one customer, billing account, product, bucket (balance) or bill, by ids sampled from the dataset |
+| `list` | 5/s (inside the read budget of 30/s) | the first page or a random offset up to 5000 of customers, billing accounts, products, bills; productUsage of a product |
+| `write` | 5/s | 40 % top-up, 25 % payment, 20 % new subscriber (party, customer, postpaid account, number, order: 5 requests), 10 % plan change, 5 % termination. Changes and terminations are postpaid lines from disjoint pools, dated tomorrow noon |
+| `ui` | 20 VUs `lt-op-NN` | the account card (the account, then its panels in parallel) or the accounts list, 5-15 s think time |
+| `mcp` | 2/s | `get_*` tool calls through lt-mcp, spread over throwaway read-only static tokens: bss-mcp allows a principal 60 calls a minute, as in production, so the runner makes enough tokens to keep each under 40 (3 at 1x, 15 for stress) |
+| `usage-post` | 5/s | `POST /productUsage` |
+| `auth` | once per VU | the sign-in (`POST /internal/v1/session`) |
+
+API VUs reuse 20 operator sessions created sequentially in setup; UI VUs sign in once
+as `lt-op-NN`, staggered, with their own `X-Forwarded-For`. Cookies persist between
+iterations. Signing in every API VU at once previously exhausted the app's memory
+during password hashing. The load-test app
+trusts that header (`APP_TRUST_FORWARDED=true`, as behind Caddy in production), so the
+sign-in throttle of 20 a minute per address sees operators, not the one k6 container.
+
+**Pass criteria** (k6 thresholds; a missed one makes k6 exit 99 and the run fail): per
+group p95 < 1 s and p99 < 1.5 s; < 0.1 % failed requests overall and per group. The
+runner adds: the feed lag (the age of the oldest unacknowledged stub record, from the
+worker's `stub usage load:` lines) < 5 min, except in billing-night, where it is only
+reported (the feed waits while the worker bills); billing-night: the run < 90 min; soak: no
+container's memory grows more than 20 % from the first to the last tenth of the run, and
+no pool timeout in the app log.
+
+**The usage feed.** `LOADTEST_STUB_USAGE_RATE` (set by the runner) becomes the worker's
+`BSS_STUB_USAGE_RATE`: the stub network produces records at that daily average with a
+daily shape (70/s at 20:00, 8/s at 04:00 at 23/s), each for an MSISDN assigned that day,
+and the worker's existing feed step stores them
+(`app/integrations/network/usage_load.py`). It is refused unless `APP_ENV=test`. 1x is
+the peak load, so the runner pins the generator to one hour of the shape
+(`LOADTEST_STUB_USAGE_HOUR`, the worker's `BSS_STUB_USAGE_HOUR`): hour 20 (70/s) in
+steady, stress, soak and prod-shaped, hour 4 (8/s) in billing-night, at any time of day.
+The feed step takes batches of 500 until the feed is empty or 120 s have passed
+([usage.md](decisions/usage.md#feed)).
+
+**Credentials** come only from the environment: the operators' password from
+`~/.config/bss/loadtest/operator-password` (`make loadtest-secret`), a fresh `/metrics`
+token per run, and read-only MCP tokens created before k6 and revoked after it. None is
+written to `loadtest/out/`; the runner checks the run's files for them and deletes any
+file that holds one.
+
+**`APP_ENV=test` inventory.** The worker clock override (`app/worker/runtime.py`) is
+refused outside test; the runner unsets it, so billing uses the real clock. The new
+usage generator checks test in `usage_load.py`, called by the adapter and worker
+startup. Existing environment-sensitive request behavior is the non-Secure local HTTP
+session cookie (`app/internal/users.py`) and permission for HTTP/private callback URLs
+(`app/events/callbacks.py`, `LOCAL_ENVS`). No hub/callback operation is in this mix.
+`app/internal/context.py` reports the environment as metadata. Thus test does not alter
+the measured billing rules or TMF operations, but it does change cookie transport and
+callback validation; a blanket claim of identical request behavior would be incorrect.
+
+### Runbook
+
+The agent runs all of it; long scenarios in the background.
+
+1. `make loadtest-secret` (once) and `make loadtest-up`.
+2. **Settle the dataset for today, once a day.** `make loadtest-restore NAME=seed100k`
+   (about 30 min: the load, the migrations, `ANALYZE`), `make loadtest-up`, and wait until
+   the worker has logged three `wake-up:` lines (`make loadtest-logs`). The dataset is
+   days old: the first wake-up produces and attempts the missed prepaid renewals (2 h
+   55 min after nine days, #340), the second evaluates the accounts that changed. Then
+   stop lt-app, lt-worker and lt-mcp and `make loadtest-dump NAME=seed100k-settled-<date>`.
+   The same happens again after every midnight (the unfunded renewals are attempted once
+   a day, 81 min), so make the settled dump on the day of the runs and do not let a
+   measured run cross 00:00.
+3. `make loadtest-restore NAME=seed100k-settled-<date>` before every measured scenario:
+   each one writes to the database. This restore takes about 5 min.
+4. `make loadtest SCENARIO=smoke` must pass first: it proves every request type against
+   the restored data.
+5. `make loadtest SCENARIO=<name>` for steady, stress, soak, billing-night and
+   prod-shaped, a restore before each. The runner recreates lt-app, lt-worker and lt-mcp
+   with the scenario's settings and waits for the worker to settle before k6 starts: one
+   finished wake-up, then a feed fetch that finds the feed less than 120 s behind (about
+   70 s on a settled dump). For prod-shaped, run smoke first on the restored dump and do
+   not restore in between: the settling then happens at the normal limits.
+6. Billing-night catches up the dataset's first unbilled date (5 November on `seed100k`):
+   one date, so one daily run of all 100k accounts. The worker does not bill that gap by
+   itself, so the run starts only when k6 asks for it, 30 s into the scenario.
+7. To prove the thresholds: `make loadtest SCENARIO=steady MULT=6 DURATION=3m` must fail
+   with k6 exit 99. (At 20x k6 itself is killed at its 2g limit and writes no summary.)
+8. Run nothing else on the machine during a measured run: a commit's test run uses every
+   CPU. The report lists the other containers and their CPU at the start.
+
+Dropped iterations also fail the k6 thresholds: latency alone does not prove that the
+generator delivered the requested arrival rate. An interrupted k6 process without a
+summary produces a failed report with missing groups, rather than a successful empty
+report. Each ID pool is a separate `SharedArray`, so accessing one ID does not copy the
+entire exported dataset into each VU.
+
+What to watch while it runs: `make loadtest-ps` (health), `make loadtest-logs` (the app's
+errors and the worker's `stub usage load:` lines), `tail -f loadtest/out/<run>/stats.jsonl`.
+After it: `report.md`, then fill in [loadtest-results.md](loadtest-results.md).
 
 ## SQL plan sweep (#327)
 

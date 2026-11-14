@@ -56,6 +56,19 @@ class Settings(BaseSettings):
         default="stub", validation_alias=AliasChoices("BSS_NETWORK_ADAPTER", "network_adapter")
     )
     network_max_attempts: int = Field(default=5, ge=1)
+    # Load tests only (#281, docs/loadtest.md): the stub network produces usage at this daily
+    # average in records/s, shaped over the day. 0 = off; anything else needs APP_ENV=test.
+    stub_usage_rate: float = Field(
+        default=0, ge=0, validation_alias=AliasChoices("BSS_STUB_USAGE_RATE", "stub_usage_rate")
+    )
+    # The local hour (0-23) whose share of the daily shape the generator keeps for the whole
+    # run: 20 is the peak, 4 the night. -1 = follow the clock.
+    stub_usage_hour: int = Field(
+        default=-1,
+        ge=-1,
+        le=23,
+        validation_alias=AliasChoices("BSS_STUB_USAGE_HOUR", "stub_usage_hour"),
+    )
     # Number Transfer PIN validity in days (docs/decisions/numbers.md); optional.
     number_transfer_pin_days: int = Field(
         default=7,

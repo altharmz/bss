@@ -6,23 +6,29 @@
 #
 # The system under test (lt-db, lt-app, lt-worker, lt-mcp) shares one cpuset,
 # LOADTEST_SUT_CPUS (4 logical CPUs, emulating a 4-core host; default 4-7 = cores 2 and 3
-# of the workstation). k6 gets LOADTEST_K6_CPUS (#281). Limits are the load-test budget
-# from the programme's shared facts. All services are in the `loadtest` profile, so a
-# plain `up` never starts them.
+# of the workstation). k6 and the metrics scraper get LOADTEST_K6_CPUS (#281; default 8-9
+# = core 4, not overlapping). Limits are the load-test budget from the programme's shared
+# facts; the LOADTEST_* limit variables exist for the prod-shaped scenario (today's
+# production limits, set by loadtest/run.py). All services are in the `loadtest` profile,
+# so a plain `up` never starts them.
 services:
   lt-db:
     image: postgres:16-alpine
     profiles: [loadtest]
     # Production-like durability (fsync on), unlike the test database `db`. Settings of the
-    # load-test profile: 80 connections, 2 GB shared buffers, pg_stat_statements.
+    # load-test profile: 80 connections, 1 GB shared buffers, pg_stat_statements. The
+    # programme's 2 GB of shared buffers did not fit the 3g limit with 60 app connections:
+    # 2.0 GB of shared memory and 0.9 GB of backends left nothing for the page cache, and
+    # the kernel killed a backend twice in the 30-minute steady run (#281,
+    # docs/loadtest-results.md).
     command:
       - postgres
       - -c
       - max_connections=80
       - -c
-      - shared_buffers=2GB
+      - shared_buffers=${LOADTEST_DB_SHARED_BUFFERS:-1GB}
       - -c
-      - effective_cache_size=2GB
+      - effective_cache_size=${LOADTEST_DB_CACHE:-2GB}
       - -c
       - work_mem=16MB
       - -c
@@ -40,8 +46,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: ${POSTGRES_DB:-app}
     cpuset: ${LOADTEST_SUT_CPUS:-4-7}
-    mem_limit: 3g
-    memswap_limit: 3g
+    mem_limit: ${LOADTEST_DB_MEM:-3g}
+    memswap_limit: ${LOADTEST_DB_MEM:-3g}
     shm_size: 1g
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB && PGPASSWORD=$$POSTGRES_PASSWORD psql -U $$POSTGRES_USER -d $$POSTGRES_DB -c 'SELECT 1' -tAq >/dev/null"]
@@ -66,13 +72,18 @@ services:
       BILL_PAYMENT_TERM_DAYS: "30"
       BSS_SERVICE_SECRET: ${BSS_SERVICE_SECRET:-}
       BSS_BUILD: loadtest
+      # #281: k6 sends each virtual operator's own X-Forwarded-For, as Caddy does in
+      # production, so the sign-in throttle (20 a minute per address) sees operators, not
+      # the one k6 container; the scraper's bearer token, made per run by loadtest/run.py
+      APP_TRUST_FORWARDED: "true"
+      BSS_METRICS_TOKEN: ${LOADTEST_METRICS_TOKEN:-}
       # the load-test budget (#288): 4 x 15 + worker + tools <= max_connections 80
       WEB_CONCURRENCY: ${LOADTEST_WEB_CONCURRENCY:-4}
       DB_POOL_SIZE: ${LOADTEST_DB_POOL_SIZE:-15}
     cpuset: ${LOADTEST_SUT_CPUS:-4-7}
-    cpus: 3.0
-    mem_limit: 1536m
-    memswap_limit: 1536m
+    cpus: ${LOADTEST_APP_CPUS:-3.0}
+    mem_limit: ${LOADTEST_APP_MEM:-1536m}
+    memswap_limit: ${LOADTEST_APP_MEM:-1536m}
     read_only: true
     tmpfs:
       - /tmp
@@ -91,6 +102,10 @@ services:
       # the billing-run measurement (#283, make loadtest-billing-run): the worker's clock
       # pinned to the run's start (APP_ENV=test only); empty = the real clock
       WORKER_FAKE_NOW: ${LOADTEST_WORKER_FAKE_NOW:-}
+      # the stub network's usage feed (#281): records/s, daily average, shaped; 0 = off
+      BSS_STUB_USAGE_RATE: ${LOADTEST_STUB_USAGE_RATE:-0}
+      # the hour of the daily shape the feed keeps (20 = the peak, 4 = the night); -1 = the clock
+      BSS_STUB_USAGE_HOUR: ${LOADTEST_STUB_USAGE_HOUR:--1}
     cpuset: ${LOADTEST_SUT_CPUS:-4-7}
     cpus: ${LOADTEST_WORKER_CPUS:-3.0}
     mem_limit: 1024m
@@ -164,6 +179,41 @@ services:
     depends_on:
       lt-db:
         condition: service_healthy
+    networks: [lab]
+
+  # k6 (#281, loadtest/k6/, run by loadtest/run.py): the official image pinned by digest
+  # (Grafana's GHCR copy: Docker Hub refused the daemon's pulls), on its own cpuset with a
+  # 2g limit, a 2 vCPU load generator. Plain HTTP to lt-app and lt-mcp on `lab`.
+  lt-k6:
+    image: ghcr.io/grafana/k6:1.3.0@sha256:3ddc8b1a33a2c3d8edc6e99b6a762ae36cba08788463458f5e6a7703e14eb77d
+    profiles: [loadtest]
+    # the host user, so the run's files in loadtest/out/ stay the operator's (run.py sets it)
+    user: ${LOADTEST_UID:-1000}:${LOADTEST_GID:-1000}
+    cpuset: ${LOADTEST_K6_CPUS:-8-9}
+    mem_limit: 2g
+    memswap_limit: 2g
+    environment:
+      LOADTEST_OPERATOR_PASSWORD: ${LOADTEST_OPERATOR_PASSWORD:-}
+      LOADTEST_MCP_TOKENS: ${LOADTEST_MCP_TOKENS:-}
+    volumes:
+      - ./loadtest/k6:/scripts:ro
+      - ./loadtest/out:/out
+    networks: [lab]
+
+  # Scrapes lt-app's /metrics every 15 s into the run's directory (loadtest/scrape.py).
+  # On the k6 cpuset: the observer is not part of the system under test.
+  lt-scrape:
+    image: ${IMAGE_NAME:?use scripts/task-compose}:${TAG:-dev}
+    profiles: [loadtest]
+    cpuset: ${LOADTEST_K6_CPUS:-8-9}
+    mem_limit: 256m
+    environment:
+      LOADTEST_METRICS_TOKEN: ${LOADTEST_METRICS_TOKEN:-}
+    healthcheck:
+      disable: true
+    volumes:
+      - ./loadtest:/app/loadtest:ro
+      - ./loadtest/out:/app/loadtest/out
     networks: [lab]
 
 volumes:

@@ -18,13 +18,16 @@ Devices: `check_device` answers by the IMEI's first eight digits (the TAC): `350
 device is carrier locked, no VoLTE), `98000000` to `98999999` fails temporarily (the BSS
 records unknown), anything else unknown.
 
-Usage: nothing is generated on its own; `inject_usage` queues a record that `usage_records`
-returns until `ack_usage` (a record can be injected twice to test a resent batch).
+Usage: nothing is generated on its own unless a load-test generator is given
+(`BSS_STUB_USAGE_RATE`, app/integrations/network/usage_load.py); `inject_usage` queues a
+record that `usage_records` returns until `ack_usage` (a record can be injected twice to
+test a resent batch).
 """
 
 import hashlib
+import logging
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.integrations.network.interface import (
     DeviceCheck,
@@ -36,6 +39,11 @@ from app.integrations.network.interface import (
     PortStatus,
     UsageRecord,
 )
+
+if TYPE_CHECKING:
+    from app.integrations.network.usage_load import UsageLoad
+
+log = logging.getLogger("app.network.usage_load")
 
 REFUSE_SUFFIX = "0000"
 TEMPORARY_SUFFIX = "0001"
@@ -50,7 +58,8 @@ INCOMPATIBLE_REASONS = (
 
 
 class StubNetwork:
-    def __init__(self) -> None:
+    def __init__(self, load: "UsageLoad | None" = None) -> None:
+        self.load = load
         self.received: dict[str, tuple[str, dict[str, Any]]] = {}
         self.attempts: list[str] = []  # every call, repeated keys included
         self.recovered: set[str] = set()
@@ -103,10 +112,23 @@ class StubNetwork:
         return DeviceCheck("unknown", ("the device model is not in the network's database",))
 
     def usage_records(self, limit: int) -> list[UsageRecord]:
+        if self.load is not None:
+            self.usage_queue.extend(self.load.due(len(self.usage_queue)))
+            oldest = self.usage_queue[0].event_at if self.usage_queue else None
+            lag = (self.load.clock.now() - oldest).total_seconds() if oldest else 0.0
+            # docs/loadtest.md: the runner reads the feed lag from these lines
+            log.info(
+                "stub usage load: queued=%d made=%d dropped=%d lag_seconds=%.1f",
+                len(self.usage_queue),
+                self.load.made,
+                self.load.dropped,
+                lag,
+            )
         return self.usage_queue[:limit]
 
     def ack_usage(self, ids: list[str]) -> None:
-        self.usage_acked.extend(ids)
+        if self.load is None:  # a load test acknowledges millions: do not keep them (#281)
+            self.usage_acked.extend(ids)
         acked = set(ids)  # once, not per queued record: the load-test feed acks 500 at a time
         self.usage_queue = [r for r in self.usage_queue if r.id not in acked]
 
