@@ -437,6 +437,13 @@ items:
   - {id: ui.ports.cancel, area: ui, stage: 5, title: "Cancel an open port-in"}
   - {id: ui.subscriber.transferPinItem, area: ui, stage: 5, title: "Number Transfer PIN menu item on an active or suspended product"}
   - {id: ui.subscriber.transferPin, area: ui, stage: 5, title: "Number Transfer PIN dialog: shown once with expiry, copyable"}
+  - {id: ui.subscriber.deviceItem, area: ui, stage: 5, title: "Device menu item on a prepaid product"}
+  - {id: ui.subscriber.device, area: ui, stage: 5, title: "Device dialog: the line's current IMEI and compatibility"}
+  - {id: ui.subscriber.deviceHistory, area: ui, stage: 5, title: "Device dialog: the devices the line has had, newest first"}
+  - {id: ui.subscriber.checkDevice, area: ui, stage: 5, title: "Check device: ask the network whether an IMEI works, nothing stored"}
+  - {id: ui.subscriber.changeDevice, area: ui, stage: 5, title: "Change device: a modify order with only the imei characteristic"}
+  - {id: ui.subscriber.addProductImei, area: ui, stage: 5, title: "Add product: optional device IMEI for a prepaid line"}
+  - {id: ui.products.device, area: ui, stage: 5, title: "Product detail: current device (IMEI, compatibility, reasons)"}
   - {id: ui.sims.list, area: ui, stage: 5, title: "SIM and eSIM stock with state, type and batch filters"}
   - {id: ui.sims.previous, area: ui, stage: 5, title: "SIMs: previous page"}
   - {id: ui.sims.next, area: ui, stage: 5, title: "SIMs: next page"}

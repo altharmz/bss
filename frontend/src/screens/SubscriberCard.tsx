@@ -48,6 +48,7 @@ import { TableHead, TableRow, type Column } from '../ui/Table';
 import { AddProductModal } from './AddProduct';
 import { NumberModal } from './ProductNumber';
 import { TransferPinDialog } from './TransferPin';
+import { DeviceDialog } from './ProductDevice';
 import { BillDialog, RecordPaymentModal, useBills } from './Bills';
 import { ActionDialog, BalanceActions } from './PrepaidHistory';
 import {
@@ -249,6 +250,7 @@ function Card({
   const [balanceAction, setBalanceAction] = useState<string | null>(null);
   const [numberProduct, setNumberProduct] = useState<string | null>(null);
   const [pinProduct, setPinProduct] = useState<string | null>(null);
+  const [deviceProduct, setDeviceProduct] = useState<AccountProduct | null>(null);
   const [adding, setAdding] = useState(false);
   const [paying, setPaying] = useState(false);
   const [money, setMoney] = useState<MoneyForm | null>(null);
@@ -572,6 +574,7 @@ function Card({
                       product={product}
                       onNumber={() => setNumberProduct(product.id)}
                       onTransferPin={() => setPinProduct(product.id)}
+                      onDevice={() => setDeviceProduct(product)}
                       onBuyAddOn={() => setAddOnFor(product)}
                       onPick={(change, immediate) =>
                         setProductDialog({ product, change, immediate })
@@ -767,6 +770,19 @@ function Card({
       )}
       {pinProduct !== null && (
         <TransferPinDialog productId={pinProduct} onClose={() => setPinProduct(null)} />
+      )}
+      {deviceProduct !== null && (
+        <DeviceDialog
+          accountId={account.id}
+          productId={deviceProduct.id}
+          canChange={['active', 'suspended'].includes(deviceProduct.status)}
+          onClose={() => setDeviceProduct(null)}
+          onDone={(message, accepted) => {
+            toast(message);
+            if (accepted?.id) onWatch(watch('order', accepted.id, accepted.label));
+            reload();
+          }}
+        />
       )}
       {paying && bills.status === 'ok' && (
         <RecordPaymentModal
@@ -1201,6 +1217,7 @@ function ProductRow({
   onPick,
   onNumber,
   onTransferPin,
+  onDevice,
   onBuyAddOn,
 }: {
   account: Account;
@@ -1210,6 +1227,7 @@ function ProductRow({
   onPick: (change: ProductAction, immediate: boolean) => void;
   onNumber: () => void;
   onTransferPin: () => void;
+  onDevice: () => void;
   onBuyAddOn: () => void;
 }) {
   const context = useSystemContext();
@@ -1348,6 +1366,9 @@ function ProductRow({
                         onClick: onTransferPin,
                       },
                     ]
+                  : []),
+                ...(account.ratingType === 'prepaid'
+                  ? [{ label: 'Device…', ui: 'ui.subscriber.deviceItem', onClick: onDevice }]
                   : []),
                 ...(canBuyAddOn(product, context.businessDate)
                   ? [

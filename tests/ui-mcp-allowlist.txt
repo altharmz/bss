@@ -37,8 +37,6 @@ get_payment_command: the dialog reads the account's charges (list_card_topups); 
 list_payment_commands: the dialog reads one account's charges (list_card_topups); no cross-account list
 get_usage: the Usage tab is issue 190b (216)
 create_usage: a mediation device records usage; the network feed is the normal path, no UI action
-list_devices: the device on the product is issue 194b (225)
-check_device: the Check device action is issue 194b (225)
 
 # Global lists the UI reads through the internal paged searches instead (#314): prefix
 # search on the server and the page's figures, rather than the TMF lists filtered client side.
