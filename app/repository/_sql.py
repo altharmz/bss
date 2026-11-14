@@ -201,6 +201,25 @@ def count_references(
     return counts
 
 
+def is_referenced(
+    conn: psycopg.Connection, row_id: Any, sources: dict[str, tuple[str, str]]
+) -> bool:
+    """Whether any (table, column) of `sources` has a row with `column = row_id`: one
+    EXISTS per source, stopping at the first. For guards that need no counts."""
+    for table, column in sources.values():
+        row = fetch_one(
+            conn,
+            sql.SQL("SELECT EXISTS (SELECT 1 FROM {} WHERE {} = %s) AS found").format(
+                sql.Identifier(table), sql.Identifier(column)
+            ),
+            (row_id,),
+        )
+        assert row is not None
+        if row["found"]:
+            return True
+    return False
+
+
 def delete_by_id(conn: psycopg.Connection, table: str, row_id: Any) -> bool:
     """Delete one row; False if it was not there."""
     query = sql.SQL("DELETE FROM {} WHERE id = %s RETURNING id").format(sql.Identifier(table))

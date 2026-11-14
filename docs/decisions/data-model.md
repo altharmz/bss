@@ -124,7 +124,9 @@ approved by the human on 2026-11-09; the growth inventory of the 100k dataset
   deliveries keep their one-minute cadence during a long first clean-up; a table with
   nothing left costs one indexed query per wake-up. Indexes for the batches (migration
   0076): `idempotency_key (created_at)`, `event_delivery (finished_at)` of finished
-  deliveries, `notification_message (created_at)` and `(resend_of)`.
+  deliveries, `notification_message (created_at)` and `(resend_of)`. Migration 0077 (#310)
+  replaces `notification_message (created_at)` with `(created_at DESC, id)`, which the
+  batch reads backwards.
 - **`idempotency_key` stays protected:** its trigger still refuses every delete except in a
   transaction that set `bss.housekeeping = 'on'` (only the housekeeping does).
 - **The old event purge is gone:** `deliver.purge` deleted an event with its deliveries 30
@@ -132,3 +134,23 @@ approved by the human on 2026-11-09; the growth inventory of the 100k dataset
 - **Autovacuum:** `autovacuum_vacuum_scale_factor = 0.02` and
   `autovacuum_analyze_scale_factor = 0.01` on `billing_run_account`, `app_session`, `event`,
   `event_delivery`, `idempotency_key` and every `usage_record` partition.
+
+## Indexes for hot paths, list sorts and references (2026-11-14, #310)
+
+From the EXPLAIN review of the 100k load-test dataset and the SQL plan sweep (#327);
+migration 0077, each index EXPLAINed before and after in the PR.
+
+- **What gets an index:** a query the worker runs every wake-up or for every billed
+  account; an admin list's exact `ORDER BY` (a mixed `created_at DESC, id` needs
+  `(created_at DESC, id)`; `DESC, DESC` reads `(created_at, id)` backwards); and every
+  foreign key whose parent can be deleted or whose PATCH guard asks whether it is
+  referenced. Partial where the query's own condition is selective (a state, a kind, a
+  non-null reference).
+- **A wider index replaces a narrower one** when it serves the old queries too:
+  `event_delivery (subscription_id)` became `(subscription_id, last_attempt_at DESC, id
+  DESC)` and `notification_message (created_at)` became `(created_at DESC, id)`.
+- **Presence guards ask EXISTS:** `is_referenced` (`app/repository/_sql.py`) stops at the
+  first row. `count_references` stays for the delete guards, whose 409 names the counts.
+- **Not indexed:** the Balances screen's status filter (computed from the account state:
+  the join, not an index, decides it) and the product-by-number semijoin (an existing
+  index; the planner's join choice). The numbers list no longer sorts by value.

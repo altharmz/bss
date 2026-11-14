@@ -93,7 +93,7 @@ from app.billing.engine_tax import service_address_of
 from app.config import settings
 from app.events import emit
 from app.repository import accounts, billing, cycles, parties, presentation
-from app.repository._sql import Row, count_references, jsonb, rows_by_id
+from app.repository._sql import Row, count_references, is_referenced, jsonb, rows_by_id
 
 API = "TMF666"
 BASE = "/tmf-api/accountManagement/v5"
@@ -475,8 +475,7 @@ def _change_customer(conn: psycopg.Connection, current: Row, party: CustomerPart
         customer = parties.get_customer(conn, customer_id)
         assert customer is not None  # foreign key
         return customer
-    counts = count_references(conn, current["id"], parties.ACCOUNT_HISTORY)
-    if any(counts.values()):
+    if is_referenced(conn, current["id"], parties.ACCOUNT_HISTORY):
         raise conflict(
             "relatedParty: the customer cannot change once the account has history"
             " (orders, charges, bills, payments or billing runs)"
@@ -787,8 +786,7 @@ def patch_account(
         )
         mode = data.rating_type or current["rating_type"]
         if mode != current["rating_type"]:
-            counts = count_references(conn, uid, parties.ACCOUNT_HISTORY)
-            if any(counts.values()):
+            if is_referenced(conn, uid, parties.ACCOUNT_HISTORY):
                 raise conflict(
                     "ratingType cannot change once the account has history (a prepaid"
                     " account always has its bucket): open a new account in the other mode"

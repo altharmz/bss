@@ -54,9 +54,11 @@ Daily runs have one identity per business date; prepaid command runs have one re
 | Name | Definition | Backs a constraint |
 |---|---|---|
 | `billing_run_command_id_key` | `CREATE UNIQUE INDEX billing_run_command_id_key ON billing_run USING btree (command_id)` | yes |
+| `billing_run_completed_idx` | `CREATE INDEX billing_run_completed_idx ON billing_run USING btree (run_date, id) WHERE (status = 'completed'::billing_run_status)` | no |
 | `billing_run_daily_date` | `CREATE UNIQUE INDEX billing_run_daily_date ON billing_run USING btree (run_date) WHERE (kind = 'daily'::text)` | no |
 | `billing_run_grant_command` | `CREATE UNIQUE INDEX billing_run_grant_command ON billing_run USING btree (id, command_id)` | yes |
 | `billing_run_pkey` | `CREATE UNIQUE INDEX billing_run_pkey ON billing_run USING btree (id)` | yes |
+| `billing_run_running_idx` | `CREATE INDEX billing_run_running_idx ON billing_run USING btree (id) WHERE (status = 'running'::billing_run_status)` | no |
 
 ## Triggers
 
