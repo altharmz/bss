@@ -2,7 +2,7 @@
 
 Customers are told about the events that matter for a prepaid line, through a sender adapter that
 only logs for now. Design approved by the human's standing delegation (decided following TMF:
-TMF681 Communication Management is the message log). The UI half is issue #222 (192b).
+TMF681 Communication Management is the message log). The UI half is issue #222 (192b): the Messages tab on the subscriber card ([frontend.md](frontend.md#messages-tab-and-consent-2026-11-14-issue-222)).
 Migration `0061`.
 
 ## TMF681 (vendored v4.0.0, base `/tmf-api/communicationManagement/v4`)
@@ -88,7 +88,7 @@ not MCP tools (scope excluded).
 
 ## Not in this slice
 
-UI (192b), a real provider, other languages, inbound STOP handling and unsubscribe links, delivery
+A real provider, other languages, inbound STOP handling and unsubscribe links, delivery
 receipts, other settings than the environment variables above.
 
 ## Tests

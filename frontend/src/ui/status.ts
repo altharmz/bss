@@ -129,6 +129,13 @@ export const STATUS_MAP = {
     rated: ['live', 'Rated'],
     rejected: ['failed', 'Rejected'],
   },
+  message: {
+    initial: ['queued', 'Queued'],
+    inProgress: ['moving', 'Retrying'],
+    completed: ['live', 'Sent'],
+    cancelled: ['ended', 'Cancelled'],
+    failed: ['failed', 'Failed'],
+  },
 } as const;
 
 export type StatusKind = keyof typeof STATUS_MAP;

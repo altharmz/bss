@@ -480,6 +480,8 @@ items:
   - {id: ui.subscriber.planFacts, area: ui, stage: 5, title: "Prepaid product row: offering kind, how it renews, an add-on's plan and end date"}
   - {id: ui.subscriber.renewalHistory, area: ui, stage: 5, title: "Renewal history of a prepaid product: period, amount, tax, funding and bill"}
   - {id: ui.subscriber.usage, area: ui, stage: 5, title: "Usage tab of a prepaid subscriber: period allowance bars per kind (used, included, remaining, 80% and 100% marks), throttled and barred badges, pay-as-you-go balance and unrated count, paged TMF635 records with rating status, applied usage price, roaming and throttled flags"}
+  - {id: ui.subscriber.messages, area: ui, stage: 5, title: "Messages tab of a subscriber: the customer's TMF681 messages paged newest first (time, channel, event, receiver, state with its reason, last error), loaded only when opened"}
+  - {id: ui.subscriber.consent, area: ui, stage: 5, title: "Marketing consent of the customer on the Messages tab: current opt-in per channel (SMS, email) with its source and operator, and the history"}
   - {id: ui.subscriber.buyAddOnItem, area: ui, stage: 5, title: "Buy add-on menu item on a plan product"}
   - {id: ui.subscriber.buyAddOn, area: ui, stage: 5, title: "Buy add-on dialog: add-on offerings and the TMF622 add order with an addOn relationship"}
   - {id: ui.subscriber.buyAddOn.quote, area: ui, stage: 5, title: "Add-on price with taxes and fees from the first-charge quote"}
@@ -742,6 +744,16 @@ items:
   - {id: ui.subscriber.usage.data, area: ui, stage: 5, title: "Subscriber data allowance"}
   - {id: ui.subscriber.usage.sms, area: ui, stage: 5, title: "Subscriber SMS allowance"}
   - {id: ui.subscriber.usage.voice, area: ui, stage: 5, title: "Subscriber voice allowance"}
+  - {id: ui.subscriber.messages.detail, area: ui, stage: 5, title: "Message detail dialog: TMF681 GET /communicationMessage/{id} with the content, receiver, sender, attempts and error"}
+  - {id: ui.subscriber.messages.resend, area: ui, stage: 5, title: "Resend a sent, failed or cancelled message (POST /internal/v1/notification/message/{id}/resend)"}
+  - {id: ui.subscriber.messages.cancel, area: ui, stage: 5, title: "Cancel an unsent message (TMF681 PATCH state cancelled)"}
+  - {id: ui.subscriber.messages.newItem, area: ui, stage: 5, title: "New message button on the Messages tab"}
+  - {id: ui.subscriber.messages.new, area: ui, stage: 5, title: "New message dialog: SMS or email, transactional or marketing, TMF681 POST to the customer"}
+  - {id: ui.subscriber.messages.next, area: ui, stage: 5, title: "Subscriber messages: next page"}
+  - {id: ui.subscriber.messages.previous, area: ui, stage: 5, title: "Subscriber messages: previous page"}
+  - {id: ui.subscriber.consent.sms, area: ui, stage: 5, title: "Marketing SMS consent: current choice and Opt in / Opt out"}
+  - {id: ui.subscriber.consent.email, area: ui, stage: 5, title: "Marketing email consent: current choice and Opt in / Opt out"}
+  - {id: ui.subscriber.consent.record, area: ui, stage: 5, title: "Record consent dialog: the source, POST /internal/v1/notification/consent"}
 
 excluded:
   - {id: api.service.root, area: api, method: GET, path: /, reason: "template status root, not a product feature"}
