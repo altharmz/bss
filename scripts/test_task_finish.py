@@ -357,6 +357,31 @@ if a[0] == 'ps' and any(x.startswith('ancestor=') for x in a):
             self.call(["git", "rev-parse", "HEAD"], cwd=self.primary).stdout.strip(), self.head
         )
 
+    def test_pending_final_counter_names_the_telemetry_follow_up(self):
+        pending = [{"client": "claude", "status": "partial", "reason": "final_counter_pending"}]
+
+        def events(task, operation, *args, **kwargs):
+            return pending if operation == "task-completed" else None
+
+        with patch.object(lifecycle, "record", side_effect=events):
+            outcome = self.finish()
+        self.assertEqual(
+            outcome["telemetry_next_command"], f"make telemetry-watch TASK={self.task}"
+        )
+        self.assertTrue(outcome["next_command"].startswith("make start-task BSS_TASK_OWNER="))
+
+    def test_complete_or_missing_telemetry_adds_no_follow_up(self):
+        for collections in (
+            None,
+            [{"client": "claude", "status": "complete", "reason": None}],
+            [{"client": "claude", "status": "partial", "reason": "counters_missing"}],
+        ):
+            with self.subTest(collections=collections):
+                self.assertIsNone(lifecycle.final_tail_command(self.task, collections))
+        with patch.object(lifecycle, "record", return_value=None):
+            outcome = self.finish()
+        self.assertNotIn("telemetry_next_command", outcome)
+
     def docker_now(self):
         return json.loads(self.docker_state.read_text())
 
