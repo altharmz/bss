@@ -107,21 +107,26 @@ mcp-token-revoke: ## Revoke a local MCP static token (ID=<id>) or OAuth grant (G
 		exit 1; \
 	fi
 
+# Heavy test runs go through scripts/with-test-lock: one at a time on the workstation, in
+# any worktree, queued behind the commit hook's run and each other (#348). Light targets
+# (lint, format, docs, builds) never take the lock; aggregates lock stage by stage.
+LOCKED := ./scripts/with-test-lock
+
 test: runtime-check deploy-check ## The FULL suite in the container (parallel; HYPOTHESIS_PROFILE=dev|ci), plus the harness and deploy script tests (runtime-check, deploy-check): nightly in CI, by hand before a PR
 	./scripts/test-billing-status-check.sh
 	./scripts/test-pre-commit-lock.sh
-	./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) $(if $(PLAN_CAPTURE_DIR),-e BSS_PLAN_CAPTURE_DIR=$(PLAN_CAPTURE_DIR)) oneoff pytest -n auto
+	$(LOCKED) ./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) $(if $(PLAN_CAPTURE_DIR),-e BSS_PLAN_CAPTURE_DIR=$(PLAN_CAPTURE_DIR)) oneoff pytest -n auto
 
 test-smoke: ## The smoke subset (pytest -m smoke) and the scripts' own cases: what CI runs on pull requests and master
 	./scripts/test-billing-status-check.sh
 	./scripts/test-pre-commit-lock.sh
-	./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) oneoff pytest -n auto -m smoke
+	$(LOCKED) ./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) oneoff pytest -n auto -m smoke
 
 # pytest-testmon runs the tests whose code changed since their last recorded run, plus new and
 # previously failed ones (selection is off under -m or -k, so this never filters). The first
 # run on a fresh checkout is the whole suite; it records into .testmon/.testmondata.
 test-changed: ## Only the tests affected by the change since their last run (pytest-testmon); the pre-commit hook runs it after test-smoke
-	./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) oneoff pytest -n auto --testmon
+	$(LOCKED) ./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) oneoff pytest -n auto --testmon
 
 # The whole backend suite for the commit hook (scripts/hook_selection.py), recorded by
 # testmon (--testmon-noselect: every test runs), so a failure is followed by a short retry.
@@ -134,12 +139,12 @@ test-recorded: ## The hook's full backend suite, recorded for testmon (no harnes
 	./scripts/test-billing-status-check.sh
 	./scripts/test-pre-commit-lock.sh
 	@: >.testmon/full-suite
-	./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) -e FULL_SUITE_DIGEST="$$(python3 -B scripts/hook_selection.py digest)" oneoff sh -c 'pytest -n auto --testmon-noselect; status=$$?; if [ $$status -le 1 ]; then echo "$$FULL_SUITE_DIGEST" >/testmon/full-suite; fi; exit $$status'
+	$(LOCKED) ./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) -e FULL_SUITE_DIGEST="$$(python3 -B scripts/hook_selection.py digest)" oneoff sh -c 'pytest -n auto --testmon-noselect; status=$$?; if [ $$status -le 1 ]; then echo "$$FULL_SUITE_DIGEST" >/testmon/full-suite; fi; exit $$status'
 
 comma := ,
 test-files: ## The listed test files (TESTS=tests/a.py,tests/b.py): the hook runs the readers of a staged data file
 	@test -n "$(TESTS)" || { echo "TESTS=tests/a.py,tests/b.py is required" >&2; exit 2; }
-	./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) oneoff pytest -n auto $(subst $(comma), ,$(TESTS))
+	$(LOCKED) ./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) oneoff pytest -n auto $(subst $(comma), ,$(TESTS))
 
 .PHONY: testmon-dir
 test test-smoke test-changed test-recorded test-files check-preflight: | testmon-dir
@@ -307,10 +312,10 @@ web-test: ## UI tests; second timezone in CI or when frontend/src changed
 
 .PHONY: web-test-once web-test-timezone
 web-test-once:
-	$(WEB) sh -c '$(WEB_DEPS) && npm run test:local'
+	$(LOCKED) $(WEB) sh -c '$(WEB_DEPS) && npm run test:local'
 
 web-test-timezone:
-	$(WEB) sh -c '$(WEB_DEPS) && npm run test:timezone'
+	$(LOCKED) $(WEB) sh -c '$(WEB_DEPS) && npm run test:timezone'
 
 web-types: ## Regenerate the UI's TypeScript types from spec/
 	$(WEB) sh -c '$(WEB_DEPS) && npm run types'
@@ -331,7 +336,7 @@ web-e2e: ## e2e smoke (Playwright) on the built UI and the seeded local stack; b
 	$(E2E_USERS) cleanup
 	$(E2E_USERS) prepare --numbered-offering
 	./scripts/task-compose up -d e2e-worker
-	./scripts/task-compose run --rm e2e; rc=$$?; $(E2E_USERS) cleanup || rc=1; ./scripts/task-compose rm -sf web-preview e2e-worker >/dev/null 2>&1; exit $$rc
+	$(LOCKED) ./scripts/task-compose run --rm e2e; rc=$$?; $(E2E_USERS) cleanup || rc=1; ./scripts/task-compose rm -sf web-preview e2e-worker >/dev/null 2>&1; exit $$rc
 
 web-shots: ## Capture Ledger UI reference PNGs at 1280 and 1600 px
 	rm -rf frontend/.shots
@@ -341,7 +346,7 @@ web-shots: ## Capture Ledger UI reference PNGs at 1280 and 1600 px
 	mkdir -p frontend/.e2e
 	$(E2E_USERS) cleanup
 	$(E2E_USERS) prepare
-	./scripts/task-compose run --rm e2e npx playwright test -c playwright.shots.config.ts; rc=$$?; $(E2E_USERS) cleanup || rc=1; ./scripts/task-compose rm -sf web-preview >/dev/null 2>&1; exit $$rc
+	$(LOCKED) ./scripts/task-compose run --rm e2e npx playwright test -c playwright.shots.config.ts; rc=$$?; $(E2E_USERS) cleanup || rc=1; ./scripts/task-compose rm -sf web-preview >/dev/null 2>&1; exit $$rc
 
 spec-verify-upstream: ## Re-fetch the spec blob SHAs from GitHub and compare with spec/README.md (network; not in make test)
 	python3 scripts/spec-verify-upstream.py
@@ -372,7 +377,7 @@ show-task: ## Show this task's issue (title, body, labels, comments) as JSON
 
 .PHONY: check-preflight
 check-preflight: migrate
-	./scripts/task-compose run --rm oneoff pytest -q tests/test_migrations.py::test_alembic_upgrade_head_on_clean_database tests/test_migrations.py::test_cloned_test_databases_are_at_the_current_head tests/test_constraints.py tests/test_worker_schema.py
+	$(LOCKED) ./scripts/task-compose run --rm oneoff pytest -q tests/test_migrations.py::test_alembic_upgrade_head_on_clean_database tests/test_migrations.py::test_cloned_test_databases_are_at_the_current_head tests/test_constraints.py tests/test_worker_schema.py
 
 # The commit was tested by the pre-commit hook: deploying does not test again.
 deployed: ## Show the last deploy recorded by scripts/deploy.sh and the commits not deployed yet
@@ -408,9 +413,9 @@ remote: ## Run a one-off command against the deployed image on the VPS: make rem
 
 progress: ## Write .progress/PROGRESS.md + status.json (scope.yaml vs the code; reruns the full suite, over 10 min)
 	@mkdir -p .progress
-	./scripts/task-compose run --rm -T app python -m tests.progress_collect < docs/progress/scope.yaml > .progress/backend.json
+	$(LOCKED) ./scripts/task-compose run --rm -T app python -m tests.progress_collect < docs/progress/scope.yaml > .progress/backend.json
 	./scripts/task-compose run --rm --no-deps -T web-offline sh -c '$(WEB_DEPS) && node scripts/ui-markers.mjs' > .progress/ui.json
-	./scripts/task-compose run --rm --no-deps -T web-offline sh -c '$(WEB_DEPS) && npm run types >&2 && UI_TESTED_OUT=/tmp/ui-tested.json npx vitest run >&2 && cat /tmp/ui-tested.json' > .progress/ui-tested.json
+	$(LOCKED) ./scripts/task-compose run --rm --no-deps -T web-offline sh -c '$(WEB_DEPS) && npm run types >&2 && UI_TESTED_OUT=/tmp/ui-tested.json npx vitest run >&2 && cat /tmp/ui-tested.json' > .progress/ui-tested.json
 	@python3 scripts/progress/generate.py; result=$$?; echo "Progress report: .progress/PROGRESS.md (.progress/status.json)"; exit $$result
 
 docs: ## Regenerate docs/api/ and docs/db/ (app.openapi() vs spec/, pg_catalog at migration head)
@@ -438,11 +443,11 @@ DEPLOY_SUITES := scripts/test_deploy_rollback.py
 RUNTIME_SUITES := $(filter-out scripts/test_telemetry_database.py $(DEPLOY_SUITES),$(sort $(wildcard scripts/test_*.py)))
 
 runtime-check: ## The harness script tests (every scripts/test_*.py but the deploy suite, in parallel parts), no Docker or secrets; the commit hook runs them when scripts/, Makefile, .claude/ or .codex/ change
-	python3 -B scripts/run_suites.py $(RUNTIME_SUITES)
+	$(LOCKED) python3 -B scripts/run_suites.py $(RUNTIME_SUITES)
 
 .PHONY: deploy-check
 deploy-check: ## The deploy script's tests (scripts/test_deploy_rollback.py), no Docker or network; the commit hook runs them when the deploy or smoke scripts, the compose files or the Makefile change
-	python3 -B scripts/run_suites.py $(DEPLOY_SUITES)
+	$(LOCKED) python3 -B scripts/run_suites.py $(DEPLOY_SUITES)
 
 .PHONY: telemetry-collect telemetry-probe telemetry-watch
 telemetry-watch: export BSS_COLLECT_TASK = $(TASK)

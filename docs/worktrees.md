@@ -76,6 +76,10 @@ background or a persistent session and read the exit status from the task itself
 through a pipe (a pipe hides the status, which hid a failed commit once); `make commit` prints
 its final status line even when the hook output is long. If a call was killed, run
 `make review-task` before trying again, and never start a second copy while one runs.
+A heavy test target (`make test`, `make test-files`, `make web-test`, `make runtime-check`
+and the others) queues behind any other task's test run on the workstation
+(`scripts/with-test-lock` prints `test lock: ... waiting`), so it may wait long before it
+starts: run it in the background too, and do not start a second copy.
 
 **After `make sync-task` pulls in UI changes**, run `make web-install` before committing, or
 the hook stops at `web-lint`. If `master` moves while the hook runs, `create-pr` asks for

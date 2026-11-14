@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# scripts/with-test-lock <command> [args...]: run a heavy test command one at a time on the
+# workstation (#348). Every heavy test target of the Makefile runs through it, started by
+# hand or by the commit hook, in any worktree: they share the hook's repository-wide lock
+# (pre-commit.lock in the common git directory), so a second run queues instead of doubling
+# the load (12 UI tests timed out beside another worktree's backend suite, 2026-11-14).
+#
+# BSS_TEST_LOCK_HELD=1 means the caller already holds the lock (the hook, or an outer locked
+# command): the command runs at once. It is needed because a second open of the lock file
+# blocks even in the same process tree; without it the hook would deadlock on its own
+# `make test-smoke`. BSS_TEST_LOCK_WAIT: seconds to wait for a busy lock (default 3600).
+set -euo pipefail
+
+if (($# == 0)); then
+  echo 'usage: scripts/with-test-lock <command> [args...]' >&2
+  exit 2
+fi
+
+if [[ "${BSS_TEST_LOCK_HELD:-}" == 1 ]]; then
+  exec "$@"
+fi
+
+lock="$(git rev-parse --path-format=absolute --git-common-dir)/pre-commit.lock"
+wait="${BSS_TEST_LOCK_WAIT:-3600}"
+# The lock lives on this shell's descriptor 9 and ends with it, killed or not. The command
+# runs without the descriptor, so a process it leaves behind cannot keep the lock.
+exec 9>>"${lock}"
+if ! flock -n 9; then
+  echo 'test lock: another test run is in progress - waiting' >&2
+  if ! flock -w "${wait}" 9; then
+    echo "test lock: another test run still holds ${lock} after ${wait} s - not running: $*" >&2
+    exit 1
+  fi
+fi
+
+export BSS_TEST_LOCK_HELD=1
+status=0
+"$@" 9>&- || status=$?
+exit "${status}"
