@@ -100,3 +100,7 @@ offsets 0 and 40, blocked, ok at 0 and 5000, unfiltered at 0 and 5000; due dates
 | - | `run_payment_due_dates` (page of cycles) | 145 ms | 43 ms | Not flagged by #327 (its tests list few runs). The run ids now restrict `billing_run` as well: the planner hashed all 70k rows, prepaid command runs included. The rest is reading the ~12k bills of 20 runs; storing the term on the run would be a data-model change and is not proposed for this cost |
 
 The sweep's cadence list now includes `run_member_total` (once per run).
+
+Shape 35 was re-checked after #310 (migration 0077 adds `billing_run_account (billing_account_id)`):
+the status pages still read `billing_run_account_unresolved` (failed/blocked 0.6-1.0 ms against
+30-65 ms for the old text comparison), with identical results on all seven pages.
