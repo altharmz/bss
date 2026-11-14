@@ -42,7 +42,16 @@ in the invoking worktree):
 - a Markdown-only commit (outside `spec/` and `scripts/docs/`) skips every check;
 - takes a repository-wide `flock` (`pre-commit.lock` in the common git directory), so two
   sessions never run two suites at once (that took 12.5 minutes instead of 5 and broke the
-  timing-sensitive worker tests); a waiter checks the tree again, 30 minutes at most;
+  timing-sensitive worker tests); a waiter checks the tree again, 60 minutes at most
+  (`PRE_COMMIT_LOCK_WAIT`). Every heavy test target takes the same lock through
+  `scripts/with-test-lock` when run by hand (#348: a UI run beside another worktree's
+  backend suite timed out 12 tests): the backend pytest targets, `runtime-check`,
+  `deploy-check`, `web-test-once`, `web-test-timezone`, `web-e2e`, `web-shots` and
+  `progress`; aggregates such as `make check` lock stage by stage, and light targets (lint,
+  format, docs, builds, lifecycle) never wait. The hook exports `BSS_TEST_LOCK_HELD=1`, so
+  the targets it runs pass straight through (a second open of the lock would deadlock);
+  the wrapper waits up to `BSS_TEST_LOCK_WAIT` seconds (3600), then fails without running.
+  `scripts/test_test_lock.py` refuses a heavy recipe line without `$(LOCKED)`;
 - `make lint`, then the test runs `scripts/hook_selection.py` plans for the staged files
   ([below](#tests-in-the-hook-smoke-plus-affected)): `make test-smoke` + `make test-changed`,
   plus `make test-files` for the tests that read a staged data file (`frontend/src`,
@@ -175,6 +184,15 @@ code runs as a script child, so the guard keeps blocking manual `docker volume`,
 and `system` cleanup by agents. `make clean-tasks` (list by default, `CONFIRM=1` to remove)
 applies the same function to earlier leftovers of finished tasks and reports abandoned work
 as kept.
+
+## Help output is grouped
+
+Every help comment in the `Makefile` starts with a group tag (`target: ## [group] text`,
+#307). `make help` shows the daily groups (task, stack, test, ui, docs, mcp);
+`make help GROUP=<name>` shows one of the others (loadtest, telemetry, ops) or `all`, and
+`make help-ops` shows the human-only deploy and VPS targets. The grouping only changes the
+listing and restricts nothing. `scripts/test_make_help.py` fails when a target has no valid
+tag, so a new target cannot be left out of the list.
 
 ## Script modules
 

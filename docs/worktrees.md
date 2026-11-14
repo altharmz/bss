@@ -9,7 +9,7 @@ board work). Never switch branches in a task worktree or touch sibling worktrees
 ## Normal agent workflow
 
 Every regular operation has a Make target; use it instead of the equivalent raw Git, GitHub
-or Docker commands (`make help` lists them). Targets validate task identity, run the hooks
+or Docker commands (`make help` lists the common ones, `make help GROUP=all` every target). Targets validate task identity, run the hooks
 and record telemetry; raw commands skip that. Nothing blocks you from using a plain command
 where no target exists (source reading, `git diff`, `git log`, `rg`). Run each target as a
 standalone command, with its required variables.
@@ -76,6 +76,10 @@ background or a persistent session and read the exit status from the task itself
 through a pipe (a pipe hides the status, which hid a failed commit once); `make commit` prints
 its final status line even when the hook output is long. If a call was killed, run
 `make review-task` before trying again, and never start a second copy while one runs.
+A heavy test target (`make test`, `make test-files`, `make web-test`, `make runtime-check`
+and the others) queues behind any other task's test run on the workstation
+(`scripts/with-test-lock` prints `test lock: ... waiting`), so it may wait long before it
+starts: run it in the background too, and do not start a second copy.
 
 **After `make sync-task` pulls in UI changes**, run `make web-install` before committing, or
 the hook stops at `web-lint`. If `master` moves while the hook runs, `create-pr` asks for
