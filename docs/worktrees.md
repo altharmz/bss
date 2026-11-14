@@ -41,7 +41,10 @@ standalone command, with its required variables.
    selects the next eligible Ready issue and a free slot, claims `agent:<client>`, moves the
    issue to Doing, creates the branch and worktree and records the session. Use exactly the
    returned issue, branch, slot and worktree; do not inspect the board or claim items first.
-   If it fails or finds nothing, stop and report.
+   If it fails or finds nothing, stop and report. If it succeeds, the claimed issue is
+   approved work: report the issue, slot and worktree and carry on with steps 2-5 without
+   asking the human whether to start. Stop only at a human gate (below), a `needs-human`
+   decision or a data-model/large design change that needs a plan first.
 
    **A specific issue:** only when the human names it in the current conversation, add
    `ISSUE=<n> HUMAN_APPROVAL=<n>`. Never supply the marker on your own initiative. Only that
