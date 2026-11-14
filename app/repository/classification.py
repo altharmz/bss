@@ -69,6 +69,28 @@ def memberships(
     )
 
 
+def memberships_of(
+    conn: psycopg.Connection, kind: Membership, uids: list[UUID]
+) -> dict[UUID, list[Row]]:
+    """`memberships` (the categories) of a page of catalogs or offerings in one query
+    (#303), each list in the same `m.created_at, t.id` order."""
+    if not uids:
+        return {}
+    owner = "catalog_id" if kind == "catalog" else "offering_id"
+    groups: dict[UUID, list[Row]] = {uid: [] for uid in uids}
+    rows = fetch_all(
+        conn,
+        sql.SQL(
+            "SELECT m.{} AS member_of, t.* FROM {} m JOIN category t ON t.id = m.category_id"
+            " WHERE m.{} = ANY(%s) ORDER BY m.created_at, t.id"
+        ).format(sql.Identifier(owner), sql.Identifier(f"{kind}_category"), sql.Identifier(owner)),
+        (list(set(uids)),),
+    )
+    for row in rows:
+        groups[row.pop("member_of")].append(row)
+    return groups
+
+
 def replace(
     conn: psycopg.Connection, kind: Membership, uid: UUID, ids: list[UUID], *, reverse: bool = False
 ) -> None:

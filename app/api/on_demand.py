@@ -31,7 +31,7 @@ from app.api.errors import conflict, not_found, unprocessable
 from app.api.tmfjson import TmfJSONResponse
 from app.events import emit
 from app.repository import parties
-from app.repository._sql import fetch_one, jsonb, returning, select_page
+from app.repository._sql import fetch_one, jsonb, returning, rows_by_id, select_page
 
 router = APIRouter(prefix=BASE)
 # Documents to us: stored as sent, checked against the spec.
@@ -53,7 +53,17 @@ class DemandCreate(documents_model("DemandDocuments", "TMF678", DOCUMENTS)):
     description: str | None = None
 
 
+def demand_bodies(conn, rows):
+    """The bodies of a page of requests, their billing accounts read at once (#303)."""
+    accounts = rows_by_id(conn, "billing_account", [row["billing_account_id"] for row in rows])
+    return [_demand_body(row, accounts[row["billing_account_id"]]) for row in rows]
+
+
 def demand_body(conn, row):
+    return demand_bodies(conn, [row])[0]
+
+
+def _demand_body(row, account):
     return without_nulls(
         {
             "id": str(row["id"]),
@@ -63,9 +73,7 @@ def demand_body(conn, row):
             "name": row["name"],
             "description": row["description"],
             "lastUpdate": utc(row["updated_at"]),
-            "billingAccount": account_ref(
-                parties.get_billing_account(conn, row["billing_account_id"])
-            ),
+            "billingAccount": account_ref(account),
             "customerBill": ref(
                 "CustomerBill", bill_href(row["customer_bill_id"]), row["customer_bill_id"]
             )
@@ -94,7 +102,7 @@ def list_bill_demands(request: Request, tx: Tx) -> TmfJSONResponse:
             offset=query.offset,
             limit=query.limit,
         )
-        items = [demand_body(conn, r) for r in rows]
+        items = demand_bodies(conn, rows)
     return listing.list_response(items, more, query)
 
 

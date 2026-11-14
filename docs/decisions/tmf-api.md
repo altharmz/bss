@@ -1125,6 +1125,22 @@ authentication and pool checks. It covers full pages, multiple products/tax line
 payments, empty pages, stored versus fallback terms, and single-item response equality.
 No contract change or migration is needed.
 
+## Batched message, offering, account and on-demand bodies (2026-11-14, #303)
+
+`productOffering` loads specifications, prices (`ORDER BY created_at, id`) and category
+memberships (`ORDER BY m.created_at, t.id`, one join for the page) once per page.
+`financialAccount` loads owners, linked accounts (one union, creation order) and
+balances (the linked billing accounts, then `account_balances` for all of them) once per
+page; balances are still summed per currency in currency order. `partyAccount` and
+`settlementAccount` load owners and financial accounts once per page.
+`customerBillOnDemand` loads billing accounts once per page. `communicationMessage`
+needs no related rows. Single-item reads, write responses and event bodies use the
+same loaders with one row; no response attribute or nested array order changes.
+
+`tests/test_list_queries.py` pins equal statement counts for pages of 1 and 100 and
+compares full pages with single-item reads (and creation responses where nothing
+changed since).
+
 ## Lists without counts (2026-11-10, #312)
 
 Decided by the human: no list counts its rows. A deliberate deviation from TMF630's
