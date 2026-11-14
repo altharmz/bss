@@ -42,6 +42,7 @@ The outcome of one billing account in one billing run (ours): ok, failed (with t
 
 | Name | Definition | Backs a constraint |
 |---|---|---|
+| `billing_run_account_billing_account_id_idx` | `CREATE INDEX billing_run_account_billing_account_id_idx ON billing_run_account USING btree (billing_account_id)` | no |
 | `billing_run_account_pkey` | `CREATE UNIQUE INDEX billing_run_account_pkey ON billing_run_account USING btree (run_id, billing_account_id)` | yes |
 | `billing_run_account_unresolved` | `CREATE INDEX billing_run_account_unresolved ON billing_run_account USING btree (billing_account_id, run_id) WHERE (status <> 'ok'::billing_run_account_status)` | no |
 

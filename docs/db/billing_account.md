@@ -64,6 +64,7 @@ SID BillingAccount (TMF666 billingAccount, served as the BssBillingAccount exten
 
 | Name | Definition | Backs a constraint |
 |---|---|---|
+| `billing_account_auto_topup_idx` | `CREATE INDEX billing_account_auto_topup_idx ON billing_account USING btree (id) WHERE auto_topup_enabled` | no |
 | `billing_account_created_at_id_idx` | `CREATE INDEX billing_account_created_at_id_idx ON billing_account USING btree (created_at, id)` | no |
 | `billing_account_customer_id_idx` | `CREATE INDEX billing_account_customer_id_idx ON billing_account USING btree (customer_id)` | no |
 | `billing_account_cycle_specification_idx` | `CREATE INDEX billing_account_cycle_specification_idx ON billing_account USING btree (cycle_specification_id)` | no |

@@ -44,6 +44,7 @@ A saved card as a gateway token (TMF670 tokenizedCard). The BSS never receives o
 | Name | Definition | Backs a constraint |
 |---|---|---|
 | `payment_method_account_idx` | `CREATE INDEX payment_method_account_idx ON payment_method USING btree (billing_account_id)` | no |
+| `payment_method_created_at_id_idx` | `CREATE INDEX payment_method_created_at_id_idx ON payment_method USING btree (created_at, id)` | no |
 | `payment_method_one_default` | `CREATE UNIQUE INDEX payment_method_one_default ON payment_method USING btree (billing_account_id) WHERE is_default` | no |
 | `payment_method_pkey` | `CREATE UNIQUE INDEX payment_method_pkey ON payment_method USING btree (id)` | yes |
 | `payment_method_token_once` | `CREATE UNIQUE INDEX payment_method_token_once ON payment_method USING btree (billing_account_id, gateway_token) WHERE (status = 'active'::text)` | no |

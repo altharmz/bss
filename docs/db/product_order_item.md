@@ -64,6 +64,7 @@ SID ProductOrderItem (TMF622 productOrderItem): one add or delete of one product
 | `product_order_item_pkey` | `CREATE UNIQUE INDEX product_order_item_pkey ON product_order_item USING btree (id)` | yes |
 | `product_order_item_position_unique` | `CREATE UNIQUE INDEX product_order_item_position_unique ON product_order_item USING btree (product_order_id, "position")` | yes |
 | `product_order_item_product_id_idx` | `CREATE INDEX product_order_item_product_id_idx ON product_order_item USING btree (product_id)` | no |
+| `product_order_item_product_offering_id_idx` | `CREATE INDEX product_order_item_product_offering_id_idx ON product_order_item USING btree (product_offering_id)` | no |
 | `product_order_item_product_order_id_item_id_key` | `CREATE UNIQUE INDEX product_order_item_product_order_id_item_id_key ON product_order_item USING btree (product_order_id, item_id)` | yes |
 
 ## Triggers

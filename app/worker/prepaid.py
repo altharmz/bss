@@ -107,7 +107,7 @@ def _renewal_blocked(conn, cmd, today) -> str | None:
         " OR p.termination_date <= %s AS ended,"
         " a.state <> 'Active' OR (p.manually_suspended AND NOT p.lifecycle_suspended) AS blocked"
         " FROM funded_interval f JOIN product p ON p.id = f.product_id"
-        " JOIN billing_account a ON a.id = f.billing_account_id WHERE f.id::text = %s",
+        " JOIN billing_account a ON a.id = f.billing_account_id WHERE f.id = %s::uuid",
         (today, cmd["request"].get("previous_interval_id")),
     )
     if row is None:
@@ -115,7 +115,7 @@ def _renewal_blocked(conn, cmd, today) -> str | None:
     if not row["ended"] and not row["blocked"]:
         product = fetch_one(
             conn,
-            "SELECT product_id FROM funded_interval WHERE id::text = %s",
+            "SELECT product_id FROM funded_interval WHERE id = %s::uuid",
             (cmd["request"].get("previous_interval_id"),),
         )
         if product is not None and network.waiting_for_profile(conn, product["product_id"]):
@@ -162,7 +162,7 @@ def process_commands(
     candidates = fetch_all(
         conn,
         "SELECT c.* FROM prepaid_command c LEFT JOIN funded_interval f"
-        " ON f.id::text = c.request->>'previous_interval_id'"
+        " ON f.id = (c.request->>'previous_interval_id')::uuid"
         " LEFT JOIN product p ON p.id = f.product_id"
         " LEFT JOIN LATERAL (SELECT observed_at FROM prepaid_funding_shortfall"
         " WHERE command_id = c.id ORDER BY observed_at DESC LIMIT 1) s ON true"

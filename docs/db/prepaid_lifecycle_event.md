@@ -45,3 +45,4 @@ A lifecycle transition the worker took or tried for a product on a business date
 | `prepaid_lifecycle_event_account_idx` | `CREATE INDEX prepaid_lifecycle_event_account_idx ON prepaid_lifecycle_event USING btree (billing_account_id, created_at)` | no |
 | `prepaid_lifecycle_event_pkey` | `CREATE UNIQUE INDEX prepaid_lifecycle_event_pkey ON prepaid_lifecycle_event USING btree (id)` | yes |
 | `prepaid_lifecycle_event_product_id_action_business_date_key` | `CREATE UNIQUE INDEX prepaid_lifecycle_event_product_id_action_business_date_key ON prepaid_lifecycle_event USING btree (product_id, action, business_date)` | yes |
+| `prepaid_lifecycle_event_product_order_id_idx` | `CREATE INDEX prepaid_lifecycle_event_product_order_id_idx ON prepaid_lifecycle_event USING btree (product_order_id) WHERE (product_order_id IS NOT NULL)` | no |

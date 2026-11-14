@@ -65,9 +65,11 @@ A number port: in (the customer brings a number, submitted to the carrier by the
 
 | Name | Definition | Backs a constraint |
 |---|---|---|
+| `port_request_billing_account_id_idx` | `CREATE INDEX port_request_billing_account_id_idx ON port_request USING btree (billing_account_id) WHERE (billing_account_id IS NOT NULL)` | no |
 | `port_request_in_open_key` | `CREATE UNIQUE INDEX port_request_in_open_key ON port_request USING btree (subscriber_number_id) WHERE ((direction = 'in'::text) AND (state = ANY (ARRAY['submitted'::text, 'pending'::text, 'rejected'::text])))` | no |
 | `port_request_inventory_idx` | `CREATE INDEX port_request_inventory_idx ON port_request USING btree (subscriber_number_id) WHERE (subscriber_number_id IS NOT NULL)` | no |
 | `port_request_number_idx` | `CREATE INDEX port_request_number_idx ON port_request USING btree (number_value)` | no |
 | `port_request_out_reference_key` | `CREATE UNIQUE INDEX port_request_out_reference_key ON port_request USING btree (carrier_reference) WHERE (direction = 'out'::text)` | no |
 | `port_request_pkey` | `CREATE UNIQUE INDEX port_request_pkey ON port_request USING btree (id)` | yes |
+| `port_request_product_order_id_idx` | `CREATE INDEX port_request_product_order_id_idx ON port_request USING btree (product_order_id) WHERE (product_order_id IS NOT NULL)` | no |
 | `port_request_work_idx` | `CREATE INDEX port_request_work_idx ON port_request USING btree (direction, state)` | no |
