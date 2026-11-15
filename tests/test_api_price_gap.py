@@ -11,6 +11,7 @@ from datetime import date, datetime, timedelta
 
 import pytest
 
+from app.api import catalog as catalog_api
 from tests import apidata
 from tests.apidata import CATALOG
 from tests.timeline import START, iso, midnight
@@ -59,6 +60,21 @@ def test_ending_the_price_of_a_live_product_is_refused(api, live):
         " exactly at the new end"
     )
     assert "endDateTime" not in api.get(price_href).json()["validFor"]  # unchanged
+
+
+def test_the_refusal_counts_unpriced_products_only_up_to_the_cap(api, live, monkeypatch):
+    """#331: the refusal does not count every product of a large offering; beyond
+    GAP_COUNT_CAP it says "more than N", up to it the exact number."""
+    offering, account, _, price_href = live
+    monkeypatch.setattr(catalog_api, "GAP_COUNT_CAP", 2)
+    order_product(api, account, offering, date(2026, 10, 2))
+    exact = end_price(api, price_href, midnight(date(2026, 11, 1)))
+    assert exact.status_code == 409
+    assert "would leave 2 product(s) of this offering" in exact.json()["message"]
+    order_product(api, account, offering, date(2026, 10, 2))
+    capped = end_price(api, price_href, midnight(date(2026, 11, 1)))
+    assert capped.status_code == 409
+    assert "would leave more than 2 product(s) of this offering" in capped.json()["message"]
 
 
 @pytest.mark.parametrize(
