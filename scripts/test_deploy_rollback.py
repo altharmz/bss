@@ -257,6 +257,8 @@ class AutomaticRollback(DeployHarness):
         self.assertNotCalled(r"> CURRENT\.tmp")
         self.assertNotCalled(r"rm -f PREVIOUS")
         self.assertIn("ROLLBACK REFUSED", self.out)
+        self.assertIn("would lose data", self.out)
+        self.assertNotIn("did not finish within", self.out)
         self.assertIn("docs/operations.md", self.out)
 
     def test_4_migration_failure_changes_nothing(self):
@@ -591,6 +593,8 @@ class RollbackDrill(DeployHarness):
         self.assertNotCalled(rf"TAG={OLD} .* up -d")
         self.assertNotCalled(r"> CURRENT\.tmp|rm -f PREVIOUS")
         self.assertIn("ROLLBACK REFUSED", self.out)
+        self.assertIn("did not finish within 120s and was rolled back", self.out)
+        self.assertNotIn("would lose data", self.out)
 
     def test_manual_rollback_without_the_drill_passes_no_drill_environment(self):
         rules = [(r"cat bss/DEPLOYED", 0, f"{OLD}full")]

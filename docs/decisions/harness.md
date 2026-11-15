@@ -202,6 +202,21 @@ and `system` cleanup by agents. `make clean-tasks` (list by default, `CONFIRM=1`
 applies the same function to earlier leftovers of finished tasks and reports abandoned work
 as kept.
 
+## Finish-task removes the task's load-test stack (2026-11-15, #311)
+
+A task that ran `make loadtest-*` could not be finished while any `lt-*` container existed:
+the Compose ownership check accepted only the dev services created from `compose.yaml` and
+`compose.override.yaml`, and the plain `down` leaves the load-test containers as orphans.
+`scripts/task_finish.py` now also accepts the seven `lt-*` services of
+`compose.loadtest.yaml`, but only with exactly that file added to the same worktree's
+two (project, working directory and file list still match exactly; a dev service with the
+load-test file list is refused too). When any is present, the removal runs
+`scripts/task-compose --loadtest --profile '*' down`, which removes both stacks, one-off
+containers included, and keeps volumes for `remove_leftovers` (which already deleted
+`lt_pgdata`). No direct `docker rm`. The load-test services join the same `lab` network, so
+the network check needed no change. Anything else, such as another project, worktree or
+compose file, still stops the finish with the runtime preserved.
+
 ## Help output is grouped
 
 Every help comment in the `Makefile` starts with a group tag (`target: ## [group] text`,
@@ -225,6 +240,22 @@ Not merged, on purpose: `task_runtime.git` (text, the caller's directory),
 and `task_repo.run`. They differ in error type and return value, every caller depends on
 those, and one helper with flags for each difference would be harder to read than four
 short functions.
+
+## One entry point for lifecycle targets
+
+The lifecycle targets (start, commit, PR, merge, finish, quality and board targets, #309) all
+run `scripts/task.py <target>`. Its table `TARGETS` names each target's script, the arguments
+it gets and the make variables it accepts. The Makefile passes only the names of the variables
+given on the make command line (`BSS_MAKE_VARS`), never their values; `task.py` refuses a name
+the target does not know (`VERBOSE` and `BSS_*` are always allowed), so `make commit
+MESAGE=...` fails instead of committing without the intended message. Values keep travelling
+as exported environment variables, because pasting make variables into a recipe breaks on
+quotes and lets text become shell. Variables from the process environment are not checked:
+they are not in `BSS_MAKE_VARS`. `finish-task` runs the `task.py` next to its Makefile
+(`HARNESS_DIR`), so `make -f /abs/worktree/Makefile finish-task` keeps working without the
+former `python -c` one-liner. The scripts stay runnable directly, which `task_runtime.rerun`
+relies on. `FILES` accepts a plain space-separated list besides a JSON array; `FILES_FILE` one
+name per line or a JSON array.
 
 ## Stale primary scripts
 

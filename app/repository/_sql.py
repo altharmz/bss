@@ -124,6 +124,39 @@ def _enum_labels(conn: psycopg.Connection, enum: str) -> frozenset[str] | None:
     return _ENUM_LABELS[key] or None
 
 
+def conditions(
+    conn: psycopg.Connection, table: str, where: dict[str, Any]
+) -> tuple[list[sql.Composable], list[Any]] | None:
+    """The `column = value` conditions of a list filter on `table`, each compared with the
+    column's own type so its indexes apply (#286, #311); None when a value can match no
+    row (a string that is not a label of the column's enum), so the caller answers an
+    empty page without a query. A value may also be IS_NULL or NOT_NULL. A string for a
+    column of `table` that is neither text nor an enum keeps the `column::text` match; a
+    column `table` does not have (a derived one) is compared as text.
+    """
+    conds, params = [], []
+    types = None
+    for column, value in where.items():
+        ident = sql.Identifier(column)
+        if value is IS_NULL:
+            conds.append(sql.SQL("{} IS NULL").format(ident))
+        elif value is NOT_NULL:
+            conds.append(sql.SQL("{} IS NOT NULL").format(ident))
+        elif isinstance(value, str):
+            types = types if types is not None else _column_types(conn, table)
+            data_type, udt = types.get(column, ("text", "text"))
+            labels = _enum_labels(conn, udt) if data_type == "USER-DEFINED" else None
+            if labels is not None and value not in labels:
+                return None
+            typed = labels is not None or data_type in TEXT_TYPES
+            conds.append(sql.SQL("{} = %s" if typed else "{}::text = %s").format(ident))
+            params.append(value)
+        else:
+            conds.append(sql.SQL("{} = %s").format(ident))
+            params.append(value)
+    return conds, params
+
+
 def select_page(
     conn: psycopg.Connection,
     table: str,
@@ -145,26 +178,10 @@ def select_page(
     that is not a label matches nothing, and the answer is an empty page with no query. A
     string for a column that is neither text nor an enum keeps the `column::text` match.
     """
-    conds, params = [], []
-    types = None
-    for column, value in where.items():
-        ident = sql.Identifier(column)
-        if value is IS_NULL:
-            conds.append(sql.SQL("{} IS NULL").format(ident))
-        elif value is NOT_NULL:
-            conds.append(sql.SQL("{} IS NOT NULL").format(ident))
-        elif isinstance(value, str):
-            types = types if types is not None else _column_types(conn, table)
-            data_type, udt = types.get(column, ("text", "text"))
-            labels = _enum_labels(conn, udt) if data_type == "USER-DEFINED" else None
-            if labels is not None and value not in labels:
-                return [], False
-            typed = labels is not None or data_type in TEXT_TYPES
-            conds.append(sql.SQL("{} = %s" if typed else "{}::text = %s").format(ident))
-            params.append(value)
-        else:
-            conds.append(sql.SQL("{} = %s").format(ident))
-            params.append(value)
+    filters = conditions(conn, table, where)
+    if filters is None:
+        return [], False
+    conds, params = filters
     clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conds) if conds else sql.SQL("")
     ident = sql.Identifier(table)
     rows = fetch_all(

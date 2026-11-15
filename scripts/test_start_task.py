@@ -97,6 +97,7 @@ class StartupTests(unittest.TestCase):
             "task_quality.py",
             "board_admin.py",
             "install-hooks.py",
+            "task.py",
         ):
             shutil.copy2(SCRIPTS / name, self.primary / "scripts" / name)
         shutil.copy2(SCRIPTS.parent / "Makefile", self.primary / "Makefile")

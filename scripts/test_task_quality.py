@@ -17,6 +17,7 @@ class QualityTests(unittest.TestCase):
     def setUp(self):
         self.runtime_setup()
         shutil.copy2(SCRIPTS / "task_quality.py", self.work / "scripts/task_quality.py")
+        shutil.copy2(SCRIPTS / "task.py", self.work / "scripts/task.py")
         shutil.copy2(SCRIPTS.parent / "Makefile", self.work / "Makefile")
         child_make = self.bin / "make"
         child_make.write_text('#!/bin/sh\necho "ran-$1"\n[ "$1" != "$BSS_TEST_FAIL_TARGET" ]\n')
