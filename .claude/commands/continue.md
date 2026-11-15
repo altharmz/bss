@@ -21,4 +21,6 @@ unrelated Ready work. The full workflow is in
 4. **If startup fails or finds nothing**, stop and report the result.
 
 "Deliver the next task" means step 3 directly, without the checks above. Report the
-returned issue, slot and worktree, then work.
+returned issue, slot and worktree, then work. In every case a successful `make start-task`
+is the go-ahead: do not ask the human whether to start; carry on through delivery and stop
+only at a human gate.
