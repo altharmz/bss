@@ -95,6 +95,7 @@ class StartupTests(unittest.TestCase):
             "task_pr.py",
             "task_git.py",
             "task_quality.py",
+            "board_admin.py",
             "install-hooks.py",
         ):
             shutil.copy2(SCRIPTS / name, self.primary / "scripts" / name)
@@ -143,12 +144,18 @@ class StartupTests(unittest.TestCase):
             "  sys.exit(1)\n"
             " row = next(r for r in rows if str(r['content']['number']) == args[2])\n"
             " labels = row['content']['labels']['nodes']\n"
-            " if '--add-label' in args: labels.append({'name': args[-1]})\n"
-            " else: labels[:] = [n for n in labels if n['name'] != args[-1]]\n"
+            " for flag, value in zip(args, args[1:]):\n"
+            "  if flag == '--remove-label':\n"
+            "   labels[:] = [n for n in labels if n['name'] != value]\n"
+            "  if flag == '--add-label': labels.append({'name': value})\n"
             " row['content']['labels']['totalCount'] = len(labels)\n"
             " with open(board_path, 'w') as output: json.dump(board, output)\n"
             " sys.exit(0)\n"
+            "if args[:2] == ['issue', 'comment']:\n"
+            " sys.exit(0)\n"
             "if args[:2] == ['issue', 'view']:\n"
+            " if os.path.exists(board_path + '.hidden'):\n"
+            "  with open(board_path + '.hidden') as source: rows.append(json.load(source))\n"
             " row = next(r for r in rows if str(r['content']['number']) == args[2])\n"
             " c = row['content']\n"
             " print(json.dumps({'number': c['number'], 'state': c['state'], 'title': c['title'],\n"
@@ -179,7 +186,12 @@ class StartupTests(unittest.TestCase):
             " for page in board:\n"
             "  nodes = page['node']['items']['nodes']\n"
             "  if row in nodes: nodes.remove(row)\n"
-            " board[0]['node']['items']['nodes'].insert(0, row)\n"
+            " after = next((a[6:] for a in args if a.startswith('after=')), None)\n"
+            " if after is None: board[0]['node']['items']['nodes'].insert(0, row)\n"
+            " for page in board if after else []:\n"
+            "  nodes = page['node']['items']['nodes']\n"
+            "  ids = [r['id'] for r in nodes]\n"
+            "  if after in ids: nodes.insert(ids.index(after) + 1, row)\n"
             " with open(board_path, 'w') as output: json.dump(board, output)\n"
             " out = {'updateProjectV2ItemPosition': {'clientMutationId': None}}\n"
             " print(json.dumps({'data': out}))\n"
@@ -189,7 +201,8 @@ class StartupTests(unittest.TestCase):
             " item = next(a[5:] for a in args if a.startswith('item='))\n"
             " option = next(a[7:] for a in args if a.startswith('option='))\n"
             " row = next(r for r in rows if r['id'] == item)\n"
-            " row['fieldValueByName']['name'] = 'Doing' if option == '47fc9ee4' else 'Ready'\n"
+            " row['fieldValueByName'] = {'name': {'47fc9ee4': 'Doing', 'abe5d139': 'Ready',\n"
+            "  'f75ad846': 'Inbox', '98f1210e': 'Waiting', '98236657': 'Done'}[option]}\n"
             " with open(board_path, 'w') as output: json.dump(board, output)\n"
             " print(json.dumps({'data': {'updated': True}}))\n"
             " sys.exit(0)\n"

@@ -157,6 +157,23 @@ githubstatus.com. Manual `gh project` commands are recovery only. After the 2026
 incident the automation was observed back to about 2 seconds (#138 set to Done 2 s after
 closing) and the fallbacks were not needed afterwards; they stay for incidents.
 
+## Board targets
+
+Board administration has Make targets (#308), so the docs name no raw `gh project` or
+`gh api graphql` commands: `make board` (the open items by status in board order),
+`make add-task` (a new issue in Inbox or Ready, never P0: that stays
+`make new-priority-task`), `make move-task` (to Inbox, Ready or Waiting, Waiting with its
+`Waiting on:` comment; Waiting to Doing only for an owned issue), `make set-priority` and
+`make reorder-task`. Doing stays owned by `make start-task` and Done by closing the issue
+or `make finish-task`. Priority and order changes need `HUMAN_APPROVAL=<issue>`, the same
+marker as `make start-task ISSUE=`: it records the agent's assertion that the human
+approved, not proof, and the script cannot verify the conversation. Every change is
+confirmed by reading the board again. The targets work from any checkout and record no
+telemetry: they belong to no task. The entry point is `scripts/board_admin.py`; it reuses
+`task_board.py` (where `INBOX` and `WAITING` joined the other status options) and
+`task_repo.py` (where `body_from_file` moved from `start_task.py`), keeping those two
+libraries free of command-line code.
+
 ## Lifecycle output and waiting
 
 Lifecycle targets print one result (a line or the JSON) with `next_command`/`Next:` as the
