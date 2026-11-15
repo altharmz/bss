@@ -72,6 +72,7 @@ Immutable prepaid service grants. Persistence foundation only; the future billin
 | `funded_interval_billing_account_id_idx` | `CREATE INDEX funded_interval_billing_account_id_idx ON funded_interval USING btree (billing_account_id)` | no |
 | `funded_interval_billing_run_id_idx` | `CREATE INDEX funded_interval_billing_run_id_idx ON funded_interval USING btree (billing_run_id)` | no |
 | `funded_interval_command_id_product_id_key` | `CREATE UNIQUE INDEX funded_interval_command_id_product_id_key ON funded_interval USING btree (command_id, product_id)` | yes |
+| `funded_interval_end_idx` | `CREATE INDEX funded_interval_end_idx ON funded_interval USING btree (upper(period))` | no |
 | `funded_interval_id_product_key` | `CREATE UNIQUE INDEX funded_interval_id_product_key ON funded_interval USING btree (id, product_id)` | yes |
 | `funded_interval_latest_idx` | `CREATE INDEX funded_interval_latest_idx ON funded_interval USING btree (product_id, lower(period) DESC, authorized_at DESC)` | no |
 | `funded_interval_pkey` | `CREATE UNIQUE INDEX funded_interval_pkey ON funded_interval USING btree (id)` | yes |

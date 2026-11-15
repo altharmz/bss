@@ -34,6 +34,18 @@ def latest_grant(conn, product_id):
     )
 
 
+# A grant of the same product after the grant `g`: the latest grant (`latest_grant`, by
+# first day, then authorization) is the one no such grant follows. Grants of a product
+# overlap only when one supersedes the other, perhaps from the same first day, so the
+# authorization (then the id, for a complete order) breaks that tie. For
+# `NOT EXISTS (...)` on `funded_interval g`; funded_interval_latest_idx serves it.
+LATER_GRANT = (
+    "SELECT FROM funded_interval l WHERE l.product_id = g.product_id"
+    " AND lower(l.period) >= lower(g.period)"
+    " AND (lower(l.period), l.authorized_at, l.id) > (lower(g.period), g.authorized_at, g.id)"
+)
+
+
 def latest_grants(conn, product_ids):
     """`latest_grant` of each product that has one, in one statement (#305)."""
     if not product_ids:

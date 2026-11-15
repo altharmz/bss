@@ -9,6 +9,8 @@ from alembic.config import Config
 from alembic import command
 from app.billing.core import prorate, tax_of
 from app.billing.model import DateRange
+from app.notify import events
+from app.worker import prepaid
 from tests import apidata
 from tests.test_api_order_cancel import CANCEL, cancel_body
 from tests.test_api_resource_inventory import number
@@ -72,6 +74,36 @@ def test_downgrade_today_credits_the_whole_interval_and_buys_the_new_one(
     assert held(db_conn) == 0
     tick(db_conn, api.clock.now() + timedelta(minutes=1))  # replay posts nothing twice
     assert len(grants(db_conn, first)) == 2 and len(refunds(db_conn, first)) == 1
+
+
+def test_a_grant_superseded_from_its_first_day_is_never_the_latest(
+    api,
+    db_conn,
+    granted,  # noqa: F811
+):
+    """Both grants start today; the latest is the superseding one (authorized later), so
+    the renewal producer and the plan-expiring detector see it alone (#311: the latest
+    grant is found as the one no later grant follows)."""
+    first, _ = granted.products
+    today = api.clock.now().date()
+    pay(db_conn, UUID(granted.acc["id"]), "6", api.clock.now())
+    switch(api, granted.acc, first, granted.b, today)
+    tick(db_conn, api.clock.now())
+    (old_id, old_end), (new_id, new_end) = db_conn.execute(
+        "SELECT id, upper(period) FROM funded_interval WHERE product_id = %s"
+        " ORDER BY supersedes_interval_id NULLS FIRST",
+        (first["id"],),
+    ).fetchall()
+    for end in (old_end, new_end):  # a window (end - 1 day, end + 2 days] for each end
+        keys = {e.key for e in events._plan_expiring(db_conn, end - timedelta(days=1))}
+        assert f"plan_expiring:{old_id}" not in keys
+        covered = end - timedelta(days=1) < new_end <= end + timedelta(days=2)
+        assert (f"plan_expiring:{new_id}" in keys) == covered
+    last = max(old_end, new_end)
+    due = db_conn.execute(
+        prepaid._DUE_RENEWALS, {"today": last, "account": UUID(granted.acc["id"])}
+    ).fetchall()
+    assert [row[0] for row in due if row[1] == UUID(first["id"])] == [new_id]
 
 
 def test_future_dated_change_credits_the_unused_dates_to_the_cent(

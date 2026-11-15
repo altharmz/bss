@@ -64,6 +64,7 @@ Durable outbound charge to the payment gateway: sent and retried by the billing 
 | `payment_command_client_key` | `CREATE UNIQUE INDEX payment_command_client_key ON payment_command USING btree (billing_account_id, client_key) WHERE (client_key IS NOT NULL)` | no |
 | `payment_command_created_at_id_idx` | `CREATE INDEX payment_command_created_at_id_idx ON payment_command USING btree (created_at DESC, id)` | no |
 | `payment_command_declined_idx` | `CREATE INDEX payment_command_declined_idx ON payment_command USING btree (created_at) WHERE (state = 'declined'::text)` | no |
+| `payment_command_exhausted_idx` | `CREATE INDEX payment_command_exhausted_idx ON payment_command USING btree (created_at) WHERE (state = 'exhausted'::text)` | no |
 | `payment_command_one_auto_in_flight` | `CREATE UNIQUE INDEX payment_command_one_auto_in_flight ON payment_command USING btree (billing_account_id) WHERE ((purpose = 'auto_topup'::text) AND (state = ANY (ARRAY['pending'::text, 'sent'::text])))` | no |
 | `payment_command_one_renewal_in_flight` | `CREATE UNIQUE INDEX payment_command_one_renewal_in_flight ON payment_command USING btree (billing_account_id) WHERE ((purpose = 'renewal'::text) AND (state = ANY (ARRAY['pending'::text, 'sent'::text])))` | no |
 | `payment_command_open_idx` | `CREATE INDEX payment_command_open_idx ON payment_command USING btree (created_at, id) WHERE (state = ANY (ARRAY['pending'::text, 'sent'::text]))` | no |

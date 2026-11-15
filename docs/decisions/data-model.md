@@ -154,3 +154,27 @@ migration 0077, each index EXPLAINed before and after in the PR.
 - **Not indexed:** the Balances screen's status filter (computed from the account state:
   the join, not an index, decides it) and the product-by-number semijoin (an existing
   index; the planner's join choice). The numbers list no longer sorts by value.
+
+## Queries an index alone could not fix (2026-11-15, #311)
+
+From the same EXPLAIN review (100k dataset); migration 0079, each query EXPLAINed before
+and after in the PR.
+
+- **The latest grant of a product** is the grant no later grant of the product follows
+  (`entitlement.LATER_GRANT`: later by first day, then authorization, then id, since a
+  superseding grant may start on the superseded grant's first day). The renewal producer
+  and the plan-expiring detector read the grants ending by today or in the notice window
+  (`funded_interval (upper(period))`) and keep the latest of them, instead of a
+  DISTINCT ON over every grant. The producer still reads every grant ended by today, so
+  it grows with the grant history, but without the sort; a bound needs renewal state
+  stored on the grant, a data-model change left for later.
+- **A uuid filter is compared as a uuid.** `_sql.conditions` is the one typed filter
+  builder (`select_page`, the TMF654 balance-action lists, the resource inventory); the
+  inventory's derived states are text. A renewal's grant is looked up by `id = ANY(uuid[])`.
+- **`/metrics` queue counts** put each condition in WHERE (`metrics.queue_query`), so a
+  partial index answers it; 0079 adds the missing ones for the failed rows.
+- **Not changed:** `/metrics` products by status (100 ms on 115k products, every 30 s;
+  an index-only scan of a status index was no faster), the billing runs list (stored
+  counts since #284: 0.3 ms) and the resource list's `allocationStatus`/`usageState`
+  filters, which derive the state of every number before filtering (3.4 s at 115k
+  numbers): that needs the state stored or a different filter shape.
