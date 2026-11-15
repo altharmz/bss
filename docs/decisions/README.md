@@ -19,6 +19,7 @@ changing it, and record a new decision in it.
 | [sim.md](sim.md) | SIM and eSIM inventory on the IMSI resource, activation pick, SIM swap (2026-11-05, issue #186) |
 | [numbers.md](numbers.md) | Carrier number pools, port-in and port-out, Number Transfer PIN (2026-11-06, issue #189) |
 | [usage.md](usage.md) | Usage records (TMF635), the network usage feed, allowance tracking and 80/100% thresholds (2026-11-06, issue #190) |
+| [care.md](care.md) | Customer care: interaction notes (TMF683) and cases (TMF621), linked to the audit log (2026-11-15, issue #199) |
 | [notifications.md](notifications.md) | Customer SMS and email: TMF681 message log, triggers, consent, quiet hours, retries (2026-11-06, issue #192) |
 | [taxes.md](taxes.md) | Tax engine adapter (Avalara-style placeholder) and the service address of prepaid charges (2026-11-05, issue #184) |
 | [payments.md](payments.md) | Payment gateway adapter (Stripe-style placeholder): saved cards (TMF670), card top-ups, auto top-up (2026-11-05, issue #185) |

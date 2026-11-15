@@ -21,6 +21,31 @@
 
 # accepted deviations: gaps kept on purpose, each with its reason (docs/decisions/tmf-api.md,
 # "The last gaps"). The probe still finds them; the lock is exact.
+# TMF621 cases (docs/decisions/care.md): simple cases have no templates, so
+# troubleTicketSpecification is not implemented; attachments, external identifiers, ticket
+# relationships and characteristics are not built (422 when sent, never returned, so the
+# probe cannot look below them). The customer of a case does not change.
+TMF621 DELETE /troubleTicketSpecification/{id} endpoint absent
+TMF621 GET /troubleTicket/{id} missing attachment
+TMF621 GET /troubleTicket/{id} missing externalIdentifier
+TMF621 GET /troubleTicket/{id} missing troubleTicketCharacteristic
+TMF621 GET /troubleTicket/{id} missing troubleTicketRelationship
+TMF621 GET /troubleTicket/{id} missing troubleTicketSpecification
+TMF621 GET /troubleTicketSpecification endpoint absent
+TMF621 GET /troubleTicketSpecification/{id} endpoint absent
+TMF621 PATCH /troubleTicket/{id} read-only relatedParty
+TMF621 PATCH /troubleTicket/{id} unprobed attachment
+TMF621 PATCH /troubleTicket/{id} unprobed externalIdentifier
+TMF621 PATCH /troubleTicket/{id} unprobed troubleTicketCharacteristic
+TMF621 PATCH /troubleTicket/{id} unprobed troubleTicketRelationship
+TMF621 PATCH /troubleTicket/{id} unprobed troubleTicketSpecification
+TMF621 PATCH /troubleTicketSpecification/{id} endpoint absent
+TMF621 POST /troubleTicket unprobed attachment
+TMF621 POST /troubleTicket unprobed externalIdentifier
+TMF621 POST /troubleTicket unprobed troubleTicketCharacteristic
+TMF621 POST /troubleTicket unprobed troubleTicketRelationship
+TMF621 POST /troubleTicket unprobed troubleTicketSpecification
+TMF621 POST /troubleTicketSpecification endpoint absent
 # POST /product: billing cannot charge a product without an account and an offering.
 TMF637 POST /product requires billingAccount
 TMF637 POST /product requires productOffering
@@ -100,3 +125,37 @@ TMF666 GET /billingAccount/{id} missing accountBalance.validFor
 TMF678 GET /customerBill/{id} missing billDocument.href
 TMF678 GET /customerBill/{id} missing billDocument.url
 TMF678 GET /customerBill/{id} missing billDocument.validFor
+# TMF683 interactions (docs/decisions/care.md): attachments, interaction relationships and
+# external identifiers are not built (422 when sent, never returned). An interaction records
+# a contact that happened: its customer, channel, items and date do not change on PATCH. An
+# item is a link (id, reason, resolution, type, item); its own dates, channels, parties,
+# notes, attachments and relationships are not kept - the interaction has them.
+TMF683 GET /partyInteraction/{id} missing attachment
+TMF683 GET /partyInteraction/{id} missing externalIdentifier
+TMF683 GET /partyInteraction/{id} missing interactionItem.attachment
+TMF683 GET /partyInteraction/{id} missing interactionItem.creationDate
+TMF683 GET /partyInteraction/{id} missing interactionItem.interactionItemRelationship
+TMF683 GET /partyInteraction/{id} missing interactionItem.itemDate
+TMF683 GET /partyInteraction/{id} missing interactionItem.lastUpdate
+TMF683 GET /partyInteraction/{id} missing interactionItem.note
+TMF683 GET /partyInteraction/{id} missing interactionItem.relatedChannel
+TMF683 GET /partyInteraction/{id} missing interactionItem.relatedParty
+TMF683 GET /partyInteraction/{id} missing interactionRelationship
+TMF683 PATCH /partyInteraction/{id} read-only interactionDate
+TMF683 PATCH /partyInteraction/{id} read-only interactionItem
+TMF683 PATCH /partyInteraction/{id} read-only relatedChannel
+TMF683 PATCH /partyInteraction/{id} read-only relatedParty
+TMF683 PATCH /partyInteraction/{id} unprobed attachment
+TMF683 PATCH /partyInteraction/{id} unprobed externalIdentifier
+TMF683 PATCH /partyInteraction/{id} unprobed interactionRelationship
+TMF683 POST /partyInteraction refused interactionItem.attachment
+TMF683 POST /partyInteraction refused interactionItem.creationDate
+TMF683 POST /partyInteraction refused interactionItem.interactionItemRelationship
+TMF683 POST /partyInteraction refused interactionItem.itemDate
+TMF683 POST /partyInteraction refused interactionItem.lastUpdate
+TMF683 POST /partyInteraction refused interactionItem.note
+TMF683 POST /partyInteraction refused interactionItem.relatedChannel
+TMF683 POST /partyInteraction refused interactionItem.relatedParty
+TMF683 POST /partyInteraction unprobed attachment
+TMF683 POST /partyInteraction unprobed externalIdentifier
+TMF683 POST /partyInteraction unprobed interactionRelationship

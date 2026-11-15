@@ -1,4 +1,5 @@
 a84bc2e456b611c5f2fe3cb82a7f5d6b68e9589a43bcdbe8b5c0a0c3a7429351  TMF620-Product_Catalog_Management-v5.0.0.oas.yaml
+dd3d242c643d132833c9a883c562bb56401ad3ef9e79c942a1f987e950be5017  TMF621-Trouble_Ticket-v5.0.1.oas.yaml
 833d15f23c6e79c43594e68a236821669f1257426dedf51111e98fccdf30a3ba  TMF622-ProductOrdering-v5.0.0.oas.yaml
 fb55f75e317af1ed6e51e484d126e57399e6e1587ad655eda0d47a7f9365a737  TMF629-Customer_Management-v5.0.1.oas.yaml
 629e0236773c10ddade53598bd3d3c254f0e097e6e5c178aa51eeb8b297aecc2  TMF632-Party_Management-v5.0.0.oas.yaml
@@ -11,3 +12,4 @@ a0cfbd1497fea9648bb7a204e2a32fe6351267e3f7ed9bf99f17cb6ea08c997b  TMF666-Account
 a7d048d200716e3b91ae8badd3d895d12d9f74a6cec5493e1c1deea565eda0d5  TMF676-Payment-v4.0.0.swagger.json
 661587c5d236e364199218046a6db4266c639ca443b9a4f312ab89f2c8c6c181  TMF678-CustomerBill-v5.0.0.oas.yaml
 6c97c723110b6cc167d34de16936775619c920e07ad4012969fb95dd5b5dec8c  TMF681-Communication-v4.0.0.swagger.json
+e9a22119793701f1c83d167f80d4fd3c6e612eddaceed2d59ac56a552dc0415d  TMF683-Party_Interaction-v5.0.0.oas.yaml
