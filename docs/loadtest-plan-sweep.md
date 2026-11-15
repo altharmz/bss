@@ -78,3 +78,29 @@ rows over a widened window, since the run's own window has none).
 
 The sweep's cadence list (`loadtest/plan_measure.py`) now includes `process_lifecycle` and
 `_entitlement_accounts`; shape 5 was measured against the 5 ms per-account default before.
+
+## Billing-run membership and outcomes (#333)
+
+Re-measured on 2026-11-14 on `seed100k` restored and migrated to head (0076), warm cache,
+the same lt-db settings, another task's lt-db sharing the host: absolute times run about
+twice the #327 figures, so compare before/after within this table only. Before/after are
+the second of two runs. The dataset's runs are all ok, so the status filters were measured
+in a rolled-back transaction that marked 50 outcomes of the latest run failed and 20
+blocked. Results compared on the dataset: identical (seven outcome pages: failed at
+offsets 0 and 40, blocked, ok at 0 and 5000, unfiltered at 0 and 5000; due dates of the
+20 latest runs).
+
+| Shape | Where | Before | After | Disposition |
+| --- | --- | ---: | ---: | --- |
+| 11 | `outcome_gaps` | 2 x 199-298 ms per close | 1 x | Unchanged SQL, now read once per close. `close_run` read the gaps, then `finish_run` read them again under the run's lock; `close_run` now calls `finish_run` and takes the gaps from its `RunNotComplete`. The scan of every member and its outcome is the "completed means every member is ok" rule (#284), once per run: intended |
+| 12 | `run_members` | 256-284 ms | unchanged | The run's work list, ~97 % of the accounts in id order, once per run (`DateRun`): the seq scan and sort are intended; an index on `opened_at` would not be used for 97 % of the rows. On a failed close it was also called to count the members, loading every id: now `run_member_total`, a count (72-90 ms) |
+| 15 | `count_members` | 166-202 ms | unchanged | Once per start, reopen or takeover (#284): intended |
+| 35 | `page_run_outcomes` | failed 31-75 ms, blocked 72 ms, ok offset 5000 684 ms | 1.3-1.8 ms, 0.8 ms, 31 ms | The status is compared as the enum and only added when given. As `status::text` the partial index `billing_run_account_unresolved` could not serve it, so a failed/blocked page read every outcome of the run through the primary key, and the estimate (504 rows instead of 100k for ok) chose a parallel scan for deep ok pages. Unfiltered pages are unchanged (index scan in account order). The 196-519x estimate errors of #327 were on a UUID proxy status that matched nothing: estimate-only |
+| 64 | `run_payment_due_date` | 9-14 ms | unchanged | Accepted: the planner ANDs the `(billing_account_id, bill_date)` index into the run's bitmap (34 rows estimated, 1,067 real); with `bill_date` kept a filter it took 2.9 ms, but that plan shows only on a large `customer_bill`, so no test can hold it and the change is not made. One read per cycle request |
+| - | `run_payment_due_dates` (page of cycles) | 145 ms | 43 ms | Not flagged by #327 (its tests list few runs). The run ids now restrict `billing_run` as well: the planner hashed all 70k rows, prepaid command runs included. The rest is reading the ~12k bills of 20 runs; storing the term on the run would be a data-model change and is not proposed for this cost |
+
+The sweep's cadence list now includes `run_member_total` (once per run).
+
+Shape 35 was re-checked after #310 (migration 0077 adds `billing_run_account (billing_account_id)`):
+the status pages still read `billing_run_account_unresolved` (failed/blocked 0.6-1.0 ms against
+30-65 ms for the old text comparison), with identical results on all seven pages.

@@ -37,7 +37,12 @@ from app.repository._sql import Row, fetch_all, fetch_one, money, returning, sel
 
 
 class RunNotComplete(Exception):
-    """A run cannot be completed: some member account has no ok outcome."""
+    """A run cannot be completed: some member account has no ok outcome. `gaps` counts
+    them by 'failed', 'blocked' and 'missing' (outcome_gaps)."""
+
+    def __init__(self, message: str, gaps: dict[str, int]) -> None:
+        super().__init__(message)
+        self.gaps = gaps
 
 
 # --- billing runs: the rows only. Whether a run is started, reopened, taken over or left
@@ -152,7 +157,7 @@ def finish_run(
     gaps = outcome_gaps(conn, run_id, run["run_date"], tz)
     if gaps:
         detail = ", ".join(f"{n} {status}" for status, n in sorted(gaps.items()))
-        raise RunNotComplete(f"billing run {run['run_date']} has accounts not ok: {detail}")
+        raise RunNotComplete(f"billing run {run['run_date']} has accounts not ok: {detail}", gaps)
     return _end_run(conn, run_id, "completed", now, None, None)
 
 
@@ -196,16 +201,20 @@ def run_payment_due_date(conn: psycopg.Connection, run_id: UUID) -> date | None:
 
 
 def run_payment_due_dates(conn: psycopg.Connection, run_ids: list[UUID]) -> dict[UUID, date]:
-    """Stored terms of the bills issued on each run's own date, for a page of cycles."""
+    """Stored terms of the bills issued on each run's own date, for a page of cycles. The
+    runs are named on both sides of the join: with the bills' side alone the planner hashed
+    every billing_run row, prepaid command runs included (#333, 145 -> 43 ms for 20 runs
+    of 100k accounts; what is left is reading their bills)."""
     if not run_ids:
         return {}
     rows = fetch_all(
         conn,
         "SELECT b.billing_run_id, max(b.payment_due_date) AS due FROM customer_bill b"
         " JOIN billing_run r ON r.id = b.billing_run_id"
-        " WHERE b.billing_run_id = ANY(%s) AND b.bill_date = r.run_date"
+        " WHERE b.billing_run_id = ANY(%(ids)s) AND r.id = ANY(%(ids)s)"
+        " AND b.bill_date = r.run_date"
         " GROUP BY b.billing_run_id",
-        (run_ids,),
+        {"ids": run_ids},
     )
     return {row["billing_run_id"]: row["due"] for row in rows}
 
@@ -306,25 +315,35 @@ def run_charges(conn: psycopg.Connection, run_ids: list[UUID]) -> dict[UUID, lis
     return result
 
 
+_OUTCOMES = """
+    SELECT o.*, a.name AS account_name, w.run_date AS waits_for_date
+      FROM billing_run_account o
+      JOIN billing_account a ON a.id = o.billing_account_id
+      LEFT JOIN billing_run w ON w.id = o.waits_for_run_id
+     WHERE o.run_id = %(run)s
+     ORDER BY o.billing_account_id OFFSET %(offset)s LIMIT %(limit)s
+"""
+# The status compared as the enum, in its own statement: a failed/blocked page then reads
+# the partial index billing_run_account_unresolved, not every outcome of the run through
+# the primary key (#333: a failed page 31-75 -> 1-2 ms on a 100k-account run, an ok page
+# at offset 5000 684 -> 31 ms).
+_OUTCOMES_OF_STATUS = """
+    SELECT o.*, a.name AS account_name, w.run_date AS waits_for_date
+      FROM billing_run_account o
+      JOIN billing_account a ON a.id = o.billing_account_id
+      LEFT JOIN billing_run w ON w.id = o.waits_for_run_id
+     WHERE o.run_id = %(run)s AND o.status = %(status)s::billing_run_account_status
+     ORDER BY o.billing_account_id OFFSET %(offset)s LIMIT %(limit)s
+"""
+
+
 def page_run_outcomes(
     conn: psycopg.Connection, run_id: UUID, *, status: str | None, offset: int, limit: int
 ) -> tuple[list[Row], bool]:
     """A run's per-account outcomes (optionally of one status), with the account's name
     and the date a blocked row waits for; in account id order."""
     params = {"run": run_id, "status": status, "offset": offset, "limit": limit + 1}
-    rows = fetch_all(
-        conn,
-        """
-        SELECT o.*, a.name AS account_name, w.run_date AS waits_for_date
-          FROM billing_run_account o
-          JOIN billing_account a ON a.id = o.billing_account_id
-          LEFT JOIN billing_run w ON w.id = o.waits_for_run_id
-         WHERE o.run_id = %(run)s
-           AND (%(status)s::text IS NULL OR o.status::text = %(status)s)
-         ORDER BY o.billing_account_id OFFSET %(offset)s LIMIT %(limit)s
-        """,
-        params,
-    )
+    rows = fetch_all(conn, _OUTCOMES_OF_STATUS if status else _OUTCOMES, params)
     return rows[:limit], len(rows) > limit
 
 
@@ -344,6 +363,19 @@ def run_members(conn: psycopg.Connection, run_date: date, tz: str | None = None)
         {"day": run_date, "tz": tz or settings.billing_tz},
     )
     return [row["id"] for row in rows]
+
+
+def run_member_total(conn: psycopg.Connection, run_date: date, tz: str | None = None) -> int:
+    """How many accounts run_members lists, counted in the database (#333)."""
+    row = fetch_one(
+        conn,
+        """
+        SELECT count(*) AS n FROM billing_account
+         WHERE opened_at < (%(day)s::date::timestamp AT TIME ZONE %(tz)s)
+        """,
+        {"day": run_date, "tz": tz or settings.billing_tz},
+    )
+    return row["n"] if row else 0
 
 
 def outcome_gaps(
