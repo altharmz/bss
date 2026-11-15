@@ -105,6 +105,38 @@ export BSS_TEST_LOCK_HELD=1
 # context (GUI clients, editors) as well as a plain terminal commit.
 run make lint || fail "make lint"
 
+# suite TARGET: a run the hook does by path (a script suite, the smoke tests).
+# scripts/hook_selection.py holds its trigger paths and says `none` when no selected path
+# is one of them, `passed` when the run already passed on exactly this content of all its
+# trigger paths, else `run`. A passing run records that content (.testmon/TARGET), so a
+# retry of the commit - after a lint failure, say - does not run it again (#366).
+# Of the harness suites only those that depend on the selected paths run (#369); such a
+# partial run records nothing, and `all` is the whole of make runtime-check.
+suite() {
+  local state chosen
+  state="$(python3 -B "$selection" suite "$1" 2>&1)" ||
+    fail "scripts/hook_selection.py suite $1: ${state}"
+  case "$state" in
+    run)
+      if [[ "$1" == runtime-check ]]; then
+        chosen="$(python3 -B "$selection" suites 2>&1)" ||
+          fail "scripts/hook_selection.py suites: ${chosen}"
+        if [[ -z "$chosen" ]]; then
+          echo "runtime-check: no harness suite depends on the selected paths; skipped" | tee -a "$log"
+          return 0
+        elif [[ "$chosen" != all ]]; then
+          echo "runtime-check: the suites that depend on the selected paths" | tee -a "$log"
+          run make runtime-check "RUNTIME_SUITES=${chosen}" || fail "make runtime-check RUNTIME_SUITES=\"${chosen}\""
+          return 0
+        fi
+      fi
+      run make "$1" || fail "make $1"
+      run python3 -B "$selection" stamp "$1" || fail "scripts/hook_selection.py stamp $1"
+      ;;
+    passed) echo "$1: passed on this content already; skipped" | tee -a "$log" ;;
+  esac
+}
+
 # Tests: the plan of scripts/hook_selection.py for the selected paths (#344). Usually the
 # smoke subset plus the tests this change affects (pytest-testmon, which follows the Python
 # code each test ran), plus the tests that read a staged data file testmon cannot see (the
@@ -113,10 +145,17 @@ run make lint || fail "make lint"
 # (its tests run it in subprocesses), alembic/ - and not again when it already ran to its
 # end on that content: a retry then runs the failed and the affected tests. The full
 # `make test` is nightly in CI and by hand (2026-10-28).
+# No backend test at all for a commit no backend test can depend on - the harness, the
+# docs, the UI, CI (#369) - and no second smoke run on backend content it passed on.
 plan="$(python3 -B "$selection" plan 2>&1)" ||
   fail "scripts/hook_selection.py plan: ${plan}"
+[[ -n "$plan" ]] || echo "backend tests: no selected path can affect them; skipped" | tee -a "$log"
 while IFS= read -r step; do
   [[ -n "$step" ]] || continue
+  if [[ "$step" == test-smoke ]]; then
+    suite test-smoke
+    continue
+  fi
   # shellcheck disable=SC2086 # a step is a make target and its variables
   run make $step || fail "make ${step}"
 done <<<"$plan"
@@ -127,33 +166,21 @@ if grep -qE '^(app|alembic|spec|scripts/docs)/|^tests/docs_collect' <<<"$selecte
   run make docs-check || fail "generated docs are out of date - git add docs/api docs/db and commit again"
 fi
 
-# suite TARGET: a script suite the hook runs by path. scripts/hook_selection.py holds its
-# trigger paths (SUITES) and says `none` when no selected path is one of them, `passed`
-# when the suite already passed on exactly this content of all its trigger paths, else
-# `run`. A passing run records that content (.testmon/TARGET), so a retry of the commit -
-# after a lint failure, say - does not run the suite again (#366).
-suite() {
-  local state
-  state="$(python3 -B "$selection" suite "$1" 2>&1)" ||
-    fail "scripts/hook_selection.py suite $1: ${state}"
-  case "$state" in
-    run)
-      run make "$1" || fail "make $1"
-      run python3 -B "$selection" stamp "$1" || fail "scripts/hook_selection.py stamp $1"
-      ;;
-    passed) echo "$1: passed on this content already; skipped" | tee -a "$log" ;;
-  esac
-}
-
 # The harness script tests, only when the commit touches the harness (scripts/, .claude/,
-# .codex/, the Makefile: the same paths as the CI harness job). `make test` (so the nightly
+# .codex/, the workflows, the Makefile, compose.prod.yaml: the same paths as the CI harness
+# job). `make test` (so the nightly
 # run) includes them too; the hook's own full-suite run (make test-recorded) does not, so
 # they never run twice or unasked.
 suite runtime-check
 
 # The deploy script's tests, only when the commit touches what they run: the deploy and
-# smoke scripts, the compose files, the suite itself, its runner or the Makefile.
+# smoke scripts, the compose files, the suite itself, its runner or the one Makefile
+# recipe the suite reads.
 suite deploy-check
+
+# The shell cases of the hook's own scripts (this hook's lock and plan, the billing status
+# check), when scripts/ changes. They were part of make test-smoke until #369.
+suite hook-cases
 
 # The admin UI, only when the commit touches it or the specs its types come from. These
 # targets run offline and never install: if node_modules is out of date they fail with

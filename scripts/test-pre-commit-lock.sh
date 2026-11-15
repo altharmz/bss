@@ -21,8 +21,8 @@ mkdir -p "${tmp}/bin" "${repo}"
 held="${tmp}/held"
 # The fake make records its target, and in ${held} whether it ran with the lock held; the
 # target named in FAKE_MAKE_FAIL fails.
-printf '#!/bin/sh\necho "$1" >>"%s"\necho "${BSS_TEST_LOCK_HELD:-unset}" >>"%s"\n%s\n' \
-  "${calls}" "${held}" '[ "$1" != "${FAKE_MAKE_FAIL:-}" ]' >"${tmp}/bin/make"
+printf '#!/bin/sh\necho "$1" >>"%s"\necho "${BSS_TEST_LOCK_HELD:-unset}" >>"%s"\n%s\n%s\n' \
+  "${calls}" "${held}" 'echo "make $*"' '[ "$1" != "${FAKE_MAKE_FAIL:-}" ]' >"${tmp}/bin/make"
 chmod +x "${tmp}/bin/make"
 export PATH="${tmp}/bin:${PATH}"
 git init -q "${tmp}/primary"
@@ -68,8 +68,9 @@ if [[ "$(sort -u "${held}")" != 1 ]]; then
 fi
 rm -f "${held}"
 
+# The smoke run passed on this backend content: it is not repeated from here on (#369).
 hold 1 "echo released >>${calls}"
-expect 0 "released lint test-smoke test-changed" "a held lock: the checks run after it is released"
+expect 0 "released lint test-changed" "a held lock: the checks run after it is released"
 grep -q 'waiting for them' "${tmp}/out" || {
   echo 'FAIL a held lock: no waiting message' >&2
   failed=$((failed + 1))
@@ -86,8 +87,12 @@ PRE_COMMIT_LOCK_WAIT=1 expect 1 "" "a lock held past the wait limit fails the co
 mkdir -p "${repo}/frontend/src" "${repo}/alembic"
 echo a >"${repo}/frontend/src/a.ts"
 git -C "${repo}" add frontend
-expect 0 "lint test-smoke test-changed test-files web-lint web-test" \
+expect 0 "lint test-changed test-files web-lint web-test" \
   "a UI source runs the backend tests that read it, not the whole suite"
+grep -qF 'test-smoke: passed on this content already; skipped' "${tmp}/out" || {
+  echo 'FAIL a smoke run on unchanged backend content: no skipped line' >&2
+  failed=$((failed + 1))
+}
 
 echo m >"${repo}/alembic/m.py"
 git -C "${repo}" add alembic
@@ -118,24 +123,47 @@ commit -m base
 mkdir -p "${repo}/scripts"
 echo a >"${repo}/scripts/a.py"
 git -C "${repo}" add scripts
-expect 0 "lint test-smoke test-changed runtime-check" "a harness path runs the harness suite"
-expect 0 "lint test-smoke test-changed" "a retry on the same harness content skips the suite"
+expect 0 "lint runtime-check hook-cases" \
+  "a harness path runs the harness suite and the hook cases, and no backend test"
+said 'backend tests: no selected path can affect them; skipped' "a harness-only commit"
+expect 0 "lint" "a retry on the same harness content skips the suite"
 said 'runtime-check: passed on this content already; skipped' "a skipped harness suite"
 
 echo b >"${repo}/scripts/a.py"
 git -C "${repo}" add scripts
-FAKE_MAKE_FAIL=runtime-check expect 1 "lint test-smoke test-changed runtime-check" \
+FAKE_MAKE_FAIL=runtime-check expect 1 "lint runtime-check" \
   "a changed harness path runs the suite again"
-expect 0 "lint test-smoke test-changed runtime-check" "a failed suite leaves no stamp: it runs again"
+expect 0 "lint runtime-check hook-cases" "a failed suite leaves no stamp: it runs again"
 
-echo all: >"${repo}/Makefile"
-git -C "${repo}" add Makefile
-FAKE_MAKE_FAIL=deploy-check expect 1 "lint test-smoke test-changed runtime-check deploy-check" \
-  "the Makefile runs both script suites"
-expect 0 "lint test-smoke test-changed deploy-check" \
-  "each suite has its own stamp: only the failed one runs again"
-expect 0 "lint test-smoke test-changed" "both suites passed on this content"
+echo d >"${repo}/scripts/deploy.sh"
+git -C "${repo}" add scripts
+FAKE_MAKE_FAIL=deploy-check expect 1 "lint runtime-check deploy-check" \
+  "a deploy script runs both script suites"
+expect 0 "lint deploy-check hook-cases" \
+  "each suite has its own stamp: only the failed one and what follows it run"
+expect 0 "lint" "every suite passed on this content"
 said 'deploy-check: passed on this content already; skipped' "a skipped deploy suite"
+
+# Of the Makefile only the recipe the deploy suite reads runs that suite (#369).
+printf 'deployed:\n\techo one\n' >"${repo}/Makefile"
+git -C "${repo}" add Makefile
+expect 0 "lint runtime-check deploy-check" "the deploy recipe of the Makefile runs the deploy suite"
+commit -m recipe
+printf 'deployed:\n\techo one\n\nother:\n\techo a\n' >"${repo}/Makefile"
+git -C "${repo}" add Makefile
+expect 0 "lint runtime-check" "another Makefile change runs the harness suites only"
+
+# Only the suites that depend on the selected paths (#369); a partial run leaves no stamp.
+commit -m makefile
+echo 'NAMES = "a.py"' >"${repo}/scripts/test_x.py"
+echo 'NAMES = "deploy.sh"' >"${repo}/scripts/test_y.py"
+git -C "${repo}" add scripts
+commit -m suites
+echo c >"${repo}/scripts/a.py"
+git -C "${repo}" add scripts
+expect 0 "lint runtime-check hook-cases" "a script runs the suites that name it"
+said 'RUNTIME_SUITES=scripts/test_x.py' "a partial harness run"
+expect 0 "lint runtime-check" "a partial run is not recorded: a retry runs it again"
 
 # A merge commit: the checks are chosen from the task's side, not from what comes in (#366).
 commit -m harness
@@ -151,12 +179,13 @@ incoming() {
   git -C "${tmp}/primary" -c user.name=t -c user.email=t@t commit -q -m "incoming $1"
 }
 incoming one
-echo task >"${repo}/notes.txt"
-git -C "${repo}" add notes.txt
+mkdir -p "${repo}/docs"
+echo task >"${repo}/docs/notes.txt"
+git -C "${repo}" add docs
 commit -m task
 git -C "${repo}" -c user.name=t -c user.email=t@t merge -q --no-ff --no-commit "${trunk}" >/dev/null 2>&1
-expect 0 "lint test-smoke test-changed" \
-  "a merge runs no full suite or script suite for what only comes in"
+expect 0 "lint" \
+  "a merge runs no backend test or script suite for what only comes in"
 said "selection: merge with $(git -C "${tmp}/primary" rev-parse --short HEAD), 5 incoming paths left out" \
   "a merge commit"
 commit -m merge
@@ -168,7 +197,7 @@ echo task >"${repo}/scripts/task.py"
 git -C "${repo}" add app scripts
 commit -m task
 git -C "${repo}" -c user.name=t -c user.email=t@t merge -q --no-ff --no-commit "${trunk}" >/dev/null 2>&1
-expect 0 "lint test-recorded docs-check runtime-check" \
+expect 0 "lint test-recorded docs-check runtime-check hook-cases" \
   "a merge runs the suites the task's own side calls for"
 commit -m merge
 

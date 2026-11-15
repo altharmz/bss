@@ -9,6 +9,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import hook_selection
 from run_suites import split, suite_environment
 
 RUNNER = Path(__file__).resolve().parent / "run_suites.py"
@@ -52,8 +53,8 @@ class MakeTargetTests(unittest.TestCase):
         recipe = self.recipe()
         suites = set(recipe[recipe.index("scripts/run_suites.py") + 1 :])
         every = {path.relative_to(ROOT).as_posix() for path in RUNNER.parent.glob("test_*.py")}
-        left_out = {"scripts/test_deploy_rollback.py", "scripts/test_telemetry_database.py"}
-        self.assertEqual(suites, every - left_out)
+        # the hook passes its own choice of suites and leaves the same two out
+        self.assertEqual(suites, every - set(hook_selection.NOT_RUNTIME))
 
 
 SUITE = """import os, unittest

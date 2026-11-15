@@ -2,12 +2,14 @@
 """scripts/task_testmon.py: the test-selection record saved by finish and seeded by start."""
 
 import os
+import shutil
 import sqlite3
 import subprocess
 import tempfile
 import unittest
 import unittest.mock
 from pathlib import Path
+from unittest.mock import patch
 
 import task_testmon
 
@@ -60,7 +62,9 @@ class TestSelectionTests(unittest.TestCase):
         self.assertEqual(task_testmon.seed(self.new, self.common), "seeded")
         self.assertEqual(rows(self.new / task_testmon.DATA), ["test_a", "test_b"])
         # only the record: no temporary file is left in either place
-        self.assertEqual([p.name for p in (self.new / ".testmon").iterdir()], [".testmondata"])
+        self.assertEqual(
+            sorted(p.name for p in (self.new / ".testmon").iterdir()), [".testmondata", "seeded"]
+        )
         self.assertEqual(
             [p.name for p in task_testmon.store(self.common).parent.iterdir()], ["testmondata"]
         )
@@ -71,6 +75,77 @@ class TestSelectionTests(unittest.TestCase):
         record(self.new / task_testmon.DATA, ["test_c"])
         self.assertEqual(task_testmon.save(self.new, self.common), "saved")
         self.assertEqual(rows(task_testmon.store(self.common)), ["test_c"])
+
+    def test_a_task_that_ran_no_test_keeps_the_saved_record(self):
+        """Its record is the one it was given: nothing newer to offer (#369)."""
+        record(self.old / task_testmon.DATA, ["test_a"])
+        task_testmon.save(self.old, self.common)
+        task_testmon.seed(self.new, self.common)
+        other = self.base / "other"
+        record(other / task_testmon.DATA, ["test_newer"])
+        self.assertEqual(task_testmon.save(other, self.common), "saved")
+        self.assertEqual(task_testmon.save(self.new, self.common), "unchanged")
+        self.assertEqual(rows(task_testmon.store(self.common)), ["test_newer"])
+        # a run changed the record: it is saved again
+        with sqlite3.connect(self.new / task_testmon.DATA) as connection:
+            connection.execute("INSERT INTO node VALUES ('test_run')")
+        connection.close()
+        self.assertEqual(task_testmon.save(self.new, self.common), "saved")
+        self.assertEqual(rows(task_testmon.store(self.common)), ["test_a", "test_run"])
+
+    def test_adopting_replaces_the_worktrees_record(self):
+        record(self.old / task_testmon.DATA, ["test_master"])
+        task_testmon.save(self.old, self.common)
+        self.assertEqual(task_testmon.adopt(self.new, self.common), "adopted")
+        record_path = self.new / task_testmon.DATA
+        self.assertEqual(rows(record_path), ["test_master"])
+        with sqlite3.connect(record_path) as connection:
+            connection.execute("INSERT INTO node VALUES ('test_own')")
+        connection.close()
+        record(self.base / "later" / task_testmon.DATA, ["test_later"])
+        task_testmon.save(self.base / "later", self.common)
+        self.assertEqual(task_testmon.adopt(self.new, self.common), "adopted")
+        self.assertEqual(rows(record_path), ["test_later"])
+        self.assertEqual(task_testmon.save(self.new, self.common), "unchanged")
+
+    def test_adopting_is_best_effort(self):
+        self.assertEqual(task_testmon.adopt(self.new, self.common), "none")
+        record(self.old / task_testmon.DATA, ["test_a"])
+        task_testmon.save(self.old, self.common)
+        (self.new / ".gitignore").write_text("")
+        self.assertEqual(task_testmon.adopt(self.new, self.common), "not adopted (not ignored)")
+        self.assertFalse((self.new / ".testmon").exists())
+
+    def test_a_sync_adopts_the_record_only_when_backend_code_comes_in(self):
+        import task_git
+
+        record(self.old / task_testmon.DATA, ["test_master"])
+        task_testmon.save(self.old, self.common)
+        identity = ("-c", "user.name=t", "-c", "user.email=t@t")
+        git("-C", str(self.new), "add", "-A")
+        git("-C", str(self.new), *identity, "commit", "-qm", "base")
+        git("-C", str(self.new), "branch", "task")
+        common = self.new / ".git"
+        shutil.copytree(task_testmon.store(self.common).parent, common / "bss-testmon")
+        record(self.new / task_testmon.DATA, ["test_own"])
+
+        def incoming(path):
+            git("-C", str(self.new), "checkout", "-q", "-B", "incoming", "task")
+            (self.new / path).parent.mkdir(parents=True, exist_ok=True)
+            (self.new / path).write_text("x\n")
+            git("-C", str(self.new), "add", "-A")
+            git("-C", str(self.new), *identity, "commit", "-qm", path)
+            git("-C", str(self.new), "checkout", "-q", "task")
+            return git("-C", str(self.new), "rev-parse", "incoming")
+
+        with patch("builtins.print") as shown:
+            task_git.adopt_test_record(self.new, incoming("scripts/tool.py"))
+        shown.assert_not_called()
+        self.assertEqual(rows(self.new / task_testmon.DATA), ["test_own"])
+        with patch("builtins.print") as shown:
+            task_git.adopt_test_record(self.new, incoming("app/main.py"))
+        self.assertEqual(shown.call_args.args[0], "sync-task: test-selection record adopted")
+        self.assertEqual(rows(self.new / task_testmon.DATA), ["test_master"])
 
     def test_nothing_saved_means_nothing_seeded(self):
         self.assertEqual(task_testmon.save(self.old, self.common), "none")
