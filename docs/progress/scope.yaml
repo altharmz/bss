@@ -364,7 +364,7 @@ items:
   - {id: api.internal.accountSettlement.get, area: api, stage: 5, method: GET, path: "/internal/v1/billingAccount/{account_id}/settlement", title: "An account's bills owed, unused credit, overdue and on hold"}
   - {id: api.internal.billDetail.get, area: api, stage: 5, method: GET, path: "/internal/v1/customerBill/{bill_id}", title: "A bill with charges, sources, history and allowed states"}
   - {id: api.internal.priceChange.create, area: api, stage: 5, method: POST, path: "/internal/v1/productOffering/{offering_id}/priceChange", title: "Atomic price change of a live offering (D-W21)"}
-  - {id: api.internal.subscriber.search, area: api, stage: 5, method: GET, path: /internal/v1/subscriber, title: "Search subscribers by prefix, paged (the Subscribers list)"}
+  - {id: api.internal.subscriber.search, area: api, stage: 5, method: GET, path: /internal/v1/subscriber, title: "Search subscribers by prefix, paged (the Subscribers list); serviceAddress=missing lists prepaid accounts with live lines and no service address (#207)"}
   - {id: api.internal.party.search, area: api, stage: 5, method: GET, path: /internal/v1/party, title: "Search parties by prefix, paged (the Parties list, owner picker)"}
   - {id: api.internal.partyCustomer.search, area: api, stage: 5, method: GET, path: /internal/v1/partyCustomer, title: "Search customers by prefix, paged (the Parties customers list)"}
   - {id: api.internal.billingRun.list, area: api, stage: 4, method: GET, path: /internal/v1/billingRun, title: "List billing runs (newest first)"}
@@ -415,6 +415,7 @@ items:
   - {id: ui.subscribers.previous, area: ui, stage: 5, title: "Subscribers: previous page"}
   - {id: ui.subscribers.next, area: ui, stage: 5, title: "Subscribers: next page"}
   - {id: ui.subscribers.prepaid, area: ui, stage: 5, title: "Subscribers prepaid account mode"}
+  - {id: ui.subscribers.noServiceAddress, area: ui, stage: 5, title: "No service address filter chip: prepaid accounts with live lines and no service address"}
   - {id: ui.products, area: ui, stage: 5, title: "Products screen: every status, filters, rows"}
   - {id: ui.products.status, area: ui, stage: 5, title: "Products status filter"}
   - {id: ui.products.accountChip, area: ui, stage: 5, title: "Products account filter chip"}
@@ -525,6 +526,7 @@ items:
   - {id: ui.subscriber.prepaid.editNote, area: ui, stage: 5, title: "Edit the reason and description of a top-up, adjustment or hold"}
   - {id: ui.subscriber.prepaid.editNoteForm, area: ui, stage: 5, title: "Note form of the Balance action dialog"}
   - {id: ui.addProduct.prepaidPreview, area: ui, stage: 5, title: "Prepaid first-charge preview in Add product: to pay, available, shortfall, ledger after"}
+  - {id: ui.addProduct.serviceAddress, area: ui, stage: 5, title: "Set service address from Add product after a serviceAddressRequired refusal: opens the card's service address dialog"}
   - {id: ui.addProduct.topUpShortfall, area: ui, stage: 5, title: "Top up the shortfall from Add product: opens the Top-up form with the amount typed in"}
   - {id: ui.bills, area: ui, stage: 5, title: "Bills screen: bills and bill cycles tabs with state, account and billing date filters"}
   - {id: ui.bills.previous, area: ui, stage: 5, title: "Bills: previous page of newer bills"}
@@ -533,6 +535,7 @@ items:
   - {id: ui.bills.links, area: ui, stage: 5, title: "Bill dialog links: bill cycle and rates"}
   - {id: ui.bills.cycleDetail, area: ui, stage: 5, title: "Bill cycle detail dialog"}
   - {id: ui.bills.rateDetail, area: ui, stage: 5, title: "Applied billing rate detail dialog"}
+  - {id: ui.bills.rateDetail.taxLines, area: ui, stage: 5, title: "Tax lines of a charge (category, jurisdiction, rate, amount) in the rate detail and the prepaid renewal history"}
   - {id: ui.payments, area: ui, stage: 5, title: "Payments screen: payments and refunds tabs with status, account and date filters"}
   - {id: ui.payments.previous, area: ui, stage: 5, title: "Payments: previous page of newer rows"}
   - {id: ui.payments.next, area: ui, stage: 5, title: "Payments: next page of older rows"}
@@ -754,6 +757,11 @@ items:
   - {id: ui.subscriber.consent.sms, area: ui, stage: 5, title: "Marketing SMS consent: current choice and Opt in / Opt out"}
   - {id: ui.subscriber.consent.email, area: ui, stage: 5, title: "Marketing email consent: current choice and Opt in / Opt out"}
   - {id: ui.subscriber.consent.record, area: ui, stage: 5, title: "Record consent dialog: the source, POST /internal/v1/notification/consent"}
+  - {id: ui.subscriber.serviceAddress, area: ui, stage: 5, title: "Service address group on the subscriber card's Account tab"}
+  - {id: ui.subscriber.serviceAddress.edit, area: ui, stage: 5, title: "Set or edit the service address (PATCH of the account's whole contact array, PIN offered)"}
+  - {id: ui.subscriber.serviceAddress.form, area: ui, stage: 5, title: "Service address form: street, city, state, ZIP, country US; 422 errors at the input"}
+  - {id: ui.subscriber.serviceAddress.remove, area: ui, stage: 5, title: "Remove the service address after a confirmation"}
+  - {id: ui.subscriber.serviceAddress.missing, area: ui, stage: 5, title: "Warning on a prepaid card without a service address"}
   - {id: ui.subscriber.security, area: ui, stage: 5, title: "Security tab of a subscriber: account PIN, line locks and audit log of the customer, loaded only when opened"}
   - {id: ui.subscriber.security.pin, area: ui, stage: 5, title: "Account PIN status: set, set by and at, reason, wrong attempts, lockout end (never the PIN)"}
   - {id: ui.subscriber.security.setPin, area: ui, stage: 5, title: "Set PIN / Reset PIN button on the Security tab"}

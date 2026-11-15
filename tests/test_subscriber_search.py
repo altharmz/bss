@@ -7,6 +7,9 @@ import pytest
 
 from tests import apidata, timeline
 from tests.test_api_resource_inventory import number
+from tests.test_prepaid_orders import shop
+from tests.test_settlement_db import make_payment
+from tests.test_tax_engine import CA, set_address
 
 URL = "/internal/v1/subscriber"
 
@@ -122,3 +125,47 @@ def test_the_number_and_bucket_pages_read_their_order_index(db_conn):
         query = f"SELECT id FROM {table} ORDER BY created_at, id LIMIT 51"  # noqa: S608
         plan = "\n".join(r[0] for r in db_conn.execute("EXPLAIN " + query))
         assert f"{table}_created_at_id_idx" in plan, plan
+
+
+def test_service_address_missing_lists_prepaid_accounts_with_live_lines_and_no_address(
+    api, db_conn
+):
+    """#207: the accounts whose new lines are refused and whose charges get the flat tax."""
+    off, _ = shop(api, db_conn, funds="0", numbers=False)
+
+    def prepaid_line(name: str):
+        acc = apidata.account(api, name=name)
+        db_conn.execute(
+            "UPDATE billing_account SET rating_type = 'prepaid' WHERE id = %s", (acc["id"],)
+        )
+        make_payment(db_conn, dict(acc, currency="USD"), "100")
+        db_conn.commit()
+        order = apidata.order(api, acc, apidata.add_item(off))
+        assert order["state"] == "inProgress", order.get("productOrderErrorMessage")
+        return acc
+
+    first = prepaid_line("No address 1")
+    with_address = prepaid_line("Has address")
+    assert set_address(api, with_address, CA).status_code == 200
+    ended = prepaid_line("Ended line")
+    db_conn.execute(
+        "UPDATE product SET status = 'terminated' WHERE billing_account_id = %s", (ended["id"],)
+    )
+    db_conn.commit()
+    second = prepaid_line("No address 2")
+    empty = apidata.account(api, name="No lines")
+    db_conn.execute(
+        "UPDATE billing_account SET rating_type = 'prepaid' WHERE id = %s", (empty["id"],)
+    )
+    db_conn.commit()
+    subscriber(api, "Postpaid Customer", "Postpaid")
+
+    url = f"{URL}?serviceAddress=missing"
+    assert [r["id"] for r in api.get(url).json()] == [first["id"], second["id"]]
+    page = api.get(f"{url}&limit=1")
+    assert [r["id"] for r in page.json()] == [first["id"]] and 'rel="next"' in page.headers["Link"]
+    last = api.get(f"{url}&limit=1&offset=1")
+    assert [r["id"] for r in last.json()] == [second["id"]] and "Link" not in last.headers
+    assert names(api.get(f"{url}&q=no%20address%202")) == ["No address 2"]
+    assert api.get(f"{URL}?serviceAddress=present").status_code == 400
+    assert api.get(f"{url}&serviceAddress=missing").status_code == 400

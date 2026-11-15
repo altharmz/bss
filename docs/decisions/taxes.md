@@ -26,7 +26,10 @@ rejected with the TMF622 error `serviceAddressRequired` (the order's
 
 **Existing accounts** keep the old behaviour until an address is set: no address, no
 engine, the flat tax of the price, for new purchases only when the check is off and for
-renewals of lines bought before. The list of such accounts ships with the UI (#184b).
+renewals of lines bought before. The list of such accounts is built (#207):
+`GET /internal/v1/subscriber?serviceAddress=missing` (and the MCP tool `search_subscribers`)
+returns the prepaid accounts with a live line (not terminated, cancelled or aborted) and no
+`service_address`; the Subscribers screen's **No service address** chip sets it.
 
 ## Interface
 

@@ -59,7 +59,7 @@ export const ORDER_ERRORS: Record<string, string> = {
   realizingResourceDuplicate: 'Choose at most one resource of each kind.',
   requestedStartDateInPast: 'Choose today or a later start date.',
   serviceAddressRequired:
-    'Add the service address to the billing account before activating a prepaid line.',
+    'The billing account needs a service address before a prepaid line can be activated.',
   simSwapAlone:
     'Swap the SIM of a prepaid line in an order of its own: change only the IMSI, nothing else.',
   simUnavailable: 'No SIM of the chosen type is in stock. Import SIMs or choose another type.',

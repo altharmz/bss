@@ -68,6 +68,7 @@ export function AddProductModal({
   onClose,
   onOrdered,
   onTopUp,
+  onServiceAddress,
 }: {
   account: Account;
   activeOfferingIds: Set<string>;
@@ -75,6 +76,9 @@ export function AddProductModal({
   /** Close Add product and open the card's Top-up form with this decimal amount typed in;
    * absent where there is no card behind the dialog (a new subscriber's first product). */
   onTopUp?: (amount: string) => void;
+  /** Close Add product and open the card's service address dialog (after a
+   * serviceAddressRequired refusal); absent where there is no card behind the dialog. */
+  onServiceAddress?: () => void;
   onOrdered: (message: string, accepted?: PendingOrder) => void;
   /** Edit this draft instead of placing a new order. */
   draft?: DraftToEdit;
@@ -378,6 +382,16 @@ export function AddProductModal({
               Top up {formatCents(shortfallCents)} {first.shortfall.unit}…
             </Button>
           )}
+          {onServiceAddress !== undefined &&
+            (code ?? '').split(', ').includes('serviceAddressRequired') && (
+              <Button
+                variant="primary"
+                data-ui="ui.addProduct.serviceAddress"
+                onClick={onServiceAddress}
+              >
+                Set service address…
+              </Button>
+            )}
         </Footer>
       }
     >

@@ -2836,3 +2836,49 @@ def test_messages_and_consent_as_the_ui_sends_them(api, db_conn):
     assert current["marketing"]["sms"] is None
     assert [e["source"] for e in current["history"]] == ["call 2026-10-01"]
     assert new("Email", "marketing", "Half price", subject="Offer")["state"] == "initial"
+
+
+def test_service_address_writes_as_the_ui_sends_them(api, db_conn):
+    """saveAccountContacts() (SubscriberCard.serviceAddress.test.tsx, #207): the whole contact
+    array in a merge patch - set (added after the other contacts), changed in place with a
+    second street line, and removed (the other contacts as loaded)."""
+    account = apidata.account(api, ratingType="prepaid")
+    url = f"{ACCOUNTS}/{account['id']}"
+    billing = (
+        '{"@type":"Contact","contactType":"billing","contactName":"Accounts desk",'
+        '"contactMedium":[{"@type":"EmailContactMedium","emailAddress":"desk@example.com"}]}'
+    )
+    assert api.patch_raw(url, f'{{"contact":[{billing}]}}').status_code == 200
+
+    def address(street2: str = "") -> str:
+        return (
+            '{"@type":"Contact","contactType":"serviceAddress","contactMedium":'
+            '[{"@type":"GeographicAddressContactMedium","street1":"5 Main St",'
+            f"{street2}"
+            '"city":"Albany","stateOrProvince":"NY","postCode":"12207-1234","country":"US"}]}'
+        )
+
+    def mirrored():
+        return db_conn.execute(
+            "SELECT service_address FROM billing_account WHERE id = %s", (account["id"],)
+        ).fetchone()[0]
+
+    set_ = api.patch_raw(url, f'{{"contact":[{billing},{address()}]}}')
+    assert set_.status_code == 200, set_.text
+    assert [c["contactType"] for c in set_.json()["contact"]] == ["billing", "serviceAddress"]
+    assert mirrored()["postCode"] == "12207-1234"
+
+    second_line = address('"street2":"Suite 200",')
+    changed = api.patch_raw(url, f'{{"contact":[{billing},{second_line}]}}')
+    assert changed.status_code == 200, changed.text
+    assert mirrored()["street2"] == "Suite 200"
+
+    short_zip = address().replace("12207-1234", "1220")
+    bad = api.patch_raw(url, f'{{"contact":[{billing},{short_zip}]}}')
+    assert bad.status_code == 422
+    assert bad.json()["message"].startswith("contact.1.contactMedium.0: postCode must be a ZIP")
+
+    removed = api.patch_raw(url, f'{{"contact":[{billing}]}}')
+    assert removed.status_code == 200, removed.text
+    assert [c["contactType"] for c in removed.json()["contact"]] == ["billing"]
+    assert mirrored() is None

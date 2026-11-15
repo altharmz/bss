@@ -684,13 +684,16 @@ OPERATIONS: dict[str, Op] = {
     "search_subscribers": Op(
         "Billing accounts with their customer, oldest first, paged: the Subscribers list. q"
         " matches by prefix a customer or account name, a subscriber number or a short id"
-        " (BA-1F3A9C2B, or its first characters); state and ratingType filter. Each row has"
+        " (BA-1F3A9C2B, or its first characters); state and ratingType filter;"
+        " serviceAddress=missing lists the prepaid accounts with live lines and no service"
+        " address (their new lines are refused, charges taxed at the flat rate). Each row has"
         " the balance, active products and how many accounts the customer has.",
         query=PAGE,
         extra={
             "q": {"type": "string", "maxLength": 200},
             "state": {"type": "string", "enum": ["Active", "Suspended", "Closed"]},
             "ratingType": {"type": "string", "enum": ["prepaid", "postpaid"]},
+            "serviceAddress": {"type": "string", "enum": ["missing"]},
         },
     ),
     "search_parties": Op(

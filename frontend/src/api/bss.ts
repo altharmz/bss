@@ -1,4 +1,5 @@
 import { orderRefusal, type OrderError } from './orderErrors';
+import { serviceAddressOf, type ServiceAddress } from './serviceAddress';
 // What the screens load and send, mapped from the generated spec types onto exactly what
 // the UI needs. The TMF types make every attribute optional; our API always sends the
 // ones read here, so a missing one is an error (shown in the error block), never a
@@ -12,6 +13,7 @@ import { contactMedia, EMPTY_CONTACT } from './partyDocuments';
 import { addDays, businessDate, zonedDateTime } from '../format/dates';
 import {
   AMOUNT,
+  accountPinHeader,
   amountSlot,
   explain,
   getAll,
@@ -75,6 +77,20 @@ type BillingAccountBody = T666['schemas']['BillingAccount'] & {
   ratingType?: string;
 };
 
+/** Save the account's whole `contact` array (the service address replaced or removed,
+ * #207); the account PIN goes in X-Account-Pin when typed. */
+export async function saveAccountContacts(
+  accountId: string,
+  contacts: unknown[],
+  accountPin: string,
+): Promise<void> {
+  await patchJson(
+    `${PATHS.accounts}/${accountId}`,
+    { contact: contacts },
+    accountPinHeader(accountPin),
+  );
+}
+
 /** The account's rating mode (docs/decisions/prepaid.md); chosen at creation. */
 export type RatingMode = 'postpaid' | 'prepaid';
 
@@ -94,6 +110,11 @@ export interface Account {
   financialAccount: { id: string; name: string } | null;
   /** the bill structure the account prefers (slice 18); absent = the defaults */
   billing?: BillingPrefs | undefined;
+  /** the TMF666 `contact` array as loaded (sent back whole when the service address
+   * changes, #207); absent on a Subscribers row */
+  contact?: unknown[] | undefined;
+  /** the contact of type serviceAddress; absent on a Subscribers row */
+  serviceAddress?: ServiceAddress | null | undefined;
 }
 
 /** The ids of the cycle specification (null = the built-in monthly), bill format and
@@ -150,7 +171,10 @@ export function toAccount(body: BillingAccountBody): Account {
   const balance = need(body.accountBalance?.[0]?.amount?.value, 'accountBalance');
   const limit = body.creditLimit?.value;
   const financial = body.financialAccount;
+  const contact: unknown[] = body.contact ?? [];
   return {
+    contact,
+    serviceAddress: serviceAddressOf(contact),
     financialAccount: financial
       ? { id: need(financial.id, 'financialAccount id'), name: financial.name ?? '' }
       : null,
@@ -423,6 +447,8 @@ export interface SubscriberFilter {
   q: string;
   state: AccountState | null;
   mode: RatingMode | null;
+  /** only prepaid accounts with live lines and no service address (#207) */
+  noServiceAddress?: boolean;
 }
 
 export const SUBSCRIBER_PAGE = 50;
@@ -458,6 +484,7 @@ export async function searchSubscribers(
   if (filter.q.trim()) query.set('q', filter.q.trim());
   if (filter.state) query.set('state', filter.state);
   if (filter.mode) query.set('ratingType', filter.mode);
+  if (filter.noServiceAddress) query.set('serviceAddress', 'missing');
   query.set('offset', String(offset));
   query.set('limit', String(SUBSCRIBER_PAGE));
   const page = await getPage<SubscriberBody>(`${PATHS.subscribers}?${query}`, signal);

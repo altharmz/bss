@@ -20,6 +20,7 @@ import { Button, Dialog, submitDialogPrimary } from '../ui/kit';
 import { ErrorBlock, SkeletonRows } from '../ui/states';
 import { Footer } from './FinancialForms';
 import { uncertain } from './submissionKey';
+import { TaxLines } from './TaxLines';
 
 // The prepaid plan features of the subscriber's product row (docs/decisions/prepaid.md,
 // "Plans, renewal, add-ons and fees"): the plan facts, the renewal history and Buy add-on.
@@ -97,7 +98,7 @@ export function RenewalHistory({ product }: { product: AccountProduct }) {
             </tr>
           </thead>
           <tbody>
-            {history.map((h) => (
+            {history.map((h) => [
               <tr key={h.authorizedAt}>
                 <td className="num">
                   {h.period.start} – {h.period.end}
@@ -109,8 +110,15 @@ export function RenewalHistory({ product }: { product: AccountProduct }) {
                 <td className="num">{formatCents(toCents(h.tax.value))}</td>
                 <td>{h.fundedBy === 'card' ? 'Card' : 'Balance'}</td>
                 <td className="num">{h.bill === null ? '—' : `BILL-${shortId(h.bill.id)}`}</td>
-              </tr>
-            ))}
+              </tr>,
+              h.appliedTax.length > 0 && (
+                <tr key={`${h.authorizedAt}:taxes`}>
+                  <td colSpan={6}>
+                    <TaxLines lines={h.appliedTax} />
+                  </td>
+                </tr>
+              ),
+            ])}
           </tbody>
         </table>
       )}

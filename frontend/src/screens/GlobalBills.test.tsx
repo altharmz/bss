@@ -161,7 +161,31 @@ describe('bills screen', () => {
       [`GET ${BILL}?${LIST}`]: () => json([BILL1], { total: 1 }),
       [`GET /internal/v1/customerBill/${B1}`]: () => json(DETAIL),
       [`GET ${RATE}?bill.id=${B1}&${PAGE}`]: () => json([RATE1], { total: 1 }),
-      [`GET ${RATE}/${R1}`]: () => json(RATE1),
+      [`GET ${RATE}/${R1}`]: () =>
+        json({
+          ...RATE1,
+          appliedTax: [
+            {
+              taxCategory: 'sales_tax',
+              taxRate: 7.25,
+              taxAmount: usd(18.13),
+              jurisdiction: 'CA state',
+            },
+            {
+              taxCategory: 'federal_usf',
+              taxRate: 3,
+              taxAmount: usd(7.5),
+              jurisdiction: 'US federal',
+            },
+            {
+              taxCategory: 'prepaid_wireless_e911',
+              taxRate: 0,
+              taxAmount: usd(0.8),
+              jurisdiction: 'CA state',
+            },
+            { taxCategory: 'VAT', taxRate: 20, taxAmount: usd(1) },
+          ],
+        }),
       [`GET ${CYCLE}/${K1}`]: () => json(CYCLE1),
     });
     open('/bills');
@@ -179,9 +203,23 @@ describe('bills screen', () => {
     expect(within(row).getByText('250.00')).toBeTruthy();
     expect(within(row).getByText('50.00')).toBeTruthy();
     fireEvent.click(row);
-    await screen.findByRole('dialog', { name: 'Rate D1000001' });
+    const rate = await screen.findByRole('dialog', { name: 'Rate D1000001' });
     expectUi('ui.bills.rateDetail');
     expect(calls).toContain(`GET ${RATE}/${R1}`);
+    // #207: one row per tax line, with its jurisdiction; a fixed fee has no rate
+    const taxes = await within(rate).findByRole('table', { name: 'Tax lines' });
+    expectUi('ui.bills.rateDetail.taxLines');
+    expect(
+      within(taxes)
+        .getAllByRole('row')
+        .slice(1)
+        .map((r) => Array.from(r.querySelectorAll('td')).map((c) => c.textContent)),
+    ).toEqual([
+      ['Sales tax', 'CA state', '7.25%', '18.13'],
+      ['Federal USF', 'US federal', '3%', '7.50'],
+      ['Prepaid wireless E911', 'CA state', '—', '0.80'],
+      ['VAT', '—', '20%', '1.00'],
+    ]);
     fireEvent.click(screen.getAllByRole('button', { name: 'Close' }).at(-1) as HTMLElement);
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Bill cycle' }));

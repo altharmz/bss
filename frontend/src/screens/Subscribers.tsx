@@ -124,12 +124,19 @@ export function SubscribersScreen() {
   const q = useSettled(query);
   const [state, setState] = useState<StateFilter>('All');
   const [mode, setMode] = useState<ModeFilter>('All');
+  // prepaid accounts with live lines and no service address (#207)
+  const [noAddress, setNoAddress] = useState(false);
   // the offset belongs to the filters it was set for: new filters start at the first page
-  const filterKey = `${q}:${state}:${mode}`;
+  const filterKey = `${q}:${state}:${mode}:${noAddress}`;
   const [offset, setOffset] = usePageOffset(filterKey);
-  const subscribers = useResource(`subscribers:${q}:${state}:${mode}:${offset}`, (signal) =>
+  const subscribers = useResource(`subscribers:${filterKey}:${offset}`, (signal) =>
     searchSubscribers(
-      { q, state: state === 'All' ? null : state, mode: mode === 'All' ? null : mode },
+      {
+        q,
+        state: state === 'All' ? null : state,
+        mode: mode === 'All' ? null : mode,
+        noServiceAddress: noAddress,
+      },
       offset,
       signal,
     ),
@@ -170,11 +177,12 @@ export function SubscribersScreen() {
       ? { ...column, label: `Balance ${rows[0]?.currency}` }
       : column,
   );
-  const filtered = query !== '' || state !== 'All' || mode !== 'All';
+  const filtered = query !== '' || state !== 'All' || mode !== 'All' || noAddress;
   const reset = () => {
     setQuery('');
     setState('All');
     setMode('All');
+    setNoAddress(false);
   };
 
   const openCard = (accountId: string) => navigate(hrefOf({ name: 'subscriber', accountId }));
@@ -226,6 +234,14 @@ export function SubscribersScreen() {
               onChange={setMode}
               options={MODES.map(({ key, label }) => ({ key, label }))}
             />
+            <Button
+              data-ui="ui.subscribers.noServiceAddress"
+              aria-pressed={noAddress}
+              title="Prepaid accounts with live lines and no service address: new lines are refused and charges are taxed at the flat rate"
+              onClick={() => setNoAddress(!noAddress)}
+            >
+              No service address
+            </Button>
             {filtered && (
               <Button variant="quiet" onClick={reset}>
                 Reset filters
@@ -251,6 +267,7 @@ export function SubscribersScreen() {
               ...(mode !== 'All'
                 ? [{ label: 'Mode', value: mode === 'prepaid' ? 'Prepaid' : 'Postpaid' }]
                 : []),
+              ...(noAddress ? [{ label: 'Service address', value: 'Missing' }] : []),
             ]}
             onResetFilters={reset}
           >
