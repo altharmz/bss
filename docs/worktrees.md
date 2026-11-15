@@ -261,7 +261,9 @@ succeeds again.
 
 `make finish-task SLOT=<slot>` runs from clean primary `master` under the startup and slot
 locks. It verifies the merged PR and head, the closed issue with Done board state, a clean
-worktree and matching Compose ownership; synchronizes `master`; stops the task's containers;
+worktree and matching Compose ownership; synchronizes `master`; stops the task's containers
+(the load-test `lt-*` containers too, through `scripts/task-compose --loadtest`, so no
+`make loadtest-down` is needed first);
 removes the worktree without force; removes the task's own external `.env` only if
 unchanged; then removes what the task created, as disposable development data: its Compose
 volumes (exact project label `bss-<task id>`, none in use), its images
