@@ -24,9 +24,13 @@ def suite_environment():
     """The caller's environment without Git's repository selectors. The commit hook runs
     the suites with GIT_DIR and GIT_INDEX_FILE set; a suite that passed them on to
     `git init <dir>` re-initialised the real repository as bare (2026-11-11). Harness tests
-    must also never write to the shared telemetry database."""
+    must also never write to the shared telemetry database. Nor does a suite inherit the
+    flags and command-line variables of the make that runs it: with
+    `make runtime-check RUNTIME_SUITES=...` every `make` a suite started in its fixture saw
+    RUNTIME_SUITES too, and the lifecycle targets refused it as an unknown variable (#366)."""
     selectors = ("GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE", "GIT_PREFIX")
     selectors += ("GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES")
+    selectors += ("MAKEFLAGS", "MFLAGS", "MAKEOVERRIDES", "GNUMAKEFLAGS", "MAKELEVEL")
     environment = {key: value for key, value in os.environ.items() if key not in selectors}
     return {**environment, "GIT_PAGER": "cat", "BSS_TELEMETRY_DISABLED": "1"}
 

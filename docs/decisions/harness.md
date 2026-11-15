@@ -52,7 +52,10 @@ in the invoking worktree):
   the targets it runs pass straight through (a second open of the lock would deadlock);
   the wrapper waits up to `BSS_TEST_LOCK_WAIT` seconds (3600), then fails without running.
   `scripts/test_test_lock.py` refuses a heavy recipe line without `$(LOCKED)`;
-- `make lint`, then the test runs `scripts/hook_selection.py` plans for the staged files
+- every choice below is made from the selected paths (`scripts/hook_selection.py paths`):
+  the staged paths, or on a merge commit the task's own side only
+  ([below](#tests-in-the-hook-smoke-plus-affected));
+- `make lint`, then the test runs `scripts/hook_selection.py` plans for the selected paths
   ([below](#tests-in-the-hook-smoke-plus-affected)): `make test-smoke` + `make test-changed`,
   plus `make test-files` for the tests that read a staged data file (`frontend/src`,
   `docs/progress/scope.yaml`, `scripts/ui_mcp_parity.py`); or the whole backend suite,
@@ -72,6 +75,8 @@ in the invoking worktree):
 - `make deploy-check` (`scripts/test_deploy_rollback.py`), only when the deploy or smoke
   scripts, the compose files, the suite, its runner or the `Makefile` change. It tests the
   human's deploy, not the agents' workflow, and was the longest suite of every harness commit;
+- neither of the two suites runs again on content it already passed on
+  ([below](#tests-in-the-hook-smoke-plus-affected));
 - `make web-lint` and `make web-test` when `frontend/` or `spec/` change;
 - the full output of each run is in `.git/pre-commit-logs/` (last 10).
 
@@ -311,6 +316,38 @@ it had not touched, and a retry after its one failure paid all of it again. Now:
 - `make test-recorded` has no `runtime-check` or `deploy-check`: the hook runs those by its
   own path rules, once. `make test` (by hand, nightly) is unchanged.
 
+**A merge commit chooses from the task's side** (2026-11-15, #366). `make sync-task` merges
+`origin/master` into the task branch, and the hook of that merge commit used to choose its
+checks from `git diff --cached`, which for a merge is everything coming in. In #309 a merge
+that brought in a migration and `app/worker/` code ran `make test-recorded`,
+`make runtime-check` and `make deploy-check`, over 10 minutes, on a task that had touched
+none of it; that code had already passed the hook and CI on `master`. Now
+`scripts/hook_selection.py paths` gives the paths every choice is made from: the staged
+paths, or, while `MERGE_HEAD` exists, the paths whose index content differs from
+`MERGE_HEAD` (`git diff --cached --name-only MERGE_HEAD`). Those are the task's own changes
+since it left `master` and the conflicts resolved by hand; a file that only came in is left
+out. The plan, the Markdown-only exit, `docs-links`, `docs-check`, the two script suites and
+the web checks all use these paths. `make lint`, `make test-smoke` and `make test-changed`
+still run on a merge (unless the task's side is Markdown only), and testmon selects the
+tests the merged code affects, so a clash between the two sides is still caught. The whole
+suite runs on a merge only when the task's own side touched a `FULL` path. The log lists
+the real staged files and a line `selection: merge with <commit>, N incoming paths left out`.
+
+**A script suite is not repeated on the same content** (2026-11-15, #366).
+`make runtime-check` (about 85 s) ran four times in #309. After either script suite passes
+in the hook, the hook writes a digest of the index entries (mode, blob, path) of that
+suite's trigger paths to `.testmon/runtime-check` or `.testmon/deploy-check`. Before a run
+it compares the digest with the stamp and, when they are equal, prints
+`runtime-check: passed on this content already; skipped`. A retry after a lint failure or
+a failure of the other suite then costs no second run. This skips nothing the path rules
+would not skip: a suite is only considered when a trigger path is selected, and the stamp
+only matches when every trigger path has exactly the content a passing run saw. A failed
+run writes no stamp. The trigger paths of both suites are in one place (`SUITES` in
+`scripts/hook_selection.py`); `scripts/test_ci_workflow.py` keeps the CI harness job on the
+same `runtime-check` paths. The other half is a working rule
+([worktrees.md](../worktrees.md#hooks-and-checks)): while developing, run only the suites
+of the change by hand; the hook is the one full local run.
+
 testmon limits: selection is off under `-m` and `-k` (so smoke and affected are separate runs);
 the first run on a checkout without a seeded record, or after deleting `.testmon/`, is the
 whole suite; it follows
@@ -383,6 +420,13 @@ so every command in the primary checkout failed until `git config core.bare fals
 suite's environment, `scripts/task_testmon.py` from its own git call, and
 `scripts/test_task_testmon.py` has the case.
 
+**Nor the variables of the make that runs them** (2026-11-15, #366). With
+`make runtime-check RUNTIME_SUITES="..."`, make passed the variable on in `MAKEFLAGS`, and
+every `make` a suite started in its fixture received it; the lifecycle targets refuse
+unknown variables, so `scripts/test_task_quality.py` failed whenever it was chosen that
+way. `scripts/run_suites.py` removes make's control variables as well
+(`scripts/test_run_suites.py`).
+
 **Measured and left alone:**
 
 - *Scheduler and workers.* `--dist worksteal` gave 91 and 92 s on the smoke subset against
@@ -408,18 +452,38 @@ suite's environment, `scripts/task_testmon.py` from its own git call, and
 ## CI
 
 `.github/workflows/ci.yml`, GitHub Actions on `ubuntu-latest` (private repository, Free plan,
-so cost shapes what runs). Pull requests to `master` and pushes to `master`: `make lint`,
+so cost shapes what runs). Pull requests to `master`: `make lint`,
 `make docs-check`, `make test-smoke`. Nightly (01:30 UTC) and `workflow_dispatch`: `make lint`,
 `make docs-check` and the whole `make test` (including `make runtime-check` and
 `make deploy-check`). A PR run is
-cancelled by a newer push; runs on `master` never are. The workflow uses a disposable
+cancelled by a newer push; a nightly or manual run never is. The workflow uses a disposable
 database password, reads no repository secret (`contents: read`), never touches the VPS, and
 pins actions to commit SHAs. The dev image is built with the Actions layer cache. A second job, `harness` (no
-Docker, 15 minutes at most), runs `make docs-links` on every pull request and push and
+Docker, 15 minutes at most), runs `make docs-links` on every run and
 `make runtime-check` and `make deploy-check` on pull requests that change `scripts/`, `.claude/`,
 `.codex/` or the `Makefile` (a changed-files step); it is the backstop for the local commit
 hook, and the nightly full run covers the harness tests through `make test`. The web
 checks (`web-lint`, `web-test`, `web-e2e`) are not in CI. Branch protection is the human's.
+
+**No run on a push to `master`** (2026-11-15, #366). `make merge-task` merges only a green
+pull request that is not behind `master` (`base-behind`, `scripts/test_task_finish.py`), and
+the repository squash-merges, so the commit that lands on `master` has exactly the tree the
+PR's run tested. The push run tested it a second time: 84 of 185 runs in 30 days, on a Free
+plan of 2,000 minutes a month of which roughly 1,000 to 1,400 were used. The Actions layer
+cache for the dev image is now written on `master` by the nightly run; a PR run reads its
+own branch's cache and `master`'s. Moving the test gate into CI or running the full suite
+on pull requests does not fit the budget: the local hook stays the gate.
+
+**A failed nightly run opens an issue** (2026-11-15, #366). Without the push run, the
+nightly run is the only one on `master`, and a red one was found only by looking. The job
+`nightly-report` runs after a scheduled run in which `check` or `harness` failed: it opens
+`Nightly CI failed: <date>` (labels `bug`, `P1`) with the run's URL, the jobs that did not
+succeed and the commits since the last successful scheduled run, or comments on the open
+issue with that title if there is one. It is the only job with a write permission
+(`issues: write`, plus `actions: read` and `contents: read` for the run list and the compare
+request), checks out nothing, runs no repository code and uses only the run's own token. It
+writes to GitHub issues only; the issue reaches the board's Inbox like any new issue.
+`scripts/test_ci_workflow.py` holds the triggers and the permissions.
 
 The supply-chain scan (`.github/workflows/security.yml`, the `Security` workflow) is an
 infrastructure decision: [infra.md](infra.md#supply-chain-scanning-2026-11-08).

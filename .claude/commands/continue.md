@@ -8,9 +8,10 @@ unrelated Ready work. The full workflow is in
 [docs/worktrees.md](../../docs/worktrees.md#normal-agent-workflow); board rules are in
 [docs/board.md](../../docs/board.md).
 
-1. **Master health.** `gh run list --branch master --limit 5`. If the latest push run or
-   the nightly run failed, revert the offending PR (on a branch, as a PR), open an issue
-   for it, then carry on (board.md, "Red master").
+1. **Master health.** `gh run list --branch master --event schedule --limit 3` (pushes to
+   `master` start no run). If the latest nightly run failed, revert the offending PR (on a
+   branch, as a PR), note it on the `Nightly CI failed:` issue the run opened, then carry
+   on (board.md, "Red master").
 2. **Resume known work.** In a task worktree, `make review-task` shows its state and
    `make check-pr` its PR. Failing checks or requested changes come before new work. Run
    `make telemetry-collect` to bind the resumed session (Kimi:

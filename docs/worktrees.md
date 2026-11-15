@@ -204,9 +204,19 @@ worktree's `scripts/pre-commit.sh` and `scripts/pre-push.sh`. Details of the gat
   lint and the tests the change needs; Markdown-only commits skip the tests. One run at a
   time per repository. What runs when, and how long it takes:
   [harness.md](decisions/harness.md#development-cycle-and-gates).
+- **Tests while developing: only the suites of the change.** The hook is the one full
+  local run, so do not run the whole `make runtime-check` or `make test` by hand before a
+  commit. Run the suites that cover what you changed:
+  `make runtime-check RUNTIME_SUITES="scripts/test_task.py scripts/test_task_git.py"` for harness
+  scripts (include a suite whose fixtures copy the script), `make test-files
+  TESTS=tests/a.py,tests/b.py` for backend tests. The hook does not repeat work either: the
+  hook of a merge commit (`make sync-task`) chooses its tests from the task's side only, not
+  from what comes in from `master`, and a harness or deploy suite that passed is not run
+  again on the same content (a retry after a lint failure skips it with a log line).
 - **pre-push** refuses bcrypt hashes, `.env*` paths, branch deletions and non-fast-forwards.
-- `make format` formats backend and, if `frontend/` or `spec/` changed (or the base is
-  unknown), the UI (never stages). `make review-task` prints JSON about
+- `make format` formats backend and, if they changed (or the base is unknown), the harness
+  Python under `scripts/` (`make scripts-fmt`) and the UI (`frontend/` or `spec/`); it never
+  stages. `make review-task` prints JSON about
   task identity, slot, runtime, changed files, whitespace, forbidden paths and suspicious
   secret filenames; it reads no secrets and changes nothing.
 - `make check` (optional) runs migration preflight, lint, the full backend suite, generated

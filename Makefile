@@ -152,7 +152,7 @@ test: runtime-check deploy-check ## [test] The FULL suite in the container (para
 	./scripts/test-pre-commit-lock.sh
 	$(LOCKED) ./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) $(if $(PLAN_CAPTURE_DIR),-e BSS_PLAN_CAPTURE_DIR=$(PLAN_CAPTURE_DIR)) oneoff pytest -n auto
 
-test-smoke: ## [test] The smoke subset (pytest -m smoke) and the scripts' own cases: what CI runs on pull requests and master
+test-smoke: ## [test] The smoke subset (pytest -m smoke) and the scripts' own cases: what CI runs on pull requests
 	./scripts/test-billing-status-check.sh
 	./scripts/test-pre-commit-lock.sh
 	$(LOCKED) ./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) oneoff pytest -n auto -m smoke
@@ -410,7 +410,7 @@ check: ## [task] Technical readiness in a validated task (full existing local ch
 	@python3 -B scripts/task.py $@
 
 .PHONY: format review-task show-task
-format: ## [task] Format backend and frontend in a validated task
+format: ## [task] Format backend, changed harness scripts and frontend in a validated task
 	@python3 -B scripts/task.py $@
 
 review-task: ## [task] Non-destructive review of task identity and local Git safety

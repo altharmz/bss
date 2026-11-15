@@ -48,11 +48,19 @@ def needs_ui(names):
 
 
 def format_targets(names):
-    """Backend always; the UI formatter only when UI sources changed or the base is unknown."""
+    """Backend always; the harness and UI formatters only when their sources changed or the
+    base is unknown. `make fmt` does not reach scripts/, so a harness change used to need
+    `make scripts-fmt` by hand after `make scripts-lint` failed (#366)."""
+    targets = ["fmt"]
+    if names is None or any(n.startswith("scripts/") and n.endswith(".py") for n in names):
+        targets.append("scripts-fmt")
+    else:
+        print("task quality: no Python changes under scripts/; skipping scripts-fmt (harness)")
     if names is None or any(n.startswith(("frontend/", "spec/")) for n in names):
-        return ["fmt", "web-fmt"]
-    print("task quality: no changes under frontend/ or spec/; skipping web-fmt (UI formatter)")
-    return ["fmt"]
+        targets.append("web-fmt")
+    else:
+        print("task quality: no changes under frontend/ or spec/; skipping web-fmt (UI formatter)")
+    return targets
 
 
 def check_stages(names):
