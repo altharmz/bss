@@ -288,8 +288,13 @@ class FinishTests(LifecycleFixture):
             "p=Path(os.environ['BSS_TEST_DOCKER_STATE'])\n"
             "d=json.loads(p.read_text()); a=sys.argv[3:]\n"
             "if a[0]=='compose':\n"
+            " d.setdefault('compose',[]).append(a)\n"
             " if a[-1]=='down':\n"
             "  if d['fail_down']: sys.exit(1)\n"
+            # Without compose.loadtest.yaml, `down` leaves the lt-* containers (orphans).
+            "  lt=any(x.endswith('/compose.loadtest.yaml') for x in a)\n"
+            "  d['containers']={k:v for k,v in d.get('containers',{}).items()\n"
+            "   if v['com.docker.compose.service'].startswith('lt-') and not lt}\n"
             "  d['running']=False; p.write_text(json.dumps(d))\n"
             " if 'bss-telemetry' in a: sys.exit(1)\n"
             " sys.exit(0)\n"
@@ -315,8 +320,11 @@ if a[0] == 'ps' and any(x.startswith('volume=') for x in a):
 if a[0] == 'ps' and any(x.startswith('ancestor=') for x in a):
     print('user' if label('ancestor=') in d.get('image_users', []) else ''); sys.exit(0)
 """
-            "if a[0]=='ps': print('abc' if d['running'] else ''); sys.exit(0)\n"
+            "if a[0]=='ps': print('\\n'.join(d.get('containers',{})) or"
+            " ('abc' if d['running'] else '')); sys.exit(0)\n"
             "if a[:2]==['network','ls']: sys.exit(0)\n"
+            "if a[0]=='inspect' and a[-1] in d.get('containers',{}):\n"
+            " print(json.dumps(d['containers'][a[-1]])); sys.exit(0)\n"
             "if a[0]=='inspect':\n"
             " root=d['root']; task=d['task']\n"
             " print(json.dumps({'com.docker.compose.project':'bss-'+task,"
@@ -625,6 +633,66 @@ if a[0] == 'ps' and any(x.startswith('ancestor=') for x in a):
             self.finish()
         self.assertTrue(json.loads(self.docker_state.read_text())["running"])
         self.assertTrue(self.secret.exists())
+
+    def labels(self, service, root=None, files=None):
+        root = str(root or self.work)
+        names = files or ("compose.yaml", "compose.override.yaml", "compose.loadtest.yaml")
+        return {
+            "com.docker.compose.project": "bss-" + self.task,
+            "com.docker.compose.service": service,
+            "com.docker.compose.project.working_dir": root,
+            "com.docker.compose.project.config_files": ",".join(f"{root}/{n}" for n in names),
+        }
+
+    def test_finish_removes_the_tasks_own_load_test_containers(self):
+        self.set_docker(
+            containers={
+                "dev": self.labels("app", files=("compose.yaml", "compose.override.yaml")),
+                "lt-db": self.labels("lt-db"),
+                "lt-tools-run": self.labels("lt-tools"),
+            }
+        )
+        self.assertEqual(self.finish()["status"], "finished")
+        now = self.docker_now()
+        self.assertEqual(now["containers"], {})
+        down = [c for c in now["compose"] if c[-1] == "down"]
+        self.assertEqual(len(down), 1)
+        self.assertIn(f"{self.work}/compose.loadtest.yaml", down[0])
+        self.assertFalse(self.work.exists())
+
+    def test_foreign_load_test_containers_stop_finish(self):
+        for name, labels in (
+            ("working directory", self.labels("lt-db", root=self.base / "elsewhere")),
+            (
+                "compose files",
+                self.labels("lt-db", files=("compose.yaml", "compose.override.yaml")),
+            ),
+            (
+                "extra file",
+                self.labels(
+                    "lt-db",
+                    files=(
+                        "compose.yaml",
+                        "compose.override.yaml",
+                        "compose.loadtest.yaml",
+                        "x.yaml",
+                    ),
+                ),
+            ),
+            ("dev service, load-test files", self.labels("app")),
+            ("unknown lt service", self.labels("lt-other")),
+            ("project", {**self.labels("lt-app"), "com.docker.compose.project": "bss-other"}),
+        ):
+            with self.subTest(name=name):
+                self.set_docker(containers={"lt": labels})
+                with self.assertRaises(InvalidRuntime) as raised:
+                    self.finish()
+                self.assertIn("container ownership mismatch", str(raised.exception))
+                now = self.docker_now()
+                self.assertEqual(now["containers"], {"lt": labels})
+                self.assertNotIn("down", [c[-1] for c in now.get("compose", [])])
+                self.assertTrue(self.secret.exists())
+                self.assertTrue(self.work.exists())
 
     def test_partial_cleanup_failure_can_retry(self):
         self.inventory["fail_down"] = True

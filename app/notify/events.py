@@ -176,18 +176,25 @@ def _grace(
     return events
 
 
+# The latest grants ending in the window: the grants ending in it (the upper(period) index)
+# that no later grant follows, not the latest grant of every product (#311).
+_PLAN_EXPIRING = (
+    "SELECT g.id, g.product_id, g.billing_account_id, upper(g.period) AS due, p.name"  # noqa: S608 - LATER_GRANT is code
+    " FROM funded_interval g JOIN product p ON p.id = g.product_id JOIN billing_account a"
+    " ON a.id = g.billing_account_id"
+    " WHERE upper(g.period) > %(today)s AND upper(g.period) <= %(limit)s"
+    " AND NOT EXISTS (" + entitlement.LATER_GRANT + ")"
+    " AND a.rating_type = 'prepaid' AND a.state = 'Active'"
+    " AND NOT p.grantless AND p.status NOT IN ('terminated', 'cancelled', 'aborted')"
+    " AND p.termination_date IS NULL"
+    " AND NOT (p.manually_suspended AND NOT p.lifecycle_suspended) ORDER BY g.id"
+)
+
+
 def _plan_expiring(conn: psycopg.Connection, today: date) -> list[Event]:
     rows = fetch_all(
         conn,
-        "SELECT g.id, g.product_id, g.billing_account_id, upper(g.period) AS due, p.name"
-        " FROM (SELECT DISTINCT ON (product_id) id, product_id, billing_account_id, period"
-        "  FROM funded_interval ORDER BY product_id, lower(period) DESC, authorized_at DESC) g"
-        " JOIN product p ON p.id = g.product_id JOIN billing_account a"
-        " ON a.id = g.billing_account_id WHERE a.rating_type = 'prepaid' AND a.state = 'Active'"
-        " AND NOT p.grantless AND p.status NOT IN ('terminated', 'cancelled', 'aborted')"
-        " AND p.termination_date IS NULL"
-        " AND NOT (p.manually_suspended AND NOT p.lifecycle_suspended)"
-        " AND upper(g.period) > %(today)s AND upper(g.period) <= %(limit)s ORDER BY g.id",
+        _PLAN_EXPIRING,
         {"today": today, "limit": today + timedelta(days=settings.notify_expiring_days)},
     )
     return [

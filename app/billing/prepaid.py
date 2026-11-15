@@ -139,7 +139,8 @@ def _renewal_quote(conn, cmd, account, today, tz):
     latest = fetch_one(
         conn,
         "SELECT id FROM funded_interval WHERE product_id = %s"
-        " ORDER BY lower(period) DESC, authorized_at DESC LIMIT 1",
+        " ORDER BY lower(period) DESC, authorized_at DESC,"
+        " supersedes_interval_id IS NULL, id DESC LIMIT 1",
         (prod["id"],),
     )
     if latest["id"] != previous["id"] or previous["period"].upper != cmd["due_date"]:

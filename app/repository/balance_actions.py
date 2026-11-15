@@ -14,7 +14,7 @@ import psycopg
 from psycopg import sql
 
 from app.repository import billing, funding
-from app.repository._sql import Row, fetch_all, fetch_one, jsonb, returning
+from app.repository._sql import Row, conditions, fetch_all, fetch_one, jsonb, returning
 
 
 def bucket(conn: psycopg.Connection, bucket_id: UUID) -> Row | None:
@@ -94,12 +94,14 @@ def page(
     A kind's list (the TMF654 topup, adjust, reserve and transfer lists) is newest
     requested first (#314, decided by the human 2026-11-11); the history of every kind
     stays oldest first."""
-    conditions = [sql.SQL("{}::text = %s").format(sql.Identifier(c)) for c in where]
-    params = [str(value) for value in where.values()]
+    filters = conditions(conn, "balance_action", where)
+    if filters is None:
+        return [], False
+    conds, params = filters
     if kind is not None:
-        conditions.insert(0, sql.SQL("kind = %s"))
+        conds.insert(0, sql.SQL("kind = %s"))
         params.insert(0, kind)
-    clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions) if conditions else sql.SQL("")
+    clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conds) if conds else sql.SQL("")
     rows = fetch_all(
         conn,
         sql.SQL("SELECT * FROM balance_action")

@@ -76,8 +76,8 @@ def links(conn: psycopg.Connection, rows: list[Row]) -> dict[UUID, dict[str, Any
     for grant in fetch_all(
         conn,
         "SELECT id, command_id, product_id FROM funded_interval"
-        " WHERE command_id = ANY(%s) OR id::text = ANY(%s)",
-        (ids, list(previous)),
+        " WHERE command_id = ANY(%s) OR id = ANY(%s)",
+        (ids, [UUID(value) for value in previous]),
     ):
         owner = grant["command_id"] if grant["command_id"] in out else None
         if owner is not None:
