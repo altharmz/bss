@@ -1,15 +1,61 @@
 #!/usr/bin/env python3
 """scripts/run_suites.py: suites in parallel parts, one grouped result per suite."""
 
+import os
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from run_suites import split
+from run_suites import split, suite_environment
 
 RUNNER = Path(__file__).resolve().parent / "run_suites.py"
+ROOT = RUNNER.parent.parent
+# The suite itself runs under make: its flags and command-line variables are not the case's.
+MAKE_CONTROLS = {"MAKEFLAGS", "MAKELEVEL", "MFLAGS", "MAKEOVERRIDES", "GNUMAKEFLAGS"}
+
+
+class MakeTargetTests(unittest.TestCase):
+    """While developing, only the suites of the change are run by hand (docs/worktrees.md)."""
+
+    def recipe(self, *args):
+        return subprocess.run(  # noqa: S603 - fixed program, dry run
+            ["make", "-n", "runtime-check", *args],  # noqa: S607
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+            env={key: value for key, value in os.environ.items() if key not in MAKE_CONTROLS},
+        ).stdout.split()
+
+    def test_runtime_suites_on_the_command_line_replaces_the_whole_list(self):
+        chosen = "scripts/test_run_suites.py scripts/test_task.py"
+        recipe = self.recipe(f"RUNTIME_SUITES={chosen}")
+        self.assertEqual(recipe[recipe.index("scripts/run_suites.py") + 1 :], chosen.split())
+
+    def test_a_suite_does_not_inherit_the_variables_of_the_make_that_runs_it(self):
+        inherited = {
+            "MAKEFLAGS": " -- RUNTIME_SUITES=scripts/test_task.py",
+            "MAKEOVERRIDES": "RUNTIME_SUITES=scripts/test_task.py",
+            "MFLAGS": "-w",
+            "GNUMAKEFLAGS": "",
+            "MAKELEVEL": "1",
+        }
+        with patch.dict(os.environ, inherited):
+            environment = suite_environment()
+        self.assertEqual(set(inherited) & set(environment), set())
+        self.assertIn("PATH", environment)
+
+    def test_the_default_is_every_suite_but_the_deploy_and_telemetry_database_ones(self):
+        recipe = self.recipe()
+        suites = set(recipe[recipe.index("scripts/run_suites.py") + 1 :])
+        every = {path.relative_to(ROOT).as_posix() for path in RUNNER.parent.glob("test_*.py")}
+        left_out = {"scripts/test_deploy_rollback.py", "scripts/test_telemetry_database.py"}
+        self.assertEqual(suites, every - left_out)
+
+
 SUITE = """import os, unittest
 class A(unittest.TestCase):
     def test_one(self): open(os.environ["SEEN"], "a").write(f"one {os.getpid()}\\n")

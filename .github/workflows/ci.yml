@@ -1,23 +1,23 @@
-# CI. Pull requests to master and pushes to master run the cheap gate (make lint, make
-# docs-check, make test-smoke: the tests marked `smoke`); the full make test runs nightly
-# and on demand. The harness job (no Docker) checks the documentation links on every run
-# and the harness script tests on pull requests that change them.
-# Decision: docs/decisions/harness.md, "CI".
+# CI. Pull requests to master run the cheap gate (make lint, make docs-check, make
+# test-smoke: the tests marked `smoke`); the full make test runs nightly and on demand.
+# The harness job (no Docker) checks the documentation links on every run and the harness
+# script tests on pull requests that change them. A push to master starts no run:
+# `make merge-task` merges only a green pull request that is not behind master, so that
+# run tested the same code a second time (#366). A failed nightly run opens an issue
+# (nightly-report). Decision: docs/decisions/harness.md, "CI".
 name: CI
 
 on:
   pull_request:
-    branches: [master]
-  push:
     branches: [master]
   schedule:
     # 01:30 UTC = 04:30 Moscow, outside working hours. Scheduled runs use master.
     - cron: "30 1 * * *"
   workflow_dispatch:
 
-# A newer push to the same pull request supersedes the running check. Runs on master are
-# never cancelled (every commit there keeps its own result), and a nightly or manual full
-# run has its own group, so it neither waits for nor cancels a push run.
+# A newer push to the same pull request supersedes the running check. A nightly or manual
+# full run is never cancelled and has its own group, so it neither waits for nor cancels a
+# pull request's run.
 concurrency:
   group: ci-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -55,6 +55,8 @@ jobs:
       # The dev image make lint / make test run in (compose.override.yaml: target dev,
       # task-specific image). Built here with a layer cache so pinned dependency layers are
       # not reinstalled on every run; compose then finds the image and does not build.
+      # A pull request's run reads the caches of its own branch and of master, and master's
+      # is written by the nightly run (no run on a push to master any more).
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -100,3 +102,58 @@ jobs:
         if: steps.harness.outputs.changed == 'true'
       - run: make deploy-check
         if: steps.harness.outputs.changed == 'true'
+
+  # A failed nightly run opens an issue, or comments on the one still open, so a red master
+  # is not found by chance. The only job that may write, and only issues; it checks out
+  # nothing and runs no code from the repository. The issue lands in the board's Inbox like
+  # any new issue.
+  nightly-report:
+    if: github.event_name == 'schedule' && failure()
+    needs: [check, harness]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+      # gh run list (the last green nightly run) and the compare API (the commits since)
+      actions: read
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      CHECK: ${{ needs.check.result }}
+      HARNESS: ${{ needs.harness.result }}
+    steps:
+      - name: Open or update the nightly failure issue
+        run: |
+          set -euo pipefail
+          failed=""
+          [[ "$CHECK" == success ]] || failed+="- \`check\` (lint, generated docs, full suite): ${CHECK}"$'\n'
+          [[ "$HARNESS" == success ]] || failed+="- \`harness\` (documentation links): ${HARNESS}"$'\n'
+
+          # The commits merged since the last green nightly run, in a code block: a commit
+          # subject must not mention a person or link an issue from here.
+          last="$(gh run list --workflow ci.yml --event schedule --status success --limit 1 \
+            --json headSha --jq '.[0].headSha // empty')"
+          if [[ -z "$last" ]]; then
+            commits="(no successful nightly run found)"
+          elif [[ "$last" == "$GITHUB_SHA" ]]; then
+            commits="(none: the last successful nightly run was on this commit)"
+          else
+            commits="$(gh api "repos/${GH_REPO}/compare/${last}...${GITHUB_SHA}" \
+              --jq '.commits[] | .sha[0:7] + " " + (.commit.message | split("\n")[0])')" ||
+              commits="(the compare request for ${last}...${GITHUB_SHA} failed)"
+          fi
+
+          body="$(printf 'The nightly CI run failed on `%s`: %s\n\nJobs that did not succeed:\n%s\nCommits since the last successful nightly run:\n\n```\n%s\n```\n' \
+            "${GITHUB_SHA:0:7}" "$RUN_URL" "$failed" "$commits")"
+
+          existing="$(gh issue list --state open --search 'in:title "Nightly CI failed:"' \
+            --json number,title \
+            --jq '[.[] | select(.title | startswith("Nightly CI failed:"))][0].number // empty')"
+          if [[ -n "$existing" ]]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "Nightly CI failed: $(date -u +%F)" --label bug --label P1 \
+              --body "$body"
+          fi

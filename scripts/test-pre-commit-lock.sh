@@ -19,9 +19,10 @@ repo="${tmp}/repo"
 calls="${tmp}/calls"
 mkdir -p "${tmp}/bin" "${repo}"
 held="${tmp}/held"
-# The fake make records its target, and in ${held} whether it ran with the lock held.
-printf '#!/bin/sh\necho "$1" >>"%s"\necho "${BSS_TEST_LOCK_HELD:-unset}" >>"%s"\n' \
-  "${calls}" "${held}" >"${tmp}/bin/make"
+# The fake make records its target, and in ${held} whether it ran with the lock held; the
+# target named in FAKE_MAKE_FAIL fails.
+printf '#!/bin/sh\necho "$1" >>"%s"\necho "${BSS_TEST_LOCK_HELD:-unset}" >>"%s"\n%s\n' \
+  "${calls}" "${held}" '[ "$1" != "${FAKE_MAKE_FAIL:-}" ]' >"${tmp}/bin/make"
 chmod +x "${tmp}/bin/make"
 export PATH="${tmp}/bin:${PATH}"
 git init -q "${tmp}/primary"
@@ -102,6 +103,74 @@ echo fixed >"${repo}/alembic/m.py"
 git -C "${repo}" add alembic
 expect 0 "lint test-recorded docs-check web-lint web-test" \
   "a changed migration runs the whole suite again"
+
+# A script suite is not repeated on content it already passed on (#366).
+commit() { git -C "${repo}" -c user.name=t -c user.email=t@t commit -q "$@"; }
+# said <text> <case>: the last hook run printed the text
+said() {
+  grep -qF -- "$1" "${tmp}/out" || {
+    printf 'FAIL %s: the hook did not print [%s]\n' "$2" "$1" >&2
+    sed 's/^/  | /' "${tmp}/out" >&2
+    failed=$((failed + 1))
+  }
+}
+commit -m base
+mkdir -p "${repo}/scripts"
+echo a >"${repo}/scripts/a.py"
+git -C "${repo}" add scripts
+expect 0 "lint test-smoke test-changed runtime-check" "a harness path runs the harness suite"
+expect 0 "lint test-smoke test-changed" "a retry on the same harness content skips the suite"
+said 'runtime-check: passed on this content already; skipped' "a skipped harness suite"
+
+echo b >"${repo}/scripts/a.py"
+git -C "${repo}" add scripts
+FAKE_MAKE_FAIL=runtime-check expect 1 "lint test-smoke test-changed runtime-check" \
+  "a changed harness path runs the suite again"
+expect 0 "lint test-smoke test-changed runtime-check" "a failed suite leaves no stamp: it runs again"
+
+echo all: >"${repo}/Makefile"
+git -C "${repo}" add Makefile
+FAKE_MAKE_FAIL=deploy-check expect 1 "lint test-smoke test-changed runtime-check deploy-check" \
+  "the Makefile runs both script suites"
+expect 0 "lint test-smoke test-changed deploy-check" \
+  "each suite has its own stamp: only the failed one runs again"
+expect 0 "lint test-smoke test-changed" "both suites passed on this content"
+said 'deploy-check: passed on this content already; skipped' "a skipped deploy suite"
+
+# A merge commit: the checks are chosen from the task's side, not from what comes in (#366).
+commit -m harness
+trunk="$(git -C "${tmp}/primary" symbolic-ref --short HEAD)"
+# incoming <name>: master moves on with a migration, worker code, a script and a UI source
+incoming() {
+  git -C "${tmp}/primary" -c user.name=t -c user.email=t@t merge -q --ff-only "$(git -C "${repo}" rev-parse HEAD)"
+  mkdir -p "${tmp}/primary/app/worker" "${tmp}/primary/scripts"
+  for file in "alembic/$1.py" "app/worker/$1.py" "scripts/$1.py" "frontend/src/$1.ts" Makefile; do
+    echo "$1" >>"${tmp}/primary/${file}"
+  done
+  git -C "${tmp}/primary" add -A
+  git -C "${tmp}/primary" -c user.name=t -c user.email=t@t commit -q -m "incoming $1"
+}
+incoming one
+echo task >"${repo}/notes.txt"
+git -C "${repo}" add notes.txt
+commit -m task
+git -C "${repo}" -c user.name=t -c user.email=t@t merge -q --no-ff --no-commit "${trunk}" >/dev/null 2>&1
+expect 0 "lint test-smoke test-changed" \
+  "a merge runs no full suite or script suite for what only comes in"
+said "selection: merge with $(git -C "${tmp}/primary" rev-parse --short HEAD), 5 incoming paths left out" \
+  "a merge commit"
+commit -m merge
+
+incoming two
+mkdir -p "${repo}/app/worker"
+echo task >"${repo}/app/worker/task.py"
+echo task >"${repo}/scripts/task.py"
+git -C "${repo}" add app scripts
+commit -m task
+git -C "${repo}" -c user.name=t -c user.email=t@t merge -q --no-ff --no-commit "${trunk}" >/dev/null 2>&1
+expect 0 "lint test-recorded docs-check runtime-check" \
+  "a merge runs the suites the task's own side calls for"
+commit -m merge
 
 # wrapped <exit code> <recorded lines, space separated> <case> <command...>: the wrapper,
 # run in the task worktree (its lock is the one in the common git directory, as the hook's).

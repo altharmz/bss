@@ -55,19 +55,30 @@ check_tree() {
       printf '%s\n' "$untracked" | sed 's/^/  /'; } | tee -a "$log" >&2
     fail "the checks would see files the commit does not contain - add them, delete them, or ignore them"
   fi
-  staged="$(git diff --cached --name-only)"
+  # What the checks below are chosen from (scripts/hook_selection.py paths): the staged
+  # paths, or on a merge commit the task's own side only. What merely comes in from master
+  # passed the hook and CI there; a sync merge once ran the whole backend suite and both
+  # script suites for it, over 10 minutes, on a task that touched none of that (#366).
+  selected="$(python3 -B "$selection" paths 2>&1)" ||
+    fail "scripts/hook_selection.py paths: ${selected}"
 }
+selection="$(dirname "${BASH_SOURCE[0]}")/hook_selection.py"
 check_tree
+if merging="$(git rev-parse -q --verify --short MERGE_HEAD)"; then
+  printf 'selection: merge with %s, %s incoming paths left out\n' "$merging" \
+    "$(comm -23 <(git diff --cached --name-only | sort) <(sort <<<"$selected") | wc -l)" |
+    tee -a "$log"
+fi
 
 # Markdown links and the commands the agent docs name (cheap, no Docker), for any staged .md.
-if grep -qE '\.md$' <<<"$staged"; then
+if grep -qE '\.md$' <<<"$selected"; then
   run make docs-links || fail "make docs-links: fix the broken links above"
 fi
 
 # Markdown only: nothing to lint or test. Not spec/ (tests read spec/README.md) or
 # scripts/docs/ (the API notes are sources of the generated docs).
-if [[ -n "$staged" ]] && ! grep -vE '\.md$' <<<"$staged" | grep -q . &&
-  ! grep -qE '^(spec|scripts/docs)/' <<<"$staged"; then
+if [[ -n "$selected" ]] && ! grep -vE '\.md$' <<<"$selected" | grep -q . &&
+  ! grep -qE '^(spec|scripts/docs)/' <<<"$selected"; then
   echo "pre-commit: Markdown only - lint and tests skipped" | tee -a "$log"
   exit 0
 fi
@@ -94,7 +105,7 @@ export BSS_TEST_LOCK_HELD=1
 # context (GUI clients, editors) as well as a plain terminal commit.
 run make lint || fail "make lint"
 
-# Tests: the plan of scripts/hook_selection.py for the staged files (#344). Usually the
+# Tests: the plan of scripts/hook_selection.py for the selected paths (#344). Usually the
 # smoke subset plus the tests this change affects (pytest-testmon, which follows the Python
 # code each test ran), plus the tests that read a staged data file testmon cannot see (the
 # UI sources, the scope file). The whole suite (make test-recorded) only for what any test
@@ -102,7 +113,7 @@ run make lint || fail "make lint"
 # (its tests run it in subprocesses), alembic/ - and not again when it already ran to its
 # end on that content: a retry then runs the failed and the affected tests. The full
 # `make test` is nightly in CI and by hand (2026-10-28).
-plan="$(python3 -B "$(dirname "${BASH_SOURCE[0]}")/hook_selection.py" plan 2>&1)" ||
+plan="$(python3 -B "$selection" plan 2>&1)" ||
   fail "scripts/hook_selection.py plan: ${plan}"
 while IFS= read -r step; do
   [[ -n "$step" ]] || continue
@@ -112,28 +123,43 @@ done <<<"$plan"
 
 # The generated docs/api and docs/db (~7 s), when their sources change: regenerated here,
 # so a commit that leaves them stale is refused with the files to stage.
-if grep -qE '^(app|alembic|spec|scripts/docs)/|^tests/docs_collect' <<<"$staged"; then
+if grep -qE '^(app|alembic|spec|scripts/docs)/|^tests/docs_collect' <<<"$selected"; then
   run make docs-check || fail "generated docs are out of date - git add docs/api docs/db and commit again"
 fi
 
-# The harness script tests, only when the commit touches the harness (the same paths as the
-# CI harness job). `make test` (so the nightly run) includes them too; the hook's own
-# full-suite run (make test-recorded) does not, so they never run twice or unasked.
-if grep -qE '^(scripts/|\.claude/|\.codex/|Makefile$)' <<<"$staged"; then
-  run make runtime-check || fail "make runtime-check"
-fi
+# suite TARGET: a script suite the hook runs by path. scripts/hook_selection.py holds its
+# trigger paths (SUITES) and says `none` when no selected path is one of them, `passed`
+# when the suite already passed on exactly this content of all its trigger paths, else
+# `run`. A passing run records that content (.testmon/TARGET), so a retry of the commit -
+# after a lint failure, say - does not run the suite again (#366).
+suite() {
+  local state
+  state="$(python3 -B "$selection" suite "$1" 2>&1)" ||
+    fail "scripts/hook_selection.py suite $1: ${state}"
+  case "$state" in
+    run)
+      run make "$1" || fail "make $1"
+      run python3 -B "$selection" stamp "$1" || fail "scripts/hook_selection.py stamp $1"
+      ;;
+    passed) echo "$1: passed on this content already; skipped" | tee -a "$log" ;;
+  esac
+}
+
+# The harness script tests, only when the commit touches the harness (scripts/, .claude/,
+# .codex/, the Makefile: the same paths as the CI harness job). `make test` (so the nightly
+# run) includes them too; the hook's own full-suite run (make test-recorded) does not, so
+# they never run twice or unasked.
+suite runtime-check
 
 # The deploy script's tests, only when the commit touches what they run: the deploy and
 # smoke scripts, the compose files, the suite itself, its runner or the Makefile.
-if grep -qE '^(scripts/(deploy\.sh|test_deploy_rollback\.py|run_suites\.py|task-compose|billing-status-check\.sh|[a-z-]*smoke[a-z-]*\.(sh|py))|compose[a-z.]*\.yaml|Makefile)$' <<<"$staged"; then
-  run make deploy-check || fail "make deploy-check"
-fi
+suite deploy-check
 
 # The admin UI, only when the commit touches it or the specs its types come from. These
 # targets run offline and never install: if node_modules is out of date they fail with
 # "run make web-install". A change in app/api or app/internal alone can still break the
 # UI; make check (web-e2e) is the gate for that, on demand.
-if grep -qE '^(frontend|spec)/' <<<"$staged"; then
+if grep -qE '^(frontend|spec)/' <<<"$selected"; then
   run make web-lint || fail "make web-lint"
   run make web-test || fail "make web-test"
 fi

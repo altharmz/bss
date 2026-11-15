@@ -76,12 +76,24 @@ class QualityTests(unittest.TestCase):
             self.assertIn("test", stages)
 
     def test_format_skips_the_ui_formatter_without_ui_changes(self):
-        for names in (None, {"frontend/src/App.tsx"}, {"spec/tmf.json", "scripts/a.py"}):
+        for names in ({"frontend/src/App.tsx"}, {"spec/tmf.json", "scripts/a.sh"}):
             self.assertEqual(format_targets(names), ["fmt", "web-fmt"])
-        for names in (set(), {"scripts/task_git.py"}, {"app/main.py", "docs/x.md"}):
+        for names in (set(), {"app/main.py", "docs/x.md"}):
             with patch("builtins.print") as shown:
                 self.assertEqual(format_targets(names), ["fmt"])
             self.assertIn("skipping web-fmt", shown.call_args.args[0])
+
+    def test_format_runs_the_harness_formatter_for_changed_harness_python(self):
+        self.assertEqual(format_targets(None), ["fmt", "scripts-fmt", "web-fmt"])
+        self.assertEqual(format_targets({"scripts/x.py"}), ["fmt", "scripts-fmt"])
+        self.assertEqual(
+            format_targets({"spec/tmf.json", "scripts/docs/a.py"}),
+            ["fmt", "scripts-fmt", "web-fmt"],
+        )
+        for names in ({"app/x.py"}, {"scripts/deploy.sh", "docs/scripts/x.py"}):
+            with patch("builtins.print") as shown:
+                self.assertEqual(format_targets(names), ["fmt"])
+            self.assertIn("skipping scripts-fmt", shown.call_args_list[0].args[0])
 
     def test_multiple_failures_are_reported(self):
         from types import SimpleNamespace

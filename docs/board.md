@@ -125,9 +125,10 @@ direct push to `master`, a force-push. No hook checks labels, paths, `--admin` o
 merges, so these rules rest on you; `make merge-task` is the only supported way to merge,
 and the guard blocks force pushes.
 
-**Red master.** If `master` goes red (a push run or the nightly full run), the first step of
-the next "continue" is: revert the offending PR (on a branch, as a PR), open an issue for
-it, then carry on in the normal order. The revert PR follows the same flow.
+**Red master.** If `master` goes red (the nightly full run; pushes to `master` start no
+run), the first step of the next "continue" is: revert the offending PR (on a branch, as a
+PR), note it on the `Nightly CI failed:` issue the run opened (open one if it is missing),
+then carry on in the normal order. The revert PR follows the same flow.
 
 **Repo setting.** The repository allows squash merges only and deletes merged branches
 (`gh repo edit --enable-squash-merge --enable-merge-commit=false
