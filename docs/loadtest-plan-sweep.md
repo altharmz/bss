@@ -42,7 +42,7 @@ buffers, plan excerpts and acceptance criteria:
 | Catalogue affected-product lookup | [#331](https://github.com/altharmz/bss/issues/331) |
 | Worker account selection and product transitions | [#332](https://github.com/altharmz/bss/issues/332) |
 | Billing-run membership and outcomes | [#333](https://github.com/altharmz/bss/issues/333) |
-| First-touch timing outliers requiring reproduction | [#334](https://github.com/altharmz/bss/issues/334) |
+| First-touch timing outliers requiring reproduction | [#334](https://github.com/altharmz/bss/issues/334): reproduced and dispositioned, no statement changed, [below](#first-touch-timing-outliers-334) |
 
 The slowest final inventory-number query took 1,483 ms; registry joins reached
 234 ms, lifecycle account selection 244 ms, catalogue impact lookup 157 ms and
@@ -78,3 +78,108 @@ rows over a widened window, since the run's own window has none).
 
 The sweep's cadence list (`loadtest/plan_measure.py`) now includes `process_lifecycle` and
 `_entitlement_accounts`; shape 5 was measured against the 5 ms per-account default before.
+
+## Billing-run membership and outcomes (#333)
+
+Re-measured on 2026-11-14 on `seed100k` restored and migrated to head (0076), warm cache,
+the same lt-db settings, another task's lt-db sharing the host: absolute times run about
+twice the #327 figures, so compare before/after within this table only. Before/after are
+the second of two runs. The dataset's runs are all ok, so the status filters were measured
+in a rolled-back transaction that marked 50 outcomes of the latest run failed and 20
+blocked. Results compared on the dataset: identical (seven outcome pages: failed at
+offsets 0 and 40, blocked, ok at 0 and 5000, unfiltered at 0 and 5000; due dates of the
+20 latest runs).
+
+| Shape | Where | Before | After | Disposition |
+| --- | --- | ---: | ---: | --- |
+| 11 | `outcome_gaps` | 2 x 199-298 ms per close | 1 x | Unchanged SQL, now read once per close. `close_run` read the gaps, then `finish_run` read them again under the run's lock; `close_run` now calls `finish_run` and takes the gaps from its `RunNotComplete`. The scan of every member and its outcome is the "completed means every member is ok" rule (#284), once per run: intended |
+| 12 | `run_members` | 256-284 ms | unchanged | The run's work list, ~97 % of the accounts in id order, once per run (`DateRun`): the seq scan and sort are intended; an index on `opened_at` would not be used for 97 % of the rows. On a failed close it was also called to count the members, loading every id: now `run_member_total`, a count (72-90 ms) |
+| 15 | `count_members` | 166-202 ms | unchanged | Once per start, reopen or takeover (#284): intended |
+| 35 | `page_run_outcomes` | failed 31-75 ms, blocked 72 ms, ok offset 5000 684 ms | 1.3-1.8 ms, 0.8 ms, 31 ms | The status is compared as the enum and only added when given. As `status::text` the partial index `billing_run_account_unresolved` could not serve it, so a failed/blocked page read every outcome of the run through the primary key, and the estimate (504 rows instead of 100k for ok) chose a parallel scan for deep ok pages. Unfiltered pages are unchanged (index scan in account order). The 196-519x estimate errors of #327 were on a UUID proxy status that matched nothing: estimate-only |
+| 64 | `run_payment_due_date` | 9-14 ms | unchanged | Accepted: the planner ANDs the `(billing_account_id, bill_date)` index into the run's bitmap (34 rows estimated, 1,067 real); with `bill_date` kept a filter it took 2.9 ms, but that plan shows only on a large `customer_bill`, so no test can hold it and the change is not made. One read per cycle request |
+| - | `run_payment_due_dates` (page of cycles) | 145 ms | 43 ms | Not flagged by #327 (its tests list few runs). The run ids now restrict `billing_run` as well: the planner hashed all 70k rows, prepaid command runs included. The rest is reading the ~12k bills of 20 runs; storing the term on the run would be a data-model change and is not proposed for this cost |
+
+The sweep's cadence list now includes `run_member_total` (once per run).
+
+Shape 35 was re-checked after #310 (migration 0077 adds `billing_run_account (billing_account_id)`):
+the status pages still read `billing_run_account_unresolved` (failed/blocked 0.6-1.0 ms against
+30-65 ms for the old text comparison), with identical results on all seven pages.
+
+## First-touch timing outliers (#334)
+
+Reproduced on 2026-11-15 on `seed100k` restored and migrated to head (0078). The 24
+statements of the issue were taken from a fresh full-suite collection (2,691 tests; all 24
+unchanged in the code) and measured with `PHASE=measure` on that subset. That ran three
+rounds: each from a fresh restore, then `lt-db` restarted (empty shared buffers), then
+three passes. Pass 1 is cold; passes 2 and 3 are warm. Each pass is a new process, so a
+new backend. The OS page cache could not be dropped (no root in WSL2), so "cold" means
+cold shared buffers and a cold backend. The host was shared with two other tasks'
+stacks (load average 13 on 12 CPUs), which accounts for the 5-9 ms single warm samples.
+
+Result: pass 1 flagged 20-21 of the 24 every round; passes 2 and 3 flagged 1-7. The plans (node types, relations and indexes) were identical in every
+pass for all 96 shape/profile pairs: only buffers and time differ. **No statement is
+changed.** Times are the worst profile, in ms. Warm is the median / max over 24 samples.
+
+| Shape | Source | #327 | Cold (3 rounds) | Cold reads | Warm median / max |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 30 | `app/repository/_sql.py:170` payment list | 62.7 | 14.3-97.1 | 160 | 0.1 / 2.7 |
+| 32 | `app/repository/_sql.py:170` billCycle list | 57.1 | 0.2-0.4 | 0 | 0.2 / 0.3 |
+| 55 | `app/repository/billing.py` `forget_member` | 21.0 | 25.2-30.6 | 69 | 0.8 / 16.7 |
+| 62 | `app/repository/prepaid_command_views.py:92` | 16.9 | 15.5-256.4 | 999 | 1.1 / 4.0 |
+| 64 | `app/repository/_sql.py:170` productOrder list | 15.2 | 16.0-71.2 | 124 | 0.1 / 5.0 |
+| 67 | `app/repository/_sql.py:222` order item parent | 12.6 | 10.5-13.1 | 47 | 2.2 / 6.5 |
+| 69 | `app/repository/_sql.py:170` billCycle by date | 12.2 | 0.1-0.2 | 0 | 0.1 / 0.2 |
+| 71 | `app/repository/balance_actions.py:128` | 10.9 | 14.3-20.4 | 41 | 1.9 / 7.8 |
+| 72 | `app/repository/usage.py:276` | 9.8 | 10.0-15.5 | 69 | 0.6 / 2.8 |
+| 73 | `app/repository/parties.py:42` | 9.1 | 6.8-11.4 | 26 | 1.1 / 2.0 |
+| 75 | `app/repository/_sql.py:222` subscriber number | 8.9 | 6.9-9.8 | 19 | 0.6 / 1.5 |
+| 76 | `app/repository/billing.py:1230` | 7.7 | 10.7-13.8 | 37 | 2.2 / 9.4 |
+| 77 | `app/repository/_sql.py:170` party list | 7.3 | 6.2-11.8 | 99 | 0.1 / 8.0 |
+| 80 | `app/repository/usage.py:271` | 7.1 | 4.3-5.2 | 0 | 1.6 / 4.2 |
+| 81 | `app/repository/payments.py:60` | 7.0 | 6.5-8.0 | 21 | 1.5 / 3.9 |
+| 82 | `app/repository/billing.py:1258` | 6.9 | 4.8-5.8 | 17 | 1.3 / 4.0 |
+| 83 | `app/repository/_sql.py:170` customer list | 6.9 | 4.2-10.8 | 100 | 0.1 / 3.8 |
+| 86 | `app/repository/balance_actions.py:214` | 6.3 | 7.6-9.9 | 19 | 4.0 / 8.6 |
+| 65 | `app/repository/parties.py:125` | 5.9 | 8.3-9.5 | 48 | 1.8 / 3.2 |
+| 87 | `app/repository/billing.py:534` | 5.7 | 11.6-15.9 | 74 | 1.2 / 3.4 |
+| 88 | `app/repository/billing.py:373` | 5.6 | 6.3-9.0 | 16 | 1.6 / 3.1 |
+| 89 | `app/repository/funding.py:186` | 5.4 | 7.1-8.7 | 27 | 2.6 / 8.6 |
+| 90 | `app/ordering/numbers.py:380` | 5.3 | 8.2-12.0 | 55 | 0.8 / 2.0 |
+| 92 | `app/repository/_sql.py:222` customer update | 5.1 | 4.7-6.8 | 30 | 0.4 / 1.1 |
+
+Dispositions:
+
+- **32, 69 - not reproduced; a binder value the app never sends.** The #327 fresh pass
+  bound `kind = 'prepaidCommand'` (70,408 rows) and got a sequential scan. The only
+  caller, `GET /billCycle` (`app/api/bill.py`), always filters `kind = 'daily'` (31 rows),
+  which the partial unique index `billing_run_daily_date` serves. The current binder
+  samples the latest daily run. Directly: `prepaidCommand` 34.7 ms (parallel seq scan),
+  `daily` 0.28 ms (index scan). No index is added for a value no request produces.
+- **30, 64, 77, 83 - cold-only, deep page.** Only the `largest` profile is slow: it binds
+  OFFSET 5000, so the index scan reads 5,021 rows and their heap pages (99-160 blocks
+  cold). Warm it takes 2-3 ms, and the other profiles (OFFSET 0) take 0.1 ms. OFFSET/limit
+  is the TMF paging contract. The cost grows with the offset, not with the table.
+- **62 - cold-only.** A bitmap heap scan of ~730 bills of a page of prepaid commands:
+  999 blocks read cold (15-256 ms, depending on the OS cache), 1-4 ms warm.
+- **55 - accepted, rare.** `forget_member` runs only when a billing account without
+  history is deleted. It updates one `billing_run` row per daily run since the account
+  opened (24 for `largest`, 0.3-1.7 ms for the others). The 9-17 ms warm `largest` samples
+  read 15-16 new blocks each: page growth from the sweep's own repeated rolled-back
+  updates of the same 24 rows, not a plan cost.
+- **All the single-row writes (65, 67, 71-73, 75, 76, 80-82, 86-90, 92) - cold-only,
+  first call in a backend.** The cold pass reads the index leaves and heap pages the
+  write maintains (16-74 blocks). It also pays per-backend set-up: plpgsql compilation of
+  the triggers (`account_review`, `credit_account_lock`, the ledger and retention
+  triggers), the RI checks' SPI plans and the catalog caches. The sweep always measures
+  `typical` first in each backend, which is why `typical` is the worst profile of most
+  writes in #327. Shown directly on shape 86, with four inserts in one backend, three
+  backends: the first took 30.6-84.3 ms (triggers 20.1-45.7 ms), the next 5.8-16.9 ms
+  (triggers 1.6-3.4 ms). The app pool (`app/db.py`, psycopg_pool defaults) keeps
+  connections for up to an hour, so a request pays this once per pooled connection, not
+  per call. Warm medians are 0.4-4.0 ms. Shape 86's `typical` stays at 5.4-7.3 ms in the
+  warm passes too: each pass is a new backend, and it is that backend's first INSERT
+  into `balance_action`, so its RI plans are prepared in that call. The other 5-9 ms warm
+  samples are single values under host contention.
+
+The rounds' reports are in `loadtest/out/plan-sweep-334repro/round{1,2,3}/` of worker2
+(ignored, not committed).

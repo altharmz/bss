@@ -18,6 +18,8 @@ table of operations and their targets, is
 1. From the clean primary checkout: `make start-task BSS_TASK_OWNER=<client>` (`claude`,
    `codex`, `kimi`). It selects the issue and a free slot and claims them; use exactly
    what it returns. Do not pick or claim board items yourself. If it fails, stop and report.
+   Once it succeeds, the claimed task is approved work: report the issue, slot and worktree
+   in one line and carry on through delivery without asking whether to start.
 2. In the returned worktree: implement, `make format`, `make review-task`.
 3. `make commit MESSAGE="..." FILES='["path", ...]'` (the pre-commit hook is the one local
    test run), then `make create-pr`, `make check-pr`, `make merge-task`.
