@@ -368,7 +368,7 @@ The Caddy side is vps-infra's. What bss relies on (applied; vps-infra owns the c
   it is only the app's `BSS_SMOKE_SECRET` ([users.md](users.md#after-u11-the-plan-slice-4-2026-10-19)).
   `.env.smoke` is denied to reads like `.env`/`.env.prod`
   (settings.json, guard). **`DRY_RUN=1 ./scripts/deploy.sh`** runs every local check and
-  lists exactly what the rsync calls would ship (the same `ship_config`/`ship_web`
+  lists exactly what the rsync calls would ship (the same `ship_env`/`ship_release`
   functions, `--dry-run` into a scratch directory), proves `.env.smoke` is not among it,
   and stops before any network step. After the app is healthy it rsyncs
   `frontend/dist/` **into** `~/bss/web` - hashed assets, then `index.html`, then a
@@ -486,6 +486,17 @@ VPS) keeps the last two releases and goes back one by itself. Operator view:
   serves has changed: alembic runs all pending migrations in one transaction
   (`alembic/env.py`), so a failed upgrade leaves the schema as it was. Warnings (the smoke
   client prune, image and release pruning) never roll back.
+- **`~/bss/compose*.yaml` always match the running release** (2026-11-15, #256). The deploy
+  ships the new compose files only to `releases/<tag>/`; the migration one-off reads them
+  there (`docker compose --project-directory . -f releases/<tag>/compose.yaml -f
+  releases/<tag>/compose.prod.yaml`, so `~/bss/.env` still fills `${...}` and the project
+  stays `bss`), and they are copied into `~/bss` only by `activate_release`, right before
+  `up`. **Why:** the live drill (#254) found the new release's files in `~/bss` after a
+  failed migration, while the old release kept serving - `make remote` or a manual compose
+  call would have read files that did not match it. Not syncing early was chosen over
+  restoring in the failure path: a restore is one more remote step that can itself fail
+  (the SSH link is often why a deploy fails). `~/bss/.env` is still synced before the
+  migration (it needs the database password) and is not per release, as above.
 - **Target:** an automatic rollback returns to `CURRENT` (still the old release, since the
   pointers have not moved), or to `PREVIOUS` when the deploy was a re-deploy of `CURRENT`;
   `make rollback` goes from `CURRENT` to `PREVIOUS`. Either way `CURRENT` becomes the target

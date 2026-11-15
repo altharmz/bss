@@ -210,13 +210,15 @@ fi
 # DRY_RUN=1 with --dry-run against a local scratch directory - the same calls.
 # Chained with && so a failed rsync fails the function wherever it is called - set -e does
 # not reach into a command substitution, which is where DRY_RUN calls them.
-ship_config() { # <destination> [rsync options]
+# The compose files are NOT shipped into ~/bss here: they go to the release's directory
+# (ship_release) and reach ~/bss only at `up` (activate_release), so until the point of no
+# return ~/bss/compose*.yaml are the running release's (#256).
+ship_env() { # <destination> [rsync options]
   local dest="$1"
   shift
-  "${RSYNC[@]}" "$@" compose.yaml compose.prod.yaml "${dest}/" &&
-    # compose auto-loads a file named .env from its project directory, so EVERY remote
-    # compose call sees the secrets - not just the one that starts the stack
-    "${RSYNC[@]}" "$@" .env.prod "${dest}/.env"
+  # compose auto-loads a file named .env from its project directory, so EVERY remote
+  # compose call sees the secrets - not just the one that starts the stack
+  "${RSYNC[@]}" "$@" .env.prod "${dest}/.env"
 }
 # The release's own copy: its compose files and the exact UI files, into
 # ~/bss/releases/<tag>/. Nothing serves from there; ~/bss/web is synced from it later.
@@ -236,6 +238,13 @@ rcompose() {
   local tag="$1"
   shift
   rssh "cd ${REMOTE_DIR} && IMAGE_NAME=${IMAGE_NAME} TAG=${tag} ${COMPOSE[*]} $*"
+}
+# compose for a stored release that is not active yet, from its own files in
+# releases/<tag>/ with ~/bss as the project directory (so ~/bss/.env still fills ${...});
+# the project name is `bss` either way (compose.yaml `name:`). Prints the command prefix.
+release_compose() { # <tag>
+  printf 'IMAGE_NAME=%s TAG=%s docker compose --project-directory . -f releases/%s/compose.yaml -f releases/%s/compose.prod.yaml' \
+    "${IMAGE_NAME}" "$1" "$1" "$1"
 }
 remote_logs() { # <tag>
   printf '\n--- remote logs (last 100 lines) ---\n' >&2
@@ -416,7 +425,8 @@ write_current() { # <tag>
 }
 
 # The first deploy after releases existed: record what runs as a release, so this deploy
-# can roll back to it. Runs before ship_config overwrites the compose files in ~/bss.
+# can roll back to it. Runs before anything of the new release reaches ~/bss, whose compose
+# files are still the running release's.
 bootstrap_release() {
   local cid image running commit rev
   [[ -z "$(remote_cat CURRENT)" ]] || return 0
@@ -587,7 +597,7 @@ if [[ "${DRY_RUN:-}" == 1 ]]; then
   stage="$(mktemp -d)"
   mkdir -p "${stage}/release/web" # --dry-run creates nothing; the real one exists first
   listing="$(mktemp)"
-  if ! { ship_config "${stage}" --dry-run --out-format='%n' &&
+  if ! { ship_env "${stage}" --dry-run --out-format='%n' &&
          ship_release "${stage}/release" --list "releases/${TAG}/"; } >"${listing}"; then
     rm -rf "${stage}" "${listing}"
     fail "dry run: an rsync call failed (see above)"
@@ -643,9 +653,9 @@ OLD_CURRENT="$(remote_cat CURRENT)"
 OLD_PREVIOUS="$(remote_cat PREVIOUS)"
 [[ -z "${OLD_CURRENT}" ]] || SERVER_NOTE="nothing changed on the server; ${OLD_CURRENT} is still serving"
 
-log "Syncing compose files"
+log "Syncing .env.prod to ~/${REMOTE_DIR}/.env"
 rssh "mkdir -p ${REMOTE_DIR}" || fail "cannot create ~/${REMOTE_DIR} on ${REMOTE}"
-ship_config "${REMOTE}:${REMOTE_DIR}" || fail "syncing the compose files failed"
+ship_env "${REMOTE}:${REMOTE_DIR}" || fail "syncing .env.prod failed"
 record_release "${TAG}" "${DEPLOY_COMMIT}" "${NEW_REV}"
 
 # No --quiet-pull on any compose call below: the image only exists locally on the VPS
@@ -660,10 +670,13 @@ record_release "${TAG}" "${DEPLOY_COMMIT}" "${NEW_REV}"
 # retrying the connection, so without a deadline the deploy just looks slow. Killing the
 # local ssh does not reliably stop the remote one-off container, so a timed-out run is
 # removed explicitly and cannot finish later behind our back.
+#
+# The one-off runs from the new release's own compose files (release_compose): ~/bss still
+# holds the running release's, so a failure here leaves them matching what serves.
 log "Running database migrations (timeout ${MIGRATE_TIMEOUT}s)"
 migrate_rc=0
 timeout "${MIGRATE_TIMEOUT}" ssh "${SSH_OPTS[@]}" "${REMOTE}" "cd ${REMOTE_DIR} && \
-  IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} run --rm --no-deps ${MIGRATE_DRILL_ENV:+${MIGRATE_DRILL_ENV} }app alembic upgrade head" \
+  $(release_compose "${TAG}") run --rm --no-deps ${MIGRATE_DRILL_ENV:+${MIGRATE_DRILL_ENV} }app alembic upgrade head" \
   || migrate_rc=$?
 if (( migrate_rc == 124 )); then
   remove_oneoffs
