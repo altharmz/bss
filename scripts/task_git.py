@@ -6,6 +6,7 @@
 import json
 import os
 import runpy
+import shlex
 import subprocess
 import sys
 import time
@@ -94,16 +95,37 @@ def text_input(inline, from_file):
         raise InvalidRuntime(f"{from_file} is not readable UTF-8 text") from None
 
 
+FILES_FORMS = (
+    "FILES must be a JSON array or a space-separated list of repository-relative filenames"
+)
+
+
+def selected_files():
+    """FILES as a JSON array or space-separated names; FILES_FILE as JSON or one per line."""
+    from_file = bool(os.environ.get("FILES_FILE"))
+    text = text_input("FILES", "FILES_FILE").strip()
+    try:
+        if text.startswith("["):
+            selected = json.loads(text)
+        elif from_file:
+            selected = [line for line in text.splitlines() if line.strip()]
+        else:
+            selected = shlex.split(text)
+    except ValueError:
+        raise InvalidRuntime(FILES_FORMS) from None
+    require(
+        isinstance(selected, list) and selected and all(isinstance(n, str) for n in selected),
+        FILES_FORMS,
+    )
+    return selected
+
+
 def commit(root):
     dry_run = os.environ.get("DRY_RUN", "0")
     require(dry_run in {"0", "1"}, "DRY_RUN must be 0 or 1")
     message = text_input("MESSAGE", "MESSAGE_FILE")
     require(message.strip(), "MESSAGE or MESSAGE_FILE is required")
-    selected = json.loads(text_input("FILES", "FILES_FILE") or "[]")
-    require(
-        isinstance(selected, list) and selected and all(isinstance(n, str) for n in selected),
-        "FILES must be an explicit JSON array of repository-relative filenames",
-    )
+    selected = selected_files()
     changed = (
         set(paths(root, "diff", "--no-renames", "--name-only", "-z"))
         | set(paths(root, "diff", "--cached", "--no-renames", "--name-only", "-z"))

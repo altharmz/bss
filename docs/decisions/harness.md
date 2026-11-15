@@ -226,6 +226,22 @@ and `task_repo.run`. They differ in error type and return value, every caller de
 those, and one helper with flags for each difference would be harder to read than four
 short functions.
 
+## One entry point for lifecycle targets
+
+The lifecycle targets (start, commit, PR, merge, finish, quality and board targets, #309) all
+run `scripts/task.py <target>`. Its table `TARGETS` names each target's script, the arguments
+it gets and the make variables it accepts. The Makefile passes only the names of the variables
+given on the make command line (`BSS_MAKE_VARS`), never their values; `task.py` refuses a name
+the target does not know (`VERBOSE` and `BSS_*` are always allowed), so `make commit
+MESAGE=...` fails instead of committing without the intended message. Values keep travelling
+as exported environment variables, because pasting make variables into a recipe breaks on
+quotes and lets text become shell. Variables from the process environment are not checked:
+they are not in `BSS_MAKE_VARS`. `finish-task` runs the `task.py` next to its Makefile
+(`HARNESS_DIR`), so `make -f /abs/worktree/Makefile finish-task` keeps working without the
+former `python -c` one-liner. The scripts stay runnable directly, which `task_runtime.rerun`
+relies on. `FILES` accepts a plain space-separated list besides a JSON array; `FILES_FILE` one
+name per line or a JSON array.
+
 ## Stale primary scripts
 
 The primary checkout runs old scripts until `master` is fast-forwarded (a fix in #140 once
