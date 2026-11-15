@@ -4,6 +4,13 @@
 ## every target is .PHONY (declared here or next to the target).
 
 SHELL := /bin/bash
+# Names (never values) of the variables given on the make command line; scripts/task.py
+# refuses names a target does not know.
+export BSS_MAKE_VARS := $(strip $(foreach v,$(.VARIABLES),$(if $(findstring command line,$(origin $(v))),$(v))))
+# The directory of this Makefile, for make -f /abs/worktree/Makefile finish-task. MAKEFILE_LIST
+# splits a path with spaces into words: rejoin it before taking the directory.
+space := $(subst ,, )
+HARNESS_DIR := $(subst |, ,$(dir $(subst $(space),|,$(strip $(MAKEFILE_LIST)))))
 COMPOSE_PROD := docker compose -f compose.yaml -f compose.prod.yaml
 # Same timeouts as scripts/deploy.sh: a stalled connection fails fast instead of hanging.
 SSH_OPTS := -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o BatchMode=yes
@@ -30,7 +37,7 @@ endif
 start-task: export BSS_START_ISSUE := $(ISSUE)
 start-task: export BSS_START_APPROVAL := $(HUMAN_APPROVAL)
 start-task: ## [task] Prepare the next Ready issue; optional ISSUE=<id> HUMAN_APPROVAL=<same-id> only with explicit human approval (JSON=1 for agents)
-	@python3 -B scripts/start_task.py $(if $(filter 1,$(JSON)),--json,)
+	@python3 -B scripts/task.py $@
 
 new-priority-task: export BSS_NEW_TASK_TITLE := $(TITLE)
 new-priority-task: export BSS_NEW_TASK_BODY := $(BODY)
@@ -38,10 +45,10 @@ new-priority-task: export BSS_NEW_TASK_BODY_FILE := $(BODY_FILE)
 new-priority-task: export BSS_NEW_TASK_ISSUE := $(ISSUE)
 new-priority-task: export BSS_NEW_TASK_LABELS := $(LABELS)
 new-priority-task: ## [task] Create an approved P0 issue first in Ready; start separately (TITLE= BODY=|BODY_FILE=/abs/path [LABELS=a,b]); ISSUE=<n> finishes a preserved one
-	@python3 -B scripts/start_task.py --new-priority-task $(if $(filter 1,$(JSON)),--json,)
+	@python3 -B scripts/task.py $@
 
 release-slot: ## [task] Release a slot after its task worktree was safely removed (SLOT=worker1)
-	@python3 -B scripts/start_task.py --release-slot
+	@python3 -B scripts/task.py $@
 
 .PHONY: board add-task move-task set-priority reorder-task
 board add-task move-task set-priority reorder-task: export BSS_BOARD_JSON := $(JSON)
@@ -58,15 +65,15 @@ set-priority reorder-task: export BSS_BOARD_APPROVAL := $(HUMAN_APPROVAL)
 reorder-task: export BSS_BOARD_AFTER := $(AFTER)
 
 board: ## [task] Show the open board items by status, in board order (JSON=1 for JSON)
-	@python3 -B scripts/board_admin.py board
+	@python3 -B scripts/task.py $@
 add-task: ## [task] Create an issue on the board (TITLE= BODY=|BODY_FILE=/abs/path [LABELS=a,b] [PRIORITY=P1|P2|P3] [STATUS=Inbox|Ready])
-	@python3 -B scripts/board_admin.py add-task
+	@python3 -B scripts/task.py $@
 move-task: ## [task] Move an issue to Inbox, Ready or Waiting (ISSUE= STATUS=; Waiting needs WAITING_ON= UNBLOCKS_WHEN=)
-	@python3 -B scripts/board_admin.py move-task
+	@python3 -B scripts/task.py $@
 set-priority: ## [task] Change an issue's priority label with human approval (ISSUE= PRIORITY=P0..P3 HUMAN_APPROVAL=<same issue>)
-	@python3 -B scripts/board_admin.py set-priority
+	@python3 -B scripts/task.py $@
 reorder-task: ## [task] Move an issue first on the board, or after AFTER=<issue>, with human approval (ISSUE= HUMAN_APPROVAL=<same issue>)
-	@python3 -B scripts/board_admin.py reorder-task
+	@python3 -B scripts/task.py $@
 
 up: ## [stack] Start the local stack (app + postgres, hot reload)
 	./scripts/task-compose up -d --build
@@ -400,17 +407,17 @@ rollback: ## [ops] Roll the VPS back to the previous release (DRY_RUN=1 shows th
 # On demand only, when a change needs stronger testing; the pre-commit hook is the
 # regular gate. Target-specific: also applies to the `test` prerequisite.
 check: ## [task] Technical readiness in a validated task (full existing local checks)
-	python3 -B scripts/task_quality.py check
+	@python3 -B scripts/task.py $@
 
 .PHONY: format review-task show-task
 format: ## [task] Format backend and frontend in a validated task
-	python3 -B scripts/task_quality.py format
+	@python3 -B scripts/task.py $@
 
 review-task: ## [task] Non-destructive review of task identity and local Git safety
-	python3 -B scripts/task_quality.py review-task
+	@python3 -B scripts/task.py $@
 
 show-task: ## [task] Show this task's issue (title, body, labels, comments) as JSON
-	python3 -B scripts/task_quality.py show-task
+	@python3 -B scripts/task.py $@
 
 .PHONY: check-preflight
 check-preflight: migrate
@@ -564,36 +571,35 @@ commit: export MESSAGE_FILE := $(MESSAGE_FILE)
 commit: export FILES := $(FILES)
 commit: export FILES_FILE := $(FILES_FILE)
 commit: export DRY_RUN := $(or $(DRY_RUN),0)
-commit: ## [task] Commit explicit task files (FILES JSON array or FILES_FILE=/abs/path; MESSAGE or MESSAGE_FILE=/abs/path)
-	@python3 -B scripts/task_git.py commit
+commit: ## [task] Commit explicit task files (FILES="a b" or a JSON array, or FILES_FILE=/abs/path; MESSAGE or MESSAGE_FILE=/abs/path)
+	@python3 -B scripts/task.py $@
 
 push: ## [task] Publish only the current validated task branch to origin
-	@python3 -B scripts/task_git.py push
+	@python3 -B scripts/task.py $@
 
 .PHONY: sync-task
 sync-task: ## [task] Merge current origin/master into a clean task, preserving history and hooks
-	@python3 -B scripts/task_git.py sync-task
+	@python3 -B scripts/task.py $@
 
 .PHONY: create-pr check-pr
 create-pr: export PR_TITLE := $(PR_TITLE)
 create-pr: export PR_BODY_FILE := $(PR_BODY_FILE)
 create-pr: ## [task] Publish the task branch and create or confirm its PR
-	@python3 -B scripts/task_pr.py create-pr
+	@python3 -B scripts/task.py $@
 
 check-pr: export HUMAN_APPROVAL := $(HUMAN_APPROVAL)
 check-pr: ## [task] Report task PR readiness, including human review gates (never merges)
-	@python3 -B scripts/task_pr.py check-pr
+	@python3 -B scripts/task.py $@
 
 .PHONY: clean-tasks
 clean-tasks: export CONFIRM := $(CONFIRM)
 clean-tasks: ## [task] List leftovers (volumes, images, branches, credentials) of finished tasks; CONFIRM=1 removes them. Primary only
-	@python3 -B scripts/task_cleanup.py
+	@python3 -B scripts/task.py $@
 
 .PHONY: merge-task finish-task
 merge-task: export HUMAN_APPROVAL := $(HUMAN_APPROVAL)
 merge-task: ## [task] Merge this task PR only when all repository and human gates permit
-	@python3 -B scripts/task_finish.py merge-task
+	@python3 -B scripts/task.py $@
 
-finish-task: export BSS_FINISH_MAKEFILE := $(MAKEFILE_LIST)
 finish-task: ## [task] Safely finish a completed slot task, from primary master (SLOT=worker1)
-	@python3 -B -c 'import os, pathlib, runpy, sys; script = pathlib.Path(os.environ["BSS_FINISH_MAKEFILE"]).resolve().parent / "scripts/task_finish.py"; sys.path.insert(0, str(script.parent)); sys.argv = [str(script), "finish-task"]; runpy.run_path(str(script), run_name="__main__")'
+	@python3 -B "$(HARNESS_DIR)scripts/task.py" $@

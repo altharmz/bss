@@ -238,6 +238,64 @@ class GitTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.call(["git", "rev-parse", "HEAD"]).stdout, head)
 
+    def committed(self):
+        return self.call(["git", "show", "--format=", "--name-only", "HEAD"]).stdout.split("\n")
+
+    def commit_with(self, **selection):
+        for key in ("FILES", "FILES_FILE"):
+            self.env.pop(key, None)
+        self.env.update(MESSAGE="selection forms", **selection)
+        return self.call([shutil.which("make"), "commit"], check=False)
+
+    def test_files_accepts_a_space_separated_list(self):
+        for name in ("a.txt", "b.txt"):
+            (self.work / name).write_text(name)
+        result = self.commit_with(FILES="a.txt b.txt")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(sorted(filter(None, self.committed())), ["a.txt", "b.txt"])
+
+    def test_files_list_quotes_a_name_with_a_space(self):
+        (self.work / "with space.txt").write_text("x\n")
+        self.change()
+        result = self.commit_with(FILES="'with space.txt' chosen.txt")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(sorted(filter(None, self.committed())), ["chosen.txt", "with space.txt"])
+
+    def test_files_json_array_still_works_inline(self):
+        self.change()
+        result = self.commit_with(FILES=' ["chosen.txt"] ')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(list(filter(None, self.committed())), ["chosen.txt"])
+
+    def test_files_file_one_name_per_line_or_json(self):
+        listing = self.base / "files.txt"
+        listing.write_text("with space.txt\n\nchosen.txt\n")
+        (self.work / "with space.txt").write_text("x\n")
+        self.change()
+        result = self.commit_with(FILES_FILE=str(listing))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(sorted(filter(None, self.committed())), ["chosen.txt", "with space.txt"])
+        (self.work / "chosen.txt").write_text("again\n")
+        listing.write_text(json.dumps(["chosen.txt"]) + "\n")
+        result = self.commit_with(FILES_FILE=str(listing))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(list(filter(None, self.committed())), ["chosen.txt"])
+
+    def test_unbalanced_quote_is_refused_and_nothing_is_staged(self):
+        self.change()
+        head = self.call(["git", "rev-parse", "HEAD"]).stdout
+        for files in ("'chosen.txt", "[not json", "   "):
+            with self.subTest(files=files):
+                result = self.commit_with(FILES=files)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(
+                    "FILES must be a JSON array or a space-separated list of "
+                    "repository-relative filenames",
+                    result.stderr,
+                )
+                self.assertEqual(self.call(["git", "rev-parse", "HEAD"]).stdout, head)
+                self.assertEqual(self.call(["git", "diff", "--cached", "--name-only"]).stdout, "")
+
     def test_deletion_and_literal_filename(self):
         name = "literal[1].txt"
         (self.work / name).write_text("literal\n")
