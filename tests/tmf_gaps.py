@@ -303,10 +303,18 @@ def probe_reads(client: TestClient, spec: str | None = None) -> list[str]:
     return lines
 
 
+# The history the nested read probe seeds. The probe looks at which attributes the
+# resources carry, not at how many there are: from 25 days on (the first bills, which the
+# seed's last day needs) the lines are the ones of the demo's 120 days (#373), and a day
+# costs a billing run. If a probed attribute ever needs a later event, the comparison
+# with tests/tmf-gaps.txt fails: lengthen the history then.
+SEED_DAYS = 30
+
+
 def populate(api: Any) -> None:
-    """Data for the nested read probe: the demo seed (tests/seed.py), and one of each
-    resource it does not create."""
-    seed(api, api.clock, timeline.TODAY)
+    """Data for the nested read probe: the demo seed (tests/seed.py) over a short
+    history (`SEED_DAYS`), and one of each resource it does not create."""
+    seed(api, api.clock, timeline.TODAY, days=SEED_DAYS)
     (party, *_) = api.get(f"{apidata.PARTY}/individual").json()
     (cust, *_) = api.get(apidata.CUSTOMER).json()
     acc = apidata.account(api, cust, name="Probe")

@@ -409,7 +409,7 @@ fail because of the task. The rules now:
 12 workers, 2,743 tests in 12 min 36 s, another task's suite running beside it). Four
 tests take over 100 s each and 16 take over 20 s; the next 40 take 10 to 20 s, most of
 them migration round trips. Nothing was changed here: each of the four is a real probe or
-a seeding run, and shortening one is its own piece of work (a follow-up issue).
+a seeding run, and shortening one is its own piece of work (#373, below).
 
 | Test | Time |
 | --- | --- |
@@ -421,6 +421,35 @@ a seeding run, and shortening one is its own piece of work (a follow-up issue).
 | `test_prepaid_offering_changes.py::test_0044_combined_items_block_downgrade` | 37 s |
 | `test_nonsuperuser_migration.py::test_migrations_run_as_non_superuser_database_owner` | 36 s |
 | `test_migrations.py::test_alembic_downgrade_then_upgrade_roundtrip` | 32 s |
+
+**Shortened (#373, 2026-11-15).** Re-measured on the idle 12-CPU host. Most of the 100+ s
+above was the other suite beside it: alone, the four took 44 to 56 s. What changed, with
+no assertion dropped:
+
+- *nested gap probe*: it seeds a 30-day history (`tests/tmf_gaps.py`, `SEED_DAYS`), not the
+  demo's 120. The probe reads which attributes resources carry, not how many there are;
+  from 25 days on (the first bills) the lines equal the 120-day ones, and the test
+  asserts one daily run per seeded day. Splitting the probe in parts, as the issue
+  proposed, would have seeded once per part: more total work, not less.
+- *load-test seed*: the 20 operators get the smallest scrypt cost, as `tests/conftest.py`
+  gives test users (a stored hash names its own cost); hashing and their first sign-ins at
+  the production cost were half of each run. The killed-run test asserts the cost it got
+  and runs 3 days instead of 4, which still leaves a whole day after the killed one.
+- *`test_seed`*: unchanged. Its time is the demo itself (120 daily runs over 9 accounts
+  ~16 s, prepaid passes ~5 s, API calls ~11 s, profiled), and every part is asserted
+  (`START_DAYS` daily runs, events from day 100). Shortening it means a cheaper
+  `bill_account` (about 13 ms per account and day) in the app, not a test change.
+
+| Test | Alone, before | Alone, after | `make test`, after |
+| --- | --- | --- | --- |
+| `test_tmf_gaps[nested]` | 56 s | 31 s | 50 s |
+| `test_loadtest_seed` parallel processes | 50 s | 35 s | 42 s |
+| `test_loadtest_seed` killed and rerun | 48 s | 23 s | 63 s (still 4 days) |
+| `test_seed` | 44 s | 37 s | 74 s |
+
+The full backend suite (`pytest -n auto`, 12 workers, idle host) took 8 min 31 s for
+2,738 tests, under the 10-minute target. `test_seed` stays over the 60 s target under
+load.
 
 testmon limits: selection is off under `-m` and `-k` (so smoke and affected are separate runs);
 the first run on a checkout without a seeded record, or after deleting `.testmon/`, is the

@@ -35,9 +35,12 @@ def recorded() -> list[str]:
 
 
 @pytest.mark.parametrize("part", tmf_gaps.PARTS)
-def test_the_gap_list_is_the_recorded_one(api, part):
+def test_the_gap_list_is_the_recorded_one(api, db_conn, part):
     # in parts, so xdist runs them side by side (the whole probe took over a minute)
     found = tmf_gaps.gaps(api, part)
+    if part == tmf_gaps.NESTED:  # on the short history, one billing run a day
+        daily = db_conn.execute("SELECT count(*) FROM billing_run WHERE kind = 'daily'")
+        assert daily.fetchone() == (tmf_gaps.SEED_DAYS,)
     expected = [line for line in recorded() if tmf_gaps.part_of(line) == part]
     closed = sorted(set(expected) - set(found))
     opened = sorted(set(found) - set(expected))

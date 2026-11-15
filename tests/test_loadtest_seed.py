@@ -9,12 +9,14 @@ import pytest
 
 from app.config import settings
 from app.integrations.network import adapter
+from bss_mcp import passwords
 from loadtest import seed as generator
 from tests import scratch_db
 from tests.conftest import _create_database, _drop_database
 
 PASSWORD = "load-test-operator-password"
-PARAMS = generator.Params(n=12, days=4, usage_days=1, seed=7, day0=date(2026, 9, 1))
+# 3 days: the kill on day 1 still leaves a whole day after it (4 cost a quarter more, #373)
+PARAMS = generator.Params(n=12, days=3, usage_days=1, seed=7, day0=date(2026, 9, 1))
 
 
 class Killed(Exception):
@@ -23,7 +25,11 @@ class Killed(Exception):
 
 @pytest.fixture
 def seeding(monkeypatch):
-    """What a generator run changes in this process, put back afterwards."""
+    """What a generator run changes in this process, put back afterwards. The 20
+    operators get the smallest scrypt cost (a stored hash names its own, as in
+    tests/conftest.py): creating them and their first sign-ins at the production cost was
+    half of every run, and no test here is about the cost (#373)."""
+    monkeypatch.setattr(passwords, "N", 2)
     monkeypatch.setattr(settings, "app_env", "test")
     monkeypatch.setattr(settings, "bss_service_secret", settings.bss_service_secret)
     adapter().reset()
@@ -72,6 +78,12 @@ def test_a_run_killed_mid_day_and_rerun_equals_an_uninterrupted_run(
         assert whole[table] > 0, table
     assert whole["billing_account"] == PARAMS.n
     assert whole["app_user"] == 21
+    with psycopg.connect(migrated_db_url) as conn:  # the fixture's cost, on the operators
+        costs = conn.execute(
+            "SELECT DISTINCT split_part(password_hash, '.', 2) FROM app_user"
+            " WHERE username LIKE 'lt-op-%'"
+        ).fetchall()
+    assert costs == [("2",)]
 
     name = scratch_db.name("test")
     killed_url = _create_database(name, template=template_db)

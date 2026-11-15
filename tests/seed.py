@@ -473,11 +473,13 @@ def settle_prepaid(conn: psycopg.Connection, clock: FixedClock) -> None:
     observe_entitlements(conn, clock=clock, tz=TZ)
 
 
-def seed(client: Any, clock: FixedClock, today: date) -> bool:
+def seed(client: Any, clock: FixedClock, today: date, days: int = START_DAYS) -> bool:
     """Seed through `client` (a TmfClient over the app whose clock is `clock`). Returns
-    False if the data was already there."""
+    False if the data was already there. `days` is the length of the history: the demo's
+    is START_DAYS; a shorter one (tests/tmf_gaps.py) has the events of its own days and
+    today's, and the later ones never happen."""
     api = Api(client, clock)
-    start = today - timedelta(days=START_DAYS)
+    start = today - timedelta(days=days)
     clock.set(at(start, 9))
     if already_seeded(api):
         return False
