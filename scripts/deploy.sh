@@ -535,11 +535,17 @@ rollback_to_previous() { # auto|manual
       IMAGE_NAME=${IMAGE_NAME} TAG=${failed} ${COMPOSE[*]} run --rm --no-deps ${DOWNGRADE_DRILL_ENV:+${DOWNGRADE_DRILL_ENV} }app alembic downgrade ${target_rev}" \
       || rc=$?
     if (( rc != 0 )); then
-      (( rc != 124 )) || remove_oneoffs
+      # A timeout is not a refusal: the one transaction never committed, so the schema is
+      # unchanged and the cause is the database or its connection, not the data.
+      local reason="failed (most likely it would lose data written since the deploy). ${failed} is running again. Restoring needs a vps-infra dump - see docs/operations.md"
+      if (( rc == 124 )); then
+        remove_oneoffs
+        reason="did not finish within ${MIGRATE_TIMEOUT}s and was rolled back (the schema is still ${failed_rev}) - check the database and its connection, not the data. ${failed} is running again"
+      fi
       log "Bringing ${IMAGE_NAME}:${failed} back up"
       rssh "cd ${REMOTE_DIR} && cp releases/${failed}/compose.yaml releases/${failed}/compose.prod.yaml ." || true
       rcompose "${failed}" up -d --remove-orphans || true
-      fail "ROLLBACK REFUSED: the schema downgrade to ${target_rev} failed (most likely it would lose data written since the deploy). ${failed} is running again. Restoring needs a vps-infra dump - see docs/operations.md"
+      fail "ROLLBACK REFUSED: the schema downgrade to ${target_rev} ${reason}"
     fi
   fi
 
