@@ -84,15 +84,18 @@ What `deploy.sh` does, in order:
    the running release as one (**bootstrap**: tag from the running app container, compose
    files and `web/` from `~/bss`, commit from `DEPLOYED`, `alembic current`) and makes it
    `CURRENT`. With nothing running it says no rollback is possible for this deploy.
-7. Syncs the compose files and `.env.prod` (as `~/bss/.env`), and stores the release in
+7. Syncs `.env.prod` (as `~/bss/.env`), and stores the release in
    `~/bss/releases/<tag>/`: compose files, the exact UI files (`web/`) and `release.env`
    (`tag`, `commit`, `alembic_rev` = the newest migration of the commit, `deployed_at`).
+   The compose files in `~/bss` itself are not touched yet.
 8. **Runs the migrations** with the new image before the app serves traffic (with a
-   deadline). A failure up to here changes nothing that serves: the old containers keep
-   running and the schema is unchanged (all pending migrations run in one transaction,
-   `alembic/env.py`); the message says "nothing changed on the server; `<tag>` is still
-   serving".
-9. `up` of the new release (its compose files from `releases/<tag>/`) - **the point of no
+   deadline), from the compose files in `releases/<tag>/`. A failure up to here changes
+   nothing that serves: the old containers keep running, the schema is unchanged (all
+   pending migrations run in one transaction, `alembic/env.py`) and
+   `~/bss/compose*.yaml` are still the running release's; the message says "nothing
+   changed on the server; `<tag>` is still serving". (`~/bss/.env` is already the new
+   one: it is not kept per release.)
+9. `up` of the new release (its compose files copied from `releases/<tag>/` to `~/bss`) - **the point of no
    return**: any failure from here on rolls back automatically ([Rollback](#rollback)).
    Waits until **`app`, `worker` and `mcp` are healthy** (240 s).
 10. Atomically writes the full Git commit to `~/bss/DEPLOYED`, reads it back and
