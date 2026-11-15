@@ -202,6 +202,21 @@ and `system` cleanup by agents. `make clean-tasks` (list by default, `CONFIRM=1`
 applies the same function to earlier leftovers of finished tasks and reports abandoned work
 as kept.
 
+## Finish-task removes the task's load-test stack (2026-11-15, #311)
+
+A task that ran `make loadtest-*` could not be finished while any `lt-*` container existed:
+the Compose ownership check accepted only the dev services created from `compose.yaml` and
+`compose.override.yaml`, and the plain `down` leaves the load-test containers as orphans.
+`scripts/task_finish.py` now also accepts the seven `lt-*` services of
+`compose.loadtest.yaml`, but only with exactly that file added to the same worktree's
+two (project, working directory and file list still match exactly; a dev service with the
+load-test file list is refused too). When any is present, the removal runs
+`scripts/task-compose --loadtest --profile '*' down`, which removes both stacks, one-off
+containers included, and keeps volumes for `remove_leftovers` (which already deleted
+`lt_pgdata`). No direct `docker rm`. The load-test services join the same `lab` network, so
+the network check needed no change. Anything else, such as another project, worktree or
+compose file, still stops the finish with the runtime preserved.
+
 ## Help output is grouped
 
 Every help comment in the `Makefile` starts with a group tag (`target: ## [group] text`,

@@ -155,6 +155,17 @@ QUEUES: dict[str, tuple[str, str | None, str]] = {
     # pending = to deliver (next_attempt_at set exactly while pending); failed = retries used up
     "event_delivery": ("state = 'pending'", "state = 'failed'", "created_at"),
 }
+
+
+def queue_query(name: str) -> str:
+    """A queue's pending count, oldest pending time and failed count. Each condition is in
+    its own WHERE, so the queue's partial index serves it instead of a scan of the whole
+    table, completed rows included (#311)."""
+    pending, failed, since = QUEUES[name]
+    failed_sql = f"(SELECT count(*) FROM {name} WHERE {failed})" if failed else "0"  # noqa: S608
+    return f"SELECT count(*), min({since}), {failed_sql} FROM {name} WHERE {pending}"  # noqa: S608
+
+
 BILLING_STATUSES = ("ok", "running", "stale", "failed", "none")
 
 
@@ -204,12 +215,8 @@ class DbCollector(Collector):
                 .fetchone()
             )
             queues = {}
-            for name, (pending, failed, since) in QUEUES.items():
-                failed_sql = f"count(*) FILTER (WHERE {failed})" if failed else "0"
-                queues[name] = conn.execute(
-                    f"SELECT count(*) FILTER (WHERE {pending}), min({since}) FILTER"  # noqa: S608
-                    f" (WHERE {pending}), {failed_sql} FROM {name}"
-                ).fetchone()
+            for name in QUEUES:
+                queues[name] = conn.execute(queue_query(name)).fetchone()
             products = conn.execute(
                 "SELECT status::text, count(*) FROM product GROUP BY 1"
             ).fetchall()

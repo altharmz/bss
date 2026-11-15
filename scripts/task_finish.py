@@ -233,36 +233,55 @@ def synchronize(primary):
     )
 
 
+# The dev services (compose.yaml, compose.override.yaml) and the load-test services, which
+# only `scripts/task-compose --loadtest` creates (compose.loadtest.yaml, docs/loadtest.md).
+SERVICES = {
+    "app",
+    "db",
+    "mcp",
+    "tools",
+    "oneoff",
+    "web",
+    "web-offline",
+    "web-preview",
+    "e2e",
+    "e2e-worker",
+}
+LOADTEST_SERVICES = {"lt-db", "lt-app", "lt-worker", "lt-mcp", "lt-tools", "lt-k6", "lt-scrape"}
+
+
+def owned(labels, root, project):
+    """A container of this task's own stack: its project, worktree and compose files."""
+    files = [f"{root}/compose.yaml", f"{root}/compose.override.yaml"]
+    service = labels.get("com.docker.compose.service")
+    if service in LOADTEST_SERVICES:
+        files.append(f"{root}/compose.loadtest.yaml")
+    elif service not in SERVICES:
+        return False
+    return (
+        labels.get("com.docker.compose.project") == project
+        and labels.get("com.docker.compose.project.working_dir") == str(root)
+        and labels.get("com.docker.compose.project.config_files") == ",".join(files)
+    )
+
+
 def runtime_inventory(root, task):
-    """Inspect only bounded ownership fields, never container environment/secrets."""
+    """Inspect only bounded ownership fields, never container environment/secrets.
+
+    Returns the task's containers, its networks and whether any container belongs to the
+    load-test stack (removed through `scripts/task-compose --loadtest`).
+    """
     project = "bss-" + task
     containers = docker(
         root, "ps", "-aq", "--no-trunc", "--filter", f"label=com.docker.compose.project={project}"
     ).split()
-    services = {
-        "app",
-        "db",
-        "mcp",
-        "tools",
-        "oneoff",
-        "web",
-        "web-offline",
-        "web-preview",
-        "e2e",
-        "e2e-worker",
-    }
+    loadtest = False
     for identity in containers:
         labels = json.loads(
             docker(root, "inspect", "--format", "{{json .Config.Labels}}", identity)
         )
-        require(
-            labels["com.docker.compose.project"] == project
-            and labels["com.docker.compose.service"] in services
-            and labels["com.docker.compose.project.working_dir"] == str(root)
-            and labels["com.docker.compose.project.config_files"]
-            == f"{root}/compose.yaml,{root}/compose.override.yaml",
-            "container ownership mismatch; preserved runtime",
-        )
+        require(owned(labels, root, project), "container ownership mismatch; preserved runtime")
+        loadtest = loadtest or labels["com.docker.compose.service"] in LOADTEST_SERVICES
     networks = docker(
         root,
         "network",
@@ -287,7 +306,7 @@ def runtime_inventory(root, task):
         require(
             set(attached or {}) <= set(containers), "unknown container attached to task network"
         )
-    return containers, networks
+    return containers, networks, loadtest
 
 
 # Ignored build and test output of Make targets (web-build, web-shots, web-types, web-e2e,
@@ -441,9 +460,20 @@ def finish_steps(primary, common, slot):
             saved = task_testmon.save(root, common)
             if saved.startswith("not saved"):
                 print(f"finish-task: test-selection record {saved}", file=sys.stderr)
-            runtime_inventory(root, task)
-            command(root, str(root / "scripts/task-compose"), "--profile", "*", "down")
-            require(runtime_inventory(root, task) == ([], []), "task runtime removal incomplete")
+            loadtest = runtime_inventory(root, task)[2]
+            # Plain `down` leaves the load-test containers as orphans; with --loadtest it
+            # removes both stacks (one-off containers included) and keeps the volumes.
+            command(
+                root,
+                str(root / "scripts/task-compose"),
+                *(["--loadtest"] if loadtest else []),
+                "--profile",
+                "*",
+                "down",
+            )
+            require(
+                runtime_inventory(root, task) == ([], [], False), "task runtime removal incomplete"
+            )
             state["runtime_stopped"] = True
             checkpoint(journal, state)
             clean_task(root)

@@ -1071,7 +1071,8 @@ allocates `amount + taxAmount`, which `totalAmount` (if sent) must equal
 - **Typed filters.** `select_page` compares each value with the column's own type, so the
   filter indexes apply. A string for an enum column is checked against the enum's labels
   (loaded once per process). One that is no label answers an empty page with
-  no rows and no query, as before ("an unknown value matches nothing").
+  no rows and no query, as before ("an unknown value matches nothing"). The TMF654
+  balance-action lists and the resource inventory use the same builder (#311).
 - **Filter indexes by rule:** a reference (`*_id`) filter without an index gets a btree, as
   does a name filter; status/state filters get none (low selectivity). Each list's filters
   and the index serving them are listed in the PR of #286.

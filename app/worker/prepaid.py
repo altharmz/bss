@@ -34,19 +34,21 @@ log = logging.getLogger("app.worker")
 
 # A product's latest grant ended on or before today, with nothing blocking renewal
 # and no renewal produced for it yet. Manual and account suspension block renewal.
+# The latest grant is the one with no later grant of the product (LATER_GRANT), so only
+# the grants ended by today are read, never the latest of every product (#311).
 _DUE_RENEWALS = (
-    "SELECT g.id, g.product_id, g.billing_account_id, g.due FROM ("
-    " SELECT DISTINCT ON (product_id) id, product_id, billing_account_id, upper(period) AS due"
-    " FROM funded_interval ORDER BY product_id, lower(period) DESC, authorized_at DESC) g"
+    "SELECT g.id, g.product_id, g.billing_account_id, upper(g.period) AS due"  # noqa: S608 - LATER_GRANT is code
+    " FROM funded_interval g"
     " JOIN product p ON p.id = g.product_id JOIN billing_account a ON a.id = g.billing_account_id"
-    " WHERE g.due <= %(today)s AND a.rating_type = 'prepaid' AND a.state = 'Active'"
+    " WHERE upper(g.period) <= %(today)s AND NOT EXISTS (" + entitlement.LATER_GRANT + ")"
+    " AND a.rating_type = 'prepaid' AND a.state = 'Active'"
     " AND NOT (p.manually_suspended AND NOT p.lifecycle_suspended)"
     " AND p.status NOT IN ('terminated', 'cancelled', 'aborted')"
     " AND (p.termination_date IS NULL OR p.termination_date > %(today)s)"
     " AND NOT EXISTS (SELECT FROM prepaid_command c WHERE c.kind = 'renewal'"
     " AND c.request->>'previous_interval_id' = g.id::text)"
     " AND (%(account)s::uuid IS NULL OR g.billing_account_id = %(account)s)"
-    " ORDER BY g.billing_account_id, g.due, g.product_id"
+    " ORDER BY g.billing_account_id, due, g.product_id"
 )
 
 

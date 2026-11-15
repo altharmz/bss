@@ -29,9 +29,26 @@ def latest_grant(conn, product_id):
     return fetch_one(
         conn,
         "SELECT * FROM funded_interval WHERE product_id = %s"
-        " ORDER BY lower(period) DESC, authorized_at DESC LIMIT 1",
+        " ORDER BY lower(period) DESC, authorized_at DESC,"
+        " supersedes_interval_id IS NULL, id DESC LIMIT 1",
         (product_id,),
     )
+
+
+# A grant of the same product after the grant `g`: the latest grant (`latest_grant`) is
+# the one no such grant follows. Grants of a product overlap only when one supersedes the
+# other, perhaps from the same first day, so the order is the first day, then the
+# authorization, then the superseding grant before the one it supersedes (the two can
+# share an authorization time, as under a test clock), then the id: the same total order
+# as every `ORDER BY lower(period) DESC, authorized_at DESC, supersedes_interval_id IS
+# NULL, id DESC`. For `NOT EXISTS (...)` on `funded_interval g`;
+# funded_interval_latest_idx serves it.
+LATER_GRANT = (
+    "SELECT FROM funded_interval l WHERE l.product_id = g.product_id"
+    " AND lower(l.period) >= lower(g.period)"
+    " AND (lower(l.period), l.authorized_at, l.supersedes_interval_id IS NOT NULL, l.id)"
+    " > (lower(g.period), g.authorized_at, g.supersedes_interval_id IS NOT NULL, g.id)"
+)
 
 
 def latest_grants(conn, product_ids):
@@ -41,7 +58,8 @@ def latest_grants(conn, product_ids):
     rows = fetch_all(
         conn,
         "SELECT DISTINCT ON (product_id) * FROM funded_interval WHERE product_id = ANY(%s)"
-        " ORDER BY product_id, lower(period) DESC, authorized_at DESC",
+        " ORDER BY product_id, lower(period) DESC, authorized_at DESC,"
+        " supersedes_interval_id IS NULL, id DESC",
         (sorted(set(product_ids)),),
     )
     return {row["product_id"]: row for row in rows}

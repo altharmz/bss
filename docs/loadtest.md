@@ -36,7 +36,7 @@ and the pre-commit hook (all on the dev `db`) neither see nor disturb them. Plai
 | Target | What it does |
 |---|---|
 | `make loadtest-up` | builds the images, starts `lt-db`, migrates it, starts the rest |
-| `make loadtest-down` | stops and removes the `lt-*` containers; the database volume stays |
+| `make loadtest-down` | stops and removes the `lt-*` containers; the database volume stays. `make finish-task` does this itself (and deletes the volume) |
 | `make loadtest-ps` / `make loadtest-logs` | status and the last 5 minutes of app and worker logs |
 | `make loadtest-reset` | empties the database (drop, create, migrate) |
 | `make loadtest-secret` | creates the operators' password file (once) |

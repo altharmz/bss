@@ -197,7 +197,8 @@ def periods_of(
         " FROM unnest(%s::uuid[], %s::date[]) AS i(product_id, day)"
         " CROSS JOIN LATERAL (SELECT lower(period) AS period_start, upper(period) AS period_end"
         " FROM funded_interval WHERE product_id = i.product_id AND period @> i.day"
-        " ORDER BY lower(period) DESC, authorized_at DESC LIMIT 1) f",
+        " ORDER BY lower(period) DESC, authorized_at DESC,"
+        " supersedes_interval_id IS NULL, id DESC LIMIT 1) f",
         ([key[0] for key in keys], [key[1] for key in keys]),
     )
     return {(row["product_id"], row["day"]): row for row in rows}
@@ -259,7 +260,8 @@ def period_of(conn: psycopg.Connection, product_id: UUID, day: date) -> Row | No
         conn,
         "SELECT lower(period) AS period_start, upper(period) AS period_end"
         " FROM funded_interval WHERE product_id = %s AND period @> %s::date"
-        " ORDER BY lower(period) DESC, authorized_at DESC LIMIT 1",
+        " ORDER BY lower(period) DESC, authorized_at DESC,"
+        " supersedes_interval_id IS NULL, id DESC LIMIT 1",
         (product_id, day),
     )
 

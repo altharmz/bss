@@ -2,7 +2,14 @@
 
 from psycopg import sql
 
-from app.repository._sql import fetch_all, fetch_one, returning, select_by_id, update_by_id
+from app.repository._sql import (
+    conditions,
+    fetch_all,
+    fetch_one,
+    returning,
+    select_by_id,
+    update_by_id,
+)
 
 
 def get(conn, uid, *, lock=False):
@@ -64,11 +71,14 @@ def page(conn, where, offset, limit, today, quarantine_days):
           FROM number_assignment WHERE subscriber_number_id = n.id AND cancelled_at IS NULL
         ) a ON true
     ) """)
-    conditions = sql.SQL(" AND ").join(
-        sql.SQL("{}::text = %s").format(sql.Identifier(key)) for key in where
-    )
-    clause = sql.SQL(" WHERE ") + conditions if where else sql.SQL("")
-    params = [today, today, today, quarantine_days, today, *map(str, where.values())]
+    # Typed comparisons, so a filter on a subscriber_number column reaches its index
+    # through the inlined CTE (#311); the derived states are text.
+    filters = conditions(conn, "subscriber_number", where)
+    if filters is None:
+        return [], False
+    conds, values = filters
+    clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conds) if conds else sql.SQL("")
+    params = [today, today, today, quarantine_days, today, *values]
     rows = fetch_all(
         conn,
         source
