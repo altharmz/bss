@@ -32,7 +32,7 @@ from zoneinfo import ZoneInfo
 
 import psycopg
 
-from app.billing.adapter import bill_account, visible_before
+from app.billing.adapter import RunPrices, bill_account, visible_before
 from app.billing.model import BillingError
 from app.clock import Clock
 from app.events import emit
@@ -111,6 +111,8 @@ class DateRun:
         self.todo = deque(a for a in accounts if a not in done or done[a]["status"] != "ok")
         # each account's unresolved earlier failure, read once for the run (#283)
         self.blockers = billing.earliest_failures_before(conn, self.run_date)
+        # each offering's recurring prices, read once for the run (#305)
+        self.prices = RunPrices()
 
     def step(self) -> bool:
         """Process the next account; False when there is none left."""
@@ -142,7 +144,14 @@ class DateRun:
                 )
             else:
                 try:
-                    bill_account(conn, account_id, self.run, tz=self.tz, account=account)
+                    bill_account(
+                        conn,
+                        account_id,
+                        self.run,
+                        tz=self.tz,
+                        account=account,
+                        prices=self.prices,
+                    )
                 except BillingError as error:
                     billing.record_outcome(
                         conn,

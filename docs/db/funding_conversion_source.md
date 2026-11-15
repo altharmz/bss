@@ -46,6 +46,7 @@ Retained internal command hold conversion; no runtime caller.
 ## Triggers
 
 - `balance_ledger_bounds`: `CREATE CONSTRAINT TRIGGER balance_ledger_bounds AFTER INSERT OR UPDATE ON funding_conversion_source DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION balance_ledger_bounds()`
+- `balance_ledger_unchecked`: `CREATE TRIGGER balance_ledger_unchecked BEFORE INSERT OR UPDATE ON funding_conversion_source FOR EACH STATEMENT EXECUTE FUNCTION balance_ledger_unchecked()`
 - `credit_account_lock`: `CREATE TRIGGER credit_account_lock BEFORE INSERT ON funding_conversion_source FOR EACH ROW EXECUTE FUNCTION credit_account_lock()`
 - `funding_batch_conversion_bounds`: `CREATE CONSTRAINT TRIGGER funding_batch_conversion_bounds AFTER INSERT OR UPDATE ON funding_conversion_source DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION funding_batch_conversion_bounds()`
 - `funding_conversion_bounds`: `CREATE CONSTRAINT TRIGGER funding_conversion_bounds AFTER INSERT OR UPDATE ON funding_conversion_source DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION funding_conversion_bounds()`

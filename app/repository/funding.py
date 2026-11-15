@@ -15,6 +15,7 @@ from psycopg import sql
 from app.billing.funding import InsufficientFunds, Source, SourceAmount, reconcile, select_sources
 from app.billing.settlement import StateChange
 from app.repository import billing
+from app.repository._sql import Row
 
 
 @dataclass(frozen=True)
@@ -55,7 +56,7 @@ def plan(conn: psycopg.Connection, account_id: UUID, amount: Decimal) -> Plan:
     return Plan(snapshot, amount, select_sources(snapshot.sources, amount))
 
 
-def load(conn: psycopg.Connection, account_id: UUID) -> Snapshot:
+def load(conn: psycopg.Connection, account_id: UUID, *, locked: Row | None = None) -> Snapshot:
     """Load and reconcile payment, credit-note, adjustment, transfer and reversal
     funding without changing it. Debits, outgoing transfers and reversals consume
     sources like payouts and allocations (funding_consumption).
@@ -63,8 +64,15 @@ def load(conn: psycopg.Connection, account_id: UUID) -> Snapshot:
     Obligations include held and unissued positive bills as well as unbilled ABRs.
     Allocations reduce obligations and sources together; payouts reduce sources and
     the ledger together. Neither is subtracted twice.
+
+    `locked` is the account's row when the caller already holds its lock
+    (billing.load_account_row, the worker's per-account passes): it is not locked and
+    read a second time (#305). Otherwise the account is locked here.
     """
-    account = billing.load_account(conn, account_id)
+    if locked is not None and locked["id"] == account_id:
+        currency = locked["currency"]
+    else:
+        currency = billing.load_account(conn, account_id).currency
     bills, payments = billing.load_settlement(conn, account_id)
     sources = tuple(
         Source("payment", p.id, p.received_at, p.amount, p.used) for p in payments
@@ -121,7 +129,7 @@ def load(conn: psycopg.Connection, account_id: UUID) -> Snapshot:
     )
     ledger = billing.account_balance(conn, account_id)
     spendable = reconcile(sources, ledger, obligations)
-    return Snapshot(account_id, account.currency, sources, ledger, obligations, spendable)
+    return Snapshot(account_id, currency, sources, ledger, obligations, spendable)
 
 
 def reserve(

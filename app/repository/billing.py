@@ -5,6 +5,7 @@ to and from the billing core's dataclasses (app/billing/model.py); the core neve
 row.
 """
 
+import weakref
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
@@ -738,8 +739,20 @@ BALANCE_ACTION_LEDGER = """
 
 def has_balance_ledger(conn: psycopg.Connection) -> bool:
     """Whether the schema has balance actions and their sources (0045); older-schema
-    migration tests run these repositories before it."""
-    return conn.execute("SELECT to_regclass('funding_consumption') IS NOT NULL").fetchone()[0]
+    migration tests run these repositories before it. A yes is remembered per connection
+    (#305: it was a query per balance read). The tables never go away under a live
+    connection. An older schema is asked again each time, so a connection sees a migration
+    that adds them at once."""
+    if conn in _LEDGER_SEEN:
+        return True
+    present = conn.execute("SELECT to_regclass('funding_consumption') IS NOT NULL").fetchone()[0]
+    if present:
+        _LEDGER_SEEN.add(conn)
+    return present
+
+
+# connections that have seen the balance ledger tables (has_balance_ledger)
+_LEDGER_SEEN: "weakref.WeakSet[psycopg.Connection]" = weakref.WeakSet()
 
 
 def get_abr(conn: psycopg.Connection, abr_id: UUID) -> Row | None:
@@ -810,6 +823,16 @@ def lock_account(conn: psycopg.Connection, account_id: UUID) -> Account | None:
         (account_id,),
     )
     return None if row is None else core_account(row)
+
+
+def load_account_row(conn: psycopg.Connection, account_id: UUID) -> Row:
+    """The whole billing_account row, locked until the transaction ends: for the worker's
+    per-account passes, which need more than the core's Account and used to read the row a
+    second time after the lock (#305). LookupError if it does not exist."""
+    row = fetch_one(conn, "SELECT * FROM billing_account WHERE id = %s FOR UPDATE", (account_id,))
+    if row is None:
+        raise LookupError(f"billing account {account_id} does not exist")
+    return row
 
 
 def load_account(conn: psycopg.Connection, account_id: UUID) -> Account:

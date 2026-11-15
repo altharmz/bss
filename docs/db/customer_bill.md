@@ -64,6 +64,7 @@ SID CustomerBill (TMF678 customerBill): issued on a cycle day, collects every un
 
 - `account_review`: `CREATE TRIGGER account_review AFTER INSERT OR DELETE OR UPDATE ON customer_bill FOR EACH ROW EXECUTE FUNCTION account_review_by_column('billing_account_id')`
 - `balance_ledger_bounds`: `CREATE CONSTRAINT TRIGGER balance_ledger_bounds AFTER INSERT OR UPDATE ON customer_bill DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION balance_ledger_bounds()`
+- `balance_ledger_unchecked`: `CREATE TRIGGER balance_ledger_unchecked BEFORE INSERT OR UPDATE ON customer_bill FOR EACH STATEMENT EXECUTE FUNCTION balance_ledger_unchecked()`
 - `customer_bill_set_updated_at`: `CREATE TRIGGER customer_bill_set_updated_at BEFORE UPDATE ON customer_bill FOR EACH ROW EXECUTE FUNCTION set_updated_at()`
 - `funding_batch_conversion_bounds`: `CREATE CONSTRAINT TRIGGER funding_batch_conversion_bounds AFTER INSERT OR UPDATE ON customer_bill DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION funding_batch_conversion_bounds()`
 - `funding_conversion_bounds`: `CREATE CONSTRAINT TRIGGER funding_conversion_bounds AFTER INSERT OR UPDATE ON customer_bill DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION funding_conversion_bounds()`

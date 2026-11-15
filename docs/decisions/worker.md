@@ -274,3 +274,50 @@ months) and the deletion of rows past their retention, in batches of 5000 rows p
 transaction, at most 45 s per wake-up. The rules and the reasons are in
 [data-model.md](data-model.md#retention-2026-11-11-282) and
 [usage.md](usage.md#partitions-2026-11-11-282).
+
+## Per-account round trips (2026-11-14, #305)
+
+The 100k seed's statement statistics (2026-11-10) named the per-account repeats. Each
+item was measured before and after on the 100k dataset with `make loadtest-round-trips`
+([billing-worker.md](../billing-worker.md#round-trips)). Nothing billed or decided
+changes; only repeated reads go.
+
+- **The schema check is remembered per connection.** `billing.has_balance_ledger` asks
+  `to_regclass('funding_consumption')` once per connection and remembers only a yes. The
+  tables never go away under a live connection. An older schema (the migration tests
+  before 0045) is asked every time, so the same connection sees 0045 once it is applied.
+  This reverses the "left as is" of #283: a set of connections is all it takes.
+- **The prepaid passes read the settings once per pass.** `process_lifecycle` and the
+  notification detector read `prepaid_lifecycle_setting` before their account loop, not
+  per account. A change made during a pass applies from the next pass, at most one tick
+  later. Before, the accounts later in the pass already saw it. Transitions are tried
+  once per business date anyway.
+- **One read of the account row per account and pass.** The passes lock the whole row
+  (`billing.load_account_row`, `SELECT * ... FOR UPDATE`) instead of locking the core
+  columns and reading the row again. `funding.load(locked=row)` takes the locked row
+  rather than locking it a third time.
+- **The notification detectors batch their lookups.** The detectors that look back over
+  every line (`_lifecycle`, `_usage`, `_sim_swaps`, `_security`, `_renewals`) read the
+  line numbers (`recipients.line_numbers`) and the latest grants
+  (`entitlement.latest_grants`) in one statement each. Before, they read them per
+  event, already-notified events included, about 21k statements a pass at 100k.
+- **A run reads each offering's prices once.** `DateRun` keeps a `RunPrices` that
+  hands `bill_account` the recurring prices of the offerings it has met. This is
+  exact, not a cache that can go stale. The run of D prices only at midnights up to
+  00:00 of D, and it starts after that (NotYet otherwise). Every price change takes
+  effect at or after the moment it is made ([catalog.md](catalog.md): a price never
+  starts in the past, an attached price is never in the past, an ordered offering's
+  prices only get their validFor ended, and a price that priced nothing is on no
+  product of the run). Other `bill_account` callers read the prices as before.
+- **The balance ledger check runs once per account and transaction** (migration 0078).
+  `balance_ledger_bounds` notes each checked account in the transaction-local setting
+  `bss.ledger_checked` and skips an account it has checked. A statement-level BEFORE
+  trigger on the same eleven tables empties the note at the start of every write
+  statement. So a row written after a check (after `SET CONSTRAINTS ... IMMEDIATE`, as
+  the transfer path and the tests do) is checked again, and a check always sees the rows
+  written before it. A rolled-back savepoint takes its notes with it, which can only add
+  a check. `balance_ledger_check` itself is unchanged.
+- **Already done before this issue:** the heartbeat is part of the outcome write
+  (`record_outcome`, #284), not a statement of its own. The usage feed stores a batch of
+  500 records in about 12 statements (`ingest_batch`, #281/#329). The one-record
+  `ingest` stays for TMF635 POST, one record per request.

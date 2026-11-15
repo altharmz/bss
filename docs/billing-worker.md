@@ -264,6 +264,25 @@ restored into the local load-test stack, with the worker at `cpus: 1` inside the
   abrs `fc08396b`, bills `3ec7d204`, outcomes `a5529ca7`. Proven by
   `tests/test_worker_run_cost.py`.
 
+## Round trips
+
+Measured on 2026-11-14 (#305) with `make loadtest-round-trips DATE=2026-11-05`
+([loadtest.md](loadtest.md#round-trips)) on the 100k dataset
+(`seed100k-settled-20261114`), before and after the change, on the same rows. It counts
+every statement psycopg sends, transaction control included. The decisions are in
+[decisions/worker.md](decisions/worker.md#per-account-round-trips-2026-11-14-305).
+
+| Path | Before | After | What went |
+|---|---|---|---|
+| billed account (daily run, 2,000 accounts) | 17.17 | **15.17** | the schema check; the price read (once per offering and run) |
+| swept account (lifecycle, entitlements, notifications; 2,000 prepaid accounts) | 60.96 | **41.94** | the schema check (3), the settings read (2), the second account read (3), the line-number lookups of the look-back detectors (10.6 -> 1.3, the notifications really made) |
+| usage record, feed batches of 500 | 0.024 | 0.024 | already batched (#281) |
+| usage record, one by one (TMF635 POST) | 8.48 | 8.48 | not changed: one record per request |
+| ledger checks per prepaid transaction (a hold placed and released) | 3.0 | **1.0** | the repeated `balance_ledger_check` of one account at commit |
+
+The swept figure includes the notification detectors that run once per pass over the
+whole database. Over fewer accounts the per-account number is higher (66.8 at 500).
+
 ## Heartbeat and liveness
 
 The liveness file (`WORKER_LIVENESS_FILE`, default `/tmp/worker-alive`) is touched on

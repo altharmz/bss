@@ -8,7 +8,7 @@ import pytest
 from app.config import settings
 from app.repository import billing
 from tests import apidata
-from tests.querycount import statements
+from tests.querycount import counting, statements
 from tests.test_api_adjust import post as adjust
 from tests.test_api_bill_settlement import account_with_bills
 from tests.test_api_financial_account import financial, link
@@ -402,10 +402,15 @@ def test_financial_account_list(api, monkeypatch):
             )
             apidata.payment(api, eur, index + 1, unit="EUR")
             create_party_account(api, "partyAccount", party, financialAccount=link(fa))
-    one = statements(api, monkeypatch, f"{url}?limit=1")
-    hundred = statements(api, monkeypatch, f"{url}?limit=100")
-    # page, owners, linked, billing accounts, ledger check, balances, auth and pool checks
-    assert one == hundred == 10
+    with counting(monkeypatch) as one:
+        assert api.client.get(f"{url}?limit=1").status_code == 200
+    with counting(monkeypatch) as hundred:
+        assert api.client.get(f"{url}?limit=100").status_code == 200
+    # page, owners, linked, billing accounts, balances, auth and pool checks; the ledger
+    # schema check is asked once per pooled connection (#305), so only by a fresh one
+    schema_check = "to_regclass('funding_consumption')"
+    assert len([q for q in one if schema_check not in q]) == 9
+    assert len([q for q in hundred if schema_check not in q]) == 9
     page = _same_bodies(api, url)
     assert len(page) == 6
     assert {len(b["accountBalance"]) for b in page} == {0, 1, 2}

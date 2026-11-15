@@ -17,12 +17,12 @@ from zoneinfo import ZoneInfo
 import psycopg
 
 from app.billing import lifecycle as plan
-from app.billing.lifecycle import funded_state, is_payg
+from app.billing.lifecycle import Settings, funded_state, is_payg
 from app.clock import Clock
 from app.ordering.process import ItemRequest, OrderRequest, place_order
 from app.repository import billing, funding, orders, products
 from app.repository import lifecycle as repo
-from app.repository._sql import Row, fetch_all, fetch_one
+from app.repository._sql import Row, fetch_all
 from app.worker.process import Checkpoint, Heartbeat
 from app.worker.runs import ensure_ownership
 
@@ -60,13 +60,15 @@ def process_lifecycle(
         rows = fetch_all(conn, ACCOUNTS + " ORDER BY a.id")
     else:
         rows = fetch_all(conn, ACCOUNTS + " AND a.id = ANY(%s) ORDER BY a.id", (accounts,))
+    # once per pass (#305): a change of the settings applies from the next pass
+    settings = repo.settings(conn) if rows else None
     for row in rows:
         if checkpoint is not None and checkpoint():
             break
         with conn.transaction():
-            billing.load_account(conn, row["id"])
+            account = billing.load_account_row(conn, row["id"])
             now = clock.now()
-            acted += _account(conn, row["id"], now, now.astimezone(tz).date())
+            acted += _account(conn, account, settings, now, now.astimezone(tz).date())
         if heartbeat is not None:
             heartbeat()
     return acted
@@ -78,8 +80,11 @@ def _in_flight(conn: psycopg.Connection, product_id: UUID) -> bool:
     )
 
 
-def _account(conn: psycopg.Connection, account_id: UUID, now: datetime, today: date) -> list[UUID]:
-    account = fetch_one(conn, "SELECT * FROM billing_account WHERE id = %s", (account_id,))
+def _account(
+    conn: psycopg.Connection, account: Row, settings: Settings, now: datetime, today: date
+) -> list[UUID]:
+    """The account's due transitions; `account` is its row, locked by the caller."""
+    account_id = account["id"]
     rows = fetch_all(
         conn,
         "SELECT * FROM product WHERE billing_account_id = %s AND parent_product_id IS NULL"
@@ -87,10 +92,9 @@ def _account(conn: psycopg.Connection, account_id: UUID, now: datetime, today: d
         " ORDER BY id FOR UPDATE",
         (account_id,),
     )
-    settings = repo.settings(conn)
     spendable = None
     if any(is_payg(p) for p in rows):
-        spendable = funding.load(conn, account_id).spendable
+        spendable = funding.load(conn, account_id, locked=account).spendable
         zero = account["balance_zero_since"]
         if spendable <= 0 and zero is None:
             conn.execute(

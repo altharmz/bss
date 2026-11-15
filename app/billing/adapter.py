@@ -14,7 +14,7 @@ import psycopg
 
 from app.billing import settlement
 from app.billing.core import add_month, compute, cycle_period
-from app.billing.model import Account, BillingResult, BillingState
+from app.billing.model import Account, BillingResult, BillingState, Price
 from app.config import settings
 from app.events import emit
 from app.repository import balance_actions, billing, presentation
@@ -27,21 +27,55 @@ def visible_before(run_date: date, tz: ZoneInfo) -> datetime:
     return datetime.combine(run_date, time.min, tzinfo=tz)
 
 
+class RunPrices:
+    """The recurring prices of the offerings one run has met, each offering read once
+    (#305: it was a query per account).
+
+    Remembering them for the run changes nothing the run charges. The run of D prices
+    only at midnights up to 00:00 of D, and it starts after that (a date still ahead is
+    NotYet). Every price change takes effect at or after the moment it is made: a new or
+    newly attached price never starts in the past, a price of an ordered offering only
+    gets its validFor ended (not in the past), and a price that priced nothing is not on
+    any product of the run (docs/decisions/catalog.md). A price changed during the run
+    therefore has the same value at every instant the run looks at."""
+
+    def __init__(self) -> None:
+        self._by_offering: dict[UUID, tuple[Price, ...]] = {}
+
+    def load(self, conn: psycopg.Connection, offering_ids: list[UUID]) -> tuple[Price, ...]:
+        """As billing.load_recurring_prices: every recurring price of the offerings, by id."""
+        wanted = set(offering_ids)
+        missing = sorted(wanted - self._by_offering.keys())
+        if missing:
+            found = billing.load_recurring_prices(conn, missing)
+            for offering_id in missing:
+                self._by_offering[offering_id] = tuple(
+                    p for p in found if p.offering_id == offering_id
+                )
+        prices = (p for offering_id in wanted for p in self._by_offering[offering_id])
+        return tuple(sorted(prices, key=lambda p: p.id))
+
+
 def load_state(
     conn: psycopg.Connection,
     account_id: UUID,
     run_date: date,
     tz: ZoneInfo,
     account: Account | None = None,
+    prices: RunPrices | None = None,
 ) -> BillingState:
-    """`account`: the caller already holds its row lock (`billing.lock_account`)."""
+    """`account`: the caller already holds its row lock (`billing.lock_account`).
+    `prices`: the run's remembered prices (the worker's DateRun); None: read here."""
     account = account or billing.load_account(conn, account_id)
     products = billing.load_products(conn, account_id, visible_before=visible_before(run_date, tz))
+    offerings = [offering for p in products for offering in p.offering_ids]
     return BillingState(
         account=account,
         products=products,
-        prices=billing.load_recurring_prices(
-            conn, [offering for p in products for offering in p.offering_ids]
+        prices=(
+            billing.load_recurring_prices(conn, offerings)
+            if prices is None
+            else prices.load(conn, offerings)
         ),
         abrs=billing.load_abrs(conn, account_id),
         bills=billing.load_bills(conn, account_id),
@@ -113,18 +147,19 @@ def bill_account(
     *,
     tz: ZoneInfo | None = None,
     account: Account | None = None,
+    prices: RunPrices | None = None,
 ) -> BillingResult:
     """Bill one account for `run` (a billing_run row that is still running): write the
     ABRs and bills due up to its run date, issue the bills, and settle the account (its
     unused credit pays its open bills). Running it again for the same run writes nothing.
     Raises BillingError (nothing written) if the account cannot be billed. `account`: the
     caller already locked it in its open transaction (the worker, #283); else it is locked
-    here."""
+    here. `prices`: the run's remembered prices (RunPrices, the worker's DateRun)."""
     tz = tz or ZoneInfo(settings.billing_tz)
     with conn.transaction():
         current = billing.running_run(conn, run["id"])
         run_date = current["run_date"]
-        state = load_state(conn, account_id, run_date, tz, account)
+        state = load_state(conn, account_id, run_date, tz, account, prices)
         result = compute(state, run_date, tz)
         now = current["started_at"]
         apply_result(conn, state.account, run["id"], result, issued_at=now)
