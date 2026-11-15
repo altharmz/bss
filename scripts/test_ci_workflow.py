@@ -114,6 +114,20 @@ class CiWorkflowTests(unittest.TestCase):
     def test_the_harness_job_uses_the_hooks_runtime_check_paths(self):
         text = "\n".join(block(JOBS, "harness"))
         self.assertIn(f"grep -Eq '{hook_selection.SUITES['runtime-check'].pattern}'", text)
+        for target in ("runtime-check", "deploy-check", "hook-cases"):
+            self.assertIn(f"- run: make {target}\n        if: steps.harness.outputs.changed", text)
+
+    def test_every_step_of_the_docker_job_waits_for_the_scope_decision(self):
+        """A pull request that cannot affect the checks runs none of them (#369)."""
+        steps = "\n".join(block(block(JOBS, "check"), "steps")).split("\n      - ")
+        steps = [step for step in steps if step.strip() and not step.lstrip().startswith("#")]
+        self.assertIn("actions/checkout@", steps[0])
+        self.assertIn("id: scope", steps[1])
+        self.assertIn('hook_selection.py ci-check >> "$GITHUB_OUTPUT"', steps[1])
+        self.assertIn('"$GITHUB_EVENT_NAME" != pull_request', steps[1])
+        self.assertEqual(len(steps), 9)
+        for step in steps[2:]:
+            self.assertIn("if: steps.scope.outputs.run == 'true'", step, step)
 
 
 if __name__ == "__main__":

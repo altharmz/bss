@@ -55,6 +55,9 @@ in the invoking worktree):
 - every choice below is made from the selected paths (`scripts/hook_selection.py paths`):
   the staged paths, or on a merge commit the task's own side only
   ([below](#tests-in-the-hook-smoke-plus-affected));
+- no backend test for a commit no backend test can depend on (the harness, the docs, the
+  UI, CI), only the suites that depend on the change, and no second smoke run on the same
+  backend content ([proportional runs](#tests-proportional-to-the-change-2026-11-15-369));
 - `make lint`, then the test runs `scripts/hook_selection.py` plans for the selected paths
   ([below](#tests-in-the-hook-smoke-plus-affected)): `make test-smoke` + `make test-changed`,
   plus `make test-files` for the tests that read a staged data file (`frontend/src`,
@@ -73,8 +76,11 @@ in the invoking worktree):
   are one of its suites (`scripts/test_guard.py`). The suites are found by name because a
   hand-kept list in the Makefile once left `test_smoke_retry.py` out of every run;
 - `make deploy-check` (`scripts/test_deploy_rollback.py`), only when the deploy or smoke
-  scripts, the compose files, the suite, its runner or the `Makefile` change. It tests the
+  scripts, the compose files, the suite, its runner or the `deployed` recipe of the
+  `Makefile` change. It tests the
   human's deploy, not the agents' workflow, and was the longest suite of every harness commit;
+- `make hook-cases` (the shell cases of the hook's lock and plan and of the billing status
+  check) when `scripts/` changes;
 - neither of the two suites runs again on content it already passed on
   ([below](#tests-in-the-hook-smoke-plus-affected));
 - `make web-lint` and `make web-test` when `frontend/` or `spec/` change;
@@ -348,6 +354,74 @@ same `runtime-check` paths. The other half is a working rule
 ([worktrees.md](../worktrees.md#hooks-and-checks)): while developing, run only the suites
 of the change by hand; the hook is the one full local run.
 
+### Tests proportional to the change (2026-11-15, #369)
+
+Measured in #366: a harness-only commit paid `make test-smoke` (95 s), `make test-changed`
+and all 32 harness suites (80 s) on every commit, and its sync merge reran 2,737 backend
+tests (12 min 6 s) because `master` had changed `tests/conftest.py`. None of that could
+fail because of the task. The rules now:
+
+- **No backend test for what no backend test depends on.** `NO_BACKEND` in
+  `scripts/hook_selection.py` lists what a backend test cannot depend on: `docs/`,
+  `scripts/`, `frontend/`, `design-ref/`, `.claude/`, `.codex/`, `.github/`, the `Makefile`
+  and the root Markdown files. A commit whose selected paths are all there plans no
+  `make test-smoke` and no `make test-changed`; a `DATA` path among them still gets its
+  readers, alone (a UI commit runs three test files, not the smoke subset). Every other
+  path, known or not, is backend. The rule cannot fall behind the tests: the audit hook
+  of `tests/conftest.py` refuses a read of a `NO_BACKEND` path by a test unless `DATA`
+  maps the test to it (`tests/test_hook_selection.py`). The map file itself counts as
+  backend code (`tests/conftest.py` imports it).
+- **The smoke run has a stamp** (`.testmon/test-smoke`: the content of every backend path
+  in the index), like the script suites. A retry on the same backend content prints
+  `test-smoke: passed on this content already; skipped`. `make test-changed` needs none:
+  testmon selects nothing when nothing changed.
+- **The shell cases left `make test-smoke`.** `test-billing-status-check.sh` and
+  `test-pre-commit-lock.sh` are `make hook-cases`: in the hook when `scripts/` changes
+  (with a stamp), in the CI harness job, and in `make test`.
+- **Only the harness suites that depend on the change.** `hook_selection.py suites` reads
+  the sources under `scripts/`: a suite depends on every file its source names (a file
+  name, an imported module, a quoted module name such as the ones fixtures copy in a loop)
+  and on what those scripts name in turn. A changed path runs the suites that reach its
+  file name; the `Makefile`, `scripts/run_suites.py`, `scripts/hook_selection.py`, and any
+  path no suite names run them all. The hook then runs
+  `make runtime-check RUNTIME_SUITES="..."`; such a partial run writes no stamp. The reach
+  is deliberately wide: the lifecycle scripts copy each other into fixtures, so a change
+  to one of them still runs 22 of the 32 suites, while a change to a suite alone, the
+  guard, the docs generator or the workflow runs 1 to 6. A wrong guess is caught by the CI
+  harness job, which runs every suite on a pull request, and by the nightly run.
+  `.github/workflows/` and `compose.prod.yaml` became trigger paths (hook and CI): a suite
+  reads each (`test_ci_workflow.py`, `test_compose_prod.py`), and a change to only that
+  file ran the suite nowhere before the nightly run.
+- **Of the `Makefile`, the deploy suite follows one recipe.** `scripts/test_deploy_rollback.py`
+  reads only the `deployed` recipe, so `make deploy-check` (41 s) runs on a `Makefile`
+  change only when that recipe differs from the commit's parent (on a merge, from the
+  commit being merged in); its stamp covers the recipe, not the file.
+- **A sync adopts the saved test-selection record** when the merge brings backend code in
+  (`scripts/task_testmon.py adopt`, called by `make sync-task`). The worktree's own record
+  does not know the incoming code, so testmon reran every test it affects. The saved
+  record is the one the last merged task left, so against it the merged tree differs by
+  the task's own change: exactly the tests a clash could break. A worktree notes the
+  record it was given (`.testmon/seeded`), and `make finish-task` keeps the stored record
+  when the task's is still that one: a task that ran no backend test must not put an older
+  record over a newer one.
+
+**The slowest backend tests** (2026-11-15, one `make test` run with `--durations=60`,
+12 workers, 2,743 tests in 12 min 36 s, another task's suite running beside it). Four
+tests take over 100 s each and 16 take over 20 s; the next 40 take 10 to 20 s, most of
+them migration round trips. Nothing was changed here: each of the four is a real probe or
+a seeding run, and shortening one is its own piece of work (a follow-up issue).
+
+| Test | Time |
+| --- | --- |
+| `test_tmf_gaps.py::test_the_gap_list_is_the_recorded_one[nested]` | 141 s |
+| `test_loadtest_seed.py::test_parallel_processes_and_fast_commit_give_the_rows_of_one_process` | 130 s |
+| `test_seed.py::test_seed_builds_the_demo_and_is_idempotent` | 109 s |
+| `test_loadtest_seed.py::test_a_run_killed_mid_day_and_rerun_equals_an_uninterrupted_run` | 107 s |
+| `test_usage_load.py` (two tests) | 42 s, 41 s |
+| `test_prepaid_offering_changes.py::test_0044_combined_items_block_downgrade` | 37 s |
+| `test_nonsuperuser_migration.py::test_migrations_run_as_non_superuser_database_owner` | 36 s |
+| `test_migrations.py::test_alembic_downgrade_then_upgrade_roundtrip` | 32 s |
+
 testmon limits: selection is off under `-m` and `-k` (so smoke and affected are separate runs);
 the first run on a checkout without a seeded record, or after deleting `.testmon/`, is the
 whole suite; it follows
@@ -460,8 +534,9 @@ cancelled by a newer push; a nightly or manual run never is. The workflow uses a
 database password, reads no repository secret (`contents: read`), never touches the VPS, and
 pins actions to commit SHAs. The dev image is built with the Actions layer cache. A second job, `harness` (no
 Docker, 15 minutes at most), runs `make docs-links` on every run and
-`make runtime-check` and `make deploy-check` on pull requests that change `scripts/`, `.claude/`,
-`.codex/` or the `Makefile` (a changed-files step); it is the backstop for the local commit
+`make runtime-check`, `make deploy-check` and `make hook-cases` on pull requests that change
+`scripts/`, `.claude/`, `.codex/`, `.github/workflows/`, the `Makefile` or `compose.prod.yaml`
+(a changed-files step); it is the backstop for the local commit
 hook, and the nightly full run covers the harness tests through `make test`. The web
 checks (`web-lint`, `web-test`, `web-e2e`) are not in CI. Branch protection is the human's.
 
@@ -473,6 +548,15 @@ plan of 2,000 minutes a month of which roughly 1,000 to 1,400 were used. The Act
 cache for the dev image is now written on `master` by the nightly run; a PR run reads its
 own branch's cache and `master`'s. Moving the test gate into CI or running the full suite
 on pull requests does not fit the budget: the local hook stays the gate.
+
+**No Docker steps for a pull request that cannot affect them** (2026-11-15, #369). The
+first step of `check` asks `scripts/hook_selection.py ci-check` about the changed paths:
+backend paths (the hook's rule), the `DATA` paths, `scripts/docs/` and the workflows call
+for the job. For any other pull request (harness, docs, UI) every later step is skipped
+and the job ends green in seconds, so `make check-pr` needs no change. It is a step and not
+a job of its own, because every job is billed as a whole minute: a separate job would have
+cost a minute on every run to save one or two on some. Scheduled and manual runs always
+run everything.
 
 **A failed nightly run opens an issue** (2026-11-15, #366). Without the push run, the
 nightly run is the only one on `master`, and a red one was found only by looking. The job

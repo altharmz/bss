@@ -26,6 +26,13 @@ affects.
 no selected path is one of its trigger paths, `passed` when it already passed on exactly
 this content of all its trigger paths (its stamp), else `run`. `stamp TARGET` records that
 content after a passing run, so a retry of the commit does not repeat the suite.
+`suites` prints the harness suites that depend on the selected paths, or `all` (#369).
+
+Backend tests run only for a change they can depend on (#369): a commit whose selected
+paths are all NO_BACKEND (the harness, the docs, the UI, CI) plans no `make test-smoke`
+and no `make test-changed`. tests/conftest.py refuses a read of such a path by a test,
+unless DATA maps it, so the rule cannot fall behind the tests either. `make test-smoke`
+has a stamp like a suite (TARGET `test-smoke`): the content of every backend path.
 """
 
 import hashlib
@@ -54,16 +61,43 @@ DATA = {
 SELF = "scripts/hook_selection.py"
 STAMP = ".testmon/full-suite"
 
+# What no backend test depends on: a commit of only these plans no backend test run (#369).
+# A DATA path below them still gets its readers, and the map itself is backend code
+# (tests/conftest.py imports it).
+NO_BACKEND = re.compile(
+    r"^(docs|scripts|frontend|design-ref|\.claude|\.codex|\.github)/|^Makefile$|^[^/]*\.md$"
+)
+
+
+def backend(path):
+    """Whether a backend test may depend on `path` in a way testmon or DATA does not map."""
+    return path == SELF or not NO_BACKEND.search(path)
+
+
 # The suites the hook runs by path, and the paths that trigger each. The CI harness job
 # uses the runtime-check paths (scripts/test_ci_workflow.py keeps the two the same).
 SUITES = {
-    "runtime-check": re.compile(r"^(scripts/|\.claude/|\.codex/|Makefile$)"),
+    "runtime-check": re.compile(
+        r"^(scripts/|\.claude/|\.codex/|\.github/workflows/|Makefile$|compose\.prod\.yaml$)"
+    ),
+    # Of the Makefile the deploy suite reads one recipe (DEPLOY_RECIPE): only a change to
+    # it runs the suite, not every Makefile change (#369).
     "deploy-check": re.compile(
         r"^(scripts/(deploy\.sh|test_deploy_rollback\.py|run_suites\.py|task-compose"
         r"|billing-status-check\.sh|[a-z-]*smoke[a-z-]*\.(sh|py))"
-        r"|compose[a-z.]*\.yaml|Makefile)$"
+        r"|compose[a-z.]*\.yaml)$"
     ),
+    # The shell cases of the hook's own scripts (make hook-cases).
+    "hook-cases": re.compile(r"^scripts/"),
 }
+# A change to these runs every harness suite: what any suite may depend on.
+WHOLE_RUN = ("Makefile", "scripts/run_suites.py", SELF)
+# The suites `make runtime-check` leaves out (the Makefile's filter; test_run_suites.py
+# keeps the two the same).
+NOT_RUNTIME = ("scripts/test_deploy_rollback.py", "scripts/test_telemetry_database.py")
+DEPLOY_RECIPE = re.compile(r"^deployed:.*\n((?:\t.*\n)+)", re.M)
+# What each stamp follows: the trigger paths of a suite, every backend path for the smoke run.
+FOLLOWS = {**{target: pattern.search for target, pattern in SUITES.items()}, "test-smoke": backend}
 
 
 def data_key(path):
@@ -87,11 +121,19 @@ def check_read(path, reader, root):
     absolute = os.path.abspath(os.fsdecode(path))
     if not absolute.startswith(root):
         return
-    key = data_key(absolute[len(root) :].replace(os.sep, "/"))
+    relative = absolute[len(root) :].replace(os.sep, "/")
+    if "/__pycache__/" in relative:
+        return  # the bytecode of a source whose own read is checked
+    key = data_key(relative)
     if key is not None and reader not in DATA[key]:
         raise UnlistedDataRead(
             f"{reader} reads {os.fsdecode(path)}: the commit hook runs only the tests listed"
             f" for {key!r} when it changes - add {reader} to DATA in scripts/hook_selection.py"
+        )
+    if key is None and not backend(relative):
+        raise UnlistedDataRead(
+            f"{reader} reads {os.fsdecode(path)}: the commit hook runs no backend test when"
+            f" it changes - map it to {reader} in DATA in scripts/hook_selection.py"
         )
 
 
@@ -105,12 +147,23 @@ def data_tests(staged):
     return sorted(tests)
 
 
+def ci_check(path):
+    """Whether a pull request that changes `path` needs the Docker job of CI (lint,
+    generated docs, smoke tests): backend code, data the tests read, the sources of the
+    generated docs, the workflow itself."""
+    return (
+        backend(path)
+        or data_key(path) is not None
+        or path.startswith(("scripts/docs/", ".github/workflows/"))
+    )
+
+
 def plan(staged, digest, stamp):
     """The make invocations for the staged paths. `digest` names the FULL files as they
     are now, `stamp` the content the whole suite last ran to its end on (or None)."""
     if any(FULL.search(path) for path in staged) and stamp != digest:
         return ["test-recorded"]
-    steps = ["test-smoke", "test-changed"]
+    steps = ["test-smoke", "test-changed"] if any(backend(path) for path in staged) else []
     tests = data_tests(staged)
     if tests:
         steps.append("test-files TESTS=" + ",".join(tests))
@@ -126,17 +179,34 @@ def git(*args):
     ).stdout
 
 
-def index_digest(pattern):
-    """Names the content of every file in the index `pattern` matches: mode, blob and path."""
-    digest = hashlib.sha256()
+def index_digest(follows, extra=""):
+    """Names the content of every file in the index `follows` accepts: mode, blob and path."""
+    digest = hashlib.sha256(extra.encode())
     for entry in git("ls-files", "-s", "-z").split("\0"):
-        if entry and pattern.search(entry.split("\t", 1)[1]):
+        if entry and follows(entry.split("\t", 1)[1]):
             digest.update(entry.encode() + b"\0")
     return digest.hexdigest()
 
 
 def full_digest():
-    return index_digest(FULL)
+    return index_digest(FULL.search)
+
+
+def deploy_recipe(revision):
+    """The Makefile recipe the deploy suite reads, as `revision` (or the index, "") has it."""
+    shown = subprocess.run(  # noqa: S603 - fixed program, fixed arguments
+        ["git", "show", f"{revision}:Makefile"],  # noqa: S607
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    found = DEPLOY_RECIPE.search(shown.stdout) if shown.returncode == 0 else None
+    return found.group(1) if found else ""
+
+
+def suite_digest(target):
+    extra = deploy_recipe("") if target == "deploy-check" else ""
+    return index_digest(FOLLOWS[target], extra)
 
 
 def read_stamp(root, stamp=STAMP):
@@ -165,11 +235,59 @@ def selected_paths():
     return [p for p in git("diff", "--cached", "--name-only", "-z", *against).split("\0") if p]
 
 
+def named(text):
+    """What a script's source names: file names (`task.py`, `guard-cases.txt`), and Python
+    modules by an import or a quoted module name (fixtures copy `f"{name}.py"` in loops)."""
+    files = {token.rstrip(".") for token in re.findall(r"[\w.-]+", text)}
+    modules = re.findall(r"^\s*(?:from|import)\s+(\w+)", text, re.M)
+    modules += re.findall(r"[\"'](\w+)[\"']", text)
+    return files | {f"{module}.py" for module in modules}
+
+
+def harness_suites(selected, root):
+    """The `make runtime-check` suites that depend on the selected paths, or None for all
+    of them (#369). A suite depends on a file its source names, or the source of a script
+    it reaches through such names (an imported module, a script copied into its fixture).
+    The Makefile, the runner, this file, and a path no suite names call for every suite:
+    an unknown dependency never runs less. CI runs every suite on a pull request."""
+    names = {
+        path.name: named(path.read_text(errors="replace"))
+        for path in (Path(root) / "scripts").glob("*.py")
+    }
+    reached = {}
+    for suite in (name for name in names if name.startswith("test_")):
+        seen, queue = {suite}, [suite]
+        while queue:
+            for other in names[queue.pop()] & names.keys() - seen:
+                seen.add(other)
+                queue.append(other)
+        reached[suite] = set().union(*(names[name] for name in seen)) | {suite}
+    chosen = set()
+    for path in selected:
+        if not SUITES["runtime-check"].search(path):
+            continue
+        if path in WHOLE_RUN:
+            return None
+        found = {suite for suite, known in reached.items() if path.rsplit("/", 1)[-1] in known}
+        if not found:
+            return None
+        chosen |= found
+    return sorted({f"scripts/{suite}" for suite in chosen} - set(NOT_RUNTIME))
+
+
+def triggered(target, selected):
+    if any(FOLLOWS[target](path) for path in selected):
+        return True
+    if target == "deploy-check" and "Makefile" in selected:
+        before = "HEAD" if merge_head() is None else "MERGE_HEAD"
+        return deploy_recipe("") != deploy_recipe(before)
+    return False
+
+
 def suite_state(target, selected, root):
-    pattern = SUITES[target]
-    if not any(pattern.search(path) for path in selected):
+    if not triggered(target, selected):
         return "none"
-    if read_stamp(root, f".testmon/{target}") == index_digest(pattern):
+    if read_stamp(root, f".testmon/{target}") == suite_digest(target):
         return "passed"
     return "run"
 
@@ -177,12 +295,16 @@ def suite_state(target, selected, root):
 def write_suite_stamp(target, root):
     stamp = Path(root) / ".testmon" / target
     stamp.parent.mkdir(exist_ok=True)
-    stamp.write_text(index_digest(SUITES[target]) + "\n")
+    stamp.write_text(suite_digest(target) + "\n")
 
 
 def main(argv):
     if argv == ["digest"]:
         print(full_digest())
+        return 0
+    if argv == ["ci-check"]:
+        changed = sys.stdin.read().split("\n")
+        print("run=" + ("true" if any(ci_check(path) for path in changed if path) else "false"))
         return 0
     if argv == ["paths"]:
         sys.stdout.write("".join(path + "\n" for path in selected_paths()))
@@ -191,15 +313,19 @@ def main(argv):
     if argv == ["plan"]:
         print("\n".join(plan(selected_paths(), full_digest(), read_stamp(root))))
         return 0
-    if len(argv) == 2 and argv[0] in ("suite", "stamp") and argv[1] in SUITES:
+    if argv == ["suites"]:
+        suites = harness_suites(selected_paths(), root)
+        print("all" if suites is None else " ".join(suites))
+        return 0
+    if len(argv) == 2 and argv[0] in ("suite", "stamp") and argv[1] in FOLLOWS:
         if argv[0] == "suite":
             print(suite_state(argv[1], selected_paths(), root))
         else:
             write_suite_stamp(argv[1], root)
         return 0
     print(
-        "usage: hook_selection.py plan|digest|paths|suite TARGET|stamp TARGET"
-        f" (TARGET: {', '.join(SUITES)})",
+        "usage: hook_selection.py plan|digest|paths|suites|ci-check|suite TARGET|stamp TARGET"
+        f" (TARGET: {', '.join(FOLLOWS)})",
         file=sys.stderr,
     )
     return 2

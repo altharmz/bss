@@ -43,3 +43,15 @@ def test_a_listed_test_file_and_other_paths_are_not_refused():
     hook_selection.check_read("frontend/src/api/bss.ts", None, ROOT)  # no test running
     with pytest.raises(UnlistedDataRead):
         hook_selection.check_read("frontend/src/api/bss.ts", "tests/test_other.py", ROOT)
+
+
+def test_a_read_of_what_runs_no_backend_test_is_refused():
+    """A commit of only the harness, the docs, the UI or CI plans no backend test (#369),
+    so no test may read such a path unless the map names the test for it."""
+    for path in ("Makefile", "docs/ui.md", "scripts/task_git.py", "frontend/package.json"):
+        with pytest.raises(UnlistedDataRead, match="runs no backend test"):
+            hook_selection.check_read(path, ME, ROOT)
+    for path in ("app/main.py", "alembic.ini", "spec/README.md", "scripts/hook_selection.py"):
+        hook_selection.check_read(path, ME, ROOT)
+    hook_selection.check_read("docs/ui.md", None, ROOT)  # no test running
+    hook_selection.check_read("scripts/__pycache__/ui_mcp_parity.cpython-312.pyc", ME, ROOT)

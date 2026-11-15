@@ -207,6 +207,22 @@ def remote_configuration(root, task):
     )
 
 
+def adopt_test_record(root, base):
+    """When the merge brings backend code in, the saved test-selection record replaces the
+    worktree's (scripts/task_testmon.py): the merge commit's hook then runs the tests the
+    task's own change affects, not every test the incoming code affects. Best effort."""
+    try:
+        import hook_selection
+        import task_testmon
+    except ImportError:
+        return
+    incoming = paths(root, "diff", "--name-only", "-z", f"HEAD...{base}")
+    if not any(hook_selection.backend(name) for name in incoming):
+        return
+    common = query(root, "rev-parse", "--path-format=absolute", "--git-common-dir").decode().strip()
+    print(f"sync-task: test-selection record {task_testmon.adopt(root, common)}")
+
+
 def sync(root, task):
     require(
         not query(root, "status", "--porcelain=v1", "--untracked-files=all"),
@@ -227,6 +243,7 @@ def sync(root, task):
         return
     # Never rewrite published history. A conflict or hook failure preserves the
     # merge state for inspection and explicit file resolution through make commit.
+    adopt_test_record(root, base)
     run(root, "merge", "--no-ff", "--no-commit", base)
     run(root, "commit", "-m", "Merge origin/master into task branch")
 

@@ -213,6 +213,11 @@ worktree's `scripts/pre-commit.sh` and `scripts/pre-push.sh`. Details of the gat
   hook of a merge commit (`make sync-task`) chooses its tests from the task's side only, not
   from what comes in from `master`, and a harness or deploy suite that passed is not run
   again on the same content (a retry after a lint failure skips it with a log line).
+- **What the hook runs follows the change.** A commit of only harness, docs, UI or CI files
+  runs no backend tests; a harness change runs the suites that depend on it, not all of
+  them; the smoke tests are not repeated on unchanged backend code. Each skip is one line
+  in the hook's output. The rules:
+  [harness.md](decisions/harness.md#tests-proportional-to-the-change-2026-11-15-369).
 - **pre-push** refuses bcrypt hashes, `.env*` paths, branch deletions and non-fast-forwards.
 - `make format` formats backend and, if they changed (or the base is unknown), the harness
   Python under `scripts/` (`make scripts-fmt`) and the UI (`frontend/` or `spec/`); it never

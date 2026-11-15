@@ -147,14 +147,15 @@ mcp-token-revoke: ## [mcp] Revoke a local MCP static token (ID=<id>) or OAuth gr
 # (lint, format, docs, builds) never take the lock; aggregates lock stage by stage.
 LOCKED := ./scripts/with-test-lock
 
-test: runtime-check deploy-check ## [test] The FULL suite in the container (parallel; HYPOTHESIS_PROFILE=dev|ci), plus the harness and deploy script tests (runtime-check, deploy-check): nightly in CI, by hand before a PR
+.PHONY: hook-cases
+hook-cases: ## [test] The shell cases of the hook's own scripts (the hook's lock and plan, the billing status check); the commit hook runs them when scripts/ changes
 	./scripts/test-billing-status-check.sh
 	./scripts/test-pre-commit-lock.sh
+
+test: runtime-check deploy-check hook-cases ## [test] The FULL suite in the container (parallel; HYPOTHESIS_PROFILE=dev|ci), plus the harness and deploy script tests (runtime-check, deploy-check, hook-cases): nightly in CI, by hand before a PR
 	$(LOCKED) ./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) $(if $(PLAN_CAPTURE_DIR),-e BSS_PLAN_CAPTURE_DIR=$(PLAN_CAPTURE_DIR)) oneoff pytest -n auto
 
-test-smoke: ## [test] The smoke subset (pytest -m smoke) and the scripts' own cases: what CI runs on pull requests
-	./scripts/test-billing-status-check.sh
-	./scripts/test-pre-commit-lock.sh
+test-smoke: ## [test] The smoke subset (pytest -m smoke): what CI runs on pull requests that can affect it
 	$(LOCKED) ./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) oneoff pytest -n auto -m smoke
 
 # pytest-testmon runs the tests whose code changed since their last recorded run, plus new and
@@ -171,8 +172,6 @@ test-changed: ## [test] Only the tests affected by the change since their last r
 # path rules.
 .PHONY: test-recorded test-files
 test-recorded: ## [test] The hook's full backend suite, recorded for testmon (no harness or deploy suites; by hand use make test)
-	./scripts/test-billing-status-check.sh
-	./scripts/test-pre-commit-lock.sh
 	@: >.testmon/full-suite
 	$(LOCKED) ./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) -e FULL_SUITE_DIGEST="$$(python3 -B scripts/hook_selection.py digest)" oneoff sh -c 'pytest -n auto --testmon-noselect; status=$$?; if [ $$status -le 1 ]; then echo "$$FULL_SUITE_DIGEST" >/testmon/full-suite; fi; exit $$status'
 
