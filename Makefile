@@ -43,6 +43,31 @@ new-priority-task: ## [task] Create an approved P0 issue first in Ready; start s
 release-slot: ## [task] Release a slot after its task worktree was safely removed (SLOT=worker1)
 	@python3 -B scripts/start_task.py --release-slot
 
+.PHONY: board add-task move-task set-priority reorder-task
+board add-task move-task set-priority reorder-task: export BSS_BOARD_JSON := $(JSON)
+add-task move-task set-priority reorder-task: export BSS_BOARD_ISSUE := $(ISSUE)
+add-task: export BSS_BOARD_TITLE := $(TITLE)
+add-task: export BSS_BOARD_BODY := $(BODY)
+add-task: export BSS_BOARD_BODY_FILE := $(BODY_FILE)
+add-task: export BSS_BOARD_LABELS := $(LABELS)
+add-task set-priority: export BSS_BOARD_PRIORITY := $(PRIORITY)
+add-task move-task: export BSS_BOARD_STATUS := $(STATUS)
+move-task: export BSS_BOARD_WAITING_ON := $(WAITING_ON)
+move-task: export BSS_BOARD_UNBLOCKS_WHEN := $(UNBLOCKS_WHEN)
+set-priority reorder-task: export BSS_BOARD_APPROVAL := $(HUMAN_APPROVAL)
+reorder-task: export BSS_BOARD_AFTER := $(AFTER)
+
+board: ## [task] Show the open board items by status, in board order (JSON=1 for JSON)
+	@python3 -B scripts/board_admin.py board
+add-task: ## [task] Create an issue on the board (TITLE= BODY=|BODY_FILE=/abs/path [LABELS=a,b] [PRIORITY=P1|P2|P3] [STATUS=Inbox|Ready])
+	@python3 -B scripts/board_admin.py add-task
+move-task: ## [task] Move an issue to Inbox, Ready or Waiting (ISSUE= STATUS=; Waiting needs WAITING_ON= UNBLOCKS_WHEN=)
+	@python3 -B scripts/board_admin.py move-task
+set-priority: ## [task] Change an issue's priority label with human approval (ISSUE= PRIORITY=P0..P3 HUMAN_APPROVAL=<same issue>)
+	@python3 -B scripts/board_admin.py set-priority
+reorder-task: ## [task] Move an issue first on the board, or after AFTER=<issue>, with human approval (ISSUE= HUMAN_APPROVAL=<same issue>)
+	@python3 -B scripts/board_admin.py reorder-task
+
 up: ## [stack] Start the local stack (app + postgres, hot reload)
 	./scripts/task-compose up -d --build
 	@$(MAKE) --no-print-directory wait-local

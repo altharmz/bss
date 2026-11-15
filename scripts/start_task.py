@@ -15,7 +15,6 @@ import stat
 import subprocess
 import sys
 import unicodedata
-from pathlib import Path
 
 import task_testmon
 from task_board import (
@@ -35,6 +34,7 @@ from task_board import (
 )
 from task_repo import (
     StartupError,
+    body_from_file,
     clean,
     git,
     no_tracked_secrets,
@@ -183,18 +183,6 @@ def task_owner():
 def agent_label():
     # Owner/client identity and worker-slot allocation are independent.
     return f"agent:{task_owner()}"
-
-
-def body_from_file(path):
-    file = Path(path)
-    if not file.is_absolute() or file.is_symlink() or not file.is_file():
-        raise StartupError("BODY_FILE must be an absolute path to a regular file")
-    if file.stat().st_size > 65536:
-        raise StartupError("BODY_FILE exceeds the 64 KiB limit")
-    try:
-        return file.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
-        raise StartupError("BODY_FILE is not readable UTF-8 text") from None
 
 
 def new_task_request():

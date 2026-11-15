@@ -45,17 +45,20 @@ Labels: `ops` `vps` `harness` `docs` `gui` `bug` `idea` `blocked` `vpn-adjacent`
 ### Adding a task ("add a task / bug / idea")
 
 - Search first (`gh issue list --search`); if one exists, comment on it instead.
-- Create the issue with a clear title, short context, a task-list checklist and labels.
-  It lands in Inbox by default.
+- Create the issue with `make add-task TITLE="..." BODY_FILE=/abs/path LABELS="a,b"` (a
+  clear title, short context, a task-list checklist and labels). It lands in Inbox by
+  default.
 - If the human gave enough detail and said it should be done soon, put it straight into
-  Ready and say where you placed it.
+  Ready (`STATUS=Ready`) and say where you placed it.
 
 ### Planning ("plan / prepare X")
 
 - Refine the issue: goal, scope, acceptance criteria checklist, dependencies, labels;
   split into sub-issues if it is more than one session of work.
-- An open dependency: move it to Waiting with the "Waiting on" comment. Otherwise move it
-  to Ready and ask where it sits in priority. Do not start implementing unless told to.
+- An open dependency: move it to Waiting with the "Waiting on" comment
+  (`make move-task ISSUE=<n> STATUS=Waiting WAITING_ON="..." UNBLOCKS_WHEN="..."` posts
+  it). Otherwise move it to Ready (`make move-task ISSUE=<n> STATUS=Ready`) and ask where
+  it sits in priority. Do not start implementing unless told to.
 
 ### Changing priority with human approval
 
@@ -69,19 +72,14 @@ selection order only and leaves priority labels, board order and every eligibili
 unchanged (see [worktrees.md](worktrees.md#normal-agent-workflow)). Preserve one
 priority label per issue and leave other agents' owned work untouched.
 
-Use `gh issue edit <n> --remove-label <old> --add-label <new>` for an approved priority
-change. For approved BSS board ordering, use this inline form:
-
-```sh
-gh api graphql -f query='mutation { updateProjectV2ItemPosition(input: {projectId: "PVT_kwHOEpM-b84BpHA0", itemId: "<item id>"}) { clientMutationId } }'
-```
-
-Omitting `afterId` moves the item first; add `, afterId: "<preceding item id>"` after
-`itemId` to place it after another item. Read item IDs from the board snapshot and
-confirm the resulting order afterward. Use `make start-task` to claim/start work.
-These board-administration operations have no lifecycle Make target. No hook checks them:
-the approval requirement rests on the agent, as the human-review rules do. Run only this
-reorder mutation, never another GraphQL write.
+An approved priority change is `make set-priority ISSUE=<n> PRIORITY=<P0..P3>
+HUMAN_APPROVAL=<n>`: it replaces the issue's P0–P3 label with the new one. An approved
+board order change is `make reorder-task ISSUE=<n> [AFTER=<m>] HUMAN_APPROVAL=<n>`: the
+item moves first on the board, or directly after issue `<m>`, and the new order is
+confirmed. The `HUMAN_APPROVAL` marker records the agent's assertion that the human
+approved this change; the script cannot verify the conversation, so the approval
+requirement rests on the agent, as the human-review rules do. Use `make start-task` to
+claim/start work.
 
 `make new-priority-task TITLE=... BODY=... [LABELS=...]` creates an explicitly approved
 P0 issue first in Ready and stops. It does not claim ownership, check slot availability,
@@ -137,21 +135,12 @@ it, then carry on in the normal order. The revert PR follows the same flow.
 
 ### Mechanics
 
-The commands below are for explicitly requested board triage or administration, not normal
-startup (`make start-task` claims work). Keep those inspections compact;
-fetch only relevant issue bodies using explicit JSON fields (the human-readable view
-can query deprecated Projects classic fields and fail):
+For explicitly requested board triage or administration (not normal startup:
+`make start-task` claims work), the board snapshot is `make board` (open items by status
+in board order; `JSON=1` adds item ids and positions). Fetch only relevant issue bodies,
+with explicit JSON fields (the human-readable view can query deprecated Projects classic
+fields and fail): `gh issue view <n> --json number,title,body,labels,comments`. Manual
+`gh project` commands are for recovery only, with the IDs above.
 
-```
-gh project item-list 1 --owner altharmz --limit 100 --format json | jq -r '
-  .items | map(select(.status != "Done")) | group_by(.status)[] |
-  "\(.[0].status): \(length)",
-  (.[] | "  #\(.content.number // "-") [\(.labels | join(","))] \(.title)")'
-gh issue view <n> --json number,title,body,labels,comments
-
-gh project item-edit --project-id PVT_kwHOEpM-b84BpHA0 --id <item id> \
-  --field-id PVTSSF_lAHOEpM-b84BpHA0zhnkE7M --single-select-option-id <option id>
-```
-
-The item id comes from `item-list`. Board workflows do: item added → Inbox, PR linked →
+Board workflows do: item added → Inbox, PR linked →
 Doing, PR merged / item closed → Done, item reopened → Inbox.
