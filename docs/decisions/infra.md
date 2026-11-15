@@ -493,7 +493,9 @@ VPS) keeps the last two releases and goes back one by itself. Operator view:
 - **Schema:** when the two `alembic_rev` differ, `alembic downgrade <target rev>` runs in
   the image being left - only it contains the downgrade scripts - with the 120 s deadline
   and the one-off cleanup of the upgrade. A refusal is never forced: that release is
-  brought back up and the script stops with "ROLLBACK REFUSED". **Why:** lossy downgrades
+  brought back up and the script stops with "ROLLBACK REFUSED". A downgrade that overruns
+  the deadline gets the same stop but says it did not finish and was rolled back (one
+  transaction, schema unchanged), pointing at the database rather than the data. **Why:** lossy downgrades
   refuse on purpose ([operations.md](../operations.md#prepaid-recovery-and-rollback)), and
   this repo has no restore tooling (vps-infra owns the dumps).
 - **UI:** `~/bss/web` is synced on the server from `releases/<tag>/web/` with the deploy's
