@@ -44,3 +44,12 @@ list_accounts: the Subscribers list reads search_subscribers (/internal/v1/subsc
 list_customers: the Parties customers list reads search_customers (/internal/v1/partyCustomer)
 list_individuals: the Parties list and owner picker read search_parties (/internal/v1/party)
 list_organizations: the Parties list and owner picker read search_parties (/internal/v1/party)
+list_party_interactions: the Interactions tab is the UI half of issue 199
+get_party_interaction: the Interactions tab is the UI half of issue 199
+create_party_interaction: logging a contact; the UI action is the UI half of issue 199
+patch_party_interaction: notes and status of a contact; the UI action is the UI half of issue 199
+list_trouble_tickets: the Cases tab and screen are the UI half of issue 199
+get_trouble_ticket: the Cases tab and screen are the UI half of issue 199
+create_trouble_ticket: opening a case; the UI action is the UI half of issue 199
+patch_trouble_ticket: working a case; the UI action is the UI half of issue 199
+get_hub_ticket: the internal eventSubscription list covers every hub

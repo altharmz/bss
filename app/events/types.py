@@ -18,6 +18,8 @@ BASES: dict[str, str] = {
     "TMF670": "/tmf-api/paymentMethod/v4",
     "TMF678": "/tmf-api/customerBillManagement/v5",
     "TMF654": "/tmf-api/prepayBalanceManagement/v4",
+    "TMF683": "/tmf-api/partyInteractionManagement/v5",
+    "TMF621": "/tmf-api/troubleTicket/v5",
 }
 
 _CRUD = ("AttributeValueChange", "Create", "Delete", "StateChange")
@@ -117,6 +119,27 @@ EVENT_TYPES: dict[str, frozenset[str]] = {
         f"{action}{kind}Event"
         for action in ("TopupBalance", "AdjustBalance", "ReserveBalance", "TransferBalance")
         for kind in ("Create", "Failure", "Cancel")
+    ),
+    # Both name their state event "StatusChange". Interactions and tickets are records:
+    # Delete is never sent, nor InformationRequired; ticket specifications are not
+    # implemented (docs/decisions/care.md), so their four events are never sent either.
+    "TMF683": frozenset(
+        f"PartyInteraction{kind}Event"
+        for kind in ("AttributeValueChange", "Create", "Delete", "StatusChange")
+    ),
+    "TMF621": frozenset(
+        {
+            "TroubleTicketAttributeValueChangeEvent",
+            "TroubleTicketCreateEvent",
+            "TroubleTicketDeleteEvent",
+            "TroubleTicketInformationRequiredEvent",
+            "TroubleTicketResolvedEvent",
+            "TroubleTicketSpecificationAttributeValueChangeEvent",
+            "TroubleTicketSpecificationCreateEvent",
+            "TroubleTicketSpecificationDeleteEvent",
+            "TroubleTicketSpecificationStatusChangeEvent",
+            "TroubleTicketStatusChangeEvent",
+        }
     ),
 }
 

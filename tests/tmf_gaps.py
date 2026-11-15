@@ -57,11 +57,14 @@ SPECS = (
     "TMF666",
     "TMF676",
     "TMF678",
+    "TMF683",
+    "TMF621",
 )
 # Resources (first path segment) whose operations are not implemented yet: each is one
 # "endpoint absent" line, and the attribute probes skip it. Remove a resource here when
 # its routes land, which enables those probes.
-PENDING: dict[str, frozenset[str]] = {}
+# TMF621: simple cases have no templates (docs/decisions/care.md)
+PENDING: dict[str, frozenset[str]] = {"TMF621": frozenset({"troubleTicketSpecification"})}
 NESTED = "nested"
 PARTS = (*SPECS, NESTED)
 # probe_nested_reads' lines: one level into a response attribute
@@ -350,6 +353,71 @@ def populate(api: Any) -> None:
         (f"{_BILL_API}/customerBillOnDemand", {"billingAccount": {"id": acc["id"]}}),
     ):
         _created(api, url, body)
+    _care(api, cust, acc)
+
+
+def _care(api: Any, cust: dict[str, Any], acc: dict[str, Any]) -> None:
+    """An interaction and a ticket that refer to each other, the account and an audit entry,
+    with notes and a status history (TMF683, TMF621 reads)."""
+    customer = [{"role": "customer", "partyOrPartyRole": {"id": cust["id"]}}]
+    account = {"role": "billing", "entity": {"id": acc["id"], "@referredType": "BillingAccount"}}
+    ticket = _created(
+        api,
+        "/tmf-api/troubleTicket/v5/troubleTicket",
+        {
+            "description": "Probe case",
+            "severity": "minor",
+            "ticketType": "request",
+            "relatedParty": customer,
+            "channel": {"id": "phone"},
+            "relatedEntity": [account],
+            "note": [{"text": "probe"}],
+        },
+    )
+    (entry, *_) = api.get("/internal/v1/security/audit?action=ticket_opened").json()
+    interaction = _created(
+        api,
+        "/tmf-api/partyInteractionManagement/v5/partyInteraction",
+        {
+            "direction": "inbound",
+            "reason": "Probe",
+            "interactionDate": {"startDateTime": timeline.iso(timeline.START)},
+            "relatedChannel": [{"role": "interaction", "channel": {"id": "chat"}}],
+            "relatedParty": customer,
+            "note": [{"text": "probe"}],
+            "interactionItem": [
+                {"item": account},
+                {
+                    "item": {
+                        "role": "case",
+                        "entity": {"id": ticket["id"], "@referredType": "TroubleTicket"},
+                    }
+                },
+                {
+                    "item": {
+                        "role": "audit",
+                        "entity": {"id": entry["id"], "@referredType": "AuditEntry"},
+                    }
+                },
+            ],
+        },
+    )
+    moved = api.patch(
+        ticket["href"],
+        {
+            "status": "inProgress",
+            "relatedEntity": [
+                account,
+                {
+                    "role": "call",
+                    "entity": {"id": interaction["id"], "@referredType": "PartyInteraction"},
+                },
+            ],
+        },
+    )
+    assert moved.status_code == 200, moved.text
+    held = api.patch(ticket["href"], {"status": "held", "statusChangeReason": "Probe"})
+    assert held.status_code == 200, held.text
 
 
 _BILL_API = "/tmf-api/customerBillManagement/v5"

@@ -57,7 +57,7 @@
 | GET | `/internal/v1/prepaid/command/{command_id}` | path: `command_id` | - | 200 `PrepaidCommand` | [`app/internal/prepaid_commands.py`](../../app/internal/prepaid_commands.py) |
 | POST | `/internal/v1/prepaid/command/{command_id}/retry` | path: `command_id`; body: `application/json` | - | 202 `PrepaidCommand` | [`app/internal/prepaid_commands.py`](../../app/internal/prepaid_commands.py) |
 | POST | `/internal/v1/productOffering/{offering_id}/priceChange` | path: `offering_id`; body: `application/json` | `PriceChangeRequest` | 201 `PriceChange` | [`app/internal/catalog.py`](../../app/internal/catalog.py) |
-| GET | `/internal/v1/security/audit` | query: `customer.id`, `product.id`, `billingAccount.id`, `action`, `outcome`, `operator`, `offset`, `limit` | - | 200 `array of AuditEntry` | [`app/internal/security.py`](../../app/internal/security.py) |
+| GET | `/internal/v1/security/audit` | query: `id`, `customer.id`, `product.id`, `billingAccount.id`, `action`, `outcome`, `operator`, `offset`, `limit` | - | 200 `array of AuditEntry` | [`app/internal/security.py`](../../app/internal/security.py) |
 | GET | `/internal/v1/security/lock/{product_id}` | path: `product_id` | - | 200 `LineLock` | [`app/internal/security.py`](../../app/internal/security.py) |
 | PUT | `/internal/v1/security/lock/{product_id}` | path: `product_id` | `object` | 200 `LineLock` | [`app/internal/security.py`](../../app/internal/security.py) |
 | GET | `/internal/v1/security/pin/{customer_id}` | path: `customer_id` | - | 200 `AccountPin` | [`app/internal/security.py`](../../app/internal/security.py) |

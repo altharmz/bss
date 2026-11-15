@@ -132,6 +132,20 @@ APIS = (
         "TMF681",
         "v4",
     ),
+    Api(
+        "tmf683-party-interaction",
+        "TMF683 Party Interaction Management",
+        "/tmf-api/partyInteractionManagement/v5",
+        "TMF683",
+        "v5",
+    ),
+    Api(
+        "tmf621-trouble-ticket",
+        "TMF621 Trouble Ticket Management",
+        "/tmf-api/troubleTicket/v5",
+        "TMF621",
+        "v5",
+    ),
     Api("service", "Service endpoints", "", None, "-"),
 )
 
@@ -180,6 +194,8 @@ HANDLERS = {
     "/internal/v1/number": "app/internal/ports.py",
     "/internal/v1/usage": "app/internal/usage.py",
     "/tmf-api/communicationManagement/v4": "app/api/communication.py",
+    "/tmf-api/partyInteractionManagement/v5": "app/api/interaction.py",
+    "/tmf-api/troubleTicket/v5": "app/api/trouble_ticket.py",
     "/internal/v1/notification": "app/internal/notifications.py",
     "/internal/v1/security": "app/internal/security.py",
     "/internal/v1/payment/command": "app/internal/payments.py",
@@ -273,6 +289,15 @@ AREAS = {
     "events": ("event_subscription", "event", "event_delivery"),
     "notifications": ("notification_message", "notification_consent"),
     "security": ("customer_pin", "line_lock", "account_audit"),
+    "care": (
+        "party_interaction",
+        "party_interaction_item",
+        "party_interaction_note",
+        "trouble_ticket",
+        "trouble_ticket_related_entity",
+        "trouble_ticket_note",
+        "trouble_ticket_status_change",
+    ),
     "users": (
         "app_user",
         "app_session",
@@ -292,6 +317,7 @@ AREA_TITLES = {
     "events": "Event notifications (TMF hubs)",
     "notifications": "Customer notifications (TMF681)",
     "security": "Account security: PIN, line locks, audit log (ours)",
+    "care": "Customer care: interaction notes and cases (TMF683, TMF621)",
     "users": "Application users and sessions (ours)",
 }
 SKIP_TABLES = {"alembic_version"}
