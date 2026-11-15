@@ -651,6 +651,26 @@ describe('prepaid plans (#212)', () => {
         kind: 'renewal',
         amount: usd(12),
         tax: usd(2),
+        appliedTax: [
+          {
+            taxCategory: 'sales_tax',
+            taxRate: 7.25,
+            taxAmount: usd(0.72),
+            jurisdiction: 'CA state',
+          },
+          {
+            taxCategory: 'federal_usf',
+            taxRate: 3,
+            taxAmount: usd(0.3),
+            jurisdiction: 'US federal',
+          },
+          {
+            taxCategory: 'prepaid_wireless_e911',
+            taxRate: 0,
+            taxAmount: usd(0.98),
+            jurisdiction: 'CA state',
+          },
+        ],
         fundedBy: 'card',
         bill: { id: 'b0000001-0000-4000-8000-000000000001' },
       },
@@ -743,6 +763,17 @@ describe('prepaid plans (#212)', () => {
     expect(table.textContent).toContain('2026-09-20 – 2026-10-20');
     expect(table.textContent).toContain('Card');
     expect(table.textContent).toContain('12.00 USD');
+    // #207: each tax line with its jurisdiction; a fixed fee shows no rate
+    const taxes = within(table).getByRole('table', { name: 'Tax lines' });
+    const lines = within(taxes)
+      .getAllByRole('row')
+      .slice(1)
+      .map((r) => Array.from(r.querySelectorAll('td')).map((c) => c.textContent));
+    expect(lines).toEqual([
+      ['Sales tax', 'CA state', '7.25%', '0.72'],
+      ['Federal USF', 'US federal', '3%', '0.30'],
+      ['Prepaid wireless E911', 'CA state', '—', '0.98'],
+    ]);
   });
 
   it('offers Buy add-on on a plan only, quotes the fee and orders the add item', async () => {

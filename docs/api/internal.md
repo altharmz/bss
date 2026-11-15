@@ -71,7 +71,7 @@
 | GET | `/internal/v1/sim/batch` | - | - | 200 `array of SimBatch` | [`app/internal/sims.py`](../../app/internal/sims.py) |
 | POST | `/internal/v1/sim/batch` | query: `batch`, `simType`; body: `application/json` | `object` | 201 `SimBatch` | [`app/internal/sims.py`](../../app/internal/sims.py) |
 | POST | `/internal/v1/sim/esim-generate` | body: `application/json` | `object` | 201 `SimBatch` | [`app/internal/sims.py`](../../app/internal/sims.py) |
-| GET | `/internal/v1/subscriber` | query: `offset`, `limit`, `q`, `state`, `ratingType` | - | 200 `array of SubscriberRow` | [`app/main.py`](../../app/main.py) |
+| GET | `/internal/v1/subscriber` | query: `offset`, `limit`, `q`, `state`, `ratingType`, `serviceAddress` | - | 200 `array of SubscriberRow` | [`app/main.py`](../../app/main.py) |
 | GET | `/internal/v1/usage/summary` | query: `product.id` (required), `date` | - | 200 `UsageSummary` | [`app/internal/usage.py`](../../app/internal/usage.py) |
 | GET | `/internal/v1/users` | - | - | 200 `array of User` | [`app/internal/users.py`](../../app/internal/users.py) |
 | POST | `/internal/v1/users` | body: `application/json` | `CreateUser` | 201 `User` | [`app/internal/users.py`](../../app/internal/users.py) |

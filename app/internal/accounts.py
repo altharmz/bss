@@ -397,12 +397,14 @@ def _next_charge(state: BillingState, today: date, tz: ZoneInfo) -> date | None:
 
 def _renewal_history(conn: psycopg.Connection, product_ids: list[UUID]) -> dict[UUID, list]:
     """Each prepaid product's funded intervals, newest first: what bought or renewed it,
-    for which dates, how much and whether the card paid the shortfall."""
+    for which dates, how much (with the charge's tax lines, #207) and whether the card paid
+    the shortfall."""
     rows = fetch_all(
         conn,
         "SELECT f.product_id, f.authorized_at, f.period, f.amount, f.tax_amount, f.command_kind,"
         " f.supersedes_interval_id IS NOT NULL AS superseding, a.customer_bill_id AS bill_id,"
-        " a.billing_account_id, EXISTS (SELECT FROM payment_command c WHERE c.state = 'confirmed'"
+        " a.billing_account_id, a.applied_tax,"
+        " EXISTS (SELECT FROM payment_command c WHERE c.state = 'confirmed'"
         "  AND c.renewal_command_id = f.command_id) AS by_card, f.currency"
         " FROM funded_interval f JOIN applied_customer_billing_rate a ON a.id = f.applied_rate_id"
         " WHERE f.product_id = ANY(%s) ORDER BY lower(f.period) DESC, f.authorized_at DESC",
@@ -421,6 +423,15 @@ def _renewal_history(conn: psycopg.Connection, product_ids: list[UUID]) -> dict[
                 else "purchase",
                 "amount": money(r["amount"] + r["tax_amount"], r["currency"]),
                 "tax": money(r["tax_amount"], r["currency"]),
+                "appliedTax": [
+                    {
+                        "taxCategory": t.category,
+                        "taxRate": t.rate,
+                        "taxAmount": money(t.amount, r["currency"]),
+                    }
+                    | ({"jurisdiction": t.jurisdiction} if t.jurisdiction else {})
+                    for t in billing.applied_taxes(r)
+                ],
                 "fundedBy": "card" if r["by_card"] else "balance",
                 "bill": None
                 if r["bill_id"] is None

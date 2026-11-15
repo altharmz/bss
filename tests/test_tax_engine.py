@@ -92,6 +92,35 @@ def test_a_purchase_gets_the_engine_taxes_and_the_total_is_net_plus_taxes(api, d
     assert body.json()["appliedTax"][0]["jurisdiction"] == "CA state"
 
 
+def test_the_renewal_history_lists_the_engine_tax_lines(api, db_conn):
+    """#207: the subscriber card's renewal history shows each tax line with its jurisdiction."""
+    _, acc, _ = buy(api, db_conn, CA)
+    tick(db_conn, api.clock.now())
+    (product,) = api.get(f"/internal/v1/billingAccount/{acc['id']}/products").json()
+    (purchase,) = product["renewalHistory"]
+    assert purchase["appliedTax"] == [
+        {
+            "taxCategory": "sales_tax",
+            "taxRate": 7.25,
+            "taxAmount": {"unit": "USD", "value": 0.72},
+            "jurisdiction": "CA state",
+        },
+        {
+            "taxCategory": "federal_usf",
+            "taxRate": 3,
+            "taxAmount": {"unit": "USD", "value": 0.30},
+            "jurisdiction": "US federal",
+        },
+        {
+            "taxCategory": "prepaid_wireless_e911",
+            "taxRate": 0,
+            "taxAmount": {"unit": "USD", "value": 0.80},
+            "jurisdiction": "CA state",
+        },
+    ]
+    assert purchase["tax"]["value"] == 1.82
+
+
 @pytest.mark.parametrize(
     ("address", "tax"),
     [

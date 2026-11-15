@@ -86,7 +86,9 @@ function subscribers(rows: Body[]): Handler {
             (/^[0-9a-f]{1,8}$/.test(hex) &&
               (row.id.startsWith(hex) || row.customer.id.startsWith(hex)))) &&
           (!query.get('state') || row.state === query.get('state')) &&
-          (!query.get('ratingType') || row.ratingType === query.get('ratingType')),
+          (!query.get('ratingType') || row.ratingType === query.get('ratingType')) &&
+          // the stub's accounts without a service address: the prepaid ones
+          (query.get('serviceAddress') !== 'missing' || row.ratingType === 'prepaid'),
       );
     return json(found.slice(offset, offset + limit), {
       more: found.length > offset + limit,
@@ -224,6 +226,30 @@ describe('subscribers list', () => {
     fireEvent.click(within(group).getByRole('button', { name: 'Postpaid' }));
     await screen.findByText('Showing 1–4 · amounts in billing account currency');
     expect(requested(fetchMock)).toContain(`${LIST}?ratingType=postpaid&offset=0&limit=50`);
+  });
+
+  it('lists the prepaid accounts with no service address with its chip (#207)', async () => {
+    const rows = [
+      ...ROWS,
+      accountBody(
+        '55555555-0000-4000-8000-0000000000a5',
+        { id: 'dddd4444-0000-4000-8000-000000000004', name: 'Dmitri Sokolov' },
+        { ratingType: 'prepaid' },
+      ),
+    ];
+    const { fetchMock } = backend(subscribers(rows));
+    await open();
+    await screen.findByText('Ivan Petrov');
+    const chip = expectUi('ui.subscribers.noServiceAddress');
+    expect(chip.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(chip);
+    await screen.findByText('Showing 1–1 · amounts in billing account currency');
+    expect(chip.getAttribute('aria-pressed')).toBe('true');
+    expect(names()).toEqual(['Dmitri Sokolov']);
+    expect(requested(fetchMock)).toContain(`${LIST}?serviceAddress=missing&offset=0&limit=50`);
+    fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }));
+    await screen.findByText('Showing 1–5 · amounts in billing account currency');
+    expect(chip.getAttribute('aria-pressed')).toBe('false');
   });
 
   // TEST-CHANGE (#314): the search is a prefix search on the server (decided 2026-11-10).

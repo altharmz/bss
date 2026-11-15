@@ -9,6 +9,7 @@ import { formatAmount } from '../format/money';
 import { Button, Dialog } from '../ui/kit';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
+import { TaxLines, taxLinesOf } from './TaxLines';
 
 // What a bill links to (docs/ui.md): its bill cycle (the daily
 // billing run that issued it) and the applied rates on it. Both load only when opened, so
@@ -44,11 +45,14 @@ function DetailDialog({
   ui,
   detail,
   onClose,
+  taxes = false,
 }: {
   title: string;
   ui: string;
   detail: ReturnType<typeof useResource<Record<string, unknown>>>;
   onClose: () => void;
+  /** a rate: its appliedTax lines as a table above the fields */
+  taxes?: boolean;
 }) {
   return (
     <Dialog
@@ -64,6 +68,7 @@ function DetailDialog({
         {detail.status === 'error' && (
           <ErrorBlock title="Failed to load" error={detail.error} onRetry={detail.retry} />
         )}
+        {detail.status === 'ok' && taxes && <TaxLines lines={taxLinesOf(detail.data.appliedTax)} />}
         {detail.status === 'ok' && <Fields body={detail.data} />}
       </div>
     </Dialog>
@@ -90,6 +95,7 @@ function RateDialog({ rateId, onClose }: { rateId: string; onClose: () => void }
       title={`Rate ${shortId(rateId)}`}
       ui="ui.bills.rateDetail"
       detail={detail}
+      taxes
       onClose={onClose}
     />
   );

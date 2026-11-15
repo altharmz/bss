@@ -2,7 +2,9 @@
 
 Billing accounts with their customer, oldest first, paged on the server with Link
 rel=next and no count (#312), and searched by prefix (decided by the human 2026-11-10):
-a customer or account name, a subscriber number on a line today, or a short id. Each row
+a customer or account name, a subscriber number on a line today, or a short id.
+`serviceAddress=missing` keeps prepaid accounts with live lines and no service address
+(#207). Each row
 carries what the table shows (balance, active products, how many accounts its customer
 has), computed for the page only.
 """
@@ -25,6 +27,7 @@ router = APIRouter(prefix=BASE)
 
 STATES = ("Active", "Suspended", "Closed")
 RATING_TYPES = ("prepaid", "postpaid")
+SERVICE_ADDRESS = ("missing",)
 
 
 def one_param(request: Request, name: str, allowed: tuple[str, ...] | None = None) -> str | None:
@@ -65,13 +68,20 @@ def subscriber_body(
 
 @router.get("")
 def search_subscribers(request: Request, tx: Tx) -> TmfJSONResponse:
-    offset, limit = parse_page(request, extra=("q", "state", "ratingType"))
+    offset, limit = parse_page(request, extra=("q", "state", "ratingType", "serviceAddress"))
     q = one_param(request, "q")
     state = one_param(request, "state", STATES)
     rating_type = one_param(request, "ratingType", RATING_TYPES)
+    missing = one_param(request, "serviceAddress", SERVICE_ADDRESS) is not None
     with tx() as conn:
         rows, more = repo.search(
-            conn, q=q, state=state, rating_type=rating_type, offset=offset, limit=limit
+            conn,
+            q=q,
+            state=state,
+            rating_type=rating_type,
+            offset=offset,
+            limit=limit,
+            service_address_missing=missing,
         )
         ids = [row["id"] for row in rows]
         balances = billing.account_balances(conn, ids)
