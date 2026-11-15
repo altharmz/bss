@@ -12,7 +12,8 @@ Every regular operation has a Make target; use it instead of the equivalent raw 
 or Docker commands (`make help` lists the common ones, `make help GROUP=all` every target). Targets validate task identity, run the hooks
 and record telemetry; raw commands skip that. Nothing blocks you from using a plain command
 where no target exists (source reading, `git diff`, `git log`, `rg`). Run each target as a
-standalone command, with its required variables.
+standalone command, with its required variables. A lifecycle target refuses a variable it
+does not know and lists the ones it accepts.
 
 | Step | Command | Where |
 |---|---|---|
@@ -31,7 +32,7 @@ standalone command, with its required variables.
 | Format backend and UI | `make format` | task |
 | Review task state | `make review-task` | task |
 | Show the claimed issue (body, comments) | `make show-task` | task |
-| Commit selected files | `make commit MESSAGE="..." FILES='["path/a", "path/b"]'` (or `MESSAGE_FILE=` / `FILES_FILE=`) | task |
+| Commit selected files | `make commit MESSAGE="..." FILES="path/a path/b"` (a JSON array also works; or `MESSAGE_FILE=` / `FILES_FILE=`) | task |
 | Update from master | `make sync-task` | task |
 | Publish the branch | `make push` | task |
 | Create or reuse the PR | `make create-pr` | task |
@@ -217,8 +218,9 @@ worktree's `scripts/pre-commit.sh` and `scripts/pre-push.sh`. Details of the gat
 
 ## Commit and publish a task
 
-`make commit MESSAGE=... FILES=...` takes a JSON array of exact repository-relative file
-names (deletions included; never a directory or glob). It validates task identity, protected
+`make commit MESSAGE=... FILES=...` takes a space-separated list of exact repository-relative
+file names, or a JSON array of them (deletions included; never a directory or glob); quote a
+name with spaces. `FILES_FILE=` holds one name per line or a JSON array. It validates task identity, protected
 and secret paths and the installed hooks, stages only those files, refuses unrelated or
 partially staged files (naming them and the `git add -- <files>` that fixes them) and runs a
 normal `git commit` with hooks. If the hook fails, the files this run staged are unstaged

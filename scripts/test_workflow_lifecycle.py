@@ -23,8 +23,13 @@ class WorkflowLifecycleTests(unittest.TestCase):
         self.f.setUp()
         f = self.f
         for name in (
-            "task_quality.py", "task_git.py", "task_pr.py", "task_finish.py",
-            "install-hooks.py", "task-compose",
+            "task_quality.py",
+            "task_git.py",
+            "task_pr.py",
+            "task_finish.py",
+            "install-hooks.py",
+            "task-compose",
+            "task.py",
         ):
             shutil.copy2(SCRIPTS / name, f.primary / "scripts" / name)
         # Keep production validation unchanged: only the disposable fixture accepts a
@@ -58,7 +63,7 @@ class WorkflowLifecycleTests(unittest.TestCase):
         docker.write_text(
             f"#!{sys.executable}\nimport sys\nfrom pathlib import Path\n"
             "a=sys.argv[1:]\n"
-            f"if 'bss-telemetry' in a:\n Path({str(self.events)!r}).open('a').write(sys.stdin.read()); sys.exit(0)\n"
+            f"if 'bss-telemetry' in a:\n Path({str(self.events)!r}).open('a').write(sys.stdin.read()); sys.exit(0)\n"  # noqa: E501
             "if a[-3:]==['ps','--format','json']: print('[]')\n"
         )
         docker.chmod(0o755)
@@ -69,16 +74,16 @@ class WorkflowLifecycleTests(unittest.TestCase):
             f"#!{sys.executable}\n"
             "import json,os,subprocess,sys\nfrom pathlib import Path\n"
             "a=sys.argv[1:]\n"
-            "if a[:2] not in (['pr','list'],['pr','create'],['pr','view'],['pr','merge'],['issue','view']) and not (a[0]=='api' and 'graphql' not in a):\n"
-            " os.execv(sys.executable,[sys.executable,str(Path(__file__).with_name('startup-gh')),*a])\n"
+            "if a[:2] not in (['pr','list'],['pr','create'],['pr','view'],['pr','merge'],['issue','view']) and not (a[0]=='api' and 'graphql' not in a):\n"  # noqa: E501
+            " os.execv(sys.executable,[sys.executable,str(Path(__file__).with_name('startup-gh')),*a])\n"  # noqa: E501
             f"p=Path({str(f.base / 'lifecycle.json')!r})\n"
             "d=json.loads(p.read_text()) if p.exists() else {}\n"
-            "def git(*v): return subprocess.check_output(['git','-c','user.name=Lifecycle fixture','-c','user.email=lifecycle@example.test',*v],text=True).strip()\n"
+            "def git(*v): return subprocess.check_output(['git','-c','user.name=Lifecycle fixture','-c','user.email=lifecycle@example.test',*v],text=True).strip()\n"  # noqa: E501
             "def save(): p.write_text(json.dumps(d))\n"
             "if a[:2]==['pr','list']:\n"
-            " branch=a[a.index('--head')+1]; out=[{'number':v['number']} for v in d.values() if v['headRefName']==branch]\n"
+            " branch=a[a.index('--head')+1]; out=[{'number':v['number']} for v in d.values() if v['headRefName']==branch]\n"  # noqa: E501
             "elif a[:2]==['pr','create']:\n"
-            " branch=a[a.index('--head')+1]; number=int(branch.split('-')[1]); head=git('rev-parse','HEAD')\n"
+            " branch=a[a.index('--head')+1]; number=int(branch.split('-')[1]); head=git('rev-parse','HEAD')\n"  # noqa: E501
             " d[str(number)]={'number':number,'url':f'https://github.com/altharmz/bss/pull/{number}','state':'OPEN',"
             "'body':Path(a[a.index('--body-file')+1]).read_text(),'baseRefName':'master','headRefName':branch,"
             "'headRefOid':head,'isCrossRepository':False,'isDraft':False,'mergeable':'MERGEABLE',"
@@ -92,13 +97,13 @@ class WorkflowLifecycleTests(unittest.TestCase):
             " remote=git('remote','get-url','origin'); head=pr['headRefOid']\n"
             " parent=git('--git-dir',remote,'rev-parse','master')\n"
             " tree=git('--git-dir',remote,'rev-parse',head+'^{tree}')\n"
-            " merge=git('--git-dir',remote,'commit-tree',tree,'-p',parent,'-m','squashed fixture')\n"
+            " merge=git('--git-dir',remote,'commit-tree',tree,'-p',parent,'-m','squashed fixture')\n"  # noqa: E501
             " git('--git-dir',remote,'update-ref','refs/heads/master',merge)\n"
             " pr.update(state='MERGED',mergeCommit={'oid':merge}); save()\n"
             " board=Path(os.environ['BSS_TEST_BOARD']); pages=json.loads(board.read_text())\n"
             " for page in pages:\n"
             "  for row in page['node']['items']['nodes']:\n"
-            "   if row['content']['number']==int(a[2]): row['content']['state']='CLOSED'; row['fieldValueByName']['name']='Done'\n"
+            "   if row['content']['number']==int(a[2]): row['content']['state']='CLOSED'; row['fieldValueByName']['name']='Done'\n"  # noqa: E501
             " board.write_text(json.dumps(pages)); sys.exit(0)\n"
             "elif a[:2]==['issue','view']:\n"
             " pr=d.get(a[2]); done=pr and pr['state']=='MERGED'\n"
@@ -106,7 +111,7 @@ class WorkflowLifecycleTests(unittest.TestCase):
             "'projectItems':[{'title':'BSS','status':{'name':'Done' if done else 'Doing'}}]}\n"
             "elif '/files?' in a[-1]: out=[{'filename':'notes.md'}]\n"
             "elif '/compare/' in a[-1]: out={'behind_by':0}\n"
-            "else: out={'allow_squash_merge':True,'allow_merge_commit':False,'allow_rebase_merge':False,'archived':False}\n"
+            "else: out={'allow_squash_merge':True,'allow_merge_commit':False,'allow_rebase_merge':False,'archived':False}\n"  # noqa: E501
             "print(json.dumps(out))\n"
         )
         gh.chmod(0o755)
@@ -184,8 +189,26 @@ class WorkflowLifecycleTests(unittest.TestCase):
         statements = self.events.read_text()
         for result in (first, second, third):
             # Every lifecycle event retains task identity, even after worktree removal.
-            for operation in ("start-task", "sync-task", "format", "review-task", "commit", "push", "create-pr", "check-pr", "merge-task", "task-completed", "finish-task"):
-                self.assertTrue(any(result["branch"] in line and "'" + operation + "'" in line for line in statements.splitlines()), operation)
+            for operation in (
+                "start-task",
+                "sync-task",
+                "format",
+                "review-task",
+                "commit",
+                "push",
+                "create-pr",
+                "check-pr",
+                "merge-task",
+                "task-completed",
+                "finish-task",
+            ):
+                self.assertTrue(
+                    any(
+                        result["branch"] in line and "'" + operation + "'" in line
+                        for line in statements.splitlines()
+                    ),
+                    operation,
+                )
         for client in ("codex", "claude", "kimi"):
             self.assertIn('"client":"' + client + '"', statements)
 

@@ -66,7 +66,13 @@ class RuntimeTests(unittest.TestCase):
             cwd=self.primary,
         )
         (self.work / "scripts").mkdir()
-        for name in ("task-compose", "task_runtime.py", "task_telemetry.py", "install-hooks.py"):
+        for name in (
+            "task-compose",
+            "task_runtime.py",
+            "task_telemetry.py",
+            "install-hooks.py",
+            "task.py",
+        ):
             shutil.copy2(SCRIPTS / name, self.work / "scripts" / name)
         self.metadata = {
             "version": 1,
