@@ -89,3 +89,7 @@ G5 / B8: Products started today first become visible to tomorrow’s run. Unchar
   `id IN (... UNION ...)`: the planner cannot know how many rows a prefix matches, and
   hashing every match cost 20-60 ms (narrow) to 1.6 s (one letter) at 100k accounts.
   Measurements: [loadtest-plan-sweep.md](../loadtest-plan-sweep.md#registry-lists-and-searches-330).
+
+- `GET /internal/v1/report/kpi` (issue #198): prepaid KPIs by month (lines, net adds, churn,
+  billed revenue by source, ARPU), read-only and computed on request. Entry:
+  [reporting.md](reporting.md#prepaid-kpis-by-month-2026-11-15-issue-198).

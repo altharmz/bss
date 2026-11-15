@@ -91,6 +91,7 @@ describe('routes', () => {
     ['/bills', { name: 'bills' }],
     ['/payments', { name: 'payments' }],
     ['/balances', { name: 'balances' }],
+    ['/reports', { name: 'reports' }],
     ['/orders', { name: 'orders' }],
     ['/products', { name: 'products' }],
     ['/billing', { name: 'notFound', path: '/billing' }], // not /billing: /billing-status
@@ -166,11 +167,12 @@ describe('shell', () => {
       '/payments',
       '/balances',
       '/billing-settings',
+      '/reports',
       '/integrations',
       '/users',
       '/settings/logging',
     ]);
-    // four labelled sections in the TMF order, each item under its own label
+    // five labelled sections (TMF order, then Reports and System), each item under its label
     const labels = Array.from(nav.children).map((el) =>
       el.classList.contains('section') ? `# ${el.textContent}` : (el.getAttribute('href') ?? ''),
     );
@@ -193,6 +195,8 @@ describe('shell', () => {
       '/payments',
       '/balances',
       '/billing-settings',
+      '# Reports',
+      '/reports',
       '# System',
       '/integrations',
       '/users',
