@@ -40,7 +40,8 @@ def lock_renewals(conn, product_ids):
     rows = fetch_all(
         conn,
         "SELECT DISTINCT ON (product_id) id FROM funded_interval WHERE product_id = ANY(%s)"
-        " ORDER BY product_id, lower(period) DESC, authorized_at DESC",
+        " ORDER BY product_id, lower(period) DESC, authorized_at DESC,"
+        " supersedes_interval_id IS NULL, id DESC",
         (list(product_ids),),
     )
     ids = sorted(commands.renewal_id(row["id"]) for row in rows)

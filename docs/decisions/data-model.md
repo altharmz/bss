@@ -161,8 +161,11 @@ From the same EXPLAIN review (100k dataset); migration 0079, each query EXPLAINe
 and after in the PR.
 
 - **The latest grant of a product** is the grant no later grant of the product follows
-  (`entitlement.LATER_GRANT`: later by first day, then authorization, then id, since a
-  superseding grant may start on the superseded grant's first day). The renewal producer
+  (`entitlement.LATER_GRANT`: later by first day, then authorization, then the
+  superseding grant before the one it supersedes, then id). A superseding grant may start
+  on the superseded grant's first day and, under a test clock, share its authorization
+  time, so every "latest grant" `ORDER BY` now ends with the same two tiebreaks: one total
+  order, never an arbitrary pick. The renewal producer
   and the plan-expiring detector read the grants ending by today or in the notice window
   (`funded_interval (upper(period))`) and keep the latest of them, instead of a
   DISTINCT ON over every grant. The producer still reads every grant ended by today, so
