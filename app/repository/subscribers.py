@@ -25,6 +25,47 @@ def id_range(prefix: str) -> tuple[str, str]:
     return (str(UUID(low)), str(UUID(high)))
 
 
+MATCH_CAP = 1000
+
+
+def matching(
+    conn: psycopg.Connection,
+    *,
+    alias: str,
+    conds: list[str],
+    matches: list[tuple[str, str]],
+    params: dict[str, Any],
+    offset: int,
+    limit: int,
+) -> tuple[str, int]:
+    """The condition that selects a search's page, and the offset left to apply (#330).
+
+    `matches` are (source, condition) pairs, any of which matches the search; a source
+    names only the tables its condition needs (`alias` is the searched table). How
+    many match is unknown to the planner (a prefix of one letter can match every row), so
+    one probe collects up to MATCH_CAP of them, with the filters. Fewer: the page is cut
+    from the probe, oldest first, and read by id. More: the page walks the
+    `(created_at, id)` index and tests each row, which finds a page of a broad match
+    early. A set of every match (`id IN (... UNION ...)`) cost a hash of the whole table:
+    20-60 ms for a narrow search on 100k rows, 1-1.6 s for a broad one."""
+    where = " AND ".join(conds)  # fixed fragments; every value is a parameter
+    probe = " UNION ALL ".join(
+        f"(SELECT {alias}.id, {alias}.created_at FROM {source} WHERE {where} AND {match})"  # noqa: S608
+        for source, match in matches
+    )
+    # A row can match several ways (an account and its customer by the same name), so
+    # every way may bring MATCH_CAP rows: a probe within its limit has every match.
+    most = MATCH_CAP * len(matches)
+    rows = conn.execute(f"{probe} LIMIT {most + 1}", params).fetchall()
+    found = {(created_at, id_) for id_, created_at in rows}
+    if len(rows) > most or len(found) > MATCH_CAP:
+        return "(" + " OR ".join(match for _, match in matches) + ")", offset
+    # PostgreSQL orders uuids bytewise, Python by their integer value: the same order.
+    ordered = sorted(found)
+    params["matched"] = [id_ for _, id_ in ordered[offset : offset + limit + 1]]
+    return f"{alias}.id = ANY(%(matched)s)", 0
+
+
 def search(
     conn: psycopg.Connection,
     *,
@@ -37,52 +78,73 @@ def search(
     """Accounts oldest first, each joined to its customer's name. `q` matches by prefix: a
     customer or account name (case-insensitive), a subscriber number on a line today, or
     a short id (a prefix of the account or customer id, `BA-` optional); a full uuid is
-    the account. Returns the page and whether more rows follow (limit + 1 read)."""
+    the account. Returns the page and whether more rows follow (limit + 1 read).
+
+    The filters compare the enum, not its text: as text they had no statistics and planned
+    a full scan (#330). Without a search the page is cut from billing_account alone and
+    only its rows are joined to their customer; a search goes through `matching`."""
     conds = ["true"]
-    params: dict[str, Any] = {"offset": offset, "limit": limit + 1}
+    params: dict[str, Any] = {"limit": limit + 1}
     if state is not None:
-        conds.append("a.state::text = %(state)s")
+        conds.append("a.state = %(state)s::account_state")
         params["state"] = state
     if rating_type is not None:
         conds.append("a.rating_type = %(rating)s")
         params["rating"] = rating_type
     term = (q or "").strip()
-    if term:
-        matches = [
-            "SELECT id FROM billing_account WHERE lower(name) LIKE %(name)s",
-            "SELECT b.id FROM billing_account b JOIN customer c ON c.id = b.customer_id"
-            " WHERE lower(c.name) LIKE %(name)s",
-        ]
-        params["name"] = like_prefix(term.lower())
-        bare = re.sub(r"(?i)^ba-", "", term.replace(" ", "")).lower()
-        try:
-            params["uuid"] = str(UUID(bare))
-            matches.append("SELECT %(uuid)s::uuid")
-        except ValueError:
-            pass
-        if HEX.fullmatch(bare):
-            params["low"], params["high"] = id_range(bare)
-            matches.append(
-                "SELECT id FROM billing_account WHERE id BETWEEN %(low)s::uuid AND %(high)s::uuid"
-            )
-            matches.append(
-                "SELECT b.id FROM billing_account b WHERE b.customer_id"
-                " BETWEEN %(low)s::uuid AND %(high)s::uuid"
-            )
-        if DIGITS.fullmatch(term):
-            params["number"] = like_prefix(term.lstrip("+"))
-            matches.append(
-                "SELECT p.billing_account_id FROM subscriber_number n"
+    if not term:
+        params["offset"] = offset
+        where = " AND ".join(conds)  # fixed fragments; every value is a parameter
+        query = (
+            "SELECT a.*, c.name AS customer_name"  # noqa: S608
+            f" FROM (SELECT * FROM billing_account a WHERE {where}"
+            " ORDER BY a.created_at, a.id OFFSET %(offset)s LIMIT %(limit)s) a"
+            " JOIN customer c ON c.id = a.customer_id ORDER BY a.created_at, a.id"
+        )
+        rows = fetch_all(conn, query, params)
+        return rows[:limit], len(rows) > limit
+    source = "billing_account a JOIN customer c ON c.id = a.customer_id"
+    matches = [
+        ("billing_account a", "lower(a.name) LIKE %(name)s"),
+        (source, "lower(c.name) LIKE %(name)s"),
+    ]
+    params["name"] = like_prefix(term.lower())
+    bare = re.sub(r"(?i)^ba-", "", term.replace(" ", "")).lower()
+    try:
+        params["uuid"] = str(UUID(bare))
+        matches.append(("billing_account a", "a.id = %(uuid)s::uuid"))
+    except ValueError:
+        pass
+    if HEX.fullmatch(bare):
+        params["low"], params["high"] = id_range(bare)
+        matches.append(("billing_account a", "a.id BETWEEN %(low)s::uuid AND %(high)s::uuid"))
+        matches.append(
+            ("billing_account a", "a.customer_id BETWEEN %(low)s::uuid AND %(high)s::uuid")
+        )
+    if DIGITS.fullmatch(term):
+        params["number"] = like_prefix(term.lstrip("+"))
+        matches.append(
+            (
+                "billing_account a",
+                "a.id IN (SELECT p.billing_account_id FROM subscriber_number n"
                 " JOIN number_assignment na ON na.subscriber_number_id = n.id"
                 " JOIN product p ON p.id = na.product_id"
                 " WHERE n.resource_specification_id = 'msisdn' AND n.value LIKE %(number)s"
-                " AND na.cancelled_at IS NULL AND upper_inf(na.valid_for)"
+                " AND na.cancelled_at IS NULL AND upper_inf(na.valid_for))",
             )
-        conds.append("a.id IN (" + " UNION ".join(matches) + ")")
-    where = " AND ".join(conds)  # fixed fragments; every value is a parameter
+        )
+    match, params["offset"] = matching(
+        conn,
+        alias="a",
+        conds=conds,
+        matches=matches,
+        params=params,
+        offset=offset,
+        limit=limit,
+    )
+    where = " AND ".join([*conds, match])  # fixed fragments; every value is a parameter
     query = (
-        "SELECT a.*, c.name AS customer_name FROM billing_account a"  # noqa: S608
-        f" JOIN customer c ON c.id = a.customer_id WHERE {where}"
+        f"SELECT a.*, c.name AS customer_name FROM {source} WHERE {where}"  # noqa: S608
         " ORDER BY a.created_at, a.id OFFSET %(offset)s LIMIT %(limit)s"
     )
     rows = fetch_all(conn, query, params)

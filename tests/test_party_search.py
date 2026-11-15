@@ -2,8 +2,12 @@
 lists and the account owner picker, paged on the server with no count, searched by the
 start of a name or a short id, with per-page figures."""
 
+import pytest
+
 from tests import apidata
 from tests.test_api_financial_account import financial
+
+pytestmark = pytest.mark.usefixtures("match_path")
 
 PARTIES = "/internal/v1/party"
 CUSTOMERS = "/internal/v1/partyCustomer"

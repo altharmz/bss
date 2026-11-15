@@ -183,3 +183,67 @@ Dispositions:
 
 The rounds' reports are in `loadtest/out/plan-sweep-334repro/round{1,2,3}/` of worker2
 (ignored, not committed).
+
+## Registry lists and searches (#330)
+
+Reproduced on 2026-11-15 on `seed100k` restored and migrated to head (0078), warm cache,
+the same lt-db settings, with other tasks' stacks on the host (load average 9-13). The
+#327 shapes were run by hand in psql with the binder's values (status/state `Active`,
+OFFSET 5000 for `largest`, a name prefix of 11 matches), then the old and the new
+repository functions were run side by side through `lt-tools` on 148 combinations of
+filter, search term (narrow, ~1k, ~6k, ~11k and 100k matches; short and full ids;
+numbers) and offset (0, 50, 5000). Every page and its "more" flag were identical,
+row for row in order; again with the match cap at 0 (every search walks), 2500 and 5000.
+`tests/test_party_search.py` and `tests/test_subscriber_search.py` run both search paths.
+
+Before: psql `EXPLAIN ANALYZE`, second of two runs. After: the same, the new statement.
+
+| Shape | Where | Before | After | Disposition |
+| --- | --- | ---: | ---: | --- |
+| 7 | `search_customers` status, offset 5000 | 373 ms | 6.0 ms | `c.status::text = 'Active'` was estimated at 294 rows of 100k (no statistics through the cast), so the planner sorted a parallel nested loop over every customer. Compared as the enum and paged before the party join: an index scan in page order, 21 party lookups |
+| 8 | `subscribers.search` state, offset 5000 | 329 ms | 6.1 ms | The same, `a.state::text` (208 estimated, 100k real) |
+| 24 | `subscribers.search` rating, offset 5000 | 52 ms | 18 ms | Paged before the customer join (5,021 lookups to 21). The rest is the deep page: the index scan reads 16k accounts to skip 5,000 postpaid ones (30 % of the accounts). OFFSET 0 takes 0.1 ms. An index on `(rating_type, created_at, id)` would be a migration for deep filtered pages: not proposed |
+| 29 | `search_parties` kind, offset 5000 | 59 ms | 4.9 ms | `p.party_type::text` (500 estimated, 100k real): seq scan and sort. As the enum: an index scan in page order |
+| 36, 47 | customer / subscriber lists, offset 5000 | 30 ms, 25 ms | 3.8 ms, 3.3 ms | Paged before the join; what is left is the deep page (5,021 index entries and their heap rows), as dispositioned for #334 |
+| 32, 50, 51 | `search_parties` with `q` (name; kind and name; full id) | 63, 27, 19 (#327) ms | 0.1-0.3 + 0.1-0.2 ms | `p.id IN (... UNION ...)`: the planner estimated 1,001 matches (500 per prefix condition) and hashed them against a seq scan of all 100k parties. Now `matching`: a probe of the matches, then the page by id |
+| 46 | `search_parties` name or id prefix | 27 ms | 13.8 + 0.2 ms | The same; the probe of the ~430 id-prefix matches runs as a parallel append, and worker start-up is most of its time (see below) |
+
+The search path, in full (`app/repository/subscribers.py` `matching`; recorded in
+[internal-api.md](decisions/internal-api.md)): a probe collects up to 1,000 distinct
+matches per condition with the filters (`UNION ALL`, `LIMIT`). Within the cap, Python
+sorts them by `(created_at, id)` (uuids compare bytewise in PostgreSQL and by integer
+value in Python, the same order) and the page reads its ids. Over the cap, the page walks
+`(created_at, id)` with the conditions OR-ed and stops at the page. Times through the
+app, median of three, old/new (ms):
+
+| Search | Subscribers | Parties | Customers |
+| --- | ---: | ---: | ---: |
+| 11 matches (`lt-2790`) | 56-73 / 3-4 | 14-41 / 2-4 | 2-3 / 2-3 |
+| ~1.1k (`lt-27`), offset 0 / 50 | 58-79 / 36-108 | 17-47 / 10-13 | 5-52 / 7-10 |
+| ~11k (`lt-1`) | 151-199 / 16-22 | 35-66 / 13-18 | 3-107 / 7-8 |
+| 100k (`l`) | 570-680 / 15-17 | 313-434 / 19-29 | 3 / 6-7 |
+| 100k (`l`), offset 5000 | 1,347 / 43 | 362 / 138 | 63 / 13 |
+| short id, full id | 2-4 / 2-6 | 13-36 / 2-5 | 4-6 / 5-6 |
+
+Dispositions of what remains:
+
+- **Mid-density search, deeper pages - accepted.** Walking costs ~15-30 µs a row (a
+  customer lookup and `lower()` each), so a page needs about (offset + limit) / density
+  rows: ~1 % matching at offset 50 is ~6k rows (36-108 ms against 58-79 ms before), and
+  a deep page of a broad search grows the same way. A higher cap moves the cost to the
+  probe of every broad search (cap 2500: parties by `l` 106-166 ms where 1000 gave
+  19-29 ms, all three lists by `a` 76-214 ms against 12-27 ms), so 1000 is kept. The cost grows with the offset, the OFFSET contract (#334).
+- **Customer search by a broad prefix - small regression, accepted.** 2.6 ms became 6 ms:
+  the old plan walked `created_at` with a semi-join by luck of the estimate; the probe
+  now reads 1,001 matches first. The old plan's luck did not hold with the status
+  filter: ~11k matches at offset 50 took 107 ms, 8 ms now.
+- **Party id-prefix probe - 13 ms, accepted.** The planner runs the probe as a parallel
+  append, and worker start-up is most of it; the page itself takes 0.2 ms.
+- **Number prefixes - unchanged, follow-up.** A 6-digit number prefix (`130200`, about
+  100k numbers) takes ~1 s before and after: the subscriber-number condition itself.
+  Not in the #327 shapes: #365.
+- **Estimate-only.** The 500x bitmap estimates of 32/46/50/51 are on the binder's value
+  without a wildcard (`LIKE 'lt-86402'`), and the 1,001-1,501x errors were on the union
+  aggregate that is gone. The 160-200x errors of 7, 8 and 29 were the `::text` casts.
+- **Cold-only.** None: every figure here is warm, and both before runs had the same
+  plans.

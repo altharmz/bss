@@ -10,23 +10,21 @@ from uuid import UUID
 import psycopg
 
 from app.repository._sql import Row, fetch_all
-from app.repository.subscribers import HEX, id_range, like_prefix
+from app.repository.subscribers import HEX, id_range, like_prefix, matching
 
 
-def _id_matches(term: str, table: str, params: dict[str, Any]) -> list[str]:
+def _id_matches(term: str, alias: str, params: dict[str, Any]) -> list[str]:
     """A full uuid, or a prefix of the id (1-8 hex digits, served by the primary key)."""
     bare = term.replace(" ", "").lower()
     matches = []
     try:
         params["uuid"] = str(UUID(bare))
-        matches.append("SELECT %(uuid)s::uuid")
+        matches.append(f"{alias}.id = %(uuid)s::uuid")
     except ValueError:
         pass
     if HEX.fullmatch(bare):
         params["low"], params["high"] = id_range(bare)
-        matches.append(
-            f"SELECT id FROM {table} WHERE id BETWEEN %(low)s::uuid AND %(high)s::uuid"  # noqa: S608
-        )
+        matches.append(f"{alias}.id BETWEEN %(low)s::uuid AND %(high)s::uuid")
     return matches
 
 
@@ -45,11 +43,12 @@ def search_parties(
     limit: int,
 ) -> tuple[list[Row], bool]:
     """Parties oldest first. `q` matches by prefix, case-insensitive: an individual's given
-    name, "given family" or family name, an organization's name; or a short or full id."""
+    name, "given family" or family name, an organization's name; or a short or full id.
+    The kind is compared as the enum (#330); a search goes through `matching`."""
     conds = ["true"]
     params: dict[str, Any] = {"offset": offset, "limit": limit + 1}
     if kind is not None:
-        conds.append("p.party_type::text = %(kind)s")
+        conds.append("p.party_type = %(kind)s::party_type")
         params["kind"] = kind
     if status is not None:
         conds.append("p.status = %(status)s")
@@ -57,16 +56,29 @@ def search_parties(
     term = (q or "").strip()
     if term:
         params["name"] = like_prefix(re.sub(r"\s+", " ", term.lower()))
-        matches = [
-            "SELECT id FROM party WHERE party_type = 'Individual'"
-            " AND lower(coalesce(given_name, '') || ' ' || family_name) LIKE %(name)s",
-            "SELECT id FROM party WHERE party_type = 'Individual'"
-            " AND lower(family_name) LIKE %(name)s",
-            "SELECT id FROM party WHERE party_type = 'Organization'"
-            " AND lower(organization_name) LIKE %(name)s",
-            *_id_matches(term, "party", params),
+        names = [
+            ("Individual", "lower(coalesce(p.given_name, '') || ' ' || p.family_name)"),
+            ("Individual", "lower(p.family_name)"),
+            ("Organization", "lower(p.organization_name)"),
         ]
-        conds.append("p.id IN (" + " UNION ".join(matches) + ")")
+        # Only the names of the kind asked for: a branch of the other kind matches nothing,
+        # but was still planned as a parallel scan, and starting its workers cost ~20 ms.
+        matches = [
+            ("party p", f"(p.party_type = '{name_kind}' AND {name} LIKE %(name)s)")
+            for name_kind, name in names
+            if kind in (None, name_kind)
+        ]
+        matches += [("party p", match) for match in _id_matches(term, "p", params)]
+        match, params["offset"] = matching(
+            conn,
+            alias="p",
+            conds=conds,
+            matches=matches,
+            params=params,
+            offset=offset,
+            limit=limit,
+        )
+        conds.append(match)
     where = " AND ".join(conds)  # fixed fragments; every value is a parameter
     query = (
         f"SELECT p.* FROM party p WHERE {where}"  # noqa: S608
@@ -84,27 +96,39 @@ def search_customers(
     limit: int,
 ) -> tuple[list[Row], bool]:
     """Customers oldest first, each with its party's type and name. `q` matches the
-    customer name by prefix (case-insensitive), or a short or full id."""
+    customer name by prefix (case-insensitive), or a short or full id. The status is
+    compared as the enum and the page is cut from customer alone, then joined to its
+    parties (#330); a search goes through `matching`."""
     conds = ["true"]
     params: dict[str, Any] = {"offset": offset, "limit": limit + 1}
     if status is not None:
-        conds.append("c.status::text = %(status)s")
+        conds.append("c.status = %(status)s::customer_status")
         params["status"] = status
     term = (q or "").strip()
     if term:
         params["name"] = like_prefix(term.lower())
         matches = [
-            "SELECT id FROM customer WHERE lower(name) LIKE %(name)s",
-            *_id_matches(term, "customer", params),
+            ("customer c", match)
+            for match in ["lower(c.name) LIKE %(name)s", *_id_matches(term, "c", params)]
         ]
-        conds.append("c.id IN (" + " UNION ".join(matches) + ")")
+        match, params["offset"] = matching(
+            conn,
+            alias="c",
+            conds=conds,
+            matches=matches,
+            params=params,
+            offset=offset,
+            limit=limit,
+        )
+        conds.append(match)
     where = " AND ".join(conds)  # fixed fragments; every value is a parameter
     query = (
         "SELECT c.*, p.party_type::text AS party_kind,"  # noqa: S608
         " coalesce(p.organization_name, concat_ws(' ', p.given_name, p.family_name))"
         " AS party_name"
-        f" FROM customer c JOIN party p ON p.id = c.party_id WHERE {where}"
-        " ORDER BY c.created_at, c.id OFFSET %(offset)s LIMIT %(limit)s"
+        f" FROM (SELECT * FROM customer c WHERE {where}"
+        " ORDER BY c.created_at, c.id OFFSET %(offset)s LIMIT %(limit)s) c"
+        " JOIN party p ON p.id = c.party_id ORDER BY c.created_at, c.id"
     )
     return _page(conn, query, params, limit)
 

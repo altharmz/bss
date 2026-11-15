@@ -3,10 +3,15 @@ count, searched by prefix (name, subscriber number, short id), with per-page fig
 
 from datetime import timedelta
 
+import pytest
+
 from tests import apidata, timeline
 from tests.test_api_resource_inventory import number
 
 URL = "/internal/v1/subscriber"
+
+
+pytestmark = pytest.mark.usefixtures("match_path")
 
 
 def names(response) -> list[str]:
