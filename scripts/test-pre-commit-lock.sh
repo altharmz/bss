@@ -142,7 +142,7 @@ commit -m harness
 trunk="$(git -C "${tmp}/primary" symbolic-ref --short HEAD)"
 # incoming <name>: master moves on with a migration, worker code, a script and a UI source
 incoming() {
-  git -C "${tmp}/primary" merge -q --ff-only "$(git -C "${repo}" rev-parse HEAD)"
+  git -C "${tmp}/primary" -c user.name=t -c user.email=t@t merge -q --ff-only "$(git -C "${repo}" rev-parse HEAD)"
   mkdir -p "${tmp}/primary/app/worker" "${tmp}/primary/scripts"
   for file in "alembic/$1.py" "app/worker/$1.py" "scripts/$1.py" "frontend/src/$1.ts" Makefile; do
     echo "$1" >>"${tmp}/primary/${file}"
@@ -154,7 +154,7 @@ incoming one
 echo task >"${repo}/notes.txt"
 git -C "${repo}" add notes.txt
 commit -m task
-git -C "${repo}" merge -q --no-ff --no-commit "${trunk}" >/dev/null 2>&1
+git -C "${repo}" -c user.name=t -c user.email=t@t merge -q --no-ff --no-commit "${trunk}" >/dev/null 2>&1
 expect 0 "lint test-smoke test-changed" \
   "a merge runs no full suite or script suite for what only comes in"
 said "selection: merge with $(git -C "${tmp}/primary" rev-parse --short HEAD), 5 incoming paths left out" \
@@ -167,7 +167,7 @@ echo task >"${repo}/app/worker/task.py"
 echo task >"${repo}/scripts/task.py"
 git -C "${repo}" add app scripts
 commit -m task
-git -C "${repo}" merge -q --no-ff --no-commit "${trunk}" >/dev/null 2>&1
+git -C "${repo}" -c user.name=t -c user.email=t@t merge -q --no-ff --no-commit "${trunk}" >/dev/null 2>&1
 expect 0 "lint test-recorded docs-check runtime-check" \
   "a merge runs the suites the task's own side calls for"
 commit -m merge

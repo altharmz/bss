@@ -13,6 +13,15 @@ import hook_selection
 SCRIPT = Path(__file__).with_name("hook_selection.py")
 UI_TESTS = "tests/test_order_error_codes.py,tests/test_ui_mcp_parity.py,tests/test_ui_requests.py"
 USUAL = ["test-smoke", "test-changed"]
+# A CI runner has no git identity, and a merge needs one even with --no-commit. The merge
+# cases run without the developer's own, so a missing one fails here and not only in CI.
+IDENTITY = ("-c", "user.name=t", "-c", "user.email=t@t")
+NO_IDENTITY = {
+    "PATH": os.environ["PATH"],
+    "HOME": "/nonexistent",
+    "GIT_CONFIG_NOSYSTEM": "1",
+    "GIT_CONFIG_GLOBAL": "/dev/null",
+}
 
 
 def run(directory, *args):
@@ -158,7 +167,7 @@ class MergeTests(unittest.TestCase):
 
     def commit(self, message):
         run(self.repo, "git", "add", "-A")
-        run(self.repo, "git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", message)
+        run(self.repo, "git", *IDENTITY, "commit", "-qm", message)
 
     def incoming(self, **files):
         """`master` moves on with a migration and the given files."""
@@ -171,10 +180,11 @@ class MergeTests(unittest.TestCase):
 
     def merge(self):
         return subprocess.run(  # noqa: S603
-            ["git", "merge", "-q", "--no-ff", "--no-commit", "master"],  # noqa: S607
+            ["git", *IDENTITY, "merge", "-q", "--no-ff", "--no-commit", "master"],  # noqa: S607
             cwd=self.repo,
             capture_output=True,
             check=False,
+            env=NO_IDENTITY,
         ).returncode
 
     def test_what_only_comes_in_is_left_out(self):
