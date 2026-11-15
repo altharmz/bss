@@ -77,3 +77,15 @@ FastAPI's `/openapi.json`). OAS 3.0 cannot make a `$ref` nullable (`nullable` ne
   status; future suspension retains its existing pending Undo. No migration or TMF change.
 
 G5 / B8: Products started today first become visible to tomorrow’s run. Uncharged earlier periods also point to tomorrow; already charged periods point to the next due period. The projection calls the billing core with stored ABRs at the candidate run dates, including offering boundaries, without writing anything. A product ending before renewal can still have an uncharged first period. Prepaid continues to expose paidThrough as its next renewal.
+
+- Registry lists and searches (#314, #330): `GET /internal/v1/subscriber`, `/party` and
+  `/partyCustomer` page `ORDER BY created_at, id` with OFFSET. Enum filters are compared
+  as the enum (`state = %s::account_state`), never as `::text`: as text they lost their
+  statistics and planned full scans. An unsearched page is cut from its own table and
+  only its rows are joined (customer, party). A search (`q`) goes through
+  `app/repository/subscribers.py` `matching`: one probe collects up to `MATCH_CAP`
+  (1000) distinct matches with the filters; fewer are sorted and the page is read by id,
+  more walk the `(created_at, id)` index testing the same conditions OR-ed. No
+  `id IN (... UNION ...)`: the planner cannot know how many rows a prefix matches, and
+  hashing every match cost 20-60 ms (narrow) to 1.6 s (one letter) at 100k accounts.
+  Measurements: [loadtest-plan-sweep.md](../loadtest-plan-sweep.md#registry-lists-and-searches-330).
