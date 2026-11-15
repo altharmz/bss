@@ -9,6 +9,7 @@ from task_repo import StartupError, run
 PROJECT = "PVT_kwHOEpM-b84BpHA0"
 STATUS_FIELD = "PVTSSF_lAHOEpM-b84BpHA0zhnkE7M"
 READY, DOING, DONE = "abe5d139", "47fc9ee4", "98236657"
+INBOX, WAITING = "f75ad846", "98f1210e"
 # POSITION is the board's manual order, not creation time or issue number.
 BOARD_QUERY = """
 query($project: ID!, $cursor: String) {
