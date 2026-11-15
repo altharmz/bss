@@ -201,6 +201,19 @@ class DeployHarness(unittest.TestCase):
 # The deploy's own `up -d` of the new tag; everything after it is armed.
 UP_NEW = rf"TAG={NEW} .* up -d"
 UP_PREV = rf"TAG={PREV} .* up -d"
+# Anything that writes compose files into ~/bss itself: an rsync from the workstation, or
+# the copy out of a stored release (activate_release).
+COMPOSE_INTO_HOME = (
+    r"rsync .*compose\.yaml compose\.prod\.yaml vps-test:bss/$"
+    r"|cp releases/\w+/compose\.yaml releases/\w+/compose\.prod\.yaml \."
+)
+# The migration one-off reads the new release's own compose files, with ~/bss as the
+# project directory (its .env).
+MIGRATE_FROM_RELEASE = (
+    rf"cd bss && +IMAGE_NAME=bss-app TAG={NEW} docker compose --project-directory \. "
+    rf"-f releases/{NEW}/compose\.yaml -f releases/{NEW}/compose\.prod\.yaml "
+    r"run --rm --no-deps (-e \S+ )?app alembic upgrade head"
+)
 NEW_UNHEALTHY = [(rf"TAG={NEW} .* ps -q \w+", 0, "cidnew"), (r"inspect .* cidnew", 0, "unhealthy")]
 
 
@@ -271,6 +284,30 @@ class AutomaticRollback(DeployHarness):
         self.assertIn("nothing changed on the server", self.out)
         self.assertIn(f"{PREV} is still serving", self.out)
         self.assertNotIn("ROLLED BACK", self.out)
+
+    def test_4b_migration_failure_leaves_the_compose_files_of_the_running_release(self):
+        # #256: ~/bss/compose*.yaml must still be the serving release's after this failure
+        rules = [(r"alembic upgrade head", 1, "boom")] + self.base_rules()
+        self.assertEqual(self.run_deploy(rules), 1, self.out)
+        migrate = self.assertCalled(MIGRATE_FROM_RELEASE)
+        self.assertLess(
+            self.assertCalled(
+                rf"rsync .*compose\.yaml compose\.prod\.yaml vps-test:bss/releases/{NEW}/"
+            ),
+            migrate,
+        )
+        self.assertNotCalled(COMPOSE_INTO_HOME)
+        # the secrets still arrive before the migration that needs them
+        self.assertLess(self.assertCalled(r"rsync .*\.env\.prod vps-test:bss/\.env"), migrate)
+
+    def test_4c_compose_files_reach_the_home_directory_only_at_up(self):
+        rules = self.deployed_rules(self.base_rules())
+        self.assertEqual(self.run_deploy(rules), 0, self.out)
+        migrate = self.assertCalled(MIGRATE_FROM_RELEASE)
+        copied = self.assertCalled(COMPOSE_INTO_HOME)
+        self.assertLess(migrate, copied)
+        self.assertRegex(self.calls[copied], rf"cp releases/{NEW}/compose\.yaml")
+        self.assertLess(copied, self.index(UP_NEW))
 
     def test_5_late_web_smoke_failure_rolls_back(self):
         # DEPLOYED reads back the new commit, then (after the rollback) the previous one
@@ -429,9 +466,8 @@ class Retention(DeployHarness):
         self.assertIn("alembic_rev=0001", bootstrap)
         cur = self.assertCalled(r"'old123' > CURRENT\.tmp")
         self.assertLess(cur, self.index(UP_NEW))
-        self.assertLess(
-            cur, self.index(r"rsync .*compose\.yaml compose\.prod\.yaml vps-test:bss/$")
-        )
+        # before the new release's compose files replace the running one's in ~/bss
+        self.assertLess(cur, self.assertCalled(COMPOSE_INTO_HOME))
         moved = self.calls[self.assertCalled(rf"'{NEW}' > CURRENT\.tmp")]
         self.assertIn("'old123' > PREVIOUS.tmp", moved)
 
@@ -489,7 +525,9 @@ class Drills(DeployHarness):
         code = self.run_deploy(rules, env={"BSS_DEPLOY_DRILL": "fail-migration"})
         self.assertEqual(code, 1, self.out)
         self.assertIn("BSS_DEPLOY_DRILL=fail-migration", self.out)
-        self.assertCalled(r"run --rm --no-deps -e BSS_MIGRATION_DRILL=fail app alembic upgrade head")
+        self.assertCalled(
+            r"run --rm --no-deps -e BSS_MIGRATION_DRILL=fail app alembic upgrade head"
+        )
         self.assertNotCalled(r" up -d|stop app worker mcp|alembic downgrade")
         self.assertNotCalled(r"> CURRENT\.tmp|> PREVIOUS\.tmp|rm -f PREVIOUS")
         self.assertIn(f"nothing changed on the server; {PREV} is still serving", self.out)
@@ -498,9 +536,12 @@ class Drills(DeployHarness):
         rules = [(r"alembic upgrade head", 124, "")] + self.base_rules()
         code = self.run_deploy(rules, env={"BSS_DEPLOY_DRILL": "slow-migration"})
         self.assertEqual(code, 1, self.out)
-        up = self.assertCalled(r"run --rm --no-deps -e BSS_MIGRATION_DRILL=slow app alembic upgrade")
+        up = self.assertCalled(
+            r"run --rm --no-deps -e BSS_MIGRATION_DRILL=slow app alembic upgrade"
+        )
         self.assertCalled(REMOVE_ONEOFFS, up)
         self.assertNotCalled(r" up -d|stop app worker mcp|> CURRENT\.tmp")
+        self.assertNotCalled(COMPOSE_INTO_HOME)
         self.assertIn("did not finish within 120s", self.out)
         self.assertIn(f"{PREV} is still serving", self.out)
 
@@ -524,7 +565,7 @@ class Drills(DeployHarness):
                 rules = [(r"cat bss/DEPLOYED", 0, deployed)] + self.base_rules()
                 code = self.run_deploy(rules, env={"BSS_DEPLOY_DRILL": f"fail-after-{point}"})
                 self.assertEqual(code, 1, self.out)
-                self.assertIn(f"drill: forced failure after", self.out)
+                self.assertIn("drill: forced failure after", self.out)
                 self.assertIn(f"(BSS_DEPLOY_DRILL=fail-after-{point})", self.out)
                 self.assertRolledBackToPrev()
                 # the rollback's own smokes reuse the functions with the drill points
@@ -534,8 +575,14 @@ class Drills(DeployHarness):
         cases = {
             # point: (a call that must have happened for NEW, the next one that must not)
             "health": (UP_NEW, r"> DEPLOYED\.tmp"),
-            "healthz": (r"curl -fsS --max-time 5 http://127\.0\.0\.1:18081/healthz", r"billing-status"),
-            "web-sync": (rf"rsync -a --delete releases/{NEW}/web/ web/", rf"web-smoke\.sh .* {NEW}$"),
+            "healthz": (
+                r"curl -fsS --max-time 5 http://127\.0\.0\.1:18081/healthz",
+                r"billing-status",
+            ),
+            "web-sync": (
+                rf"rsync -a --delete releases/{NEW}/web/ web/",
+                rf"web-smoke\.sh .* {NEW}$",
+            ),
             "web-smoke": (rf"web-smoke\.sh .* {NEW}$", r"mcp-smoke\.sh"),
             "mcp-smoke": (r"mcp-smoke\.sh", r"mcp-oauth-smoke\.py"),
             "oauth-smoke": (r"mcp-oauth-smoke\.py", r"> PREVIOUS\.tmp"),
@@ -566,7 +613,11 @@ class Drills(DeployHarness):
     def test_drill_values_are_checked_before_anything_runs(self):
         cases = [
             ({"BSS_DEPLOY_DRILL": "nonsense"}, (), "unknown BSS_DEPLOY_DRILL=nonsense"),
-            ({"BSS_DEPLOY_DRILL": "fail-after-lunch"}, (), "unknown BSS_DEPLOY_DRILL=fail-after-lunch"),
+            (
+                {"BSS_DEPLOY_DRILL": "fail-after-lunch"},
+                (),
+                "unknown BSS_DEPLOY_DRILL=fail-after-lunch",
+            ),
             ({"BSS_DEPLOY_DRILL": "unhealthy"}, ("--rollback",), "applies to a deploy"),
             ({"BSS_ROLLBACK_DRILL": "slow-downgrade"}, (), "applies to --rollback"),
             ({"BSS_ROLLBACK_DRILL": "nonsense"}, ("--rollback",), "unknown BSS_ROLLBACK_DRILL"),
@@ -575,7 +626,9 @@ class Drills(DeployHarness):
             with self.subTest(env=env, args=args):
                 self.assertEqual(self.run_deploy(self.base_rules(), *args, env=env), 1, self.out)
                 self.assertIn(message, self.out)
-                self.assertFalse([c for c in self.calls if c.startswith(("ssh", "rsync", "docker"))])
+                self.assertFalse(
+                    [c for c in self.calls if c.startswith(("ssh", "rsync", "docker"))]
+                )
 
 
 class RollbackDrill(DeployHarness):
@@ -586,7 +639,8 @@ class RollbackDrill(DeployHarness):
         self.assertEqual(code, 1, self.out)
         self.assertIn("BSS_ROLLBACK_DRILL=slow-downgrade", self.out)
         down = self.assertCalled(
-            rf"TAG={PREV} .* run --rm --no-deps -e BSS_MIGRATION_DRILL=slow app alembic downgrade 0040"
+            rf"TAG={PREV} .* run --rm --no-deps -e BSS_MIGRATION_DRILL=slow "
+            r"app alembic downgrade 0040"
         )
         self.assertCalled(REMOVE_ONEOFFS, down)
         self.assertCalled(rf"TAG={PREV} .* up -d", down)
