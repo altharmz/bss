@@ -277,6 +277,18 @@ def db_conn(migrated_db_url) -> Iterator[psycopg.Connection]:
         conn.close()
 
 
+@pytest.fixture(params=["by-id", "walk"])
+def match_path(request, monkeypatch):
+    """Both ways a registry search page is cut (#330, app/repository/subscribers.py
+    `matching`): from the probed matches read by id, or walking the order index when the
+    probe hits its cap (a cap of 0: every non-empty search walks)."""
+    from app.repository import subscribers
+
+    if request.param == "walk":
+        monkeypatch.setattr(subscribers, "MATCH_CAP", 0)
+    return request.param
+
+
 @cache
 def _test_password_hash():
     """The test user's stored hash, with the smallest scrypt cost. A stored hash names its
