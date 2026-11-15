@@ -304,7 +304,10 @@ the required `scripts/docs/` registry and notes edits. No commit or deployment m
   date whose midnight the price no longer covers (E's date if E is midnight, else the
   next day). A gap could never be filled later: prices never start in the past. A
   missing price is therefore a data bug, fixed case by case with a reviewed one-off script
-  and an audit note - there is no waiver feature. Ordering keeps the other side closed
+  and an audit note - there is no waiver feature. The 409 names how many such products there
+  are, exactly up to 1000 and as "more than 1000" beyond: the check counts at most 1001
+  rows, because counting a whole large offering sorted and returned ~91k ids at 100k
+  products (156 ms, #331); the capped count takes ~3 ms on the same data. Ordering keeps the other side closed
   (`priceEnds`, D-W20): together they give the invariant **"a live product has a price
   for every future day"**.
 - **Deviation: changing a live offering's price is one internal operation (D-W21).**

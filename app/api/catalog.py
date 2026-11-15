@@ -628,6 +628,11 @@ def insert_price(
     return with_meta(conn, "product_offering_price", row, data)
 
 
+# The D-W18 refusal names how many products a price end would leave unpriced up to this
+# many; beyond it, "more than N" (#331: counting a whole large offering broke the budget).
+GAP_COUNT_CAP = 1000
+
+
 def _first_uncovered_day(end: datetime) -> date:
     """A price valid until `end` (exclusive) prices every midnight before it: the first
     business date whose midnight it no longer covers."""
@@ -654,12 +659,13 @@ def _no_gap(conn: psycopg.Connection, price: Row, new_end: datetime) -> None:
     ):
         return
     day = _first_uncovered_day(new_end)
-    uncovered = catalog.products_billable_from(
-        conn, offering_id=offering_id, currency=price["currency"], day=day
+    uncovered = catalog.count_products_billable_from(
+        conn, offering_id=offering_id, currency=price["currency"], day=day, cap=GAP_COUNT_CAP
     )
     if uncovered:
+        count = f"more than {GAP_COUNT_CAP}" if uncovered > GAP_COUNT_CAP else str(uncovered)
         raise conflict(
-            f"validFor.endDateTime would leave {len(uncovered)} product(s) of this offering"
+            f"validFor.endDateTime would leave {count} product(s) of this offering"
             f" in {price['currency']} without a price from {day}: terminate them by then,"
             " or attach a price that starts exactly at the new end"
         )

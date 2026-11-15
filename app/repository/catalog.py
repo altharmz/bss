@@ -255,24 +255,30 @@ def successor_price(
     )
 
 
-def products_billable_from(
-    conn: psycopg.Connection, *, offering_id: UUID, currency: str, day: Any
-) -> list[Row]:
-    """Products of the offering, on accounts in `currency`, that are still billable on or
-    after `day`: not cancelled/aborted and not terminated by then (termination_date is
-    exclusive, so termination_date <= day means nothing from `day` on is billed)."""
-    return fetch_all(
+def count_products_billable_from(
+    conn: psycopg.Connection, *, offering_id: UUID, currency: str, day: Any, cap: int
+) -> int:
+    """How many products of the offering, on accounts in `currency`, are still billable on
+    or after `day`: not cancelled/aborted and not terminated by then (termination_date is
+    exclusive, so termination_date <= day means nothing from `day` on is billed). Counts
+    at most `cap + 1`: a caller needs "none", the exact number of a few, or "more than
+    `cap`" - counting every product of a large offering scanned the whole inventory (#331)."""
+    row = fetch_one(
         conn,
         """
-        SELECT p.id FROM product p
-        JOIN billing_account a ON a.id = p.billing_account_id
-        WHERE p.product_offering_id = %s AND a.currency = %s
-          AND p.status NOT IN ('cancelled', 'aborted')
-          AND (p.termination_date IS NULL OR p.termination_date > %s)
-        ORDER BY p.id
+        SELECT count(*) AS n FROM (
+            SELECT 1 FROM product p
+            JOIN billing_account a ON a.id = p.billing_account_id
+            WHERE p.product_offering_id = %s AND a.currency = %s
+              AND p.status NOT IN ('cancelled', 'aborted')
+              AND (p.termination_date IS NULL OR p.termination_date > %s)
+            LIMIT %s
+        ) billable
         """,
-        (offering_id, currency, day),
+        (offering_id, currency, day, cap + 1),
     )
+    assert row is not None
+    return row["n"]
 
 
 def prices_of_offering(conn: psycopg.Connection, offering_id: UUID) -> list[Row]:
