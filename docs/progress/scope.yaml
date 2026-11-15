@@ -41,6 +41,26 @@ items:
   - {id: worker.usageFeed, area: worker, stage: 5, title: "Store the network usage feed once per record, match it to lines and note allowance thresholds"}
   - {id: worker.usageRating, area: worker, stage: 5, title: "Rate closed days of pay-as-you-go usage against the prepaid balance, bar the line at zero balance and restore it after a top-up"}
   - {id: worker.housekeeping, area: worker, stage: 5, title: "Daily housekeeping from 04:00: usage_record partitions made ahead and dropped after 13 months, rows past their retention deleted in batches"}
+  - {id: db.party_interaction, area: db, stage: 5, table: party_interaction, title: "Recorded contacts with a customer (TMF683 PartyInteraction): direction, reason, channel, status"}
+  - {id: db.party_interaction_item, area: db, stage: 5, table: party_interaction_item, title: "What a contact was about: product, billing account, trouble ticket or audit entry"}
+  - {id: db.party_interaction_note, area: db, stage: 5, table: party_interaction_note, title: "Append-only notes of an interaction"}
+  - {id: db.trouble_ticket, area: db, stage: 5, table: trouble_ticket, title: "Customer cases (TMF621 TroubleTicket) with the spec's status enum"}
+  - {id: db.trouble_ticket_related_entity, area: db, stage: 5, table: trouble_ticket_related_entity, title: "What a case is about: product, billing account, party interaction or audit entry"}
+  - {id: db.trouble_ticket_note, area: db, stage: 5, table: trouble_ticket_note, title: "Append-only notes of a case"}
+  - {id: db.trouble_ticket_status_change, area: db, stage: 5, table: trouble_ticket_status_change, title: "Append-only status history of a case"}
+  - {id: api.tmf683.partyInteraction.list, area: api, stage: 5, method: GET, path: "/tmf-api/partyInteractionManagement/v5/partyInteraction", title: "TMF683 GET /partyInteraction"}
+  - {id: api.tmf683.partyInteraction.create, area: api, stage: 5, method: POST, path: "/tmf-api/partyInteractionManagement/v5/partyInteraction", title: "TMF683 POST /partyInteraction (log a contact, audited)"}
+  - {id: api.tmf683.partyInteraction.get, area: api, stage: 5, method: GET, path: "/tmf-api/partyInteractionManagement/v5/partyInteraction/{interaction_id}", title: "TMF683 GET /partyInteraction/{id}"}
+  - {id: api.tmf683.partyInteraction.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/partyInteractionManagement/v5/partyInteraction/{interaction_id}", title: "TMF683 PATCH /partyInteraction/{id} (notes, status)"}
+  - {id: api.tmf683.hub.create, area: api, stage: 5, method: POST, path: "/tmf-api/partyInteractionManagement/v5/hub", title: "Subscribe to TMF683 events"}
+  - {id: api.tmf683.hub.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/partyInteractionManagement/v5/hub/{hub_id}", title: "Unsubscribe from TMF683 events"}
+  - {id: api.tmf621.troubleTicket.list, area: api, stage: 5, method: GET, path: "/tmf-api/troubleTicket/v5/troubleTicket", title: "TMF621 GET /troubleTicket"}
+  - {id: api.tmf621.troubleTicket.create, area: api, stage: 5, method: POST, path: "/tmf-api/troubleTicket/v5/troubleTicket", title: "TMF621 POST /troubleTicket (open a case, audited)"}
+  - {id: api.tmf621.troubleTicket.get, area: api, stage: 5, method: GET, path: "/tmf-api/troubleTicket/v5/troubleTicket/{ticket_id}", title: "TMF621 GET /troubleTicket/{id}"}
+  - {id: api.tmf621.troubleTicket.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/troubleTicket/v5/troubleTicket/{ticket_id}", title: "TMF621 PATCH /troubleTicket/{id} (status transitions, notes)"}
+  - {id: api.tmf621.hub.create, area: api, stage: 5, method: POST, path: "/tmf-api/troubleTicket/v5/hub", title: "Subscribe to TMF621 events"}
+  - {id: api.tmf621.hub.get, area: api, stage: 5, method: GET, path: "/tmf-api/troubleTicket/v5/hub/{hub_id}", title: "Get a TMF621 subscription"}
+  - {id: api.tmf621.hub.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/troubleTicket/v5/hub/{hub_id}", title: "Unsubscribe from TMF621 events"}
   - {id: db.notification_message, area: db, stage: 5, table: notification_message, title: "Customer messages (TMF681 CommunicationMessage): channel, template, receiver, state, attempts, once per event"}
   - {id: db.notification_consent, area: db, stage: 5, table: notification_consent, title: "Append-only marketing consent history per customer and channel"}
   - {id: api.tmf681.communicationMessage.list, area: api, stage: 5, method: GET, path: "/tmf-api/communicationManagement/v4/communicationMessage", title: "TMF681 GET /communicationMessage"}

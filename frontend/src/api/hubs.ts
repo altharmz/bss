@@ -68,6 +68,18 @@ export const HUB_APIS: [HubApi, ...HubApi[]] = [
     version: 'v5',
     base: '/tmf-api/customerBillManagement/v5',
   },
+  {
+    id: 'TMF683',
+    name: 'Party Interaction Management',
+    version: 'v5',
+    base: '/tmf-api/partyInteractionManagement/v5',
+  },
+  {
+    id: 'TMF621',
+    name: 'Trouble Ticket Management',
+    version: 'v5',
+    base: '/tmf-api/troubleTicket/v5',
+  },
 ];
 
 // The listener events of each API (every one a hub may name in its query).
@@ -205,6 +217,24 @@ export const EVENT_TYPES: Record<string, string[]> = {
     'CustomerBillOnDemandCreateEvent',
     'CustomerBillOnDemandStateChangeEvent',
     'CustomerBillStateChangeEvent',
+  ],
+  TMF683: [
+    'PartyInteractionAttributeValueChangeEvent',
+    'PartyInteractionCreateEvent',
+    'PartyInteractionDeleteEvent',
+    'PartyInteractionStatusChangeEvent',
+  ],
+  TMF621: [
+    'TroubleTicketAttributeValueChangeEvent',
+    'TroubleTicketCreateEvent',
+    'TroubleTicketDeleteEvent',
+    'TroubleTicketInformationRequiredEvent',
+    'TroubleTicketResolvedEvent',
+    'TroubleTicketSpecificationAttributeValueChangeEvent',
+    'TroubleTicketSpecificationCreateEvent',
+    'TroubleTicketSpecificationDeleteEvent',
+    'TroubleTicketSpecificationStatusChangeEvent',
+    'TroubleTicketStatusChangeEvent',
   ],
 };
 

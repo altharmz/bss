@@ -20,9 +20,11 @@ One page per API, generated from `app.openapi()` (what the app really serves) an
 | [TMF654 Prepay Balance Management](tmf654-prepay-balance.md) | v4 | `/tmf-api/prepayBalanceManagement/v4` | 28 | [`spec/TMF654-PrepayBalance-v4.0.0.swagger.json`](../../spec/TMF654-PrepayBalance-v4.0.0.swagger.json) |
 | [TMF635 Product Usage Management](tmf635-product-usage.md) | v5 | `/tmf-api/productUsageManagement/v5` | 3 | [`spec/TMF635-Product_Usage_Management-v5.0.0.oas.yaml`](../../spec/TMF635-Product_Usage_Management-v5.0.0.oas.yaml) |
 | [TMF681 Communication Management](tmf681-communication.md) | v4 | `/tmf-api/communicationManagement/v4` | 4 | [`spec/TMF681-Communication-v4.0.0.swagger.json`](../../spec/TMF681-Communication-v4.0.0.swagger.json) |
+| [TMF683 Party Interaction Management](tmf683-party-interaction.md) | v5 | `/tmf-api/partyInteractionManagement/v5` | 6 | [`spec/TMF683-Party_Interaction-v5.0.0.oas.yaml`](../../spec/TMF683-Party_Interaction-v5.0.0.oas.yaml) |
+| [TMF621 Trouble Ticket Management](tmf621-trouble-ticket.md) | v5 | `/tmf-api/troubleTicket/v5` | 7 | [`spec/TMF621-Trouble_Ticket-v5.0.1.oas.yaml`](../../spec/TMF621-Trouble_Ticket-v5.0.1.oas.yaml) |
 | [Service endpoints](service.md) | - | - | 3 | - |
 
-248 operations in total.
+261 operations in total.
 
 ## Conventions
 

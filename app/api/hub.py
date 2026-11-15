@@ -1,5 +1,5 @@
-"""TMF hub: event subscriptions of every API (POST /hub, DELETE /hub/{id}; TMF629 also
-GET /hub/{id}). docs/decisions/events.md.
+"""TMF hub: event subscriptions of every API (POST /hub, DELETE /hub/{id}; TMF629, TMF639
+and TMF621 also GET /hub/{id}). docs/decisions/events.md.
 
 A hub names a `callback` and, optionally, a `query` choosing event types:
 `eventType=A` or `eventType=A,B`, names of the API's own listener events (anything else
@@ -127,7 +127,8 @@ def _hub_id(raw: str) -> UUID:
     return parse_id("hub", raw)
 
 
-# (api, short name in the handler names); only TMF629's spec has GET /hub/{id}
+# (api, short name in the handler names); the specs of TMF629, TMF639 and TMF621 have
+# GET /hub/{id}
 HUB_APIS = (
     ("TMF639", "resource"),
     ("TMF620", "catalog"),
@@ -140,6 +141,8 @@ HUB_APIS = (
     ("TMF670", "payment_method"),
     ("TMF678", "bill"),
     ("TMF654", "balance"),
+    ("TMF683", "interaction"),
+    ("TMF621", "ticket"),
 )
 _routers = {api: APIRouter(prefix=BASES[api]) for api, _ in HUB_APIS}
 ROUTERS = list(_routers.values())
@@ -280,3 +283,30 @@ def create_hub_payment_method(body: JsonBody, request: Request, tx: Tx, clock: C
 @_routers["TMF670"].delete("/hub/{hub_id}", **GONE)
 def delete_hub_payment_method(hub_id: str, request: Request, tx: Tx, clock: ClockDep) -> Response:
     return _delete("TMF670", hub_id, request, tx, clock)
+
+
+@_routers["TMF683"].post("/hub", **HUB)
+def create_hub_interaction(body: JsonBody, request: Request, tx: Tx, clock: ClockDep):
+    _checked(body, request)
+    return _create("TMF683", parse(HubIn, body, read_only=READ_ONLY), tx, clock)
+
+
+@_routers["TMF683"].delete("/hub/{hub_id}", **GONE)
+def delete_hub_interaction(hub_id: str, request: Request, tx: Tx, clock: ClockDep) -> Response:
+    return _delete("TMF683", hub_id, request, tx, clock)
+
+
+@_routers["TMF621"].post("/hub", **HUB)
+def create_hub_ticket(body: JsonBody, request: Request, tx: Tx, clock: ClockDep):
+    _checked(body, request)
+    return _create("TMF621", parse(HubIn, body, read_only=READ_ONLY), tx, clock)
+
+
+@_routers["TMF621"].get("/hub/{hub_id}")
+def get_hub_ticket(hub_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
+    return _get("TMF621", hub_id, request, tx)
+
+
+@_routers["TMF621"].delete("/hub/{hub_id}", **GONE)
+def delete_hub_ticket(hub_id: str, request: Request, tx: Tx, clock: ClockDep) -> Response:
+    return _delete("TMF621", hub_id, request, tx, clock)

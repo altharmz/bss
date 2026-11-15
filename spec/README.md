@@ -31,6 +31,8 @@ Three checks, which prove different things:
 | `TMF637-ProductInventory-v5.0.0.oas.yaml` | Product Inventory | 5.0.0 | [TMF637_ProductInventory](https://github.com/tmforum-apis/TMF637_ProductInventory/blob/f598b4a02186071f2794b8f9b4f6904ef0a8aa52/TMF637-ProductInventory-v5.0.0.oas.yaml) | `f598b4a02186071f2794b8f9b4f6904ef0a8aa52` |
 | `TMF666-Account_Management-v5.0.0.oas.yaml` | Account | 5.0.0 | [TMF666_AccountManagement](https://github.com/tmforum-apis/TMF666_AccountManagement/blob/8b9c4f62cbf8c41f5b71f5836f48486a3fd856b8/TMF666-Account_Management-v5.0.0.oas.yaml) | `8b9c4f62cbf8c41f5b71f5836f48486a3fd856b8` |
 | `TMF681-Communication-v4.0.0.swagger.json` | Communication | 4.0.0 | [TMF681_Communication](https://github.com/tmforum-apis/TMF681_Communication/blob/057a390f6c20ec3176a66aec0573c44b7f70711e/TMF681-Communication-v4.0.0.swagger.json) | `057a390f6c20ec3176a66aec0573c44b7f70711e` |
+| `TMF683-Party_Interaction-v5.0.0.oas.yaml` | Party Interaction | 5.0.0 | [TMF683_PartyInteraction](https://github.com/tmforum-apis/TMF683_PartyInteraction/blob/500f0cc099188e89e50a062b1c38d1af25e171bb/TMF683-Party_Interaction-v5.0.0.oas.yaml) | `500f0cc099188e89e50a062b1c38d1af25e171bb` |
+| `TMF621-Trouble_Ticket-v5.0.1.oas.yaml` | Trouble Ticket | 5.0.1 ³ | [TMF621_TroubleTicket](https://github.com/tmforum-apis/TMF621_TroubleTicket/blob/cd24d2357e28501b4ab0def951150639443c0058/TMF621-Trouble_Ticket-v5.0.1.oas.yaml) | `cd24d2357e28501b4ab0def951150639443c0058` |
 | `TMF678-CustomerBill-v5.0.0.oas.yaml` | Customer Bill | 5.0.0 | [TMF678_CustomerBill](https://github.com/tmforum-apis/TMF678_CustomerBill/blob/6d1628e7ac15f077083216f9bccd469e9f1af74f/TMF678-CustomerBill-v5.0.0.oas.yaml) | `6d1628e7ac15f077083216f9bccd469e9f1af74f` |
 | `TMF676-Payment-v4.0.0.swagger.json` | Payment | 4.0.0 ² | [TMF676_PaymentManagement](https://github.com/tmforum-apis/TMF676_PaymentManagement/blob/1de83fd2dc6d09e250c9d1ca7abf3b1b93688d9f/TMF676-Payment-v4.0.0.swagger.json) | `1de83fd2dc6d09e250c9d1ca7abf3b1b93688d9f` |
 | `TMF670-PaymentMethod-v4.0.0.swagger.json` | Payment Method | 4.0.0 | [TMF670_PaymentMethods](https://github.com/tmforum-apis/TMF670_PaymentMethods/blob/dc8dfeb39382736cb40e79704ee6ba25a588dc3b/TMF670-PaymentMethod-v4.0.0.swagger.json) | `dc8dfeb39382736cb40e79704ee6ba25a588dc3b` |
@@ -66,6 +68,8 @@ run `make spec-verify-upstream`.
 | `TMF639-Resource_Inventory_Management-v5.0.0.oas.yaml` | `2c34d9772bb937e4aebb59ae71d1a6825df39737` |
 | `TMF654-PrepayBalance-v4.0.0.swagger.json` | `60378955ca383e0f2e6427d57d9d9d5ed1ddb349` |
 | `TMF681-Communication-v4.0.0.swagger.json` | `16f56e0ce2476cc5e3f756d5b9b98d11bb26a0af` |
+| `TMF683-Party_Interaction-v5.0.0.oas.yaml` | `ad22459677788e089e2f5615c5c452a60d98a349` |
+| `TMF621-Trouble_Ticket-v5.0.1.oas.yaml` | `645fe4149ab97ba08fd21ad598007727005674d4` |
 | `TMF666-Account_Management-v5.0.0.oas.yaml` | `082fb3d09777b8c894283f9c6649c5daa690660f` |
 | `TMF678-CustomerBill-v5.0.0.oas.yaml` | `9425d310fda1e739b21595d2b445b7bc6ca6d5cb` |
 | `TMF676-Payment-v4.0.0.swagger.json` | `b3fcf10ad03954ddd2619df48bb6907ac96390f7` |
@@ -84,3 +88,7 @@ run `make spec-verify-upstream`.
 ² TMF676 has no v5 release. The repo also contains
 `TMF676_Payment_Management_API_v4.0.0_swagger.json`, whose parsed JSON content is identical
 to the file vendored here.
+
+³ The TMF621 repo publishes no v5.0.0 file; v5.0.1 is the only v5 definition there. TMF683's
+`servers` URL names no API path (`https://serverRoot`); it is served under
+`/tmf-api/partyInteractionManagement/v5` (docs/decisions/care.md).

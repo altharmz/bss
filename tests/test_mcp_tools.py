@@ -470,6 +470,34 @@ def world(api, db_conn) -> dict[str, Any]:
         "order": first(apidata.ORDER),
         "run": run_row(db_conn, date(2026, 12, 1)),
     }
+    care_party = [
+        {
+            "role": "customer",
+            "partyOrPartyRole": {"id": world["customer"]["id"], "@referredType": "Customer"},
+        }
+    ]
+    world["interaction"] = api.post(
+        "/tmf-api/partyInteractionManagement/v5/partyInteraction",
+        {
+            "direction": "inbound",
+            "reason": "MCP world",
+            "status": "open",
+            "relatedChannel": [{"role": "interaction", "channel": {"id": "phone"}}],
+            "relatedParty": care_party,
+        },
+    ).json()
+    world["ticket"] = api.post(
+        "/tmf-api/troubleTicket/v5/troubleTicket",
+        {
+            "description": "MCP world",
+            "severity": "minor",
+            "ticketType": "request",
+            "relatedParty": care_party,
+        },
+    ).json()
+    world["ticket_hub"] = api.post(
+        "/tmf-api/troubleTicket/v5/hub", {"callback": "http://listener.test/tickets"}
+    ).json()
     order_id, item_id = db_conn.execute(
         "SELECT product_order_id, id FROM product_order_item ORDER BY created_at LIMIT 1"
     ).fetchone()
@@ -556,6 +584,9 @@ def get_arguments(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "get_history": {"history_id": world["topup"]["id"]},
         "get_accumulated_balance": {"balance_id": str(world["bucket"]["accumulated_balance_id"])},
         "get_hub_resource": {"hub_id": world["resource_hub"]["id"]},
+        "get_hub_ticket": {"hub_id": world["ticket_hub"]["id"]},
+        "get_party_interaction": {"interaction_id": world["interaction"]["id"]},
+        "get_trouble_ticket": {"ticket_id": world["ticket"]["id"]},
         "get_bill_format": {"format_id": world["format"]["id"]},
         "get_bill_media": {"media_id": world["media"]["id"]},
         "get_bill_demand": {"demand_id": world["demand"]["id"]},
@@ -944,6 +975,55 @@ def test_every_write_tool_reaches_the_app(api, mcp, world):
         {"message_id": message["id"], "body": {"state": "cancelled"}},
     )
     assert cancelled["state"] == "cancelled"
+    care_party = [
+        {
+            "role": "customer",
+            "partyOrPartyRole": {"id": world["customer"]["id"], "@referredType": "Customer"},
+        }
+    ]
+    contact = call(
+        "create_party_interaction",
+        {
+            "body": {
+                "direction": "outbound",
+                "reason": "Called back",
+                "status": "open",
+                "relatedChannel": [{"role": "interaction", "channel": {"id": "phone"}}],
+                "relatedParty": care_party,
+                "note": [{"text": "via MCP"}],
+            }
+        },
+    )
+    noted = call(
+        "patch_party_interaction",
+        {
+            "interaction_id": contact["id"],
+            "body": {"note": [{"text": "more"}], "status": "completed"},
+        },
+    )
+    assert [n["text"] for n in noted["note"]] == ["via MCP", "more"]
+    case = call(
+        "create_trouble_ticket",
+        {
+            "body": {
+                "description": "No signal",
+                "severity": "major",
+                "ticketType": "incident",
+                "relatedParty": care_party,
+                "relatedEntity": [
+                    {
+                        "role": "call",
+                        "entity": {"id": contact["id"], "@referredType": "PartyInteraction"},
+                    }
+                ],
+            }
+        },
+    )
+    assert case["status"] == "acknowledged"
+    moved = call(
+        "patch_trouble_ticket", {"ticket_id": case["id"], "body": {"status": "inProgress"}}
+    )
+    assert moved["status"] == "inProgress"
     # the card tools: save a card, rename it, queue a top-up and an auto top-up rule, remove it
     paying = world["topup"]["partyAccount"]["id"]
     card = call(

@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0079**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0080**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -82,6 +82,13 @@ PostgreSQL schema at Alembic head **0079**, read from `pg_catalog` of a throwawa
 | [`customer_pin`](customer_pin.md) | security | The account PIN of a customer (CPNI verification): hashed, set or reset by an agent with a recorded reason. No API returns it. Sensitive actions on a protected customer (a live prepaid product) need it in the X-Account-Pin header. |
 | [`line_lock`](line_lock.md) | security | Optional protection of one line: while sim_swap is set a SIM swap order is refused, while port_out is set no Number Transfer PIN is issued and a carrier port-out is rejected, even with a valid PIN. No row means both off. |
 | [`account_audit`](account_audit.md) | security | Append-only log of agent actions on accounts: who, what, when, whether it was done or refused and how the customer was verified. No foreign keys: the log outlives what it describes. Never holds a PIN. |
+| [`party_interaction`](party_interaction.md) | care | One recorded contact with a customer (TMF683 PartyInteraction): a call, chat, email or store visit with its notes. A record: never deleted. |
+| [`party_interaction_item`](party_interaction_item.md) | care | What a contact was about (TMF683 interactionItem): a product (the line), a billing account, a trouble ticket or an audit log entry. |
+| [`party_interaction_note`](party_interaction_note.md) | care | Notes of an interaction (TMF683 note): append-only, the author is the operator and the date the clock. |
+| [`trouble_ticket`](trouble_ticket.md) | care | A customer case (TMF621 TroubleTicket): a simple ticket with a status. A record: never deleted. |
+| [`trouble_ticket_related_entity`](trouble_ticket_related_entity.md) | care | What a case is about (TMF621 relatedEntity): a product (the line), a billing account, a party interaction or an audit log entry. |
+| [`trouble_ticket_note`](trouble_ticket_note.md) | care | Notes of a case (TMF621 note): append-only, the author is the operator and the date the clock. |
+| [`trouble_ticket_status_change`](trouble_ticket_status_change.md) | care | Every status a case had (TMF621 statusChangeHistory), the first being acknowledged: append-only. |
 | [`app_user`](app_user.md) | users | Application identity: admin or user (UI), mcp (MCP login only); disabled, never deleted. |
 | [`app_session`](app_session.md) | users | Revocable sessions; SHA-256 tokens only, never raw cookies. |
 | [`app_user_audit`](app_user_audit.md) | users | Security changes only: operator, target, action and injected clock; no secrets. |
@@ -189,6 +196,15 @@ flowchart LR
     line_lock[line_lock]
     account_audit[account_audit]
   end
+  subgraph area_care["Customer care: interaction notes and cases (TMF683, TMF621)"]
+    party_interaction[party_interaction]
+    party_interaction_item[party_interaction_item]
+    party_interaction_note[party_interaction_note]
+    trouble_ticket[trouble_ticket]
+    trouble_ticket_related_entity[trouble_ticket_related_entity]
+    trouble_ticket_note[trouble_ticket_note]
+    trouble_ticket_status_change[trouble_ticket_status_change]
+  end
   subgraph area_users["Application users and sessions (ours)"]
     app_user[app_user]
     app_session[app_session]
@@ -294,6 +310,12 @@ flowchart LR
   offering_category -->|"offering_id"| product_offering
   party_account -->|"financial_account_id, party_id"| financial_account
   party_account -->|"party_id"| party
+  party_interaction -->|"customer_id"| customer
+  party_interaction_item -->|"billing_account_id"| billing_account
+  party_interaction_item -->|"interaction_id"| party_interaction
+  party_interaction_item -->|"product_id"| product
+  party_interaction_item -->|"trouble_ticket_id"| trouble_ticket
+  party_interaction_note -->|"interaction_id"| party_interaction
   payment -->|"billing_account_id"| billing_account
   payment_command -->|"billing_account_id"| billing_account
   payment_command -->|"payment_id"| payment
@@ -344,6 +366,13 @@ flowchart LR
   subscriber_number -->|"sim_product_id"| product
   tax_transaction -->|"applied_rate_id"| applied_customer_billing_rate
   tax_transaction -->|"billing_account_id"| billing_account
+  trouble_ticket -->|"customer_id"| customer
+  trouble_ticket_note -->|"ticket_id"| trouble_ticket
+  trouble_ticket_related_entity -->|"billing_account_id"| billing_account
+  trouble_ticket_related_entity -->|"party_interaction_id"| party_interaction
+  trouble_ticket_related_entity -->|"product_id"| product
+  trouble_ticket_related_entity -->|"ticket_id"| trouble_ticket
+  trouble_ticket_status_change -->|"ticket_id"| trouble_ticket
   usage_bar -->|"product_id"| product
   usage_charge -->|"abr_id"| applied_customer_billing_rate
   usage_charge -->|"billing_account_id"| billing_account
@@ -1631,6 +1660,126 @@ erDiagram
 
 Tables from other areas are shown with their key only: [`customer`](customer.md), [`product`](product.md).
 
+## Customer care: interaction notes and cases (TMF683, TMF621)
+
+```mermaid
+erDiagram
+  party_interaction {
+    uuid id PK
+    uuid customer_id FK
+    text direction
+    text reason
+    text description
+    text channel
+    text channel_role
+    text status
+    timestamptz status_change_date
+    timestamptz interaction_start
+    timestamptz interaction_end
+    text created_by
+    timestamptz created_at
+    timestamptz updated_at
+    text base_type
+    text schema_location
+  }
+  party_interaction_item {
+    uuid id PK
+    uuid interaction_id FK
+    integer position
+    text item_id
+    text reason
+    text resolution
+    text item_type
+    text role
+    text entity_type
+    uuid product_id FK
+    uuid billing_account_id FK
+    uuid trouble_ticket_id FK
+    uuid audit_id
+  }
+  party_interaction_note {
+    uuid id PK
+    uuid interaction_id FK
+    bigint seq
+    text author
+    timestamptz at
+    text text
+  }
+  trouble_ticket {
+    uuid id PK
+    uuid customer_id FK
+    text name
+    text description
+    text severity
+    text ticket_type
+    text priority
+    text channel
+    timestamptz requested_resolution_date
+    timestamptz expected_resolution_date
+    timestamptz resolution_date
+    trouble_ticket_status_type status
+    timestamptz status_change_date
+    text status_change_reason
+    text created_by
+    timestamptz created_at
+    timestamptz updated_at
+    text base_type
+    text schema_location
+  }
+  trouble_ticket_related_entity {
+    uuid id PK
+    uuid ticket_id FK
+    integer position
+    text role
+    text entity_type
+    uuid product_id FK
+    uuid billing_account_id FK
+    uuid party_interaction_id FK
+    uuid audit_id
+  }
+  trouble_ticket_note {
+    uuid id PK
+    uuid ticket_id FK
+    bigint seq
+    text author
+    timestamptz at
+    text text
+  }
+  trouble_ticket_status_change {
+    uuid id PK
+    uuid ticket_id FK
+    bigint seq
+    trouble_ticket_status_type status
+    timestamptz at
+    text reason
+    text operator
+  }
+  customer {
+    uuid id PK
+  }
+  billing_account {
+    uuid id PK
+  }
+  product {
+    uuid id PK
+  }
+  billing_account |o--o{ party_interaction_item : "billing_account_id"
+  billing_account |o--o{ trouble_ticket_related_entity : "billing_account_id"
+  customer ||--o{ party_interaction : "customer_id"
+  customer ||--o{ trouble_ticket : "customer_id"
+  party_interaction |o--o{ trouble_ticket_related_entity : "party_interaction_id"
+  party_interaction ||--o{ party_interaction_item : "interaction_id"
+  party_interaction ||--o{ party_interaction_note : "interaction_id"
+  product |o--o{ party_interaction_item : "product_id"
+  product |o--o{ trouble_ticket_related_entity : "product_id"
+  trouble_ticket |o--o{ party_interaction_item : "trouble_ticket_id"
+  trouble_ticket ||--o{ trouble_ticket_note : "ticket_id"
+  trouble_ticket ||--o{ trouble_ticket_related_entity : "ticket_id"
+  trouble_ticket ||--o{ trouble_ticket_status_change : "ticket_id"
+```
+
+Tables from other areas are shown with their key only: [`customer`](customer.md), [`billing_account`](billing_account.md), [`product`](product.md).
+
 ## Application users and sessions (ours)
 
 ```mermaid
@@ -1716,6 +1865,7 @@ TMF-derived enums are verbatim from `spec/` (camelCase included) and locked by `
 | `product_status_type` | `created`, `pendingActive`, `cancelled`, `active`, `pendingTerminate`, `terminated`, `suspended`, `aborted` | [`product.status`](product.md), [`product_order_item.product_status`](product_order_item.md), [`product_status_change.status`](product_status_change.md) |
 | `recurring_charge_period_type` | `monthly` | - |
 | `resource_administrative_state_type` | `locked`, `unlocked`, `shuttingDown` | [`subscriber_number.administrative_state`](subscriber_number.md) |
+| `trouble_ticket_status_type` | `acknowledged`, `rejected`, `pending`, `held`, `inProgress`, `cancelled`, `closed`, `resolved` | [`trouble_ticket.status`](trouble_ticket.md), [`trouble_ticket_status_change.status`](trouble_ticket_status_change.md) |
 | `worker_request_kind` | `catchUp`, `retry` | [`worker_request.kind`](worker_request.md) |
 
 Every table except `billing_run_account` has the audit columns `id` (uuid, `gen_random_uuid()`), `created_at` and `updated_at` (database `now()`; a `BEFORE UPDATE` trigger calling `set_updated_at()` maintains `updated_at`). The extension `btree_gist` backs the exclusion constraints.
