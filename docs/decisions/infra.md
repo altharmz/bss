@@ -549,6 +549,39 @@ than it protects.
 - **Tests:** `scripts/test_smoke_retry.py` (the helper, with a fake request) and
   `RetryTests` in `scripts/test_mcp_oauth_smoke.py`.
 
+### What stalls (2026-11-15, #261)
+
+Measured from the workstation with **no deploy running**, replaying the MCP smoke's 17
+requests (one new connection each, 15 s timeout):
+
+| Path to `bss2811.duckdns.org:443` | Timed out |
+| --- | --- |
+| via the local proxy, 3 runs of the sequence | 9 of 51 |
+| via the local proxy, `GET /MCP` only | 1 of 51 |
+| via the local proxy, tunnel to the address instead of the name | 9 of 51 |
+| direct (`--noproxy '*'`), 3 runs of the sequence | 0 of 51 |
+
+- **Not the deploy.** The stall needs no restart and no load on the VPS; the smokes only
+  met it during deploys because that is when they run.
+- **Not `/MCP`.** The stalled requests were spread over the whole sequence, GET and POST.
+- **Not the proxy's listener and not the proxy as such.** 120 of 120 bare TCP connects to
+  `127.0.0.1:10808` took under 6 ms, and 40 of 40 requests through it to an unrelated site
+  passed. Every stall is in the tunnel set-up (`CONNECT`): curl exit 28, no TLS started.
+- **Not name resolution.** 60 of 60 local lookups were fast, and the tunnel stalls as often
+  when the proxy is given the address.
+- **So:** it is the proxy's own outbound connection to the VPS address on 443 that
+  sometimes gets no answer; a direct connection through the host's SNI router does not.
+  Stalls come in bursts (9 of 51, then 1 of 51 a few minutes later).
+- **Not measured:** whether port `8445` through the proxy stalls too, and where the proxy
+  exits (if it exits on this same VPS, the request loops back to the host's own public
+  address). Both mean probing the VPN, which is the human's.
+- **What the retries of #257 buy:** at the usual rate (1 in 51) three attempts make a
+  failed smoke negligible. In a burst (9 in 51, about 1 in 6) one request still loses all
+  three attempts about 1 time in 180, so a 17-request smoke fails roughly 1 time in 10 -
+  more if the stalls cluster. Not changed here: running the public smokes without the
+  proxy would remove the stall, but whether the workstation may bypass it is the human's
+  call.
+
 ## Local load-test stack (2026-11-09, #289)
 
 The load-test programme (#281-#289) runs on the workstation; the human dropped the
