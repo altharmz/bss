@@ -12,7 +12,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from task_git import hooks, push, require, require_no_git_overrides
+from task_git import hooks, push, require, require_no_git_overrides, shared_paths
 from task_quality import context, query, review
 from task_runtime import InvalidRuntime, diagnostic
 from task_telemetry import record
@@ -223,6 +223,8 @@ def next_command(status, reasons, number, head, human, approval_state):
     )
     if status == "ready":
         return merge
+    if status == "pending" and "base-behind" in reasons:
+        return "make sync-task, make push, then make check-pr WAIT=600"
     if status == "pending":
         return "make check-pr WAIT=600"
     if status == "failed":
@@ -253,6 +255,21 @@ def await_readiness(root, task, issue):
         if outcome["status"] != "pending" or remaining <= 0:
             return outcome, result
         time.sleep(min(pause, remaining))
+
+
+COMPARE_FILE_LIMIT = 300  # GitHub's compare lists at most this many files
+
+
+def incoming_shared(root, head, own):
+    """The paths the PR (`own`: its complete file list) and the master commits it lacks
+    both change. A truncated incoming list counts as shared: unknown is never fine."""
+    files = gh(root, "api", f"repos/{REPOSITORY}/compare/{head}...{BASE}")["files"]
+    require(isinstance(files, list), "invalid base comparison")
+    if len(files) >= COMPARE_FILE_LIMIT:
+        return ["(more files than GitHub lists)"]
+    incoming = [entry["filename"] for entry in files]
+    incoming += [entry["previous_filename"] for entry in files if "previous_filename" in entry]
+    return shared_paths(own, incoming)
 
 
 def readiness(root, task, issue, approval=None):
@@ -299,6 +316,8 @@ def readiness(root, task, issue, approval=None):
     comparison = gh(root, "api", f"repos/{REPOSITORY}/compare/{BASE}...{head}")
     behind = comparison["behind_by"]
     require(type(behind) is int and behind >= 0, "invalid base comparison")
+    # Behind master is fine when nothing is shared (task_git.shared_paths, #390).
+    shared = incoming_shared(root, head, names) if behind else []
     ci = ci_state(data["statusCheckRollup"])
     reasons = []
     if human_blocked:
@@ -311,7 +330,7 @@ def readiness(root, task, issue, approval=None):
         reasons.append("review-state-unknown")
     if data["isDraft"]:
         reasons.append("draft-pr")
-    if behind:
+    if shared:
         reasons.append("base-behind")
     if head != query(root, "rev-parse", "HEAD").decode().strip():
         reasons.append("head-mismatch")

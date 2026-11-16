@@ -194,6 +194,7 @@ class MergeTests(unittest.TestCase):
         run(self.repo, "git", "init", "-q", "-b", "master")
         self.write("app/main.py", "one\ntwo\nthree\n")
         self.write("docs/x.md", "docs\n")
+        self.write(".gitignore", ".testmon/\n")
         self.commit("base")
         run(self.repo, "git", "checkout", "-q", "-b", "task")
 
@@ -245,6 +246,41 @@ class MergeTests(unittest.TestCase):
         self.commit("task")
         self.assertEqual(self.merge(), 0)
         self.assertEqual(self.script("paths"), "app/worker/run.py")
+        self.assertEqual(self.script("plan"), "test-recorded")
+
+    def stamp(self):
+        """The whole suite ran to its end on the index as it is (make test-recorded)."""
+        self.write(".testmon/full-suite", self.script("digest") + "\n")
+
+    def test_a_merge_does_not_repeat_the_whole_suite_for_the_tasks_own_full_files(self):
+        self.write("app/worker/run.py", "worker\n")
+        self.commit("task")
+        self.stamp()  # the task commit's own whole-suite run
+        self.incoming()  # a migration comes in: the FULL digest changes
+        self.assertEqual(self.merge(), 0)
+        self.assertEqual(self.script("paths"), "app/worker/run.py")
+        self.assertEqual(self.script("plan"), "test-smoke\ntest-changed")
+
+    def test_a_full_file_both_sides_changed_runs_the_whole_suite(self):
+        self.write("spec/x.yaml", "a\nb\nc\nd\ne\n")
+        self.commit("task: the spec")
+        run(self.repo, "git", "checkout", "-q", "master")
+        run(self.repo, "git", *IDENTITY, "merge", "-q", "task")
+        run(self.repo, "git", "checkout", "-q", "task")
+        self.write("spec/x.yaml", "task\nb\nc\nd\ne\n")
+        self.commit("task: line one")
+        self.stamp()
+        self.incoming(**{"spec/x.yaml": "a\nb\nc\nd\nmaster\n"})  # merges cleanly
+        self.assertEqual(self.merge(), 0)
+        self.assertEqual(self.script("paths"), "spec/x.yaml")
+        self.assertEqual(self.script("plan"), "test-recorded")
+
+    def test_without_a_stamp_for_the_task_side_a_merge_runs_the_whole_suite(self):
+        self.write("app/worker/run.py", "worker\n")
+        self.commit("task")
+        self.write(".testmon/full-suite", "an older content\n")
+        self.incoming()
+        self.assertEqual(self.merge(), 0)
         self.assertEqual(self.script("plan"), "test-recorded")
 
     def test_a_conflict_resolved_by_hand_is_included(self):

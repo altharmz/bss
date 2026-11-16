@@ -20,7 +20,8 @@ writes to the stamp when pytest ran every test (docs/decisions/harness.md).
 `paths` prints the paths every choice of the hook is based on (#366): the staged paths, or
 on a merge commit the task's own side only. What merely comes in from `master` already
 passed the hook and CI there; `make test-changed` still runs the tests the merged code
-affects.
+affects. On a merge commit the task's own FULL files do not call for the whole suite again
+when it already ran on them and the merge left them as they were (merge_full_tested, #390).
 
 `suite TARGET` says whether the hook runs a harness or deploy suite (SUITES): `none` when
 no selected path is one of its trigger paths, `passed` when it already passed on exactly
@@ -158,10 +159,12 @@ def ci_check(path):
     )
 
 
-def plan(staged, digest, stamp):
+def plan(staged, digest, stamp, merge_tested=False):
     """The make invocations for the staged paths. `digest` names the FULL files as they
-    are now, `stamp` the content the whole suite last ran to its end on (or None)."""
-    if any(FULL.search(path) for path in staged) and stamp != digest:
+    are now, `stamp` the content the whole suite last ran to its end on (or None).
+    `merge_tested`: a merge commit whose own FULL files the suite already ran on
+    (merge_full_tested)."""
+    if any(FULL.search(path) for path in staged) and stamp != digest and not merge_tested:
         return ["test-recorded"]
     steps = ["test-smoke", "test-changed"] if any(backend(path) for path in staged) else []
     tests = data_tests(staged)
@@ -190,6 +193,35 @@ def index_digest(follows, extra=""):
 
 def full_digest():
     return index_digest(FULL.search)
+
+
+def tree_digest(revision, follows):
+    """index_digest of a commit's tree: the entries `ls-files -s` lists for it, same order."""
+    digest = hashlib.sha256(b"")
+    for entry in git("ls-tree", "-r", "-z", "--full-tree", revision).split("\0"):
+        if not entry:
+            continue
+        meta, path = entry.split("\t", 1)
+        mode, _, blob = meta.split()
+        if follows(path):
+            digest.update(f"{mode} {blob} 0\t{path}".encode() + b"\0")
+    return digest.hexdigest()
+
+
+def merge_full_tested(selected, stamp):
+    """On a merge commit, whether the task's own FULL files need no whole-suite run (#390).
+
+    The selection leaves out what only came in; a FULL path it keeps is either the task's
+    own, as its last commit has it, or one both sides changed (or a hand-resolved
+    conflict). The whole suite need not run again when every kept FULL path is unchanged
+    from HEAD and the suite ran to its end on HEAD's FULL content (the stamp): the incoming
+    FULL files passed the hook and CI on master. Before #390 the incoming files changed
+    the digest and every sync merge of a task with a FULL change ran the whole suite."""
+    if stamp is None or merge_head() is None:
+        return False
+    full = {path for path in selected if FULL.search(path)}
+    moved = set(git("diff", "--cached", "--name-only", "--no-renames", "-z", "HEAD").split("\0"))
+    return not full & moved and stamp == tree_digest("HEAD", FULL.search)
 
 
 def deploy_recipe(revision):
@@ -311,7 +343,9 @@ def main(argv):
         return 0
     root = git("rev-parse", "--show-toplevel").strip()
     if argv == ["plan"]:
-        print("\n".join(plan(selected_paths(), full_digest(), read_stamp(root))))
+        selected, stamp = selected_paths(), read_stamp(root)
+        tested = merge_full_tested(selected, stamp)
+        print("\n".join(plan(selected, full_digest(), stamp, tested)))
         return 0
     if argv == ["suites"]:
         suites = harness_suites(selected_paths(), root)

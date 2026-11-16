@@ -339,6 +339,37 @@ tests the merged code affects, so a clash between the two sides is still caught.
 suite runs on a merge only when the task's own side touched a `FULL` path. The log lists
 the real staged files and a line `selection: merge with <commit>, N incoming paths left out`.
 
+**Fewer whole-suite runs and syncs for a merge** (2026-11-16, #390). Delivering #198 ran
+the whole suite three times, about 10 minutes each: the feature commit and two sync merges.
+Its own side kept `spec/internal/bss-internal.oas.yaml` (a `FULL` path), and the stamp
+check compared the digest of *every* `FULL` file, so a migration or spec coming in from
+`master` meant a full run again. The second sync merged cleanly and was due only because
+`master` moved during the first one's hook. Two rules now:
+
+- **A merge does not repeat the whole suite for the task's own `FULL` files**
+  (`merge_full_tested` in `scripts/hook_selection.py`). It is skipped when every `FULL` path
+  the merge selects still has `HEAD`'s content and the stamp equals the digest of `HEAD`'s
+  `FULL` files (`tree_digest`): the whole suite already ran on them, and the incoming ones
+  passed on `master`. The plan is then the usual smoke plus affected. A `FULL` file both
+  sides changed, or resolved by hand, differs from `HEAD`: that combination never ran, so the
+  whole suite does. In #198 both syncs were that case (`spec/internal` changed on both
+  sides), so the rule would not have saved them; it saves the common case of a task with its
+  own migration or spec while `master` brings in others.
+- **Behind `master` with nothing shared needs no sync** (`shared_paths` in
+  `scripts/task_git.py`). `make push`/`create-pr` and `check-pr`/`merge-task` accept a task
+  that lacks `master` commits when no path is changed on both sides since the fork, and no
+  migration is added on each side (two migrations on one parent are two Alembic heads,
+  whatever their names). Renames count on both names. Anything shared keeps `base-behind`,
+  and its `next_command` is `make sync-task, make push, then make check-pr WAIT=600`.
+  `check-pr` reads the incoming side from GitHub's compare (`head...master`); a list at
+  GitHub's 300-file cap counts as shared. GitHub still refuses a conflict
+  (`mergeable`), and a branch rule that wants an up-to-date branch shows as
+  `merge-state-behind`.
+
+The cost: the squash commit of a behind PR has a tree no local hook ran on. What came in
+passed the hook and CI on `master`, the two sides share no file, and the nightly full run on
+`master` is the backstop for a semantic clash between unrelated files.
+
 **A script suite is not repeated on the same content** (2026-11-15, #366).
 `make runtime-check` (about 85 s) ran four times in #309. After either script suite passes
 in the hook, the hook writes a digest of the index entries (mode, blob, path) of that
@@ -572,7 +603,8 @@ checks (`web-lint`, `web-test`, `web-e2e`) are not in CI. Branch protection is t
 **No run on a push to `master`** (2026-11-15, #366). `make merge-task` merges only a green
 pull request that is not behind `master` (`base-behind`, `scripts/test_task_finish.py`), and
 the repository squash-merges, so the commit that lands on `master` has exactly the tree the
-PR's run tested. The push run tested it a second time: 84 of 185 runs in 30 days, on a Free
+PR's run tested. Since #390 a PR that is behind but shares no path with what it lacks also
+merges (see *Fewer whole-suite runs and syncs for a merge*); the nightly run covers that tree. The push run tested it a second time: 84 of 185 runs in 30 days, on a Free
 plan of 2,000 minutes a month of which roughly 1,000 to 1,400 were used. The Actions layer
 cache for the dev image is now written on `master` by the nightly run; a PR run reads its
 own branch's cache and `master`'s. Moving the test gate into CI or running the full suite
