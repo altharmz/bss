@@ -291,6 +291,8 @@ paths:
         account name (case-insensitive), a subscriber number on a line today, or a short id
         (a prefix of the account or customer id; BA- optional); a full uuid is the account
         (#314). activeProducts and customerAccounts are computed for the page.
+        serviceAddress=missing keeps the prepaid accounts with a live line (not terminated,
+        cancelled or aborted) and no service address (#207).
       parameters:
         - {$ref: '#/components/parameters/Offset'}
         - {$ref: '#/components/parameters/Limit'}
@@ -303,6 +305,9 @@ paths:
         - name: ratingType
           in: query
           schema: {type: string, enum: [prepaid, postpaid]}
+        - name: serviceAddress
+          in: query
+          schema: {type: string, enum: [missing]}
       responses:
         '200':
           description: OK
@@ -2065,7 +2070,7 @@ components:
           items:
             type: object
             additionalProperties: false
-            required: [authorizedAt, period, kind, amount, tax, fundedBy, bill]
+            required: [authorizedAt, period, kind, amount, tax, appliedTax, fundedBy, bill]
             properties:
               authorizedAt: {type: string, format: date-time}
               period:
@@ -2078,6 +2083,20 @@ components:
               kind: {type: string, enum: [purchase, renewal, offeringChange]}
               amount: {allOf: [{$ref: '#/components/schemas/Money'}], description: Tax included.}
               tax: {$ref: '#/components/schemas/Money'}
+              appliedTax:
+                description: >-
+                  The charge's tax lines, as its TMF678 appliedTax (#207): the tax engine's
+                  lines carry a jurisdiction; a fixed fee has taxRate 0.
+                type: array
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [taxCategory, taxRate, taxAmount]
+                  properties:
+                    taxCategory: {type: string}
+                    taxRate: {type: number}
+                    taxAmount: {$ref: '#/components/schemas/Money'}
+                    jurisdiction: {type: string}
               fundedBy: {type: string, enum: [balance, card]}
               bill: {$ref: '#/components/schemas/NullableLink'}
     Charge:

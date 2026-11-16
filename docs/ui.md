@@ -125,6 +125,8 @@ active. Negative balance N stays at the right. The page table shows Name, copyab
 account StatusPill, Mode, Products, Cycle day (— for prepaid), and Balance plus the currency when all loaded accounts share one, otherwise Balance.
 Each amount shows its own account currency. Over limit appears strictly below the negative credit limit. Query-aware
 no-results names the active Status and Mode. A row opens the card; reads are unchanged.
+The **No service address** chip (`ui.subscribers.noServiceAddress`, #207) lists the prepaid
+accounts with live lines and no service address (`serviceAddress=missing`).
 API: `GET /tmf-api/accountManagement/v5/billingAccount` (all pages),
 `GET /tmf-api/productInventory/v5/product?status=active&fields=billingAccount` (all pages).
 
@@ -179,6 +181,21 @@ a postpaid account whose loaded products, charges, transactions and bills are al
 Edit form's **Financial account** select (`ui.subscriber.financialLink`, from
 `GET .../financialAccount?relatedParty.id=`) links or unlinks (`financialAccount` ref or `null` in
 the PATCH).
+
+### Service address (`ui.subscriber.serviceAddress`) - `screens/ServiceAddress.tsx`
+
+On the card's Account tab, for every account: the address lines or "—", **Set / Edit service
+address** (`ui.subscriber.serviceAddress.edit`, form `ui.subscriber.serviceAddress.form`:
+street, optional second line, city, state select, ZIP, country US read-only, Account PIN) and
+**Remove** (`ui.subscriber.serviceAddress.remove`, a confirmation). A prepaid account without
+one shows "No service address: new prepaid lines are refused and charges are taxed at the
+flat rate" in the header (`ui.subscriber.serviceAddress.missing`) with a link to the dialog.
+Each write is `PATCH .../billingAccount/{id}` `{contact: [...]}` with the whole contact array
+(the serviceAddress entry replaced, added or dropped); a 422 shows at the named input; the PIN
+goes in `X-Account-Pin` only when typed. After a `serviceAddressRequired` refusal Add product
+offers **Set service address…** (`ui.addProduct.serviceAddress`). Tax lines of a charge
+(`ui.bills.rateDetail.taxLines`) show in the rate detail and under each renewal history row.
+Decision: [frontend.md](decisions/frontend.md#service-address-and-tax-lines-2026-11-15-issue-207).
 
 ### Usage tab (`ui.subscriber.usage`) - `screens/UsageTab.tsx`
 

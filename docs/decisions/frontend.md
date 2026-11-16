@@ -646,6 +646,34 @@ matching the server's 409s; it decides nothing else. The message sender is the c
 `bss admin` (TMF681 requires a sender). A new `message` status kind maps TMF681 states to existing pill families. No backend
 change.
 
+## Service address and tax lines (2026-11-15, issue #207)
+
+The UI half of #184 ([taxes.md](taxes.md)).
+
+- **Service address** on the subscriber card's Account tab (`ServiceAddress.tsx`,
+  `api/serviceAddress.ts`), for every account; a prepaid account without one also shows a
+  warning in the header with a link to the dialog. Set, change and remove send
+  `PATCH billingAccount/{id}` with the account's **whole `contact` array** as loaded
+  (merge-patch replaces an array): the serviceAddress entry is replaced in place (its other
+  attributes kept), added at the end, or dropped; every other contact goes back unchanged.
+  Country is fixed to US; the state is a select of the codes the API accepts. A 422 names
+  `contact.N.contactMedium.M: <field> ...`; the field's problem shows at its input and the
+  footer says "Correct the marked fields." (a refusal, never "unsure"). `AccountPinField` is
+  always offered: the server alone knows whether the customer is protected.
+- **Tax lines** (`TaxLines.tsx`): the rate detail dialog and each renewal history row list
+  the charge's `appliedTax` (category label, jurisdiction, rate or "—" for a fixed fee,
+  amount through the money helpers). The renewal history entry gained `appliedTax`
+  (internal API, read from the charge's ABR in the same query), so no request per row.
+- **No service address** chip on Subscribers sends `serviceAddress=missing` (no new
+  endpoint; the MCP tool has the same parameter, so parity needs no allowlist line).
+- **Refusal:** `serviceAddressRequired` reads "The billing account needs a service address
+  before a prepaid line can be activated."; Add product then offers **Set service
+  address…**, which closes it and opens the card's dialog.
+- Tests: `SubscriberCard.serviceAddress.test.tsx`, `Subscribers.test.tsx`,
+  `GlobalBills.test.tsx` (rate detail), `SubscriberCard.balance.test.tsx` (renewal history);
+  `tests/test_ui_requests.py::test_service_address_writes_as_the_ui_sends_them`,
+  `tests/test_subscriber_search.py`, `tests/test_tax_engine.py`.
+
 ## Frontend conventions
 
 The admin UI (stage 5) lives in `frontend/`: Vite + React + TypeScript, built to static

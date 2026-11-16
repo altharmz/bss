@@ -46,6 +46,12 @@ import {
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 import { AddProductModal } from './AddProduct';
+import {
+  MissingServiceAddress,
+  RemoveServiceAddressDialog,
+  ServiceAddressDialog,
+  ServiceAddressPanel,
+} from './ServiceAddress';
 import { NumberModal } from './ProductNumber';
 import { TransferPinDialog } from './TransferPin';
 import { DeviceDialog } from './ProductDevice';
@@ -261,6 +267,7 @@ function Card({
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [addingAccount, setAddingAccount] = useState(false);
+  const [addressDialog, setAddressDialog] = useState<'edit' | 'remove' | null>(null);
   const customerStatus = useResource(`customer:${account.customerId}:${version}`, (signal) =>
     loadCustomerStatus(account.customerId, signal),
   );
@@ -448,6 +455,9 @@ function Card({
           </Link>
           {account.ratingType === 'prepaid' && <span>Charged daily at {context.billingRunAt}</span>}
         </div>
+        {account.ratingType === 'prepaid' && account.serviceAddress === null && (
+          <MissingServiceAddress onEdit={() => setAddressDialog('edit')} />
+        )}
       </header>
       <SubscriberMoneyStrip
         account={account}
@@ -525,6 +535,11 @@ function Card({
             today={context.businessDate}
             settlement={settlement.status === 'ok' ? settlement.data : null}
             onChanged={reload}
+          />
+          <ServiceAddressPanel
+            account={account}
+            onEdit={() => setAddressDialog('edit')}
+            onRemove={() => setAddressDialog('remove')}
           />
           <PaymentMethodsPanel account={account} version={version} onChanged={reload} />
         </>,
@@ -935,6 +950,28 @@ function Card({
           }}
         />
       )}
+      {addressDialog === 'edit' && (
+        <ServiceAddressDialog
+          account={account}
+          onClose={() => setAddressDialog(null)}
+          onDone={(message) => {
+            setAddressDialog(null);
+            toast(message);
+            reload();
+          }}
+        />
+      )}
+      {addressDialog === 'remove' && (
+        <RemoveServiceAddressDialog
+          account={account}
+          onClose={() => setAddressDialog(null)}
+          onDone={(message) => {
+            setAddressDialog(null);
+            toast(message);
+            reload();
+          }}
+        />
+      )}
       {adding && (
         <AddProductModal
           account={account}
@@ -948,6 +985,10 @@ function Card({
             setAdding(false);
             setMoneyAmount(amount);
             setMoney('topup');
+          }}
+          onServiceAddress={() => {
+            setAdding(false);
+            setAddressDialog('edit');
           }}
           onOrdered={(message, accepted) => {
             setAdding(false);

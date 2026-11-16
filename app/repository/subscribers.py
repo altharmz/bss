@@ -74,6 +74,7 @@ def search(
     rating_type: str | None,
     offset: int,
     limit: int,
+    service_address_missing: bool = False,
 ) -> tuple[list[Row], bool]:
     """Accounts oldest first, each joined to its customer's name. `q` matches by prefix: a
     customer or account name (case-insensitive), a subscriber number on a line today, or
@@ -82,7 +83,11 @@ def search(
 
     The filters compare the enum, not its text: as text they had no statistics and planned
     a full scan (#330). Without a search the page is cut from billing_account alone and
-    only its rows are joined to their customer; a search goes through `matching`."""
+    only its rows are joined to their customer; a search goes through `matching`.
+
+    `service_address_missing` keeps the prepaid accounts with a live line (not terminated,
+    cancelled or aborted) and no service address (#207): their new lines are refused and
+    their charges taxed at the flat rate (docs/decisions/taxes.md)."""
     conds = ["true"]
     params: dict[str, Any] = {"limit": limit + 1}
     if state is not None:
@@ -91,6 +96,12 @@ def search(
     if rating_type is not None:
         conds.append("a.rating_type = %(rating)s")
         params["rating"] = rating_type
+    if service_address_missing:
+        conds.append(
+            "a.rating_type = 'prepaid' AND a.service_address IS NULL AND EXISTS"
+            " (SELECT 1 FROM product p WHERE p.billing_account_id = a.id"
+            " AND p.status NOT IN ('terminated', 'cancelled', 'aborted'))"
+        )
     term = (q or "").strip()
     if not term:
         params["offset"] = offset
