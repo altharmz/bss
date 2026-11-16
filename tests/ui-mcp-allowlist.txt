@@ -53,3 +53,8 @@ get_trouble_ticket: the Cases tab and screen are the UI half of issue 199
 create_trouble_ticket: opening a case; the UI action is the UI half of issue 199
 patch_trouble_ticket: working a case; the UI action is the UI half of issue 199
 get_hub_ticket: the internal eventSubscription list covers every hub
+
+# Self-care logins (#195): the operator screen is #378's operator part.
+get_care_login: the operator self-care screen comes with issue 378
+invite_care_login: the operator self-care screen comes with issue 378
+disable_care_login: the operator self-care screen comes with issue 378

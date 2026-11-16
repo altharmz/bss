@@ -56,6 +56,7 @@ from app.api.trouble_ticket import TicketCreate, TicketPatch
 from app.api.usage import UsageCreate
 from app.events.types import BASES
 from app.internal.billing_runs import OUTCOMES, CatchUp
+from app.internal.care_logins import CareLoginInvite
 from app.internal.catalog import PriceChange
 from app.internal.network_commands import STATES as NETWORK_STATES
 from app.internal.payments import STATES as PAYMENT_STATES
@@ -101,6 +102,14 @@ AUTH_OPERATIONS = {
     ("GET", "/internal/v1/users"),
     ("POST", "/internal/v1/users"),
     ("PATCH", "/internal/v1/users/{username}"),
+    # customers' own sign-in and session (docs/decisions/self-care.md)
+    ("POST", "/self-care/v1/session"),
+    ("GET", "/self-care/v1/session"),
+    ("DELETE", "/self-care/v1/session"),
+    ("POST", "/self-care/v1/session/verify"),
+    ("POST", "/self-care/v1/password"),
+    ("POST", "/self-care/v1/password/reset"),
+    ("GET", "/self-care/v1/customer/{customer_id}"),
 }
 
 # Query shapes
@@ -718,6 +727,19 @@ OPERATIONS: dict[str, Op] = {
         body=TicketPatch,
     ),
     # --- internal ---
+    "get_care_login": Op(
+        "A customer's self-care login: email, status (invited, active, locked, disabled),"
+        " wrong passwords counted, lockedUntil and live sessions. 404 when it has none."
+    ),
+    "invite_care_login": Op(
+        "Invite a customer to self-care with an email: creates the login (or restarts a"
+        " disabled or never-activated one) and emails a link code to set the password. 409"
+        " while self-care is disabled, the customer has an active login or the email is taken.",
+        body=CareLoginInvite,
+    ),
+    "disable_care_login": Op(
+        "Disable a customer's self-care login: no more sign-ins, its sessions end at once."
+    ),
     "get_context": Op(
         "Business date, time zone, currency, billing run time, payment term, and the"
         " operator (your principal)."

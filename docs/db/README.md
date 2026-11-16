@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0080**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0081**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -89,6 +89,9 @@ PostgreSQL schema at Alembic head **0080**, read from `pg_catalog` of a throwawa
 | [`trouble_ticket_related_entity`](trouble_ticket_related_entity.md) | care | What a case is about (TMF621 relatedEntity): a product (the line), a billing account, a party interaction or an audit log entry. |
 | [`trouble_ticket_note`](trouble_ticket_note.md) | care | Notes of a case (TMF621 note): append-only, the author is the operator and the date the clock. |
 | [`trouble_ticket_status_change`](trouble_ticket_status_change.md) | care | Every status a case had (TMF621 statusChangeHistory), the first being acknowledged: append-only. |
+| [`customer_login`](customer_login.md) | selfcare | The self-care login of a customer (at most one): email, password and the lockout. Never an app_user: it reaches only /self-care/v1 and only its own customer. |
+| [`customer_session`](customer_session.md) | selfcare | A signed-in self-care session (cookie bss_care_session). Only the SHA-256 of the random token is stored. |
+| [`customer_login_code`](customer_login_code.md) | selfcare | One-time codes sent by email: a 6-digit sign-in code (10 minutes, 5 attempts) or a link code that sets a password (verify_email 24 hours, reset_password 1 hour). Only hashes are stored; a new code of a purpose ends the older ones. |
 | [`app_user`](app_user.md) | users | Application identity: admin or user (UI), mcp (MCP login only); disabled, never deleted. |
 | [`app_session`](app_session.md) | users | Revocable sessions; SHA-256 tokens only, never raw cookies. |
 | [`app_user_audit`](app_user_audit.md) | users | Security changes only: operator, target, action and injected clock; no secrets. |
@@ -205,6 +208,11 @@ flowchart LR
     trouble_ticket_note[trouble_ticket_note]
     trouble_ticket_status_change[trouble_ticket_status_change]
   end
+  subgraph area_selfcare["Customer self-care logins, sessions and codes (ours)"]
+    customer_login[customer_login]
+    customer_session[customer_session]
+    customer_login_code[customer_login_code]
+  end
   subgraph area_users["Application users and sessions (ours)"]
     app_user[app_user]
     app_session[app_session]
@@ -256,7 +264,10 @@ flowchart LR
   customer_bill_on_demand -->|"billing_account_id"| billing_account
   customer_bill_on_demand -->|"customer_bill_id"| customer_bill
   customer_bill_state_change -->|"customer_bill_id"| customer_bill
+  customer_login -->|"customer_id"| customer
+  customer_login_code -->|"customer_login_id"| customer_login
   customer_pin -->|"customer_id"| customer
+  customer_session -->|"customer_login_id"| customer_login
   event_delivery -->|"event_id"| event
   event_delivery -->|"subscription_id"| event_subscription
   financial_account -->|"party_id"| party
@@ -1779,6 +1790,51 @@ erDiagram
 ```
 
 Tables from other areas are shown with their key only: [`customer`](customer.md), [`billing_account`](billing_account.md), [`product`](product.md).
+
+## Customer self-care logins, sessions and codes (ours)
+
+```mermaid
+erDiagram
+  customer_login {
+    uuid id PK
+    uuid customer_id FK
+    text email
+    text password_hash
+    timestamptz email_verified_at
+    timestamptz disabled_at
+    integer failed_attempts
+    timestamptz locked_until
+    text created_by
+    timestamptz created_at
+    timestamptz updated_at
+  }
+  customer_session {
+    text token_hash PK
+    uuid customer_login_id FK
+    timestamptz created_at
+    timestamptz last_seen_at
+    timestamptz expires_at
+    timestamptz revoked_at
+  }
+  customer_login_code {
+    uuid id PK
+    uuid customer_login_id FK
+    text purpose
+    text code_hash
+    timestamptz created_at
+    timestamptz expires_at
+    timestamptz used_at
+    integer attempts
+  }
+  customer {
+    uuid id PK
+  }
+  customer ||--o{ customer_login : "customer_id"
+  customer_login ||--o{ customer_login_code : "customer_login_id"
+  customer_login ||--o{ customer_session : "customer_login_id"
+```
+
+Tables from other areas are shown with their key only: [`customer`](customer.md).
 
 ## Application users and sessions (ours)
 

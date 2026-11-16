@@ -18,6 +18,8 @@ SESSION_PATH = "/internal/v1/session"
 OPEN = {("GET", "/"), ("GET", "/healthz"), ("GET", "/billing-status")}
 OPEN |= {("POST", SESSION_PATH)}
 SESSION_ACTIONS = {SESSION_PATH, SESSION_PATH + "/password"}
+# Customer self-care: a separate session check (app/care/auth.py), 404 while it is off.
+CARE_PREFIX = "/self-care/"
 
 
 def digest(token: str) -> str:
@@ -73,6 +75,12 @@ def authenticate(request: Request, tx: Tx, clock: ClockDep) -> None:
         check_metrics_token(request)
         return
     path = request.url.path
+    if path.startswith(CARE_PREFIX):
+        # customers: their own cookie and table; nothing below applies (self-care.md)
+        from app.care import auth as care  # lazily: app.care imports app.internal.users
+
+        care.authenticate(request, tx, clock.now())
+        return
     supplied = request.headers.get("x-bss-service", "")
     if supplied:
         principal = request.headers.get("x-remote-user", "")

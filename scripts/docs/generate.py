@@ -146,6 +146,7 @@ APIS = (
         "TMF621",
         "v5",
     ),
+    Api("self-care", "Self-care API (customers)", "/self-care/v1", "SELF_CARE", "v1"),
     Api("service", "Service endpoints", "", None, "-"),
 )
 
@@ -204,6 +205,8 @@ HANDLERS = {
     "/internal/v1/context": "app/internal/context.py",
     "/internal/v1/session": "app/internal/users.py",
     "/internal/v1/users": "app/internal/users.py",
+    "/internal/v1/customer": "app/internal/care_logins.py",
+    "/self-care/v1": "app/care/routes.py",
     "/tmf-api/schema": "app/api/account.py",
     "/billing-status": "app/status.py",
     "/healthz": "app/main.py",
@@ -298,6 +301,7 @@ AREAS = {
         "trouble_ticket_note",
         "trouble_ticket_status_change",
     ),
+    "selfcare": ("customer_login", "customer_session", "customer_login_code"),
     "users": (
         "app_user",
         "app_session",
@@ -318,6 +322,7 @@ AREA_TITLES = {
     "notifications": "Customer notifications (TMF681)",
     "security": "Account security: PIN, line locks, audit log (ours)",
     "care": "Customer care: interaction notes and cases (TMF683, TMF621)",
+    "selfcare": "Customer self-care logins, sessions and codes (ours)",
     "users": "Application users and sessions (ours)",
 }
 SKIP_TABLES = {"alembic_version"}

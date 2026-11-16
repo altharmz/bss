@@ -11,6 +11,9 @@ from app.repository._sql import Row, fetch_all, fetch_one, jsonb, returning
 
 # care work (docs/decisions/care.md): logged with the rest, never a customer alert
 CARE_ACTIONS = ("interaction_logged", "ticket_opened", "ticket_status_changed", "care_note_added")
+# a customer's own self-care sign-in (docs/decisions/self-care.md): logged, not alerted (the code
+# itself went to the login's email)
+SELF_CARE_ACTIONS = ("care_sign_in", "care_locked", "care_password_changed")
 ACTIONS = (
     "sim_swap",
     "number_change",
@@ -23,6 +26,7 @@ ACTIONS = (
     "lock_cleared",
     "pin_lockout",
     *CARE_ACTIONS,
+    *SELF_CARE_ACTIONS,
 )
 OUTCOMES = ("done", "refused")
 
@@ -227,10 +231,11 @@ def audit_page(
 
 def audit_since(conn: psycopg.Connection, since: datetime) -> list[Row]:
     """The entries the customer is told about: done actions, and a port-out that a lock
-    stopped. Care work (interactions, cases, notes) is no security event: never an alert."""
+    stopped. Care work (interactions, cases, notes) and a customer's own self-care sign-in are
+    no alert."""
     return fetch_all(
         conn,
         "SELECT * FROM account_audit WHERE at >= %s AND action <> ALL(%s) AND (outcome = 'done'"
         " OR (action = 'port_out' AND outcome = 'refused')) ORDER BY at, seq",
-        (since, list(CARE_ACTIONS)),
+        (since, [*CARE_ACTIONS, *SELF_CARE_ACTIONS]),
     )
