@@ -1,0 +1,217 @@
+openapi: 3.0.3
+info:
+  title: BSS self-care API (customers)
+  version: 1.0.0
+  description: >-
+    Ours, not TMF: TMF defines no customer self-service API (docs/decisions/self-care.md).
+    Served by the app under /self-care/v1 only while BSS_SELF_CARE_ENABLED is on; off, every
+    path answers 404. A customer session (cookie bss_care_session, path /self-care/) reaches
+    only this API and only the signed-in customer's data: another customer's object is a 404,
+    never a 403. Writes need the header X-Bss-Request with value '1'. TMF Error bodies; every
+    response in the test suite is validated against this file (tests/apiclient.py). Schemas
+    are strict (additionalProperties: false).
+servers:
+  - url: /self-care/v1
+security:
+  - CareSession: []
+paths:
+  /session:
+    post:
+      summary: Sign in, step 1 - email and password.
+      description: >-
+        A right password emails a 6-digit code (valid 10 minutes, 5 attempts) to the login's
+        address. 401 for a wrong password and for an unknown, disabled or not yet activated
+        login alike; 10 wrong passwords in a row lock the login for 15 minutes (403
+        `loginLocked`, even with the right password). 429 with Retry-After from the sign-in
+        throttle; 503 `codeNotSent` when the email could not be sent.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email, password]
+              properties:
+                email: {type: string, maxLength: 254}
+                password: {type: string, maxLength: 1024}
+      responses:
+        '202':
+          description: Code sent
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CodeSent'}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+    get:
+      summary: The signed-in customer.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CareSession'}
+        '401': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+    delete:
+      summary: Sign out; the session ends at once.
+      responses:
+        '204': {description: Signed out}
+        '401': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /session/verify:
+    post:
+      summary: Sign in, step 2 - the emailed code opens a session.
+      description: >-
+        Sets the HttpOnly cookie bss_care_session (SameSite Strict, path /self-care/). The
+        session ends after BSS_CARE_SESSION_IDLE_SECONDS without a request (30 minutes) and at
+        BSS_CARE_SESSION_ABSOLUTE_SECONDS (12 hours). 401 `codeInvalid` for a wrong, used or
+        expired code; the fifth wrong code spends it.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email, code]
+              properties:
+                email: {type: string, maxLength: 254}
+                code: {type: string, maxLength: 16}
+      responses:
+        '200':
+          description: Signed in
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CareSession'}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+  /password:
+    post:
+      summary: Set the password with an emailed link code.
+      description: >-
+        The code of an invitation (24 hours) or of a reset (1 hour). The password is at least 12
+        characters and not the email. Every session of the login ends; sign in again. 401
+        `codeInvalid` for a wrong, used or expired code.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [code, newPassword]
+              properties:
+                code: {type: string, maxLength: 128}
+                newPassword: {type: string, maxLength: 1024}
+      responses:
+        '204': {description: Password set}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+  /password/reset:
+    post:
+      summary: Ask for a password reset code by email.
+      description: >-
+        204 for any email, known or not. An enabled login with a password gets a reset link
+        code (1 hour); one that never set a password gets a new invitation code (24 hours).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email]
+              properties:
+                email: {type: string, maxLength: 254}
+      responses:
+        '204': {description: Accepted}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+  /customer/{id}:
+    get:
+      summary: The signed-in customer's own record.
+      description: Any other customer's id answers 404, whether it exists or not.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CareCustomer'}
+        '401': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+components:
+  securitySchemes:
+    CareSession:
+      type: apiKey
+      in: cookie
+      name: bss_care_session
+      description: Writes also require X-Bss-Request with value '1'.
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+  schemas:
+    Error:
+      description: The TMF630 Error body, as on the TMF surface.
+      type: object
+      additionalProperties: false
+      required: ['@type', code, reason]  # as TMF630; the app always sends all five
+      properties:
+        '@type': {type: string, enum: [Error]}
+        code: {type: string}
+        reason: {type: string}
+        message: {type: string}
+        status: {type: string}
+    CodeSent:
+      type: object
+      additionalProperties: false
+      required: [codeExpiresAt]
+      properties:
+        codeExpiresAt: {type: string, format: date-time}
+    CareSession:
+      type: object
+      additionalProperties: false
+      required: [customer, email, expiresAt]
+      properties:
+        customer:
+          type: object
+          additionalProperties: false
+          required: [id, name]
+          properties:
+            id: {type: string, format: uuid}
+            name: {type: string, nullable: true}
+        email: {type: string}
+        expiresAt: {type: string, format: date-time}
+    CareCustomer:
+      type: object
+      additionalProperties: false
+      required: [id, name, status]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        status: {type: string}

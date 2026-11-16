@@ -111,6 +111,49 @@ def insert(
     )
 
 
+def record_sent(
+    conn: psycopg.Connection,
+    *,
+    uid: UUID,
+    event_type: str,
+    receiver_name: str | None,
+    receiver_email: str,
+    customer_id: UUID,
+    subject: str,
+    content: str,
+    ref: str | None,
+    error: str | None,
+    now: datetime,
+) -> Row:
+    """A security email the request sent itself (self-care codes, docs/decisions/self-care.md):
+    recorded after the send, `completed` or `failed`, never queued for the worker. `content` is
+    what the log may keep - the code masked."""
+    return _one(
+        conn,
+        "INSERT INTO notification_message (id, event_type, category, channel, template, state,"
+        " receiver_name, receiver_email, customer_id, subject, content, send_time,"
+        " send_time_complete, try_times, last_error, provider_ref, created_at)"
+        " VALUES (%s, %s, 'transactional', 'email', %s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s,"
+        " %s, %s) RETURNING *",
+        (
+            uid,
+            event_type,
+            f"{event_type}.email",
+            "failed" if error else "completed",
+            receiver_name,
+            receiver_email,
+            customer_id,
+            subject,
+            content,
+            now,
+            None if error else now,
+            error,
+            ref,
+            now,
+        ),
+    )
+
+
 def existing_events(conn: psycopg.Connection, dedupe_keys: list[str]) -> set[str]:
     """Which of the events have a message already, in one statement."""
     if not dedupe_keys:

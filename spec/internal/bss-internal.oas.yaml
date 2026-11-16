@@ -1443,6 +1443,73 @@ paths:
                 type: array
                 items: {$ref: '#/components/schemas/AuditEntry'}
         '400': {$ref: '#/components/responses/Error'}
+  /customer/{id}/careLogin:
+    get:
+      summary: The customer's self-care login (issue 195).
+      description: >-
+        Its email, status (invited, active, locked, disabled), the wrong passwords counted, until
+        when it is locked and how many sessions are live. 404 when the customer has none. No
+        password or code is ever returned.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CareLogin'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+    post:
+      summary: Invite the customer to self-care (issue 195).
+      description: >-
+        Creates the customer's login with the email, or starts a disabled or never-activated one
+        again, and emails a link code (24 hours) with which the customer sets a password
+        (`POST /self-care/v1/password`). 409 while self-care is disabled
+        (BSS_SELF_CARE_ENABLED), while the customer has an active login, or when another login
+        has the email; 503 when the email could not be sent (invite again).
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email]
+              properties:
+                '@type': {type: string}
+                '@baseType': {type: string}
+                '@schemaLocation': {type: string}
+                email: {type: string, maxLength: 254, pattern: '^[^@\s]+@[^@\s]+$'}
+      responses:
+        '201':
+          description: Invited
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CareLogin'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+    delete:
+      summary: Disable the customer's self-care login (issue 195).
+      description: >-
+        No more sign-ins; its live sessions and open codes end at once. The login is kept
+        (disabled, never deleted); inviting the customer again starts it afresh. Works while
+        self-care is disabled too.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      responses:
+        '200':
+          description: Disabled
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CareLogin'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
 components:
   securitySchemes:
     AppSession:
@@ -2404,6 +2471,22 @@ components:
         reason: {type: string, nullable: true}
         failedAttempts: {type: integer, minimum: 0}
         lockedUntil: {type: string, format: date-time, nullable: true}
+    CareLogin:
+      type: object
+      additionalProperties: false
+      required: [customer, email, status, emailVerifiedAt, lockedUntil, failedAttempts, disabledAt, activeSessions, createdBy, createdAt, updatedAt]
+      properties:
+        customer: *customerRef
+        email: {type: string}
+        status: {type: string, enum: [invited, active, locked, disabled]}
+        emailVerifiedAt: {type: string, format: date-time, nullable: true}
+        lockedUntil: {type: string, format: date-time, nullable: true}
+        failedAttempts: {type: integer, minimum: 0}
+        disabledAt: {type: string, format: date-time, nullable: true}
+        activeSessions: {type: integer, minimum: 0}
+        createdBy: {type: string}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
     LineLock:
       type: object
       additionalProperties: false
@@ -2436,10 +2519,10 @@ components:
         product: *optionalRef
         action:
           type: string
-          enum: [sim_swap, number_change, number_transfer_pin, contact_change, port_out, pin_set, pin_reset, lock_set, lock_cleared, pin_lockout, interaction_logged, ticket_opened, ticket_status_changed, care_note_added]
+          enum: [sim_swap, number_change, number_transfer_pin, contact_change, port_out, pin_set, pin_reset, lock_set, lock_cleared, pin_lockout, interaction_logged, ticket_opened, ticket_status_changed, care_note_added, care_sign_in, care_locked, care_password_changed]
         outcome: {type: string, enum: [done, refused]}
         reason: {type: string, nullable: true}
-        verification: {type: string, enum: [pin, notRequired, none]}
+        verification: {type: string, enum: [pin, notRequired, none, password+code, code]}
         detail: {type: object}
     KpiReport:
       type: object

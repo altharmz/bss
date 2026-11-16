@@ -45,6 +45,8 @@ SPEC_FILES = {
     "TMF678": "TMF678-CustomerBill-v5.0.0.oas.yaml",
     # ours: the internal API for the admin UI (not vendored, not TMF)
     "INTERNAL": "internal/bss-internal.oas.yaml",
+    # ours: the customers' self-care API (docs/decisions/self-care.md)
+    "SELF_CARE": "self-care/bss-self-care.oas.yaml",
 }
 
 
@@ -144,3 +146,10 @@ def balance_history_errors(kind: str, instance: Any) -> list[str]:
 def declared_statuses(api: str, path: str, method: str) -> set[str]:
     """Status codes the spec declares for an operation, e.g. ('/productOffering', 'get')."""
     return {str(code) for code in spec(api)["paths"][path][method]["responses"]}
+
+
+def response_schema(api: str, path: str, method: str, status: int) -> str | None:
+    """The schema name the spec gives a JSON response, e.g. 'CareSession'; None without one."""
+    response = spec(api)["paths"][path][method]["responses"].get(str(status), {})
+    ref = response.get("content", {}).get("application/json", {}).get("schema", {}).get("$ref")
+    return None if ref is None else ref.rsplit("/", 1)[-1]

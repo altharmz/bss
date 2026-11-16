@@ -128,6 +128,25 @@ class Settings(BaseSettings):
         le=1440,
         validation_alias=AliasChoices("BSS_PIN_LOCKOUT_MINUTES", "pin_lockout_minutes"),
     )
+    # Customer self-care (docs/decisions/self-care.md): off, every /self-care/v1 route answers
+    # 404 and no login can be invited. Exposing it in production is the human's decision. A
+    # customer session ends after the idle time and at the absolute lifetime (seconds).
+    self_care_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("BSS_SELF_CARE_ENABLED", "self_care_enabled"),
+    )
+    care_session_idle_seconds: int = Field(
+        default=30 * 60,
+        ge=60,
+        validation_alias=AliasChoices("BSS_CARE_SESSION_IDLE_SECONDS", "care_session_idle_seconds"),
+    )
+    care_session_absolute_seconds: int = Field(
+        default=12 * 3600,
+        ge=60,
+        validation_alias=AliasChoices(
+            "BSS_CARE_SESSION_ABSOLUTE_SECONDS", "care_session_absolute_seconds"
+        ),
+    )
     # Separate credentials: smoke can only read; MCP cannot access user/session APIs.
     bss_service_secret: str = ""
     bss_smoke_secret: str = ""

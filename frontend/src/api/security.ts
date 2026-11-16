@@ -31,12 +31,17 @@ export const AUDIT_ACTIONS: Record<AuditAction, string> = {
   ticket_opened: 'Case opened',
   ticket_status_changed: 'Case status change',
   care_note_added: 'Care note added',
+  care_sign_in: 'Self-care sign-in',
+  care_locked: 'Self-care login locked',
+  care_password_changed: 'Self-care password set',
 };
 
 export const VERIFICATION: Record<AuditEntry['verification'], string> = {
   pin: 'PIN',
   notRequired: 'Not required',
   none: 'None',
+  'password+code': 'Password and code',
+  code: 'Emailed code',
 };
 
 export function loadPin(customerId: string, signal: AbortSignal): Promise<PinStatus> {

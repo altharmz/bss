@@ -135,6 +135,19 @@ items:
   - {id: api.internal.users.list, area: api, stage: 5, method: GET, path: /internal/v1/users, title: "List users (admin)"}
   - {id: api.internal.users.create, area: api, stage: 5, method: POST, path: /internal/v1/users, title: "Create user (admin)"}
   - {id: api.internal.users.patch, area: api, stage: 5, method: PATCH, path: "/internal/v1/users/{username}", title: "Manage user (admin)"}
+  - {id: db.customer_login, area: db, stage: 5, table: customer_login, title: "Self-care login of a customer: email, password, lockout (#195)"}
+  - {id: db.customer_session, area: db, stage: 5, table: customer_session, title: "Revocable self-care customer sessions (#195)"}
+  - {id: db.customer_login_code, area: db, stage: 5, table: customer_login_code, title: "One-time self-care codes: sign-in, verify email, reset password (#195)"}
+  - {id: api.selfCare.session.create, area: api, stage: 5, method: POST, path: /self-care/v1/session, title: "Self-care sign-in step 1: password, code emailed"}
+  - {id: api.selfCare.session.verify, area: api, stage: 5, method: POST, path: /self-care/v1/session/verify, title: "Self-care sign-in step 2: the code opens a session"}
+  - {id: api.selfCare.session.get, area: api, stage: 5, method: GET, path: /self-care/v1/session, title: "Self-care: the signed-in customer"}
+  - {id: api.selfCare.session.delete, area: api, stage: 5, method: DELETE, path: /self-care/v1/session, title: "Self-care sign-out"}
+  - {id: api.selfCare.password.set, area: api, stage: 5, method: POST, path: /self-care/v1/password, title: "Self-care: set the password with an emailed link code"}
+  - {id: api.selfCare.password.reset, area: api, stage: 5, method: POST, path: /self-care/v1/password/reset, title: "Self-care: ask for a password reset code"}
+  - {id: api.selfCare.customer.get, area: api, stage: 5, method: GET, path: "/self-care/v1/customer/{customer_id}", title: "Self-care: the signed-in customer's own record (others 404)"}
+  - {id: api.internal.careLogin.get, area: api, stage: 5, method: GET, path: "/internal/v1/customer/{customer_id}/careLogin", title: "A customer's self-care login (operator)"}
+  - {id: api.internal.careLogin.invite, area: api, stage: 5, method: POST, path: "/internal/v1/customer/{customer_id}/careLogin", title: "Invite a customer to self-care (operator)"}
+  - {id: api.internal.careLogin.disable, area: api, stage: 5, method: DELETE, path: "/internal/v1/customer/{customer_id}/careLogin", title: "Disable a customer's self-care login (operator)"}
   - {id: db.financial_account, area: db, stage: 5, table: financial_account, title: "Financial accounts (TMF666)"}
   - {id: api.tmf666.financialAccount.list, area: api, stage: 5, method: GET, path: /tmf-api/accountManagement/v5/financialAccount, title: "List financial accounts"}
   - {id: api.tmf666.financialAccount.get, area: api, stage: 5, method: GET, path: "/tmf-api/accountManagement/v5/financialAccount/{account_id}", title: "Get a financial account"}

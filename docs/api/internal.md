@@ -4,7 +4,7 @@
 
 - Base path here: `/internal/v1`
 - Contract: [`spec/internal/bss-internal.oas.yaml`](../../spec/internal/bss-internal.oas.yaml) - BSS internal API (admin UI) version 1.0.0; the spec's server URL is `/internal/v1`
-- Operations exposed: 66
+- Operations exposed: 69
 
 
 ## Operations
@@ -26,6 +26,9 @@
 | GET | `/internal/v1/billingRun/{run_id}/accounts` | path: `run_id`; query: `offset`, `limit`, `status` | - | 200 `array of RunAccount` | [`app/internal/billing_runs.py`](../../app/internal/billing_runs.py) |
 | POST | `/internal/v1/billingRun/{run_id}/retry` | path: `run_id`; body: `application/json` | - | 202 `RetryQueued` | [`app/internal/billing_runs.py`](../../app/internal/billing_runs.py) |
 | GET | `/internal/v1/context` | - | - | 200 `Context` | [`app/internal/context.py`](../../app/internal/context.py) |
+| DELETE | `/internal/v1/customer/{customer_id}/careLogin` | path: `customer_id` | - | 200 `CareLogin` | [`app/internal/care_logins.py`](../../app/internal/care_logins.py) |
+| GET | `/internal/v1/customer/{customer_id}/careLogin` | path: `customer_id` | - | 200 `CareLogin` | [`app/internal/care_logins.py`](../../app/internal/care_logins.py) |
+| POST | `/internal/v1/customer/{customer_id}/careLogin` | path: `customer_id`; body: `application/json` | `object` | 201 `CareLogin` | [`app/internal/care_logins.py`](../../app/internal/care_logins.py) |
 | GET | `/internal/v1/customerBill/{bill_id}` | path: `bill_id` | - | 200 `BillDetail` | [`app/main.py`](../../app/main.py) |
 | GET | `/internal/v1/device` | query: `product.id` (required) | - | 200 `array of ProductDevice` | [`app/internal/devices.py`](../../app/internal/devices.py) |
 | GET | `/internal/v1/device/check` | query: `imei` (required) | - | 200 `DeviceCheck` | [`app/internal/devices.py`](../../app/internal/devices.py) |

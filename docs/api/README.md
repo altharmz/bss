@@ -15,16 +15,17 @@ One page per API, generated from `app.openapi()` (what the app really serves) an
 | [TMF676 Payment Management](tmf676-payment.md) | v4 | `/tmf-api/payment/v4` | 8 | [`spec/TMF676-Payment-v4.0.0.swagger.json`](../../spec/TMF676-Payment-v4.0.0.swagger.json) |
 | [TMF670 Payment Method Management](tmf670-payment-method.md) | v4 | `/tmf-api/paymentMethod/v4` | 7 | [`spec/TMF670-PaymentMethod-v4.0.0.swagger.json`](../../spec/TMF670-PaymentMethod-v4.0.0.swagger.json) |
 | [TMF678 Customer Bill Management](tmf678-customer-bill.md) | v5 | `/tmf-api/customerBillManagement/v5` | 12 | [`spec/TMF678-CustomerBill-v5.0.0.oas.yaml`](../../spec/TMF678-CustomerBill-v5.0.0.oas.yaml) |
-| [Internal API (admin UI)](internal.md) | v1 | `/internal/v1` | 66 | [`spec/internal/bss-internal.oas.yaml`](../../spec/internal/bss-internal.oas.yaml) |
+| [Internal API (admin UI)](internal.md) | v1 | `/internal/v1` | 69 | [`spec/internal/bss-internal.oas.yaml`](../../spec/internal/bss-internal.oas.yaml) |
 | [TMF639 Resource Inventory](tmf639-resource-inventory.md) | v5 | `/tmf-api/resourceInventory/v5` | 8 | [`spec/TMF639-Resource_Inventory_Management-v5.0.0.oas.yaml`](../../spec/TMF639-Resource_Inventory_Management-v5.0.0.oas.yaml) |
 | [TMF654 Prepay Balance Management](tmf654-prepay-balance.md) | v4 | `/tmf-api/prepayBalanceManagement/v4` | 28 | [`spec/TMF654-PrepayBalance-v4.0.0.swagger.json`](../../spec/TMF654-PrepayBalance-v4.0.0.swagger.json) |
 | [TMF635 Product Usage Management](tmf635-product-usage.md) | v5 | `/tmf-api/productUsageManagement/v5` | 3 | [`spec/TMF635-Product_Usage_Management-v5.0.0.oas.yaml`](../../spec/TMF635-Product_Usage_Management-v5.0.0.oas.yaml) |
 | [TMF681 Communication Management](tmf681-communication.md) | v4 | `/tmf-api/communicationManagement/v4` | 4 | [`spec/TMF681-Communication-v4.0.0.swagger.json`](../../spec/TMF681-Communication-v4.0.0.swagger.json) |
 | [TMF683 Party Interaction Management](tmf683-party-interaction.md) | v5 | `/tmf-api/partyInteractionManagement/v5` | 6 | [`spec/TMF683-Party_Interaction-v5.0.0.oas.yaml`](../../spec/TMF683-Party_Interaction-v5.0.0.oas.yaml) |
 | [TMF621 Trouble Ticket Management](tmf621-trouble-ticket.md) | v5 | `/tmf-api/troubleTicket/v5` | 7 | [`spec/TMF621-Trouble_Ticket-v5.0.1.oas.yaml`](../../spec/TMF621-Trouble_Ticket-v5.0.1.oas.yaml) |
+| [Self-care API (customers)](self-care.md) | v1 | `/self-care/v1` | 7 | [`spec/self-care/bss-self-care.oas.yaml`](../../spec/self-care/bss-self-care.oas.yaml) |
 | [Service endpoints](service.md) | - | - | 3 | - |
 
-262 operations in total.
+272 operations in total.
 
 ## Conventions
 

@@ -601,6 +601,7 @@ def get_arguments(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "get_individual": {"party_id": world["individual"]["id"]},
         "get_organization": {"party_id": world["organization"]["id"]},
         "get_customer": {"customer_id": world["customer"]["id"]},
+        "get_care_login": {"customer_id": world["customer"]["id"]},
         "get_account": {"account_id": acc},
         "get_financial_account": {"account_id": world["financial"]["id"]},
         "get_party_account": {"account_id": world["party_account"]["id"]},
@@ -651,8 +652,14 @@ def get_arguments(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return by_id
 
 
-def test_every_get_tool_answers_against_the_app(mcp, world):
+def test_every_get_tool_answers_against_the_app(mcp, world, db_conn):
     reader = mcp.token("reader", "read")
+    db_conn.execute(  # an invited self-care login (inviting needs BSS_SELF_CARE_ENABLED)
+        "INSERT INTO customer_login (id, customer_id, email, created_by, created_at, updated_at)"
+        " VALUES (%s, %s, 'mcp-reader@example.org', 'test', now(), now())",
+        (uuid4(), world["customer"]["id"]),
+    )
+    db_conn.commit()
     arguments = get_arguments(world)
     called = set()
     for name, tool in generated().items():
@@ -669,7 +676,7 @@ def test_every_get_tool_answers_against_the_app(mcp, world):
     assert payments["body"][0]["id"] == world["payment"]["id"]
 
 
-def test_every_write_tool_reaches_the_app(api, mcp, world):
+def test_every_write_tool_reaches_the_app(api, mcp, world, monkeypatch):
     """At least one successful write per resource - in fact every write tool."""
     writer = mcp.token("writer", "write")
     called: set[str] = set()
@@ -1086,6 +1093,16 @@ def test_every_write_tool_reaches_the_app(api, mcp, world):
         {"specification_id": cycle["id"], "body": {"description": "B2B"}},
     )
     call("delete_cycle_specification", {"specification_id": cycle["id"]}, expected=(204,))
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "self_care_enabled", True)
+    invited = call(
+        "invite_care_login",
+        {"customer_id": world["customer"]["id"], "body": {"email": "mcp-writer@example.org"}},
+        expected=(201,),
+    )
+    assert invited["status"] == "invited"
+    call("disable_care_login", {"customer_id": world["customer"]["id"]})
 
     assert called == {n for n, t in generated().items() if not t.read_only}
     history = api.get(f"/internal/v1/customerBill/{world['bill']['id']}").json()["history"]
