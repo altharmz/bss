@@ -17,10 +17,11 @@ import psycopg
 from psycopg.types.range import Range
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.billing import engine_tax, settlement
+from app.billing import engine_tax, multi_line, settlement
 from app.billing.core import midnight, price_at, tax_of
 from app.billing.engine_tax import quote_taxes
-from app.billing.model import AppliedTax, DateRange, Product
+from app.billing.model import AppliedTax, DateRange, Price, Product
+from app.billing.multi_line import DiscountQuote
 from app.events import emit
 from app.repository import balance_actions, billing, funding, orders, presentation, products
 from app.repository import prepaid_commands as commands
@@ -76,6 +77,8 @@ class IntervalQuote(BaseModel):
     length: int = Field(ge=1, le=1000, strict=True)
     tax_quote_id: str | None = None  # the tax engine's quote, committed when this is posted
     fees: list[FeeQuote] = []  # one-time fees charged with the first interval of a purchase
+    # the multi-line tier quoted (docs/decisions/prepaid.md); `amount` is already net of it
+    discount: DiscountQuote | None = None
 
     @property
     def gross(self) -> Decimal:
@@ -121,6 +124,24 @@ class OrderQuote(BaseModel):
         return self
 
 
+def net_of(
+    conn, account_id: UUID, currency: str, price: Price, day: date, tz: ZoneInfo, extra_lines=0
+) -> tuple[Decimal, DiscountQuote | None]:
+    """The recurring amount an interval of `price` starting on `day` charges, after the
+    multi-line discount of the account's line count then, and that discount."""
+    return multi_line.discounted(
+        conn,
+        account_id=account_id,
+        offering_id=price.offering_id,
+        currency=currency,
+        period=price.recurring_period,
+        amount=price.amount,
+        day=day,
+        tz=tz,
+        extra_lines=extra_lines,
+    )
+
+
 class RenewalRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     previous_interval_id: UUID
@@ -160,7 +181,8 @@ def _renewal_quote(conn, cmd, account, today, tz):
         account.currency,
         tz,
     )
-    taxes, tax_quote_id = quote_taxes(conn, account, account.id, price, price.amount, today, tz)
+    net, discount = net_of(conn, account.id, account.currency, price, today, tz)
+    taxes, tax_quote_id = quote_taxes(conn, account, account.id, price, net, today, tz)
     old = IntervalQuote.model_validate(previous["quote"])
     continuous = today == cmd["due_date"] and (old.unit, old.length) == (
         price.recurring_period,
@@ -171,7 +193,8 @@ def _renewal_quote(conn, cmd, account, today, tz):
         offering_id=price.offering_id,
         price_id=price.id,
         currency=account.currency,
-        amount=price.amount,
+        amount=net,
+        discount=discount,
         taxes=taxes,
         tax_quote_id=tax_quote_id,
         anchor=previous["anchor_date"] if continuous else today,
@@ -242,14 +265,16 @@ def _future_quotes(conn, request, account, today, tz, due_date):
             account.currency,
             tz,
         )
-        taxes, tax_quote_id = quote_taxes(conn, account, account.id, price, price.amount, today, tz)
+        net, discount = net_of(conn, account.id, account.currency, price, today, tz)
+        taxes, tax_quote_id = quote_taxes(conn, account, account.id, price, net, today, tz)
         quotes.append(
             IntervalQuote(
                 product_id=product_id,
                 offering_id=price.offering_id,
                 price_id=price.id,
                 currency=account.currency,
-                amount=price.amount,
+                amount=net,
+                discount=discount,
                 taxes=taxes,
                 tax_quote_id=tax_quote_id,
                 anchor=due_date,
@@ -448,6 +473,8 @@ def _post_purchase(
         applied_at=now,
         product_offering_id=quote.offering_id,
         taxes=tuple(AppliedTax(t.category, t.rate, t.amount, t.jurisdiction) for t in quote.taxes),
+        discount_price_id=None if quote.discount is None else quote.discount.price_id,
+        discount_amount=Decimal(0) if quote.discount is None else quote.discount.amount,
     )
     if quote.tax_quote_id is not None:
         engine_tax.commit(conn, abr, account.id, quote, now=now)

@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0081**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0082**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -229,6 +229,7 @@ flowchart LR
   applied_customer_billing_rate -->|"billing_account_id"| billing_account
   applied_customer_billing_rate -->|"billing_run_id"| billing_run
   applied_customer_billing_rate -->|"customer_bill_id, billing_account_id"| customer_bill
+  applied_customer_billing_rate -->|"discount_price_id"| product_offering_price
   applied_customer_billing_rate -->|"one_time_price_id"| product_offering_price
   applied_customer_billing_rate -->|"product_id, billing_account_id"| product
   applied_customer_billing_rate -->|"product_offering_id"| product_offering
@@ -547,6 +548,7 @@ erDiagram
     jsonb details
     text usage_kind
     bigint usage_block
+    integer alteration_lines
   }
   category {
     uuid id PK
@@ -926,6 +928,8 @@ erDiagram
     uuid one_time_price_id FK
     text charge_name
     uuid usage_command_id FK
+    uuid discount_price_id FK
+    numeric discount_amount
   }
   customer_bill {
     uuid id PK
@@ -1445,6 +1449,7 @@ erDiagram
   product ||--o{ usage_charge : "product_id"
   product ||--o{ usage_threshold : "product_id"
   product_offering |o--o{ applied_customer_billing_rate : "product_offering_id"
+  product_offering_price |o--o{ applied_customer_billing_rate : "discount_price_id"
   product_offering_price |o--o{ applied_customer_billing_rate : "one_time_price_id"
   product_offering_price |o--o{ usage_charge : "price_id"
   product_order |o--o{ prepaid_lifecycle_event : "product_order_id"

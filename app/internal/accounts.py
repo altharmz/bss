@@ -23,7 +23,7 @@ from app.billing import entitlement, lifecycle
 from app.billing.core import compute, cycle_period, price_at, product_charge_period
 from app.billing.engine_tax import TaxUnavailable, quote_taxes
 from app.billing.model import Account, BillingState, DateRange, MissingPrice, Price, Product
-from app.billing.prepaid import IntervalQuote, fee_quotes
+from app.billing.prepaid import IntervalQuote, fee_quotes, net_of
 from app.billing.termination import credit
 from app.config import settings
 from app.internal.context import no_query
@@ -226,8 +226,12 @@ def _prepaid_first_charge(
     interval. A start after today holds nothing at order time; the figures then show
     today's funds."""
     tz = ZoneInfo(settings.billing_tz)
+    # a new line counts itself (the purchase will); a changing line is already live
+    net, discount = net_of(
+        conn, row["id"], account.currency, price, start, tz, extra_lines=0 if changed else 1
+    )
     try:
-        taxes, tax_quote_id = quote_taxes(conn, account, row["id"], price, price.amount, start, tz)
+        taxes, tax_quote_id = quote_taxes(conn, account, row["id"], price, net, start, tz)
     except TaxUnavailable as error:
         raise TmfError(503, f"tax engine unavailable: {error}") from None
     quote = IntervalQuote(
@@ -235,7 +239,8 @@ def _prepaid_first_charge(
         offering_id=price.offering_id,
         price_id=price.id,
         currency=account.currency,
-        amount=price.amount,
+        amount=net,
+        discount=discount,
         taxes=taxes,
         tax_quote_id=tax_quote_id,
         anchor=start,
@@ -244,7 +249,7 @@ def _prepaid_first_charge(
         length=price.recurring_period_length,
     )
     period = quote.period()
-    required = price.amount + sum((t.amount for t in taxes), Decimal(0))
+    required = net + sum((t.amount for t in taxes), Decimal(0))
     snapshot = funding.load(conn, row["id"])
     available = max(Decimal(0), snapshot.spendable)
     shortfall = max(Decimal(0), required - available)
@@ -279,6 +284,16 @@ def _prepaid_first_charge(
             "shortfall": money(shortfall, currency),
             **({} if unused is None else {"credit": money(unused, currency)}),
             **({"fees": _fee_lines(fees, currency)} if fees else {}),
+            **(
+                {}
+                if discount is None
+                else {
+                    "discount": {
+                        "amount": money(discount.amount, currency),
+                        "productOfferingPrice": {"id": str(discount.price_id)},
+                    }
+                }
+            ),
         }
     )
 

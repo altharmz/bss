@@ -23,7 +23,7 @@ from zoneinfo import ZoneInfo
 from app.billing import entitlement
 from app.billing.engine_tax import TaxUnavailable, quote_taxes
 from app.billing.one_time import Charge, ChargeOrder
-from app.billing.prepaid import IntervalQuote, fee_quotes
+from app.billing.prepaid import IntervalQuote, fee_quotes, net_of
 from app.config import settings
 from app.events import emit
 from app.network import kind as offering_kind
@@ -293,11 +293,12 @@ def _fees(conn, core, offering_id, start, tz):
         raise TmfError(503, f"tax engine unavailable: {error}") from None
 
 
-def _taxes(conn, core, price, start, tz):
-    """The tax lines of a first interval, from the engine when the account has a service
-    address; an unavailable engine refuses the request (503) and nothing is held."""
+def _taxes(conn, core, price, start, tz, net):
+    """The tax lines of a first interval of `net` (after a multi-line discount), from the
+    engine when the account has a service address; an unavailable engine refuses the request
+    (503) and nothing is held."""
     try:
-        return quote_taxes(conn, core, core.id, price, price.amount, start, tz)
+        return quote_taxes(conn, core, core.id, price, net, start, tz)
     except TaxUnavailable as error:
         from app.api.errors import TmfError  # lazily: app.api imports this package
 
@@ -319,14 +320,17 @@ def prepare_changes(conn, request, account, quotes, start, now):
     out = []
     for item in items:
         price = prices[quotes[item.item_id]["id"]]
-        taxes, tax_quote_id = _taxes(conn, core, price, start, tz)
+        # the changing line is live on `start`: it counts itself
+        net, discount = net_of(conn, account["id"], account["currency"], price, start, tz)
+        taxes, tax_quote_id = _taxes(conn, core, price, start, tz, net)
         out.append(
             IntervalQuote(
                 product_id=item.product_id,
                 offering_id=item.product_offering_id,
                 price_id=price.id,
                 currency=account["currency"],
-                amount=price.amount,
+                amount=net,
+                discount=discount,
                 taxes=taxes,
                 tax_quote_id=tax_quote_id,
                 anchor=start,
@@ -585,13 +589,25 @@ def prepare(conn, request, account, quotes, start, now, *, future=False):
             accepted[item.item_id] = (new, None)
             continue
         price = prices[quotes[item.item_id]["id"]]
-        taxes, tax_quote_id = _taxes(conn, core, price, start, ZoneInfo(settings.billing_tz))
+        tz = ZoneInfo(settings.billing_tz)
+        # the lines of this order count with the account's live ones (prepaid.md)
+        net, discount = net_of(
+            conn,
+            account["id"],
+            account["currency"],
+            price,
+            start,
+            tz,
+            extra_lines=len(request.items),
+        )
+        taxes, tax_quote_id = _taxes(conn, core, price, start, tz, net)
         quote = IntervalQuote(
             product_id=new.id,
             offering_id=item.product_offering_id,
             price_id=price.id,
             currency=account["currency"],
-            amount=price.amount,
+            amount=net,
+            discount=discount,
             taxes=taxes,
             tax_quote_id=tax_quote_id,
             anchor=start,

@@ -217,6 +217,58 @@ product: a pay-as-you-go purchase UI is not part of this slice.
 **Deployment.** Migration `0057`; existing prepaid products are untouched (`grantless` false,
 their grants and paid-through dates stay; renewal by card applies from their next renewal).
 
+## Multi-line discounts (2026-11-16, issue #196)
+
+Slice 1 of multi-line prepaid (epic #182); pooled data is #379, the UI #380. Design approved on
+the issue (the human's delegation, decided following TMF). Migration `0082`.
+
+**A shared balance needs no work:** a prepaid account has one money balance and every line on
+it renews from it (P1, P2).
+
+**A tier is a TMF620 `discount` price of a plan offering** with `unitOfMeasure {amount: N,
+units: "lines"}`: `price` is the amount off per line and period, N (a whole number, 2 or more)
+the minimum number of live plan lines on the account, and `recurringChargePeriodType` the plan's
+(required). The stored column `product_offering_price.alteration_lines` holds N; tiers of an
+offering and currency may coexist but not overlap per N (the no-overlap exclusion takes N, a 409
+like any overlap). Refused (422): N below 2 or not whole, a tier without a period or with
+another period than the plan's recurring price, a tier on an add-on or pay-as-you-go offering
+(also turning a plan with tiers into one), and a discount of a plan offering whose unit is not
+`lines`. A discount **without** a unit of measure stays a record on any offering, as before
+(catalog.md). A tier's type and unit never change (PATCH: 422, 409): attach a new price.
+
+**Line count:** the account's plan products live on the quote's start date: `start_date` on or
+before it, no `termination_date` on or before it, not cancelled or aborted, in any offering.
+Grantless products (add-ons and pay-as-you-go lines) do not count; suspended lines do (they
+hold a number). A purchase counts the lines of its own order too, which do not exist yet when
+it is quoted, so the first-charge preview, the hold and the posted charge agree; one order of two
+lines prices both at the 2-line tier. The tier is the valid one (at the start date's midnight,
+in the account's currency, for the plan's period) with the largest N <= the count, on the
+plan's own offering (`app/billing/multi_line.py`).
+
+**When:** every interval quote - a purchase (immediate or future-dated, quoted at posting), a
+renewal, a mid-period offering change (the changing line counts itself). The quote is fixed for
+its period: a line added or ended changes the price from each line's next renewal; nothing is
+credited back.
+
+**Money (Decimal):** `IntervalQuote.discount` (price id, amount) and `IntervalQuote.amount` =
+recurring − discount, at least 0 (a discount never exceeds the price). Taxes are on the net, from
+the engine or the flat rate alike. The hold is the net with tax, `funded_interval.amount` is the
+net, so a termination credit refunds the net. The ABR's `amount` is the net and it keeps
+`discount_price_id` and `discount_amount` (0 without a tier, CHECK both or neither). TMF678 has no
+price alteration on a rate: the rate's `description` ends with "multi-line discount −$5.00
+(productOfferingPrice <id>)", and the bill document's line reads "Plan X (multi-line discount
+−$5.00)". `firstCharge` (prepaid) adds `discount {amount, productOfferingPrice}`; `price` stays the
+full price, `required` and `amount` are net. Quotes stored before this change have no discount
+and are read as such.
+
+**Postpaid** is unchanged: it charges recurring prices only.
+
+**Tests:** `tests/test_multi_line.py` - purchases and renewals of 1 to 4 lines with tiers 2 -> 5
+and 3 -> 10 (net and tax exact), no repricing of a running period, an ended line stops counting
+and is credited its net, the hold equals the posted charge, one order of two lines, the tax
+engine on the net, TMF678, the bill document and `firstCharge`, catalog validation and attach
+rules, a plain discount stays a record.
+
 ## Mid-period offering change (2026-11-04, issue #151)
 
 A prepaid modify item with `productOffering` may now request any date `D` with

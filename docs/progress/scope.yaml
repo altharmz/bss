@@ -724,6 +724,7 @@ items:
   - {id: worker.networkProvisioning, area: worker, stage: 5, title: "Prepaid order items send their network command and complete only when the network confirms"}
   - {id: worker.taxEngine, area: worker, stage: 5, title: "Prepaid charges are taxed by the tax engine for the account's service address; an unavailable engine retries and books nothing"}
   - {id: worker.paymentGateway, area: worker, stage: 5, title: "Card charges go to the payment gateway and the balance rises only when it confirms; automatic top-up below a threshold"}
+  - {id: worker.multiLineDiscounts, area: worker, stage: 5, title: "Multi-line discount tiers on a plan offering (discount price in lines): each plan line's purchase, renewal and offering change is quoted net of the tier for the account's live plan lines (#196)"}
   - {id: worker.prepaidPlans, area: worker, stage: 5, title: "Plan purchase with one-time fees, renewal from the balance or the card, add-on packs that end with the period, pay-as-you-go lines"}
   - {id: worker.signals, area: worker, stage: 4, title: "SIGTERM finishes the current account; SIGKILL leaves nothing half-written"}
   - {id: worker.billIssue, area: worker, stage: 5, title: "The run validates and issues the bills it writes (new -> validated -> sent; credit notes and zero bills settled)"}
