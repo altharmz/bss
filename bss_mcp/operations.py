@@ -39,6 +39,7 @@ from app.api.classification import CatalogCreate, CatalogPatch, CategoryCreate, 
 from app.api.communication import MessageCreate, MessagePatch
 from app.api.customer import CustomerCreate, CustomerPatch
 from app.api.hub import HUB_APIS, HubIn
+from app.api.interaction import InteractionCreate, InteractionPatch
 from app.api.inventory import ProductCreate, ProductPatch
 from app.api.on_demand import DemandCreate
 from app.api.ordering import CancelIn, OrderIn, OrderPatch
@@ -51,6 +52,7 @@ from app.api.reserve import ReserveCreate, ReservePatch
 from app.api.resource_inventory import ResourceCreate, ResourcePatch
 from app.api.topup import TopupCreate, TopupPatch
 from app.api.transfer import TransferCreate, TransferPatch
+from app.api.trouble_ticket import TicketCreate, TicketPatch
 from app.api.usage import UsageCreate
 from app.events.types import BASES
 from app.internal.billing_runs import OUTCOMES, CatchUp
@@ -124,6 +126,8 @@ FAMILIES = {
     "/tmf-api/prepayBalanceManagement/v4": "TMF654 Prepay Balance (v4)",
     "/tmf-api/productUsageManagement/v5": "TMF635 Product Usage",
     "/tmf-api/communicationManagement/v4": "TMF681 Communication (v4)",
+    "/tmf-api/partyInteractionManagement/v5": "TMF683 Party Interaction",
+    "/tmf-api/troubleTicket/v5": "TMF621 Trouble Ticket",
     "/tmf-api/productInventory/v5": "TMF637 Product Inventory",
     "/tmf-api/customerBillManagement/v5": "TMF678 Customer Bill",
     "/tmf-api/productOrderingManagement/v5": "TMF622 Product Ordering",
@@ -657,6 +661,62 @@ OPERATIONS: dict[str, Op] = {
     },
     "get_hub_customer": Op("One TMF629 event subscription.", query=FIELDS),
     "get_hub_resource": Op("One TMF639 event subscription.", query=FIELDS),
+    "get_hub_ticket": Op("One TMF621 event subscription.", query=FIELDS),
+    # --- customer care: TMF683 interactions (notes on a subscriber), TMF621 cases ---
+    "list_party_interactions": Op(
+        "Recorded contacts with customers (calls, chats, emails, store visits), newest first:"
+        " direction, reason, channel, status (open, inProgress, completed), what each was about"
+        " and the agents' notes. Filter by relatedParty.id (customer), product.id (the line),"
+        " billingAccount.id, status, direction or id.",
+        query=LIST,
+    ),
+    "get_party_interaction": Op(
+        "One recorded contact with its items (product, billing account, trouble ticket or"
+        " audit entry) and notes.",
+        query=FIELDS,
+    ),
+    "create_party_interaction": Op(
+        "Log a contact with a customer: direction inbound or outbound, reason, relatedChannel"
+        " [{role, channel {id: phone|chat|email|store|other}}], relatedParty [{role customer,"
+        " partyOrPartyRole {id, @referredType Customer}}]; optional description, status (open,"
+        " inProgress, completed; default completed), interactionDate, note [{text}] and"
+        " interactionItem [{item {role, entity {id, @referredType Product|BillingAccount|"
+        "TroubleTicket|AuditEntry}}}] of the same customer. Written to the account audit log.",
+        body=InteractionCreate,
+    ),
+    "patch_party_interaction": Op(
+        "Add notes (note [{text}]; notes are append-only) or change status, description and"
+        " reason of a contact; a completed one only takes more notes (409 otherwise).",
+        body=InteractionPatch,
+    ),
+    "list_trouble_tickets": Op(
+        "Customer cases, newest first: status (acknowledged, inProgress, pending, held,"
+        " resolved, closed, rejected, cancelled), severity, ticketType, priority, the status"
+        " history, what each is about and the notes. Filter by relatedParty.id (customer),"
+        " product.id, billingAccount.id, status, severity, ticketType, priority or id.",
+        query=LIST,
+    ),
+    "get_trouble_ticket": Op(
+        "One case with its status history, related entities and notes.", query=FIELDS
+    ),
+    "create_trouble_ticket": Op(
+        "Open a case (created acknowledged): description, severity (minor, major, critical),"
+        " ticketType (incident, complaint, request), relatedParty [{role customer,"
+        " partyOrPartyRole {id, @referredType Customer}}]; optional name, priority (low, medium,"
+        " high, critical), channel {id}, requestedResolutionDate, expectedResolutionDate, note"
+        " [{text}] and relatedEntity [{role, entity {id, @referredType Product|BillingAccount|"
+        "PartyInteraction|AuditEntry}}] of the same customer. Written to the account audit log.",
+        body=TicketCreate,
+    ),
+    "patch_trouble_ticket": Op(
+        "Change a case, add notes (append-only), replace relatedEntity or move its status:"
+        " acknowledged -> inProgress|rejected|cancelled; inProgress -> pending|held|resolved|"
+        "cancelled; pending, held -> inProgress|cancelled; resolved -> closed|inProgress"
+        " (reopened). Another move is a 409; closed, rejected and cancelled take no change."
+        " statusChangeReason is required for rejected, cancelled, pending, held and a"
+        " reopening.",
+        body=TicketPatch,
+    ),
     # --- internal ---
     "get_context": Op(
         "Business date, time zone, currency, billing run time, payment term, and the"

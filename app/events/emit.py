@@ -137,9 +137,12 @@ def deleted(conn: psycopg.Connection, api: str, resource: str, body: Body | Buil
     emit(conn, api, resource, "Delete", body, at=at)
 
 
-def before(conn: psycopg.Connection, api: str, resource: str, build: Build) -> Body | None:
-    """The body before a change - built only if a hub wants change events of it."""
-    if not wanted(conn, api, resource, "AttributeValueChange", "StateChange"):
+def before(
+    conn: psycopg.Connection, api: str, resource: str, build: Build, *, kind: str = "StateChange"
+) -> Body | None:
+    """The body before a change - built only if a hub wants change events of it. `kind`:
+    the name the API gives its state event (TMF683 and TMF621: StatusChange)."""
+    if not wanted(conn, api, resource, "AttributeValueChange", kind):
         return None
     return build()
 
@@ -153,17 +156,21 @@ def changed(
     *,
     at: datetime,
     state: str | None = None,
+    kind: str = "StateChange",
+    derived: frozenset[str] = frozenset(),
 ) -> None:
-    """Events for a change from `old` (from `before`; None: nobody wanted them) to `new`."""
+    """Events for a change from `old` (from `before`; None: nobody wanted them) to `new`.
+    `kind` names the state event; `derived` are attributes that only follow the state (its
+    change date, its history), so they alone make no AttributeValueChange."""
     if old is None:
         return
-    keys = (set(old) | set(new)) - IGNORED - ({state} if state else set())
+    keys = (set(old) | set(new)) - IGNORED - derived - ({state} if state else set())
     events = []
     if state is not None and old.get(state) != new.get(state):
-        events.append("StateChange")
+        events.append(kind)
     if any(old.get(k) != new.get(k) for k in keys):
         events.append("AttributeValueChange")
     wanted_now = wanted(conn, api, resource, *events) if events else set()
-    for kind in events:
-        if event_name(resource, kind) in wanted_now:
-            _store(conn, api, event_name(resource, kind), resource, new, at)
+    for event in events:
+        if event_name(resource, event) in wanted_now:
+            _store(conn, api, event_name(resource, event), resource, new, at)

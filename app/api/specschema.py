@@ -40,6 +40,8 @@ SPEC_FILES = {
     "TMF670": "TMF670-PaymentMethod-v4.0.0.swagger.json",
     "TMF678": "TMF678-CustomerBill-v5.0.0.oas.yaml",
     "TMF681": "TMF681-Communication-v4.0.0.swagger.json",
+    "TMF683": "TMF683-Party_Interaction-v5.0.0.oas.yaml",
+    "TMF621": "TMF621-Trouble_Ticket-v5.0.1.oas.yaml",
 }
 
 Schema = dict[str, Any]

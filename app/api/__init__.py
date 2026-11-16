@@ -21,6 +21,7 @@ from app.api import (
     errors,
     history,
     hub,
+    interaction,
     inventory,
     on_demand,
     ordering,
@@ -33,6 +34,7 @@ from app.api import (
     resource_inventory,
     topup,
     transfer,
+    trouble_ticket,
     usage,
 )
 
@@ -64,6 +66,8 @@ def install(app: FastAPI) -> None:
         history,
         usage,
         communication,
+        interaction,
+        trouble_ticket,
     ):
         app.include_router(module.router)
     app.include_router(account.schema_router)

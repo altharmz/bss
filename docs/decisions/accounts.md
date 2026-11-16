@@ -313,12 +313,14 @@ describes): at, operator, role, customer, account, product, `action`, `outcome` 
 document (the order and item, the number, the attribute changed; never a secret). A PIN or lock
 change stores the agent's reason as `reason`. Every attempt writes one entry: one for each done
 action, one for each refusal. `GET /internal/v1/security/audit` is read only (filters
-`customer.id`, `product.id`, `billingAccount.id`, `action`, `outcome`, `operator`; newest first).
+`id`, `customer.id`, `product.id`, `billingAccount.id`, `action`, `outcome`, `operator`; newest
+first). Since #199 it also holds care work (`interaction_logged`, `ticket_opened`,
+`ticket_status_changed`, `care_note_added`; [care.md](care.md)), which raises no alert.
 
 ## Alerts
 
 The notification worker's `security` detector (docs/decisions/notifications.md) reads the audit
-rows (done actions and a port-out a lock stopped) once each, dedupe key `security:<audit id>`,
+rows (done actions and a port-out a lock stopped; care work excluded) once each, dedupe key `security:<audit id>`,
 event types `security_<action>` (`security_port_out_blocked`), SMS and email. Security alerts
 ignore the SMS quiet hours. A **contact change is told to the addresses on record before the
 change** (kept in the entry's detail), so it cannot redirect its own alert. SIM-swap customers

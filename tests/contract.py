@@ -40,6 +40,8 @@ SPEC_FILES = {
     "TMF676": "TMF676-Payment-v4.0.0.swagger.json",
     "TMF670": "TMF670-PaymentMethod-v4.0.0.swagger.json",
     "TMF681": "TMF681-Communication-v4.0.0.swagger.json",
+    "TMF683": "TMF683-Party_Interaction-v5.0.0.oas.yaml",
+    "TMF621": "TMF621-Trouble_Ticket-v5.0.1.oas.yaml",
     "TMF678": "TMF678-CustomerBill-v5.0.0.oas.yaml",
     # ours: the internal API for the admin UI (not vendored, not TMF)
     "INTERNAL": "internal/bss-internal.oas.yaml",
@@ -107,7 +109,13 @@ def errors(api: str, schema: str, instance: Any, *, partial: bool = False) -> li
     )
 
 
+# Listener events whose schema the spec names differently from the event (TMF683 drops
+# the "Event" of its status change).
+EVENT_SCHEMAS = {("TMF683", "PartyInteractionStatusChangeEvent"): "PartyInteractionStatusChange"}
+
+
 def assert_valid(api: str, schema: str, instance: Any, *, partial: bool = False) -> None:
+    schema = EVENT_SCHEMAS.get((api, schema), schema)
     problems = errors(api, schema, instance, partial=partial)
     assert not problems, f"body does not conform to {api} {schema}:\n  " + "\n  ".join(problems)
 

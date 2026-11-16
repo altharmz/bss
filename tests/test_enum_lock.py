@@ -36,6 +36,10 @@ TMF_ENUMS = {
     ),
     "item_action_type": ("TMF622-ProductOrdering-v5.0.0.oas.yaml", "ItemActionType"),
     "customer_bill_state_type": ("TMF678-CustomerBill-v5.0.0.oas.yaml", "CustomerBillStateType"),
+    "trouble_ticket_status_type": (
+        "TMF621-Trouble_Ticket-v5.0.1.oas.yaml",
+        "TroubleTicketStatusType",
+    ),
 }
 
 
@@ -67,7 +71,7 @@ def test_tmf_enums_match_spec(db_conn):
         assert actual, f"enum type {type_name} does not exist"
         assert actual == expected, f"{type_name} differs from {filename}#{schema}"
         compared += 1
-    assert compared == 7
+    assert compared == 8
 
 
 def test_every_spec_file_is_present():
@@ -76,6 +80,6 @@ def test_every_spec_file_is_present():
         for line in (SPEC_DIR / "SHA256SUMS").read_text().splitlines()
         if line.strip()
     ]
-    assert len(listed) == 13
+    assert len(listed) == 15
     for name in listed:
         assert (SPEC_DIR / name).is_file(), f"spec file missing: {name}"

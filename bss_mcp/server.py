@@ -63,10 +63,11 @@ INSTRUCTIONS = (
     "bss: a demo billing and customer system on the TMF Open APIs (no real data). Each tool"
     ' is one API operation. Amounts are decimal strings ("19.99"), never JSON numbers.'
     " Tools that change data need the write scope."
-    " There are 216 tools with write scope (105 with read scope): TMF620 catalog,"
+    " There are 229 tools with write scope (110 with read scope): TMF620 catalog,"
     " TMF632 party, TMF629 customer, TMF666 accounts, TMF676 payments, TMF670 saved cards,"
     " TMF637 inventory,"
     " TMF639 subscriber numbers, TMF654 prepaid balances, TMF635 usage, TMF681 customer messages,"
+    " TMF683 interaction notes, TMF621 cases,"
     " TMF678 bills, TMF622 orders, internal operations and service health."
     " If your client lists fewer, search by family."
 )

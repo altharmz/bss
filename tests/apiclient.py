@@ -77,6 +77,8 @@ APIS: dict[str, tuple[str, dict[str, str]]] = {
             "customerBillOnDemand": "CustomerBillOnDemand",
         },
     ),
+    "/tmf-api/partyInteractionManagement/v5": ("TMF683", {"partyInteraction": "PartyInteraction"}),
+    "/tmf-api/troubleTicket/v5": ("TMF621", {"troubleTicket": "TroubleTicket"}),
 }
 # every API has a hub: Hub in v5, EventSubscription in TMF676 v4
 for _base, (_spec, _resources) in APIS.items():

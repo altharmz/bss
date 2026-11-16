@@ -1415,9 +1415,12 @@ paths:
       summary: The audit log of agent actions on accounts, read only (issue 193).
       description: >-
         Newest first, paged. Each entry says who did what, when, whether it was done or refused
-        (and why) and how the customer was verified. Filters customer.id, product.id,
+        (and why) and how the customer was verified. Care work is logged here too (issue 199):
+        an interaction logged, a case opened, a case status change, a note added; `detail`
+        names the interaction or the ticket. Filters id (one entry), customer.id, product.id,
         billingAccount.id, action, outcome, operator.
       parameters:
+        - {name: id, in: query, schema: {type: string, format: uuid}}
         - {name: customer.id, in: query, schema: {type: string, format: uuid}}
         - {name: product.id, in: query, schema: {type: string, format: uuid}}
         - {name: billingAccount.id, in: query, schema: {type: string, format: uuid}}
@@ -2414,7 +2417,7 @@ components:
         product: *optionalRef
         action:
           type: string
-          enum: [sim_swap, number_change, number_transfer_pin, contact_change, port_out, pin_set, pin_reset, lock_set, lock_cleared, pin_lockout]
+          enum: [sim_swap, number_change, number_transfer_pin, contact_change, port_out, pin_set, pin_reset, lock_set, lock_cleared, pin_lockout, interaction_logged, ticket_opened, ticket_status_changed, care_note_added]
         outcome: {type: string, enum: [done, refused]}
         reason: {type: string, nullable: true}
         verification: {type: string, enum: [pin, notRequired, none]}

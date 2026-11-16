@@ -218,10 +218,19 @@ def put_lock(
 def list_audit(request: Request, tx: Tx) -> TmfJSONResponse:
     offset, limit = parse_page(
         request,
-        extra=("customer.id", "product.id", "billingAccount.id", "action", "outcome", "operator"),
+        extra=(
+            "id",
+            "customer.id",
+            "product.id",
+            "billingAccount.id",
+            "action",
+            "outcome",
+            "operator",
+        ),
     )
     where: dict[str, Any] = {}
     for name, column in (
+        ("id", "id"),
         ("customer.id", "customer_id"),
         ("product.id", "product_id"),
         ("billingAccount.id", "billing_account_id"),
