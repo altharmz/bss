@@ -7,6 +7,7 @@ from psycopg import sql
 
 from app.repository._sql import (
     Lock,
+    Row,
     fetch_all,
     fetch_one,
     returning,
@@ -136,6 +137,18 @@ def remove_preferences(conn, account_id):
     )
 
 
+def _charge_name(abr: Row) -> str:
+    """The bill document's line name: "Plan X (multi-line discount −$5.00)" when a tier
+    applied."""
+    from app.billing import multi_line
+    from app.repository import billing
+
+    name = abr["offering_name"] or billing.FEE_NAME
+    if abr.get("discount_price_id") is None:
+        return name
+    return multi_line.label(name, abr["discount_amount"], abr["currency"])
+
+
 def snapshot_bill(conn, bill_id, *, now):
     from app.api import tmfjson
     from app.repository import billing
@@ -174,7 +187,7 @@ def snapshot_bill(conn, bill_id, *, now):
         document["charges"] = [
             {
                 "id": str(a["id"]),
-                "name": a["offering_name"] or billing.FEE_NAME,
+                "name": _charge_name(a),
                 "amount": {"unit": a["currency"], "value": a["amount"]},
                 "taxIncludedAmount": {"unit": a["currency"], "value": billing.abr_total(a)},
                 "period": {"start": a["period"].lower, "end": a["period"].upper},

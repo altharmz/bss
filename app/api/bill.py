@@ -50,7 +50,7 @@ from app.api.deps import ClockDep, MergePatchBody, Tx
 from app.api.errors import conflict, not_found
 from app.api.inventory import product_href
 from app.api.tmfjson import TmfJSONResponse
-from app.billing import settlement
+from app.billing import multi_line, settlement
 from app.billing.adapter import settle_account
 from app.config import settings
 from app.repository import accounts, billing
@@ -271,12 +271,19 @@ def _rate_body(row: Row, account: Row, offering: Row) -> dict[str, Any]:
     bill_id = row["customer_bill_id"]
     period = row["period"]
     covered = f"{name}, {period.lower} - {period.upper - timedelta(days=1)}"
+    description = f"refund of {covered}" if row["charge_type"] == "refund" else covered
+    if row.get("discount_price_id") is not None:
+        # TMF678 has no price alteration on a rate: the tier is named in the description
+        description += (
+            f"; {multi_line.note(row['discount_amount'], row['currency'])}"
+            f" (productOfferingPrice {row['discount_price_id']})"
+        )
     return without_nulls(
         {
             "id": str(row["id"]),
             "href": f"{BASE}/appliedCustomerBillingRate/{row['id']}",
             "name": name,
-            "description": f"refund of {covered}" if row["charge_type"] == "refund" else covered,
+            "description": description,
             "characteristic": [],  # billing sets none
             "date": utc(row["applied_at"]),
             "appliedBillingRateType": RATE_TYPE[row["charge_type"]],

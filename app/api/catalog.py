@@ -83,6 +83,7 @@ from app.api.errors import (
     validation_problems,
 )
 from app.api.tmfjson import TmfJSONResponse
+from app.billing import multi_line
 from app.billing.core import tax_of
 from app.events import emit
 from app.network import kind, profile, usage_price
@@ -448,8 +449,15 @@ PriceDocuments = documents_model("PriceDocuments", API, PRICE_DOCUMENTS)
 PriceType = Literal["recurring", "oneTime", "usage", "discount", "allowance", "penalty"]
 
 
-def _check_charge(price_type: str, period: str | None, price: Money | None) -> None:
-    if (price_type == "recurring") != (period is not None):
+def _check_charge(
+    price_type: str, period: str | None, price: Money | None, *, lines: int | None = None
+) -> None:
+    """`lines`: the N of a multi-line discount, which takes the plan's period too."""
+    if lines is not None and period is None:
+        raise ValueError(
+            "recurringChargePeriodType is required for a multi-line discount: the plan's period"
+        )
+    if lines is None and (price_type == "recurring") != (period is not None):
         raise ValueError(
             "recurringChargePeriodType is required for a recurring price and not allowed"
             f" for a {price_type} price"
@@ -510,7 +518,8 @@ class PriceCreate(PriceDocuments):
 
     @model_validator(mode="after")
     def _recurring_has_period(self) -> "PriceCreate":
-        _check_charge(self.price_type, self.recurring_charge_period_type, self.price)
+        if self.price_type != "discount":  # a discount's unit decides (insert_price)
+            _check_charge(self.price_type, self.recurring_charge_period_type, self.price)
         return self
 
 
@@ -598,12 +607,17 @@ def insert_price(
     problems = tax_problems(documents.get("tax"), data.price)
     if problems:
         raise problems_error(problems)
-    usage_kind = usage_block = None
-    if data.price_type == "usage":
-        try:
+    usage_kind = usage_block = lines = None
+    try:
+        if data.price_type == "usage":
             usage_kind, usage_block = usage_price.parse(documents.get("unitOfMeasure"))
-        except ValueError as error:
-            raise unprocessable(str(error)) from None
+        if data.price_type == "discount":
+            lines = multi_line.lines_of(documents.get("unitOfMeasure"))
+            _check_charge(
+                data.price_type, data.recurring_charge_period_type, data.price, lines=lines
+            )
+    except ValueError as error:
+        raise unprocessable(str(error)) from None
     valid_for = Range(now, None, "[)") if data.valid_for is None else data.valid_for.to_range()
     if valid_for.lower < now:
         raise conflict(
@@ -624,6 +638,7 @@ def insert_price(
         id=new_id,
         usage_kind=usage_kind,
         usage_block=usage_block,
+        alteration_lines=lines,
     )
     return with_meta(conn, "product_offering_price", row, data)
 
@@ -710,7 +725,7 @@ def _charge_changes(
         changes["amount"] = None if price is None else price.value
         changes["currency"] = None if price is None else price.unit
     try:
-        _check_charge(price_type, period, data.price)
+        _check_charge(price_type, period, data.price, lines=current["alteration_lines"])
     except ValueError as exc:
         raise unprocessable(str(exc)) from None
     if not tax_changed and all(current[column] == value for column, value in changes.items()):
@@ -727,6 +742,28 @@ def _charge_changes(
             raise conflict("price cannot be removed from a price attached to an offering")
         _check_cadence(conn, offering_id, current | changes)
     return changes
+
+
+def _lines_guard(current: Row, data: PricePatch, documents: dict[str, Any]) -> None:
+    """A multi-line discount's tier (its N) is fixed when it is created: it never turns into
+    another type, and its unitOfMeasure never changes or appears on another price."""
+    if current["alteration_lines"] is None:
+        if "unitOfMeasure" in documents and current["price_type"] == "discount":
+            try:
+                lines = multi_line.lines_of(documents["unitOfMeasure"])
+            except ValueError as error:
+                raise unprocessable(str(error)) from None
+            if lines is not None:
+                raise unprocessable("a multi-line discount is created as one: attach a new price")
+        return
+    if "price_type" in data.model_fields_set and data.price_type != "discount":
+        raise unprocessable("priceType of a multi-line discount cannot change")
+    if "unitOfMeasure" in documents and documents["unitOfMeasure"] != current["details"].get(
+        "unitOfMeasure"
+    ):
+        raise conflict(
+            "the unitOfMeasure of a multi-line discount cannot change: attach a new price"
+        )
 
 
 def _usage_guard(current: Row, data: PricePatch, documents: dict[str, Any]) -> None:
@@ -782,6 +819,7 @@ def patch_price(
             _check_lifecycle("price", current["lifecycle_status"], data.lifecycle_status)
         old = emit.before(conn, API, "productOfferingPrice", lambda: price_body(current))
         _usage_guard(current, data, documents)
+        _lines_guard(current, data, documents)
         changes |= _charge_changes(conn, current, data, documents)
         if documents:
             changes["details"] = merge_documents(current["details"], documents)
@@ -1057,6 +1095,41 @@ def _check_kind(conn: psycopg.Connection, offering_id: UUID, price_type: str) ->
         raise unprocessable(f"a {offering_kind} offering has no usage price")
 
 
+def _check_discount(conn: psycopg.Connection, offering_id: UUID, price: Row) -> None:
+    """A multi-line discount (unit `lines`) prices only a plan, for the plan's period; on a
+    plan, a discount with a unit of measure must be one (docs/decisions/prepaid.md). A
+    discount without a unit stays a record, on any offering."""
+    if price["price_type"] != "discount":
+        return
+    offering = catalog.get_product_offering(conn, offering_id)
+    if offering is None:
+        return
+    offering_kind = kind.kind_of(offering["details"])
+    if price["alteration_lines"] is not None and offering_kind != kind.PLAN:
+        raise unprocessable(f"a {offering_kind} offering has no multi-line discount")
+    if (
+        price["alteration_lines"] is None
+        and offering_kind == kind.PLAN
+        and price["details"].get("unitOfMeasure") is not None
+    ):
+        raise unprocessable(
+            "a discount of a plan offering with a unitOfMeasure is a multi-line tier:"
+            " unitOfMeasure {amount: N, units: lines}, N 2 or more"
+        )
+    if price["alteration_lines"] is None:
+        return
+    for other in catalog.prices_of_offering(conn, offering_id):
+        if (
+            other["price_type"] == "recurring"
+            and other["currency"] == price["currency"]
+            and other["recurring_period"] != price["recurring_period"]
+        ):
+            raise unprocessable(
+                "a multi-line discount's recurringChargePeriodType must be the plan's"
+                f" ({other['recurring_period']})"
+            )
+
+
 def _specification(conn: psycopg.Connection, reference: SpecificationRef) -> None:
     """An existing specification, the one referred to; taken FOR SHARE (a delete of it
     waits for this offering)."""
@@ -1134,6 +1207,7 @@ def _attach_prices(
                 candidate = catalog.get_product_offering_price(conn, price_id)
                 assert candidate is not None
                 _check_kind(conn, offering_id, candidate["price_type"])
+                _check_discount(conn, offering_id, candidate)
                 _check_cadence(conn, offering_id, candidate)
                 attached = catalog.attach_price(conn, price_id, offering_id)
         except pg_errors.ExclusionViolation:
@@ -1303,6 +1377,10 @@ def patch_offering(
                 p["price_type"] == "usage" for p in catalog.prices_of_offering(conn, uid)
             ):
                 raise unprocessable(f"a {new_kind} offering has no usage price")
+            if new_kind != kind.PLAN and any(
+                p["alteration_lines"] is not None for p in catalog.prices_of_offering(conn, uid)
+            ):
+                raise unprocessable(f"a {new_kind} offering has no multi-line discount")
         category_ids = None if data.category is None else _categories(conn, data.category)
         if category_ids is not None and not changes:
             # membership is part of this resource: fire its lastUpdate trigger too

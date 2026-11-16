@@ -15,7 +15,10 @@ Part of [the last gaps](tmf-api.md#the-last-gaps-2026-10-18) (the human: "decide
 on TMF"). TMF620's `priceType` is free text whose description names `recurring`,
 `discount`, `allowance`, `penalty` as examples, with no arithmetic. So a price may be
 `discount`, `allowance` or `penalty` besides `recurring` and `oneTime`: stored, served,
-exported and imported like any price - **a record, never billed**. Billing charges
+exported and imported like any price - **a record, never billed**. One exception since
+issue #196: a `discount` with `unitOfMeasure {amount: N, units: "lines"}` on a plan offering is
+a multi-line tier and is billed ([prepaid.md](prepaid.md#multi-line-discounts-2026-11-16-issue-196));
+it takes the plan's `recurringChargePeriodType`. Billing charges
 `recurring` prices only, as before; TMF622/637 prices answer `priceAlteration: []`.
 Like `oneTime`, an alteration has no `recurringChargePeriodType` (422). Migration
 `0028` adds the three values to `price_type` (rolling back refuses while such a price

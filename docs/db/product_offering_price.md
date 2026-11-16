@@ -16,7 +16,7 @@ SID ProductOfferingPrice (TMF620 productOfferingPrice): a price created on its o
 | `product_offering_id` | `uuid` | yes |  | The offering the price is attached to; NULL while unattached (an unattached price prices nothing). Never detached once set. |
 | `name` | `text` | yes |  |  |
 | `price_type` | `price_type` (enum, see [README](README.md#enums)) | no |  | TMF620 priceType: recurring, oneTime, usage (a price per block of a unit of measure of a pay-as-you-go offering), or an alteration (discount, allowance, penalty: records). Billing charges recurring, oneTime and usage prices. |
-| `recurring_period` | `text` | yes |  | TMF620 recurringChargePeriodType: daily, weekly, monthly or yearly. |
+| `recurring_period` | `text` | yes |  | TMF620 recurringChargePeriodType: daily, weekly, monthly or yearly. The charge period of a recurring price, and the period a multi-line discount applies to (the plan's). |
 | `recurring_period_length` | `smallint` | no | `1` | TMF620 recurringChargePeriodLength: positive interval multiplier. |
 | `amount` | `numeric(12,2)` | yes |  | numeric(12,2), exact (never float); the price for one whole period, never negative. Immutable. |
 | `currency` | `character(3)` | yes |  | ISO 4217 code, three upper-case letters. Immutable. |
@@ -27,6 +27,7 @@ SID ProductOfferingPrice (TMF620 productOfferingPrice): a price created on its o
 | `details` | `jsonb` | no | `'{}'::jsonb` | TMF620 descriptive attributes as sent, validated against the spec; ordering and billing never read them. |
 | `usage_kind` | `text` | yes |  | For a usage price: the kind it rates, data, voice or sms (from the unit of measure). |
 | `usage_block` | `bigint` | yes |  | For a usage price: the block of the unit of measure in the usage record unit (bytes, seconds, messages); usage is rounded up to whole blocks and each block costs the price. |
+| `alteration_lines` | `integer` | yes |  | For a multi-line discount (priceType discount, unitOfMeasure in lines): the minimum number of live plan lines on the account, 2 or more. The price is the amount off per line and period. |
 
 ## Foreign keys
 
@@ -38,13 +39,15 @@ SID ProductOfferingPrice (TMF620 productOfferingPrice): a price created on its o
 
 | Name | Kind | Definition |
 |---|---|---|
+| `product_offering_price_alteration_lines_check` | check | `CHECK ((alteration_lines >= 2))` |
 | `product_offering_price_amount_check` | check | `CHECK ((amount >= (0)::numeric))` |
 | `product_offering_price_amount_with_currency` | check | `CHECK (((amount IS NULL) = (currency IS NULL)))` |
 | `product_offering_price_attached_has_amount` | check | `CHECK (((product_offering_id IS NULL) OR (amount IS NOT NULL)))` |
 | `product_offering_price_base_type_check` | check | `CHECK ((length(base_type) > 0))` |
 | `product_offering_price_currency_check` | check | `CHECK ((currency ~ '^[A-Z]{3}$'::text))` |
 | `product_offering_price_details_check` | check | `CHECK ((jsonb_typeof(details) = 'object'::text))` |
-| `product_offering_price_recurring_has_period` | check | `CHECK (((price_type = 'recurring'::price_type) = (recurring_period IS NOT NULL)))` |
+| `product_offering_price_lines_are_discount` | check | `CHECK (((alteration_lines IS NULL) OR ((price_type)::text = 'discount'::text)))` |
+| `product_offering_price_recurring_has_period` | check | `CHECK ((((price_type = 'recurring'::price_type) OR (alteration_lines IS NOT NULL)) = (recurring_period IS NOT NULL)))` |
 | `product_offering_price_recurring_period_check` | check | `CHECK ((recurring_period = ANY (ARRAY['daily'::text, 'weekly'::text, 'monthly'::text, 'yearly'::text])))` |
 | `product_offering_price_recurring_period_length_check` | check | `CHECK (((recurring_period_length >= 1) AND (recurring_period_length <= 1000)))` |
 | `product_offering_price_schema_location_check` | check | `CHECK ((length(schema_location) > 0))` |
@@ -53,13 +56,13 @@ SID ProductOfferingPrice (TMF620 productOfferingPrice): a price created on its o
 | `product_offering_price_usage_kind_check` | check | `CHECK ((usage_kind = ANY (ARRAY['data'::text, 'voice'::text, 'sms'::text])))` |
 | `product_offering_price_valid_for_check` | check | `CHECK (((NOT isempty(valid_for)) AND (NOT lower_inf(valid_for)) AND lower_inc(valid_for) AND (NOT upper_inc(valid_for))))` |
 | `product_offering_price_pkey` | primary key | `PRIMARY KEY (id)` |
-| `product_offering_price_no_overlap` | exclusion | `EXCLUDE USING gist (product_offering_id WITH =, price_type WITH =, currency WITH =, COALESCE(usage_kind, ''::text) WITH =, valid_for WITH &&)` |
+| `product_offering_price_no_overlap` | exclusion | `EXCLUDE USING gist (product_offering_id WITH =, price_type WITH =, currency WITH =, COALESCE(usage_kind, ''::text) WITH =, COALESCE(alteration_lines, 0) WITH =, valid_for WITH &&)` |
 
 ## Indexes
 
 | Name | Definition | Backs a constraint |
 |---|---|---|
-| `product_offering_price_no_overlap` | `CREATE INDEX product_offering_price_no_overlap ON product_offering_price USING gist (product_offering_id, price_type, currency, COALESCE(usage_kind, ''::text), valid_for)` | yes |
+| `product_offering_price_no_overlap` | `CREATE INDEX product_offering_price_no_overlap ON product_offering_price USING gist (product_offering_id, price_type, currency, COALESCE(usage_kind, ''::text), COALESCE(alteration_lines, 0), valid_for)` | yes |
 | `product_offering_price_pkey` | `CREATE UNIQUE INDEX product_offering_price_pkey ON product_offering_price USING btree (id)` | yes |
 | `product_offering_price_product_offering_id_idx` | `CREATE INDEX product_offering_price_product_offering_id_idx ON product_offering_price USING btree (product_offering_id)` | no |
 

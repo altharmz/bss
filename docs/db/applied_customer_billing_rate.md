@@ -30,6 +30,8 @@ SID AppliedCustomerBillingRate, ABR (TMF678 appliedCustomerBillingRate): a recur
 | `one_time_price_id` | `uuid` | yes |  | The oneTime catalog price a product fee (activation fee, add-on) charges; null for every other rate. One fee per product, price and day. |
 | `charge_name` | `text` | yes |  | The name a product fee is shown under (its price's name at the time); null for every other rate. |
 | `usage_command_id` | `uuid` | yes |  | For the charge of rated pay-as-you-go usage (a oneTime rate of a usage price, period = the event day): the rating pass (usage command) that charged it; null for every other rate. |
+| `discount_price_id` | `uuid` | yes |  | The multi-line discount tier this recurring charge was quoted with, if any. |
+| `discount_amount` | `numeric(12,2)` | no | `0` | What the tier took off the recurring price; amount is already net of it (0 without a tier). |
 
 ## Foreign keys
 
@@ -39,6 +41,7 @@ SID AppliedCustomerBillingRate, ABR (TMF678 appliedCustomerBillingRate): a recur
 | `billing_account_id`, `currency` | [`billing_account`](billing_account.md) (id, currency) | `applied_customer_billing_rate_billing_account_id_currency_fkey` |
 | `billing_run_id` | [`billing_run`](billing_run.md) (id) | `applied_customer_billing_rate_billing_run_id_fkey` |
 | `customer_bill_id`, `billing_account_id` | [`customer_bill`](customer_bill.md) (id, billing_account_id) | `applied_customer_billing_rate_customer_bill_id_billing_acc_fkey` |
+| `discount_price_id` | [`product_offering_price`](product_offering_price.md) (id) | `applied_customer_billing_rate_discount_price_id_fkey` |
 | `one_time_price_id` | [`product_offering_price`](product_offering_price.md) (id) | `applied_customer_billing_rate_one_time_price_id_fkey` |
 | `product_id`, `billing_account_id` | [`product`](product.md) (id, billing_account_id) | `applied_customer_billing_rate_product_id_billing_account_i_fkey` |
 | `product_offering_id` | [`product_offering`](product_offering.md) (id) | `applied_customer_billing_rate_product_offering_id_fkey` |
@@ -49,6 +52,7 @@ SID AppliedCustomerBillingRate, ABR (TMF678 appliedCustomerBillingRate): a recur
 
 | Name | Kind | Definition |
 |---|---|---|
+| `abr_discount_has_price` | check | `CHECK (((discount_price_id IS NULL) = (discount_amount = (0)::numeric)))` |
 | `abr_fee_amount` | check | `CHECK (((NOT ((charge_type)::text = 'oneTime'::text)) OR ((amount > (0)::numeric) AND (refunds_rate_id IS NULL) AND (upper(period) = (lower(period) + 1)))))` |
 | `abr_fee_name` | check | `CHECK (((one_time_price_id IS NULL) = (charge_name IS NULL)))` |
 | `abr_fee_scope` | check | `CHECK ((((NOT ((charge_type)::text = 'oneTime'::text)) AND (product_id IS NOT NULL) AND (product_offering_id IS NOT NULL) AND (balance_action_id IS NULL) AND (one_time_price_id IS NULL)) OR (((charge_type)::text = 'oneTime'::text) AND (balance_action_id IS NOT NULL) AND (product_id IS NULL) AND (product_offering_id IS NULL) AND (one_time_price_id IS NULL)) OR (((charge_type)::text = 'oneTime'::text) AND (balance_action_id IS NULL) AND (product_id IS NOT NULL) AND (product_offering_id IS NOT NULL) AND (one_time_price_id IS NOT NULL))))` |
@@ -56,6 +60,7 @@ SID AppliedCustomerBillingRate, ABR (TMF678 appliedCustomerBillingRate): a recur
 | `abr_refund_amount` | check | `CHECK (((charge_type <> 'refund'::charge_type) OR ((amount < (0)::numeric) AND (refunds_rate_id IS NOT NULL))))` |
 | `applied_customer_billing_rate_applied_tax_check` | check | `CHECK ((jsonb_typeof(applied_tax) = 'array'::text))` |
 | `applied_customer_billing_rate_currency_check` | check | `CHECK ((currency ~ '^[A-Z]{3}$'::text))` |
+| `applied_customer_billing_rate_discount_amount_check` | check | `CHECK ((discount_amount >= (0)::numeric))` |
 | `applied_customer_billing_rate_no_lines_no_tax` | check | `CHECK (((applied_tax <> '[]'::jsonb) OR (tax_amount = (0)::numeric)))` |
 | `applied_customer_billing_rate_period_check` | check | `CHECK (((NOT isempty(period)) AND (NOT lower_inf(period)) AND (NOT upper_inf(period))))` |
 | `applied_customer_billing_rate_pkey` | primary key | `PRIMARY KEY (id)` |
@@ -68,6 +73,7 @@ SID AppliedCustomerBillingRate, ABR (TMF678 appliedCustomerBillingRate): a recur
 
 | Name | Definition | Backs a constraint |
 |---|---|---|
+| `abr_discount_price_idx` | `CREATE INDEX abr_discount_price_idx ON applied_customer_billing_rate USING btree (discount_price_id) WHERE (discount_price_id IS NOT NULL)` | no |
 | `abr_fee_once` | `CREATE UNIQUE INDEX abr_fee_once ON applied_customer_billing_rate USING btree (product_id, one_time_price_id, period, COALESCE(usage_command_id, '00000000-0000-0000-0000-000000000000'::uuid)) WHERE (one_time_price_id IS NOT NULL)` | no |
 | `abr_grant_identity` | `CREATE UNIQUE INDEX abr_grant_identity ON applied_customer_billing_rate USING btree (id, product_id, billing_account_id, billing_run_id, period, currency, amount, tax_amount, charge_type)` | yes |
 | `abr_one_per_start` | `CREATE UNIQUE INDEX abr_one_per_start ON applied_customer_billing_rate USING btree (product_id, charge_type, period, product_offering_id) WHERE (one_time_price_id IS NULL)` | no |

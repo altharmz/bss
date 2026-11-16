@@ -540,6 +540,8 @@ def insert_abr(
     one_time_price_id: UUID | None = None,
     charge_name: str | None = None,
     usage_command_id: UUID | None = None,
+    discount_price_id: UUID | None = None,
+    discount_amount: Decimal = Decimal(0),
 ) -> Row:
     """Insert an applied customer billing rate; `applied_at` (TMF678 date) is the injected
     clock of the run's attempt. Overlaps are rejected by the database (EXCLUDE
@@ -569,6 +571,9 @@ def insert_abr(
         columns["charge_name"] = charge_name
     if usage_command_id is not None:  # rated pay-as-you-go usage, from 0059
         columns["usage_command_id"] = usage_command_id
+    if discount_price_id is not None:  # a multi-line discount, from 0082
+        columns["discount_price_id"] = discount_price_id
+        columns["discount_amount"] = money(discount_amount)
     row = returning(
         conn,
         sql.SQL("INSERT INTO applied_customer_billing_rate ({}) VALUES ({}) RETURNING *").format(

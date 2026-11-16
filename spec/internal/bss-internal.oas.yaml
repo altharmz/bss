@@ -1980,6 +1980,23 @@ components:
             dates of the product's paid interval, tax included; not counted on to fund the
             new interval.
           allOf: [{$ref: '#/components/schemas/Money'}]
+        discount:
+          description: >-
+            Prepaid accounts only; absent without one (issue 196). The multi-line discount of
+            the offering's tier for the account's live plan lines on the start date, counting
+            the line being bought (not again for an offering change). `required` and `amount`
+            are net of it and taxed after it; `price` stays the full price.
+          type: object
+          additionalProperties: false
+          required: [amount, productOfferingPrice]
+          properties:
+            amount: {$ref: '#/components/schemas/Money'}
+            productOfferingPrice:
+              type: object
+              additionalProperties: false
+              required: [id]
+              properties:
+                id: {type: string, format: uuid}
         fees:
           description: >-
             Prepaid accounts only; absent without fees. The one-time fees charged with the
