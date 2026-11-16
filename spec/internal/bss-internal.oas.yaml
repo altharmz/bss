@@ -1034,6 +1034,34 @@ paths:
               schema: {$ref: '#/components/schemas/UsageSummary'}
         '400': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
+  /report/kpi:
+    get:
+      summary: Prepaid KPIs by month (issue 198).
+      description: >-
+        Per calendar month of business dates, for the prepaid accounts of one currency: lines
+        (opening, gross adds, disconnects, net adds, closing, average), churn rate, tax-excluded
+        revenue by source and ARPU. A line is a prepaid product that is not an add-on, live on
+        the days from its start date to the day before its termination date. `to` defaults to
+        the business month, `from` to eleven months before `to`; at most 24 months; the current
+        month runs to the business date (complete false). Read-only, computed on request.
+      parameters:
+        - name: from
+          in: query
+          schema: {type: string, pattern: '^[0-9]{4}-(0[1-9]|1[0-2])$'}
+        - name: to
+          in: query
+          schema: {type: string, pattern: '^[0-9]{4}-(0[1-9]|1[0-2])$'}
+        - name: currency
+          in: query
+          description: Defaults to the UI currency.
+          schema: {type: string, pattern: '^[A-Z]{3}$'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/KpiReport'}
+        '400': {$ref: '#/components/responses/Error'}
   /port:
     get:
       summary: Port requests, newest first (issue 189).
@@ -2413,6 +2441,60 @@ components:
         reason: {type: string, nullable: true}
         verification: {type: string, enum: [pin, notRequired, none]}
         detail: {type: object}
+    KpiReport:
+      type: object
+      additionalProperties: false
+      required: [currency, businessDate, from, to, months]
+      properties:
+        currency: {type: string, pattern: '^[A-Z]{3}$'}
+        businessDate: {type: string, format: date}
+        from: {type: string, pattern: '^[0-9]{4}-(0[1-9]|1[0-2])$'}
+        to: {type: string, pattern: '^[0-9]{4}-(0[1-9]|1[0-2])$'}
+        months:
+          type: array
+          description: Oldest first.
+          items: {$ref: '#/components/schemas/KpiMonth'}
+    KpiMonth:
+      type: object
+      additionalProperties: false
+      required: [month, firstDay, lastDay, complete, subscribers, churnRate, revenue, arpu]
+      properties:
+        month: {type: string, pattern: '^[0-9]{4}-(0[1-9]|1[0-2])$'}
+        firstDay: {type: string, format: date}
+        lastDay: {type: string, format: date, description: "The month's last day, or the business date for the current month."}
+        complete: {type: boolean, description: 'False for the current month (it runs to the business date).'}
+        subscribers:
+          type: object
+          additionalProperties: false
+          required: [opening, grossAdds, disconnects, netAdds, closing, average]
+          description: Lines live on the day before the month (opening) and on its last day (closing); closing = opening + netAdds.
+          properties:
+            opening: {type: integer, minimum: 0}
+            grossAdds: {type: integer, minimum: 0, description: Lines whose start date is in the month.}
+            disconnects: {type: integer, minimum: 0, description: 'Lines whose termination date is in the month (deactivation, termination, port-out).'}
+            netAdds: {type: integer}
+            closing: {type: integer, minimum: 0}
+            average: {type: number, minimum: 0, description: '(opening + closing) / 2.'}
+        churnRate:
+          type: number
+          nullable: true
+          description: disconnects / opening x 100, 2 decimals half-even; null when opening is 0.
+        revenue:
+          type: object
+          additionalProperties: false
+          required: [total, plans, addOns, usage, fees]
+          description: >-
+            Tax-excluded ABR amounts by the run date of their billing run (billed, not deferred,
+            revenue). plans = recurring charges less their refunds; addOns = one-time fees of
+            add-on products; usage = rated pay-as-you-go usage; fees = every other one-time fee.
+          properties:
+            total: {$ref: '#/components/schemas/Money'}
+            plans: {$ref: '#/components/schemas/Money'}
+            addOns: {$ref: '#/components/schemas/Money'}
+            usage: {$ref: '#/components/schemas/Money'}
+            fees: {$ref: '#/components/schemas/Money'}
+        arpu:
+          $ref: '#/components/schemas/NullableMoney'
     UsageSummary:
       type: object
       additionalProperties: false

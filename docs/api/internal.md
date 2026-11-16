@@ -4,7 +4,7 @@
 
 - Base path here: `/internal/v1`
 - Contract: [`spec/internal/bss-internal.oas.yaml`](../../spec/internal/bss-internal.oas.yaml) - BSS internal API (admin UI) version 1.0.0; the spec's server URL is `/internal/v1`
-- Operations exposed: 65
+- Operations exposed: 66
 
 
 ## Operations
@@ -57,6 +57,7 @@
 | GET | `/internal/v1/prepaid/command/{command_id}` | path: `command_id` | - | 200 `PrepaidCommand` | [`app/internal/prepaid_commands.py`](../../app/internal/prepaid_commands.py) |
 | POST | `/internal/v1/prepaid/command/{command_id}/retry` | path: `command_id`; body: `application/json` | - | 202 `PrepaidCommand` | [`app/internal/prepaid_commands.py`](../../app/internal/prepaid_commands.py) |
 | POST | `/internal/v1/productOffering/{offering_id}/priceChange` | path: `offering_id`; body: `application/json` | `PriceChangeRequest` | 201 `PriceChange` | [`app/internal/catalog.py`](../../app/internal/catalog.py) |
+| GET | `/internal/v1/report/kpi` | query: `from`, `to`, `currency` | - | 200 `KpiReport` | [`app/main.py`](../../app/main.py) |
 | GET | `/internal/v1/security/audit` | query: `id`, `customer.id`, `product.id`, `billingAccount.id`, `action`, `outcome`, `operator`, `offset`, `limit` | - | 200 `array of AuditEntry` | [`app/internal/security.py`](../../app/internal/security.py) |
 | GET | `/internal/v1/security/lock/{product_id}` | path: `product_id` | - | 200 `LineLock` | [`app/internal/security.py`](../../app/internal/security.py) |
 | PUT | `/internal/v1/security/lock/{product_id}` | path: `product_id` | `object` | 200 `LineLock` | [`app/internal/security.py`](../../app/internal/security.py) |

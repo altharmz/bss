@@ -132,6 +132,10 @@ export function Sidebar({ context }: { context: SystemContext }) {
       ],
     },
     {
+      label: 'Reports',
+      items: [{ label: 'Prepaid KPIs', href: '/reports', active: (r) => r.name === 'reports' }],
+    },
+    {
       label: 'System',
       items: [
         {

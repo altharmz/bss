@@ -34,6 +34,7 @@ import { IntegrationsScreen } from '../screens/Integrations';
 import { NumbersScreen } from '../screens/Numbers';
 import { SimsScreen } from '../screens/Sims';
 import { PortRequestsScreen } from '../screens/PortRequests';
+import { ReportsScreen } from '../screens/Reports';
 
 const CONTEXT = '/internal/v1/context';
 
@@ -83,6 +84,8 @@ function Screen() {
       return <BillsScreen />;
     case 'balances':
       return <BalancesScreen />;
+    case 'reports':
+      return <ReportsScreen />;
     case 'notFound':
       return <NotFoundScreen path={route.path} />;
   }

@@ -38,6 +38,8 @@ items:
   - {id: api.tmf635.productUsage.create, area: api, stage: 5, method: POST, path: "/tmf-api/productUsageManagement/v5/productUsage", title: "TMF635 POST /productUsage"}
   - {id: api.tmf635.productUsage.get, area: api, stage: 5, method: GET, path: "/tmf-api/productUsageManagement/v5/productUsage/{usage_id}", title: "TMF635 GET /productUsage/{id}"}
   - {id: api.internal.usage.summary, area: api, stage: 5, method: GET, path: /internal/v1/usage/summary, title: "Usage against the plan allowance of a line"}
+  - {id: api.internal.report.kpi, area: api, stage: 5, method: GET, path: /internal/v1/report/kpi, title: "Prepaid KPIs by month: lines, net adds, churn, revenue by source, ARPU"}
+  - {id: ui.reports, area: ui, stage: 5, title: "Prepaid KPIs screen: latest-month tiles, lines by month and revenue by source"}
   - {id: worker.usageFeed, area: worker, stage: 5, title: "Store the network usage feed once per record, match it to lines and note allowance thresholds"}
   - {id: worker.usageRating, area: worker, stage: 5, title: "Rate closed days of pay-as-you-go usage against the prepaid balance, bar the line at zero balance and restore it after a top-up"}
   - {id: worker.housekeeping, area: worker, stage: 5, title: "Daily housekeeping from 04:00: usage_record partitions made ahead and dropped after 13 months, rows past their retention deleted in batches"}

@@ -31,4 +31,5 @@ changing it, and record a new decision in it.
 | [infra.md](infra.md) | Environments (image size); Base image; Layout; Conventions (healthchecks, tests, local postgres, pinned dependencies, immutable migrations); Shared infrastructure (vps-infra); Known compose pitfalls; Deploying the UI |
 | [users.md](users.md) | UI user management: users, roles (admin, user), sessions, the plan (2026-10-19) |
 | [harness.md](harness.md) | Development cycle and gates (hooks); the guard; CI; Codex |
+| [reporting.md](reporting.md) | Prepaid KPIs by month: lines, net adds, churn, billed revenue by source, ARPU (2026-11-15, issue #198) |
 | [tracking.md](tracking.md) | Progress tracker (make progress, scope.yaml); UI/MCP parity check |

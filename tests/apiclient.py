@@ -131,6 +131,7 @@ INTERNAL: dict[str, str] = {
     "/sim/esim-generate": "SimBatch",
     "/number/pool": "NumberPool",
     "/usage/summary": "UsageSummary",
+    "/report/kpi": "KpiReport",
     "/security/pin/{id}": "AccountPin",
     "/security/lock/{id}": "LineLock",
     "/security/audit": "AuditEntry",

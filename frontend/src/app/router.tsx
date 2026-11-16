@@ -37,6 +37,7 @@ export type Route =
   | { name: 'payments' }
   | { name: 'bills' }
   | { name: 'balances' }
+  | { name: 'reports' }
   | { name: 'integrations' }
   | { name: 'notFound'; path: string };
 
@@ -72,6 +73,7 @@ export function parseRoute(path: string): Route {
   if (path === '/payments' || path === '/payments/') return { name: 'payments' };
   if (path === '/bills' || path === '/bills/') return { name: 'bills' };
   if (path === '/balances' || path === '/balances/') return { name: 'balances' };
+  if (path === '/reports' || path === '/reports/') return { name: 'reports' };
   return { name: 'notFound', path };
 }
 
@@ -121,6 +123,8 @@ export function hrefOf(route: Exclude<Route, { name: 'notFound' }>): string {
       return '/bills';
     case 'balances':
       return '/balances';
+    case 'reports':
+      return '/reports';
   }
 }
 

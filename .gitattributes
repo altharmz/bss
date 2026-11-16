@@ -1,0 +1,4 @@
+# Vendored TM Forum specs are byte-pinned by spec/SHA256SUMS and keep their upstream
+# trailing whitespace; exempt them (only them) from `git diff --check`.
+spec/TMF*.oas.yaml -whitespace
+spec/TMF*.swagger.json -whitespace

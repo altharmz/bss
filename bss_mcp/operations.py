@@ -111,6 +111,8 @@ PAGE = "page"  # offset, limit only
 
 UUID_ARG = {"type": "string", "format": "uuid"}
 DATE_ARG = {"type": "string", "pattern": r"^\d{4}-\d{2}-\d{2}$", "description": "YYYY-MM-DD"}
+MONTH_ARG = {"type": "string", "pattern": r"^\d{4}-(0[1-9]|1[0-2])$", "description": "YYYY-MM"}
+CURRENCY_ARG = {"type": "string", "pattern": r"^[A-Z]{3}$", "description": "ISO 4217 code"}
 
 # path prefix -> what the API is, at the head of each description
 FAMILIES = {
@@ -829,6 +831,14 @@ OPERATIONS: dict[str, Op] = {
         " marks reached, and whether the line is throttled.",
         extra={"product.id": UUID_ARG, "date": DATE_ARG},
         required=("product.id",),
+    ),
+    # --- reports ---
+    "kpi_report": Op(
+        "Prepaid KPIs per calendar month for one currency (default the UI currency): lines"
+        " (opening, grossAdds, disconnects, netAdds, closing, average), churnRate percent,"
+        " tax-excluded revenue (plans, addOns, usage, fees) and ARPU. from/to are YYYY-MM"
+        " (default the last 12 months to the business month, at most 24).",
+        extra={"from": MONTH_ARG, "to": MONTH_ARG, "currency": CURRENCY_ARG},
     ),
     # --- TMF681 customer messages ---
     "list_communication_messages": Op(
