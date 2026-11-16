@@ -4,7 +4,7 @@
 
 - Base path here: `/internal/v1`
 - Contract: [`spec/internal/bss-internal.oas.yaml`](../../spec/internal/bss-internal.oas.yaml) - BSS internal API (admin UI) version 1.0.0; the spec's server URL is `/internal/v1`
-- Operations exposed: 69
+- Operations exposed: 74
 
 
 ## Operations
@@ -80,6 +80,11 @@
 | GET | `/internal/v1/users` | - | - | 200 `array of User` | [`app/internal/users.py`](../../app/internal/users.py) |
 | POST | `/internal/v1/users` | body: `application/json` | `CreateUser` | 201 `User` | [`app/internal/users.py`](../../app/internal/users.py) |
 | PATCH | `/internal/v1/users/{username}` | path: `username`; body: `application/json` | `EditUser` | 200 `User` | [`app/internal/users.py`](../../app/internal/users.py) |
+| GET | `/internal/v1/wholesale/invoice` | query: `offset`, `limit` | - | 200 `array of WholesaleInvoice` | [`app/internal/wholesale.py`](../../app/internal/wholesale.py) |
+| POST | `/internal/v1/wholesale/invoice` | query: `invoiceNumber` (required); body: `application/json` | `string` | 201 `WholesaleInvoice` | [`app/internal/wholesale.py`](../../app/internal/wholesale.py) |
+| GET | `/internal/v1/wholesale/invoice/{invoice_id}` | path: `invoice_id` | - | 200 `WholesaleInvoice` | [`app/internal/wholesale.py`](../../app/internal/wholesale.py) |
+| GET | `/internal/v1/wholesale/invoice/{invoice_id}/discrepancies` | path: `invoice_id`; query: `kind`, `offset`, `limit` | - | 200 `array of WholesaleDiscrepancy` | [`app/internal/wholesale.py`](../../app/internal/wholesale.py) |
+| GET | `/internal/v1/wholesale/invoice/{invoice_id}/lines` | path: `invoice_id`; query: `sort`, `offset`, `limit` | - | 200 `array of WholesaleLine` | [`app/internal/wholesale.py`](../../app/internal/wholesale.py) |
 
 Schema names refer to `components/schemas` (or `definitions`) of [`spec/internal/bss-internal.oas.yaml`](../../spec/internal/bss-internal.oas.yaml). Every response in the test suite is validated against them by `tests/apiclient.py` (2xx: the resource schema; anything else: `Error`).
 

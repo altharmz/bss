@@ -205,6 +205,7 @@ HANDLERS = {
     "/internal/v1/context": "app/internal/context.py",
     "/internal/v1/session": "app/internal/users.py",
     "/internal/v1/users": "app/internal/users.py",
+    "/internal/v1/wholesale": "app/internal/wholesale.py",
     "/internal/v1/customer": "app/internal/care_logins.py",
     "/self-care/v1": "app/care/routes.py",
     "/tmf-api/schema": "app/api/account.py",
@@ -302,6 +303,7 @@ AREAS = {
         "trouble_ticket_status_change",
     ),
     "selfcare": ("customer_login", "customer_session", "customer_login_code"),
+    "wholesale": ("wholesale_invoice", "wholesale_invoice_line", "wholesale_discrepancy"),
     "users": (
         "app_user",
         "app_session",
@@ -323,6 +325,7 @@ AREA_TITLES = {
     "security": "Account security: PIN, line locks, audit log (ours)",
     "care": "Customer care: interaction notes and cases (TMF683, TMF621)",
     "selfcare": "Customer self-care logins, sessions and codes (ours)",
+    "wholesale": "Wholesale reconciliation with the partner's invoices (ours)",
     "users": "Application users and sessions (ours)",
 }
 SKIP_TABLES = {"alembic_version"}

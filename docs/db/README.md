@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0082**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0083**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -92,6 +92,9 @@ PostgreSQL schema at Alembic head **0082**, read from `pg_catalog` of a throwawa
 | [`customer_login`](customer_login.md) | selfcare | The self-care login of a customer (at most one): email, password and the lockout. Never an app_user: it reaches only /self-care/v1 and only its own customer. |
 | [`customer_session`](customer_session.md) | selfcare | A signed-in self-care session (cookie bss_care_session). Only the SHA-256 of the random token is stored. |
 | [`customer_login_code`](customer_login_code.md) | selfcare | One-time codes sent by email: a 6-digit sign-in code (10 minutes, 5 attempts) or a link code that sets a password (verify_email 24 hours, reset_password 1 hour). Only hashes are stored; a new code of a purpose ends the older ones. |
+| [`wholesale_invoice`](wholesale_invoice.md) | wholesale | A wholesale invoice of the network partner (not a TMF678 customer bill), imported by an operator and reconciled against the lines and usage the BSS knows. Immutable once reconciled; a corrected invoice is a new import under another number. |
+| [`wholesale_invoice_line`](wholesale_invoice_line.md) | wholesale | One charge of a wholesale invoice, as imported, with the product it was matched to. |
+| [`wholesale_discrepancy`](wholesale_discrepancy.md) | wholesale | What the reconciliation of a wholesale invoice found: billedNotActive (a line charge for a number no product held in its period), activeNotBilled (a prepaid line live in the period without a line charge), usageMismatch (invoiced usage off the BSS total by more than 2 percent and the absolute tolerance), duplicateCharge (two line charges of one number in overlapping periods). |
 | [`app_user`](app_user.md) | users | Application identity: admin or user (UI), mcp (MCP login only); disabled, never deleted. |
 | [`app_session`](app_session.md) | users | Revocable sessions; SHA-256 tokens only, never raw cookies. |
 | [`app_user_audit`](app_user_audit.md) | users | Security changes only: operator, target, action and injected clock; no secrets. |
@@ -212,6 +215,11 @@ flowchart LR
     customer_login[customer_login]
     customer_session[customer_session]
     customer_login_code[customer_login_code]
+  end
+  subgraph area_wholesale["Wholesale reconciliation with the partner's invoices (ours)"]
+    wholesale_invoice[wholesale_invoice]
+    wholesale_invoice_line[wholesale_invoice_line]
+    wholesale_discrepancy[wholesale_discrepancy]
   end
   subgraph area_users["Application users and sessions (ours)"]
     app_user[app_user]
@@ -394,6 +402,11 @@ flowchart LR
   usage_record -->|"billing_account_id"| billing_account
   usage_record -->|"product_id"| product
   usage_threshold -->|"product_id"| product
+  wholesale_discrepancy -->|"invoice_id"| wholesale_invoice
+  wholesale_discrepancy -->|"invoice_line_id"| wholesale_invoice_line
+  wholesale_discrepancy -->|"product_id"| product
+  wholesale_invoice_line -->|"invoice_id"| wholesale_invoice
+  wholesale_invoice_line -->|"product_id"| product
   worker_request -->|"run_id"| billing_run
 ```
 
@@ -1840,6 +1853,58 @@ erDiagram
 ```
 
 Tables from other areas are shown with their key only: [`customer`](customer.md).
+
+## Wholesale reconciliation with the partner's invoices (ours)
+
+```mermaid
+erDiagram
+  wholesale_invoice {
+    uuid id PK
+    text invoice_number
+    daterange period
+    char currency
+    numeric total
+    integer line_count
+    text state
+    timestamptz imported_at
+    text imported_by
+  }
+  wholesale_invoice_line {
+    uuid id PK
+    uuid invoice_id FK
+    integer line_number
+    text msisdn
+    text iccid
+    daterange period
+    text charge_type
+    numeric quantity
+    text unit
+    numeric amount
+    uuid product_id FK
+  }
+  wholesale_discrepancy {
+    uuid id PK
+    uuid invoice_id FK
+    text kind
+    uuid product_id FK
+    text msisdn
+    uuid invoice_line_id FK
+    text usage_kind
+    numeric expected
+    numeric invoiced
+    jsonb detail
+  }
+  product {
+    uuid id PK
+  }
+  product |o--o{ wholesale_discrepancy : "product_id"
+  product |o--o{ wholesale_invoice_line : "product_id"
+  wholesale_invoice ||--o{ wholesale_discrepancy : "invoice_id"
+  wholesale_invoice ||--o{ wholesale_invoice_line : "invoice_id"
+  wholesale_invoice_line |o--o{ wholesale_discrepancy : "invoice_line_id"
+```
+
+Tables from other areas are shown with their key only: [`product`](product.md).
 
 ## Application users and sessions (ours)
 

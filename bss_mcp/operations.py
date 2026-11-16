@@ -90,6 +90,7 @@ EXCLUDED = {
     ("GET", "/internal/v1/notification/consent"),
     ("POST", "/internal/v1/notification/consent"),
     ("POST", "/internal/v1/notification/message/{message_id}/resend"),
+    ("POST", "/internal/v1/wholesale/invoice"),
 }
 # Interactive account credentials are deliberately never exposed as model tools.
 AUTH_OPERATIONS = {
@@ -755,6 +756,34 @@ OPERATIONS: dict[str, Op] = {
         "The account's settlement summary: outstanding, unallocated credit, bills on hold, overdue."
     ),
     "charges": Op("The account's charges (ABRs), newest run first.", query=PAGE),
+    "list_wholesale_invoices": Op(
+        "Imported wholesale invoices of the network partner, newest first, each with its"
+        " discrepancy counts, cost, revenue and margin.",
+        query=PAGE,
+    ),
+    "get_wholesale_invoice": Op(
+        "A wholesale invoice's summary: period, total, line count, the count of each"
+        " discrepancy kind (billedNotActive, activeNotBilled, usageMismatch, duplicateCharge),"
+        " cost, BSS revenue of the matched lines for the period and margin."
+    ),
+    "list_wholesale_discrepancies": Op(
+        "What the reconciliation of a wholesale invoice found, by kind then line: expected and"
+        " invoiced are days live for the line kinds, MB, minutes or messages for usageMismatch.",
+        query=PAGE,
+        extra={
+            "kind": {
+                "type": "string",
+                "enum": ["billedNotActive", "activeNotBilled", "usageMismatch", "duplicateCharge"],
+            }
+        },
+    ),
+    "list_wholesale_lines": Op(
+        "Cost, revenue and margin per line of a wholesale invoice (one row per matched product,"
+        " one per number no product held); sort msisdn (default), margin (lowest first) or"
+        " -margin.",
+        query=PAGE,
+        extra={"sort": {"type": "string", "enum": ["msisdn", "margin", "-margin"]}},
+    ),
     "transactions": Op(
         "The account's ledger: charges, refunds and payments with the balance after each.",
         query=PAGE,

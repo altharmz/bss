@@ -135,6 +135,10 @@ INTERNAL: dict[str, str] = {
     "/security/pin/{id}": "AccountPin",
     "/security/lock/{id}": "LineLock",
     "/security/audit": "AuditEntry",
+    "/wholesale/invoice": "WholesaleInvoice",
+    "/wholesale/invoice/{id}": "WholesaleInvoice",
+    "/wholesale/invoice/{id}/discrepancies": "WholesaleDiscrepancy",
+    "/wholesale/invoice/{id}/lines": "WholesaleLine",
     "/customer/{id}/careLogin": "CareLogin",
     "/notification/consent": "NotificationConsent",
     "/notification/message/{id}/resend": "ResentMessage",
@@ -300,6 +304,10 @@ class TmfClient:
                 spec_path = "/network/command" + ("/{id}" if len(parts) > 2 else "")
                 spec_path += "".join(f"/{part}" for part in parts[3:])
                 return "INTERNAL", "network", INTERNAL.get(spec_path), spec_path
+            if parts[:2] == ["wholesale", "invoice"]:
+                spec_path = "/wholesale/invoice" + ("/{id}" if len(parts) > 2 else "")
+                spec_path += "".join(f"/{part}" for part in parts[3:])
+                return "INTERNAL", "wholesale", INTERNAL.get(spec_path), spec_path
             if parts[0] == "security":
                 spec_path = "/security/" + parts[1] + ("/{id}" if len(parts) > 2 else "")
                 return "INTERNAL", "security", INTERNAL.get(spec_path), spec_path

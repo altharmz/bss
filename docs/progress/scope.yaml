@@ -148,6 +148,13 @@ items:
   - {id: api.internal.careLogin.get, area: api, stage: 5, method: GET, path: "/internal/v1/customer/{customer_id}/careLogin", title: "A customer's self-care login (operator)"}
   - {id: api.internal.careLogin.invite, area: api, stage: 5, method: POST, path: "/internal/v1/customer/{customer_id}/careLogin", title: "Invite a customer to self-care (operator)"}
   - {id: api.internal.careLogin.disable, area: api, stage: 5, method: DELETE, path: "/internal/v1/customer/{customer_id}/careLogin", title: "Disable a customer's self-care login (operator)"}
+  - {id: db.wholesale_invoice, area: db, stage: 5, table: wholesale_invoice, title: "Imported wholesale invoices of the network partner (#197)"}
+  - {id: db.wholesale_invoice_line, area: db, stage: 5, table: wholesale_invoice_line, title: "Wholesale invoice lines matched to products (#197)"}
+  - {id: db.wholesale_discrepancy, area: db, stage: 5, table: wholesale_discrepancy, title: "Wholesale reconciliation discrepancies (#197)"}
+  - {id: api.internal.wholesale.list, area: api, stage: 5, method: GET, path: /internal/v1/wholesale/invoice, title: "List wholesale invoices"}
+  - {id: api.internal.wholesale.get, area: api, stage: 5, method: GET, path: "/internal/v1/wholesale/invoice/{invoice_id}", title: "Wholesale invoice summary: discrepancy counts, cost, revenue, margin"}
+  - {id: api.internal.wholesale.discrepancies, area: api, stage: 5, method: GET, path: "/internal/v1/wholesale/invoice/{invoice_id}/discrepancies", title: "Wholesale reconciliation discrepancies"}
+  - {id: api.internal.wholesale.lines, area: api, stage: 5, method: GET, path: "/internal/v1/wholesale/invoice/{invoice_id}/lines", title: "Wholesale cost, revenue and margin per line"}
   - {id: db.financial_account, area: db, stage: 5, table: financial_account, title: "Financial accounts (TMF666)"}
   - {id: api.tmf666.financialAccount.list, area: api, stage: 5, method: GET, path: /tmf-api/accountManagement/v5/financialAccount, title: "List financial accounts"}
   - {id: api.tmf666.financialAccount.get, area: api, stage: 5, method: GET, path: "/tmf-api/accountManagement/v5/financialAccount/{account_id}", title: "Get a financial account"}
@@ -838,4 +845,5 @@ excluded:
   - {id: api.internal.security.pinPut, area: api, method: PUT, path: "/internal/v1/security/pin/{customer_id}", reason: "setting or resetting a customer's PIN is an operator action: the PIN is a secret a model must not choose or see"}
   - {id: api.internal.security.lockGet, area: api, method: GET, path: "/internal/v1/security/lock/{product_id}", reason: "line locks are an operator screen (193b)"}
   - {id: api.internal.security.lockPut, area: api, method: PUT, path: "/internal/v1/security/lock/{product_id}", reason: "turning a SIM swap or port-out lock on or off is an operator action (193b), not a model tool"}
+  - {id: api.internal.wholesale.import, area: api, method: POST, path: /internal/v1/wholesale/invoice, reason: "uploading a partner invoice file is an operator action in the UI (#381); its results are MCP tools"}
   - {id: api.internal.security.audit, area: api, method: GET, path: /internal/v1/security/audit, reason: "the audit log of agent actions is an operator view (193b)"}
