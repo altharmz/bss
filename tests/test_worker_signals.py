@@ -48,14 +48,20 @@ def finish(process: subprocess.Popen, timeout: float = 60) -> tuple[int, str]:
     return process.returncode, output
 
 
+BLOCK_LIMIT = 60  # seconds
+
+
 def wait_until_blocked(url: str, process: subprocess.Popen) -> None:
     """Until the worker's session waits for a row lock (it is inside an account)."""
     query = (
         "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database()"
         " AND application_name = 'bss-worker' AND wait_event_type = 'Lock'"
     )
+    # Up to 60 s, ended as soon as the worker blocks: a slow machine (another slot running
+    # tests) can take longer than 10 s to start it, and a passing run is no slower (#395).
+    deadline = time.monotonic() + BLOCK_LIMIT
     with psycopg.connect(url, autocommit=True) as admin:
-        for _ in range(200):
+        while time.monotonic() < deadline:
             if admin.execute(query).fetchone()[0]:
                 return
             assert process.poll() is None, finish(process)[1]

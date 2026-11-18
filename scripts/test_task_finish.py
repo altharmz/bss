@@ -596,7 +596,7 @@ if a[0] == 'ps' and any(x.startswith('ancestor=') for x in a):
 
     def test_finish_saves_the_test_selection_record_for_the_next_worktree(self):
         record = self.work / ".testmon/.testmondata"
-        record.parent.mkdir()
+        record.parent.mkdir(exist_ok=True)
         connection = sqlite3.connect(record)
         connection.execute("CREATE TABLE node (name TEXT)")
         connection.commit()
@@ -610,7 +610,7 @@ if a[0] == 'ps' and any(x.startswith('ancestor=') for x in a):
 
     def test_a_damaged_test_selection_record_does_not_stop_the_finish(self):
         record = self.work / ".testmon/.testmondata"
-        record.parent.mkdir()
+        record.parent.mkdir(exist_ok=True)
         record.write_bytes(b"not an sqlite file, long enough to be read as a header" * 4)
         self.assertEqual(self.finish()["status"], "finished")
         self.assertFalse((self.primary / ".git/bss-testmon/testmondata").exists())

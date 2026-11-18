@@ -6,8 +6,10 @@ import json
 import os
 import sys
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
+import full_suite
 import task_pr
 import task_telemetry
 from task_runtime import InvalidRuntime
@@ -24,6 +26,18 @@ class PrTests(unittest.TestCase):
     def setUp(self):
         self.git_setup()
         self.head = self.call(["git", "rev-parse", "HEAD"]).stdout.strip()
+        # The full suite passed at the fixture's head (full_suite.RECORD, ignored as in the
+        # repository); the full-suite tests take it away or move the head.
+        exclude = (
+            self.work / self.call(["git", "rev-parse", "--git-path", "info/exclude"]).stdout.strip()
+        )
+        exclude.parent.mkdir(parents=True, exist_ok=True)
+        with exclude.open("a") as output:
+            output.write(".testmon/\n")
+        self.record = self.work / full_suite.RECORD
+        self.record.parent.mkdir()
+        tree = self.call(["git", "rev-parse", "HEAD^{tree}"]).stdout.strip()
+        self.record.write_text(json.dumps({"head": self.head, "tree": tree}))
         self.pr = {
             "number": 123,
             "url": "https://github.com/altharmz/bss/pull/123",
@@ -334,6 +348,141 @@ class PrTests(unittest.TestCase):
         data = self.outcome("ready", 0)
         self.assertEqual(data["next_command"], f"make merge-task HUMAN_APPROVAL=123:{self.head}")
 
+    def test_approval_is_requested_only_when_nothing_else_is_left(self):
+        # #197: approval asked at a head that base-behind then changed (#395).
+        ask = "HUMAN_APPROVAL"
+        for reasons, expected in (
+            (["base-behind"], "make sync-task, make push, then make check-pr WAIT=600"),
+            (["ci-pending"], "make check-pr WAIT=600"),
+            (["uncommitted-changes"], "make commit, make push, then make check-pr WAIT=600"),
+            (["head-mismatch"], "make push, then make check-pr WAIT=600"),
+            (["full-suite-required"], "make test, then make check-pr WAIT=600"),
+            (["mergeability-unknown"], "make check-pr WAIT=600"),
+            (["merge-conflict"], None),
+            (
+                ["base-behind", "full-suite-required", "ci-pending"],
+                "make sync-task, make push, make test, then make check-pr WAIT=600",
+            ),
+            (["draft-pr"], "resolve draft-pr, then make check-pr"),
+        ):
+            for approval in (
+                ["human-approval-required"],
+                ["human-approval-required", "human-approval-mismatched"],
+            ):
+                with self.subTest(reasons=reasons, approval=approval):
+                    status = "failed" if reasons == ["merge-conflict"] else "pending"
+                    command = task_pr.next_command(
+                        status, approval + reasons, 123, self.head, True, "missing"
+                    )
+                    self.assertNotIn(ask, command)
+                    if expected:
+                        self.assertEqual(command, expected)
+        for approval in (
+            ["human-approval-required"],
+            ["human-approval-required", "human-approval-mismatched"],
+        ):
+            self.assertEqual(
+                task_pr.next_command("blocked", approval, 123, self.head, True, "mismatched"),
+                f"Human approval needed for PR 123 at {self.head}; after approval: "
+                f"make merge-task HUMAN_APPROVAL=123:{self.head}",
+            )
+
+    def test_a_human_gated_pr_with_a_fix_due_is_pending_without_an_approval_request(self):
+        self.pr["labels"] = [{"name": "needs-human"}]
+        self.state["behind"] = 2
+        self.state["incoming"] = [{"filename": "scripts/task_pr.py"}]
+        data = self.outcome("pending", 2)
+        self.assertEqual(data["reasons"], ["human-approval-required", "base-behind"])
+        self.assertNotIn("HUMAN_APPROVAL", data["next_command"])
+        self.state["behind"] = 0
+        self.pr["statusCheckRollup"] = [{"__typename": "CheckRun", "status": "IN_PROGRESS"}]
+        self.assertNotIn("HUMAN_APPROVAL", self.outcome("pending", 2)["next_command"])
+        self.pr["statusCheckRollup"][0].update(status="COMPLETED", conclusion="SUCCESS")
+        (self.work / "uncommitted").touch()
+        self.assertNotIn("HUMAN_APPROVAL", self.outcome("pending", 2)["next_command"])
+        (self.work / "uncommitted").unlink()
+        self.state["files"] = [[{"filename": "app/billing/run.py"}]]
+        self.record.unlink()
+        data = self.outcome("pending", 2)
+        self.assertEqual(data["reasons"], ["human-approval-required", "full-suite-required"])
+        self.assertEqual(data["next_command"], "make test, then make check-pr WAIT=600")
+        # A review the human still owes stays a block, and still asks for no approval.
+        self.pr["reviewDecision"] = "REVIEW_REQUIRED"
+        self.assertNotIn("HUMAN_APPROVAL", self.outcome("blocked", 3)["next_command"])
+
+    def test_full_suite_field_and_reason(self):
+        self.assertEqual(self.outcome("ready", 0)["full_suite"], "not-required")
+        self.state["files"] = [[{"filename": "alembic/versions/0090_x.py"}]]
+        self.assertEqual(self.outcome("ready", 0)["full_suite"], "passed")
+        self.record.unlink()
+        data = self.outcome("pending", 2)
+        self.assertEqual(
+            (data["full_suite"], data["reasons"]), ("missing", ["full-suite-required"])
+        )
+        self.assertEqual(data["next_command"], "make test, then make check-pr WAIT=600")
+        self.record.write_text(json.dumps({"head": self.head, "tree": "0" * 40}))
+        self.assertEqual(self.outcome("pending", 2)["full_suite"], "missing")
+
+    def test_wait_does_not_poll_for_a_local_step(self):
+        for reasons in (["base-behind"], ["full-suite-required"], ["uncommitted-changes"]):
+            with self.subTest(reasons=reasons):
+                self.assertEqual(
+                    self.wait([("pending", 2)] * 3, reasons=reasons), ("pending", 2, 1, 0)
+                )
+        self.assertEqual(
+            self.wait(
+                [("pending", 2), ("ready", 0)], reasons=["full-suite-required", "ci-pending"]
+            ),
+            ("ready", 0, 2, 1),
+        )
+
+    def master_commit(self, path, text):
+        """A commit on origin's master, as another task's merge makes it."""
+        clone = self.base / "other"
+        self.call(["git", "clone", "-q", str(self.remote), str(clone)])
+        (clone / path).parent.mkdir(parents=True, exist_ok=True)
+        (clone / path).write_text(text)
+        for args in (["add", path], ["commit", "-q", "-m", "master change"], ["push", "-q"]):
+            self.call(
+                ["git", "-c", "user.name=t", "-c", "user.email=t@example.test", "-C", str(clone)]
+                + args
+            )
+
+    def test_check_pr_of_an_old_branch_runs_masters_harness(self):
+        # Master's scripts/task.py stands in for a newer harness: it says it ran.
+        self.master_commit(
+            "scripts/task.py",
+            "import os, sys\n"
+            "print('master harness', sys.argv[1:], os.environ.get('BSS_SCRIPTS_REEXEC'))\n"
+            "sys.exit(5)\n",
+        )
+        result = self.call(["python3", "-B", str(Path(task_pr.__file__)), "check-pr"], check=False)
+        self.assertEqual(result.returncode, 5, result.stderr)
+        self.assertIn("running master's check-pr", result.stdout)
+        self.assertIn("master harness ['check-pr'] 1", result.stdout)
+        # merge-task too, through the same hand-over.
+        finish = Path(task_pr.__file__).with_name("task_finish.py")
+        result = self.call(["python3", "-B", str(finish), "merge-task"], check=False)
+        self.assertEqual(result.returncode, 5, result.stderr)
+        self.assertIn("master harness ['merge-task'] 1", result.stdout)
+
+    def test_a_branch_that_changes_the_harness_keeps_its_own(self):
+        self.master_commit("scripts/task.py", "import sys\nsys.exit(5)\n")
+        (self.work / "scripts/own.py").write_text("")
+        self.call(["git", "add", "scripts/own.py"])
+        self.call(["git", "commit", "-q", "--no-verify", "-m", "own harness change"])
+        self.pr["headRefOid"] = self.call(["git", "rev-parse", "HEAD"]).stdout.strip()
+        result, output, error = self.command()
+        self.assertEqual(result, 0, error)
+        self.assertIn("running the branch's own", error)
+        self.assertNotIn("running master's", output)
+
+    def test_a_master_change_outside_the_harness_needs_no_hand_over(self):
+        self.master_commit("docs/other.md", "text\n")
+        result, output, error = self.command()
+        self.assertEqual(result, 0, error)
+        self.assertNotIn("master", output + error)
+
     def test_create_pr_points_at_check_pr(self):
         self.state["pr"] = None
         self.state["new_pr"] = self.pr.copy()
@@ -342,8 +491,10 @@ class PrTests(unittest.TestCase):
             json.loads(output.splitlines()[-1])["next_command"], "make check-pr WAIT=600"
         )
 
-    def wait(self, sequence, wait="600"):
-        replies = [({"status": status}, code) for status, code in sequence]
+    def wait(self, sequence, wait="600", reasons=("ci-pending",)):
+        replies = [
+            ({"status": status, "reasons": list(reasons)}, code) for status, code in sequence
+        ]
         ticks = iter(range(0, 10_000, 20))
         with (
             patch.dict(os.environ, {"WAIT": wait}),

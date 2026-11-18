@@ -12,9 +12,10 @@ import tempfile
 import time
 from pathlib import Path
 
+import full_suite
 from task_git import hooks, push, require, require_no_git_overrides, shared_paths
 from task_quality import context, query, review
-from task_runtime import InvalidRuntime, diagnostic
+from task_runtime import InvalidRuntime, diagnostic, master_harness
 from task_telemetry import record
 
 REPOSITORY = "altharmz/bss"
@@ -217,24 +218,48 @@ def ci_state(checks):
     return "passed"
 
 
+# The reasons about the human's approval itself; every other reason is fixed first (#395).
+APPROVAL_REASONS = {
+    "human-approval-required",
+    "human-approval-malformed",
+    "human-approval-mismatched",
+}
+# What waiting can resolve: GitHub finishing CI or computing mergeability.
+WAITABLE = re.compile(r"^(ci-pending|mergeability-unknown|merge-state-(unknown|unstable))$")
+
+
 def next_command(status, reasons, number, head, human, approval_state):
+    """The one next step. The approval request comes last (#395): only when no other
+    reason is left, so the human never approves a head that later has to change."""
     merge = "make merge-task" + (
         f" HUMAN_APPROVAL={number}:{head}" if human and approval_state == "accepted" else ""
     )
     if status == "ready":
         return merge
-    if status == "pending" and "base-behind" in reasons:
-        return "make sync-task, make push, then make check-pr WAIT=600"
-    if status == "pending":
-        return "make check-pr WAIT=600"
     if status == "failed":
         return "fix the failure, make commit, make push, then make check-pr WAIT=600"
-    if reasons == ["human-approval-required"]:
+    fixes = [reason for reason in reasons if reason not in APPROVAL_REASONS]
+    if not fixes:
         return (
             f"Human approval needed for PR {number} at {head}; after approval: "
             f"make merge-task HUMAN_APPROVAL={number}:{head}"
         )
-    return "resolve the listed reasons, then make check-pr"
+    steps = []
+    if "base-behind" in fixes:
+        steps.append("make sync-task")
+    if "uncommitted-changes" in fixes:
+        steps.append("make commit")
+    if {"base-behind", "uncommitted-changes", "head-mismatch"} & set(fixes):
+        steps.append("make push")
+    # After the head is final: the record follows the tree it ran on.
+    if "full-suite-required" in fixes:
+        steps.append("make test")
+    handled = {"base-behind", "uncommitted-changes", "head-mismatch", "full-suite-required"}
+    rest = [reason for reason in fixes if reason not in handled and not WAITABLE.match(reason)]
+    if rest:
+        steps.append("resolve " + ", ".join(rest))
+    steps.append("make check-pr WAIT=600" if not rest else "make check-pr")
+    return ", ".join(steps[:-1]) + (", then " if len(steps) > 1 else "") + steps[-1]
 
 
 def wait_seconds():
@@ -252,7 +277,9 @@ def await_readiness(root, task, issue):
     while True:
         outcome, result = readiness(root, task, issue)
         remaining = deadline - time.monotonic()
-        if outcome["status"] != "pending" or remaining <= 0:
+        # A local step (sync, commit, make test) is not waited for: it never comes by itself.
+        waiting = any(WAITABLE.match(reason) for reason in outcome.get("reasons", []))
+        if outcome["status"] != "pending" or not waiting or remaining <= 0:
             return outcome, result
         time.sleep(min(pause, remaining))
 
@@ -319,6 +346,7 @@ def readiness(root, task, issue, approval=None):
     # Behind master is fine when nothing is shared (task_git.shared_paths, #390).
     shared = incoming_shared(root, head, names) if behind else []
     ci = ci_state(data["statusCheckRollup"])
+    suite = full_suite.state(root, head, names)
     reasons = []
     if human_blocked:
         reasons.append("human-approval-required")
@@ -336,6 +364,8 @@ def readiness(root, task, issue, approval=None):
         reasons.append("head-mismatch")
     if query(root, "status", "--porcelain=v1", "--untracked-files=all"):
         reasons.append("uncommitted-changes")
+    if suite in {"missing", "stale"}:
+        reasons.append("full-suite-required")
     if ci != "passed":
         reasons.append("ci-" + ci)
     if data["mergeable"] != "MERGEABLE":
@@ -352,6 +382,15 @@ def readiness(root, task, issue, approval=None):
         or any(r.startswith("review-") for r in reasons)
         or merge_state == "BLOCKED"
     )
+    # Waiting for the human only when nothing else is left: a missing approval with a fix
+    # still due is pending, and WAIT polls through pending CI (#395).
+    others = [reason for reason in reasons if reason not in APPROVAL_REASONS]
+    if (
+        policy
+        and others
+        and not (any(r.startswith("review-") for r in reasons) or merge_state == "BLOCKED")
+    ):
+        policy = False
     status = "failed" if failed else "blocked" if policy else "pending" if reasons else "ready"
     return {
         "next_command": next_command(status, reasons, number, head, human, approval_state),
@@ -366,6 +405,7 @@ def readiness(root, task, issue, approval=None):
         "human_approval": approval_state,
         "head_sha": head,
         "base_behind": behind,
+        "full_suite": suite,
         "reasons": reasons,
     }, {"ready": 0, "failed": 1, "pending": 2, "blocked": 3}[status]
 
@@ -383,6 +423,11 @@ def main():
             os.environ.get("GH_HOST", "github.com") == "github.com",
             "unexpected GitHub host; unset GH_HOST",
         )
+        if operation == "check-pr":
+            # A branch older than a harness fix gets master's gates (#395).
+            handed = master_harness(Path.cwd(), operation)
+            if handed is not None:
+                return handed
         root, primary, task, slot, metadata = context()
         record(task, operation + "-attempt", 0, 0, slot=slot)
         review(root, primary, task, slot, metadata)

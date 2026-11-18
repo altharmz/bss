@@ -22,7 +22,8 @@ table of operations and their targets, is
    in one line and carry on through delivery without asking whether to start.
 2. In the returned worktree: implement, `make format`, `make review-task`.
 3. `make commit MESSAGE="..." FILES='["path", ...]'` (the pre-commit hook is the one local
-   test run), then `make create-pr`, `make check-pr`, `make merge-task`.
+   test run), then `make create-pr`, `make check-pr`, `make merge-task`. Ask the human to
+   approve a PR only when `check-pr`'s `next_command` asks for approval.
 4. After the merge, from the primary checkout: `make finish-task SLOT=<slot>`.
 
 The primary checkout stays clean on `master` and is for administration only. Work, commits

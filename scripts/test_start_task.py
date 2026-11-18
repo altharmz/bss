@@ -93,6 +93,8 @@ class StartupTests(unittest.TestCase):
             "task_finish.py",
             "task_cleanup.py",
             "task_pr.py",
+            "full_suite.py",
+            "hook_selection.py",
             "task_git.py",
             "task_quality.py",
             "board_admin.py",

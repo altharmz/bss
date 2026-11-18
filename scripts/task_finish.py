@@ -17,6 +17,7 @@ from pathlib import Path
 import task_board
 import task_pr
 import task_repo
+import task_runtime
 import task_telemetry
 import task_testmon
 from task_cleanup import command, docker, remove_leftovers
@@ -546,6 +547,10 @@ def main():
         require_no_git_overrides()
         require(os.environ.get("GH_HOST", "github.com") == "github.com", "unexpected GitHub host")
         if operation == "merge-task":
+            # A branch older than a harness fix gets master's gates (#395).
+            handed = task_runtime.master_harness(Path.cwd(), operation)
+            if handed is not None:
+                return handed
             root, primary, task, slot, metadata = context()
             record(task, operation + "-attempt", 0, 0, slot=slot)
             review(root, primary, task, slot, metadata)

@@ -278,6 +278,39 @@ locks unwind, and the updated primary script runs once more with `BSS_SCRIPTS_RE
 The aborted run records no telemetry result of its own; the rerun does. Safety checks are
 not skipped: the rerun repeats them from the checkpoint.
 
+## Approval last, master's gates, the full-suite record (2026-11-18, #395)
+
+Delivering #197 took two human approvals, an extra full-suite run and an extra hook run:
+
+- **Approval is requested last.** `check-pr` reported `human-approval-required` with
+  `base-behind`; `next_command` was a generic "resolve the listed reasons", the agent asked
+  for approval, the sync then changed the head and the human approved again. Now
+  `next_command` names every other fix first (sync, commit, push, `make test`, waiting for CI)
+  and gives the approval form only when the approval reasons are all that is left. Such a PR
+  is `pending`, not `blocked`, so `WAIT` keeps polling through pending CI. A review or a
+  `BLOCKED` merge state is still a block. `WAIT` no longer polls while only a local step is
+  due: it never comes by itself.
+- **`check-pr` and `merge-task` run `master`'s harness** (`task_runtime.master_harness`).
+  The #197 branch predated #391 and blocked on a behind-but-unshared base that `master`
+  accepted. Both targets fetch `master`; when its `scripts/` changed since the fork and the
+  branch changed none of its own, they extract `master`'s `scripts/` (and
+  `compose.telemetry.yaml`, for telemetry) into a temporary directory and run its `task.py`
+  in the worktree, once (`BSS_SCRIPTS_REEXEC`). A branch that changes the harness itself
+  keeps its copy: never an older one than the task's own; `make sync-task` brings master's in.
+- **The full-suite record** (`scripts/full_suite.py`). A passing `make test` on a clean tree
+  writes `{head, tree, passed_at}` to `.testmon/full-suite-passed.json`; a failing run, a
+  dirty tree or a tree that changed during the run writes nothing. `check-pr` reports
+  `full_suite`. "Required" reuses the hook's selection: a PR with a path a backend test may
+  depend on (`hook_selection.backend`), so docs, harness, UI and CI PRs are `not-required`.
+  That is wider than "billing, migrations or the API", but nearly every `app/` path is one of
+  those, and a second list would drift. The record is `passed` at the head's tree, or when
+  every commit since the recorded head is a merge whose changes share no path with the PR
+  (`shared_paths`, the #390 rule); else `stale`. `stale` and `missing` are the reason
+  `full-suite-required`, `next_command` `make test`.
+- **The flaky worker test.** `wait_until_blocked` in `tests/test_worker_signals.py` polled a
+  fixed 10 s; a hook run beside another slot's tests took longer. It now waits up to 60 s and
+  returns as soon as the worker blocks.
+
 ## Tests in the hook: smoke plus affected
 
 The full suite is too long for every commit (about 11 minutes locally, 19 in the nightly CI run), so

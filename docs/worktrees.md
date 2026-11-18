@@ -62,12 +62,16 @@ does not know and lists the ones it accepts.
    needed only when `push`, `create-pr` or `check-pr` asks for it (both sides change a path).
 3. **Commit** with `make commit`. It stages only the listed files and runs the normal
    pre-commit hook, which is the one local verification run (see Hooks and checks). Run
-   `make test` (the full suite) before a PR touching billing, migrations or the API.
+   `make test` (the full suite) before a PR touching billing, migrations or the API. A pass
+   on a clean tree is recorded, and `check-pr` reports it as `full_suite`: a resumed session
+   reads it there instead of running the suite again.
 4. **PR.** `make create-pr` publishes the branch and opens (or reuses) the PR with
    `Fixes #N`. `make check-pr WAIT=600` reports readiness and waits for pending checks.
 5. **Merge.** `make merge-task` when ready. A human-gated PR stays blocked until the human
    approves that PR at its exact head in the conversation; then pass
-   `HUMAN_APPROVAL=<PR-number>:<40-char-head-SHA>`. New commits need renewed approval.
+   `HUMAN_APPROVAL=<PR-number>:<40-char-head-SHA>`. New commits need renewed approval, so
+   ask the human only when `next_command` asks for approval: while anything else is due
+   (a sync, CI, a commit or push, `make test`), it names that first.
 6. **Finish.** After the merge, issue closure and board Done, immediately run
    `make finish-task SLOT=<slot>` from clean primary `master`. No human gate. It removes the
    ignored output of Make targets (`frontend/dist`, `.shots`, `.e2e`, `src/api/generated`) with the
@@ -76,7 +80,7 @@ does not know and lists the ones it accepts.
 Every lifecycle target ends with its next step: a `Next: <command>` line, or a `next_command`
 field in the JSON result (commit -> `make create-pr`, create-pr -> `make check-pr WAIT=600`,
 check-pr ready -> `make merge-task`, merge-task -> `make finish-task SLOT=<slot>`, finish-task
--> `make start-task`). When a human gate is the only blocker, `check-pr` gives the
+-> `make start-task`). When a human gate is the only blocker left, `check-pr` gives the
 ready-to-copy form: `Human approval needed for PR <n> at <sha>; after approval: make
 merge-task HUMAN_APPROVAL=<n>:<sha>`.
 
@@ -266,13 +270,19 @@ resolve as source edits and `make commit`.
 `PR_TITLE=` and `PR_BODY_FILE=/absolute/path` override. `Fixes #N` is always added.
 
 `make check-pr` prints JSON readiness: PR, CI state, mergeability, review decision, human
-gate status, commits behind base, reason codes and `next_command`. Exit status: 0 ready, 1
+gate status, commits behind base, `full_suite`, reason codes and `next_command`. Exit status: 0 ready, 1
 failed or invalid, 2 pending, 3 policy blocked (read the `status` field). `WAIT=<seconds>`
-(default off, capped at 1800) polls every 20 s and stops as soon as the status is ready,
-failed or blocked, or when the time is up (then exit status 2 as without it); it never merges
-and never changes state. Ready requires passing checks, equal
-local and PR heads, a clean tree, a current base, a nondraft mergeable PR and a clean merge
-state. Human gates: a `needs-human` label, or a changed path (or the old name of a
+(default off, capped at 1800) polls every 20 s while something GitHub finishes on its own is
+pending (CI, mergeability) and stops as soon as the status is ready, failed or blocked, when
+only a local step is left (sync, commit, `make test`), or when the time is up (then exit
+status 2 as without it); it never merges and never changes state. Ready requires passing
+checks, equal local and PR heads, a clean tree, a current base, a nondraft mergeable PR, a
+clean merge state and, for a PR a backend test may depend on, a recorded full-suite pass
+(`full_suite`: `passed`, `stale`, `missing` or `not-required`; `stale` and `missing` are the
+reason `full-suite-required`). A human-gated PR with any of these still due is `pending`,
+not `blocked`, and its `next_command` asks for no approval yet. `check-pr` and `merge-task`
+run `master`'s harness scripts when the branch is older than a harness change on `master`
+and changes none of its own. Human gates: a `needs-human` label, or a changed path (or the old name of a
 renamed one) among CLAUDE.md, AGENTS.md, `.claude/settings.json`, `.claude/hooks/`, `.codex/`,
 `scripts/pre-commit.sh`, `.github/workflows/`: the files that grant permissions, run code or
 define policy. A GitHub

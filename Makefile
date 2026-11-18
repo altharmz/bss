@@ -152,8 +152,15 @@ hook-cases: ## [test] The shell cases of the hook's own scripts (the hook's lock
 	./scripts/test-billing-status-check.sh
 	./scripts/test-pre-commit-lock.sh
 
-test: runtime-check deploy-check hook-cases ## [test] The FULL suite in the container (parallel; HYPOTHESIS_PROFILE=dev|ci), plus the harness and deploy script tests (runtime-check, deploy-check, hook-cases): nightly in CI, by hand before a PR
+# A pass on a clean tree is recorded (scripts/full_suite.py, .testmon/full-suite-passed.json):
+# make check-pr reports it as full_suite, so a resumed session need not run the suite again.
+.PHONY: full-suite-snapshot
+test: full-suite-snapshot runtime-check deploy-check hook-cases ## [test] The FULL suite in the container (parallel; HYPOTHESIS_PROFILE=dev|ci), plus the harness and deploy script tests (runtime-check, deploy-check, hook-cases): nightly in CI, by hand before a PR (a pass on a clean tree is recorded for make check-pr)
 	$(LOCKED) ./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) $(if $(PLAN_CAPTURE_DIR),-e BSS_PLAN_CAPTURE_DIR=$(PLAN_CAPTURE_DIR)) oneoff pytest -n auto
+	@python3 -B scripts/full_suite.py record
+
+full-suite-snapshot: | testmon-dir
+	@python3 -B scripts/full_suite.py snapshot
 
 test-smoke: ## [test] The smoke subset (pytest -m smoke): what CI runs on pull requests that can affect it
 	$(LOCKED) ./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) oneoff pytest -n auto -m smoke
