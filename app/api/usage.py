@@ -140,6 +140,7 @@ def _usage_body(row: Row, product: Row | None, charge: Row | None) -> dict[str, 
         characteristic("StringCharacteristic", "unit", rules.UNITS[row["kind"]]),
         characteristic("StringCharacteristic", "eventTime", utc(row["event_at"]).isoformat()),
         characteristic("BooleanCharacteristic", "roaming", row["roaming"]),
+        characteristic("BooleanCharacteristic", "international", row["international"]),
         characteristic("BooleanCharacteristic", "throttled", row["throttled"]),
     ]
     for name in ("msisdn", "imsi"):
@@ -226,14 +227,15 @@ def _characteristics(documents: list[dict[str, Any]]) -> dict[str, Any]:
             raise unprocessable(f"usageCharacteristic {name} is given twice")
         found[name] = item.get("value")
     unknown = sorted(
-        set(found) - {"quantity", "eventTime", "msisdn", "imsi", "roaming", "throttled"}
+        set(found)
+        - {"quantity", "eventTime", "msisdn", "imsi", "roaming", "throttled", "international"}
     )
     if unknown:
         raise unprocessable(f"usageCharacteristic: unknown name(s) {', '.join(unknown)}")
     quantity = found.get("quantity")
     if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0:
         raise unprocessable("usageCharacteristic quantity is required: a positive integer")
-    for name in ("roaming", "throttled"):
+    for name in ("roaming", "throttled", "international"):
         if name in found and not isinstance(found[name], bool):
             raise unprocessable(f"usageCharacteristic {name} must be true or false")
     for name in ("msisdn", "imsi", "eventTime"):
@@ -294,6 +296,7 @@ def create_usage(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> T
                 imsi=traits.get("imsi"),
                 roaming=traits.get("roaming", False),
                 throttled=traits.get("throttled", False),
+                international=traits.get("international", False),
                 product_id=product["id"],
             ),
             now=clock.now(),

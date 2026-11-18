@@ -27,6 +27,7 @@ Partitioned by `RANGE (event_date)`; the partitions are not listed (they are cre
 | `status` | `text` | no |  | TMF635 status: notRated (matched, not rated: a plan line's included usage, or waiting for its day to close), rated (a pay-as-you-go line's usage, charged or without a usage price) or rejected (no line held the number). |
 | `rejection_reason` | `text` | yes |  | noLine when the record could not be matched. |
 | `created_at` | `timestamp with time zone` | no |  |  |
+| `international` | `boolean` | no | `false` | A voice or SMS record to a non-US destination, as reported (TMF635 usageCharacteristic international). Its zone: roaming when roaming, else international for voice and SMS, else domestic. |
 
 ## Foreign keys
 

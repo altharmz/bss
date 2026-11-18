@@ -66,6 +66,22 @@ included without this slice knowing them. 80% and 100% are noted per ingested re
 kind (`used*100 >= included*pct`), once per product, period and kind (a record can pass both).
 **Throttled** = the period's latest record says so, or data used reached `dataCapMb`.
 
+## Usage zones (2026-11-16, issue #200)
+
+A record is in one zone: **roaming** when the network says `roaming`, else **international**
+for a voice or SMS record to a non-US destination (`usage_record.international`, migration
+0084: the TMF635 `usageCharacteristic` `international` on POST, the feed record's field), else
+**domestic**. Each zone counts only against its own allowance: domestic as before
+(`dataAllowanceMb`, `voiceMinutes`, `smsCount`), roaming against `roamingDataMb`,
+`roamingMinutes`, `roamingSmsCount`, international calls against `internationalMinutes`
+(international SMS and data have no allowance of their own). **A change:** before this slice a
+roaming record counted against the domestic allowance; now it does not. A record in a zone with
+no allowance is stored and counted with `included = 0`: no threshold. The 80% and 100%
+thresholds are per zone (`usage_threshold.zone`, existing rows domestic); a domestic
+notification keeps its old dedupe key, the others add the zone. `ingest` and `ingest_batch`
+stay equal (the test stores one batch both ways). The summary lists the domestic pools always
+and a roaming or international pool when it has an allowance or usage, each with its `zone`.
+
 ## Internal API
 
 `GET /internal/v1/usage/summary?product.id=[&date=]` (ours; also an MCP tool): period, per kind
@@ -124,6 +140,13 @@ record) is the once-only guard and links record, pass, price and ABR; the pass r
 records as unrated under the lock, so the feed resending, TMF635 POST replaying or the worker
 running twice never charges twice. A record becomes TMF635 `rated`, with
 `usageProductPrice` (the price of one block without tax, `dutyFreeAmount`, its unit).
+
+**Zone prices (issue #200):** a usage price may name its zone in TMF620 `prodSpecCharValueUse`
+`usageZone` (`domestic` by default, `roaming`, `international`; stored as
+`product_offering_price.usage_zone`, only on a usage price, never changed afterwards: 409). The
+no-overlap rule is per offering, kind, zone and currency. Rating groups by line, day, kind
+**and zone**; a zone with no price of its own is rated without a charge, so **operators must
+define roaming and international prices to charge them**.
 
 ## Negative balance and top-ups
 

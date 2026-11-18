@@ -10,6 +10,22 @@ from psycopg import sql
 from app.repository._sql import Row, fetch_all, fetch_one
 
 KINDS = ("data", "voice", "sms")
+ZONES = ("domestic", "roaming", "international")
+# A record's usage zone (docs/decisions/usage.md): roaming wins; international is a voice or SMS
+# record to a non-US destination; everything else is domestic. The SQL of `used` and
+# `used_many` spells the same rule.
+
+
+def zone_of(kind: str, roaming: bool, international: bool) -> str:
+    if roaming:
+        return "roaming"
+    if international and kind != "data":
+        return "international"
+    return "domestic"
+
+
+def empty_totals() -> dict[tuple[str, str], int]:
+    return {(zone, kind): 0 for zone in ZONES for kind in KINDS}
 
 
 def get(conn: psycopg.Connection, uid: UUID) -> Row | None:
@@ -72,6 +88,7 @@ def insert(
     event_date: date,
     product: Row | None,
     now: datetime,
+    international: bool = False,
 ) -> Row | None:
     """The new row, or None when the network's record id is already stored for the date
     (the unique key is per event_date: the table is partitioned by it)."""
@@ -79,8 +96,8 @@ def insert(
         conn,
         "INSERT INTO usage_record (id, network_record_id, kind, quantity, roaming, throttled,"
         " msisdn, imsi, event_at, event_date, product_id, billing_account_id, status,"
-        " rejection_reason, created_at)"
-        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+        " rejection_reason, created_at, international)"
+        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
         " ON CONFLICT (network_record_id, event_date) DO NOTHING RETURNING *",
         (
             uuid4(),
@@ -98,6 +115,7 @@ def insert(
             "rejected" if product is None else "notRated",
             "noLine" if product is None else None,
             now,
+            international,
         ),
     )
 
@@ -171,15 +189,16 @@ def insert_many(
         "billing_account_id",
         "status",
         "rejection_reason",
+        "international",
     )
     rows = fetch_all(
         conn,
         "INSERT INTO usage_record (id, network_record_id, kind, quantity, roaming, throttled,"
         " msisdn, imsi, event_at, event_date, product_id, billing_account_id, status,"
-        " rejection_reason, created_at)"
+        " rejection_reason, international, created_at)"
         " SELECT i.*, %s FROM unnest(%s::uuid[], %s::text[], %s::text[], %s::bigint[],"
         " %s::bool[], %s::bool[], %s::text[], %s::text[], %s::timestamptz[], %s::date[],"
-        " %s::uuid[], %s::uuid[], %s::text[], %s::text[]) AS i"
+        " %s::uuid[], %s::uuid[], %s::text[], %s::text[], %s::bool[]) AS i"
         " ON CONFLICT (network_record_id, event_date) DO NOTHING RETURNING *",
         (now, *([record[name] for record in records] for name in columns)),
     )
@@ -234,22 +253,23 @@ def offerings_on(
 def used_many(
     conn: psycopg.Connection, keys: list[tuple[UUID, date, date]]
 ) -> dict[tuple[UUID, date, date], dict[str, int]]:
-    """`used` for every (product, period start, period end)."""
+    """`used` for every (product, period start, period end): totals per (zone, kind)."""
     rows = fetch_all(
         conn,
-        "SELECT i.product_id, i.period_start, i.period_end, u.kind, u.total"
+        "SELECT i.product_id, i.period_start, i.period_end, u.zone, u.kind, u.total"
         " FROM unnest(%s::uuid[], %s::date[], %s::date[])"
         " AS i(product_id, period_start, period_end)"
-        " CROSS JOIN LATERAL (SELECT kind, sum(quantity)::bigint AS total FROM usage_record"
-        " WHERE product_id = i.product_id AND event_date >= i.period_start"
-        " AND event_date < i.period_end GROUP BY kind) u",
+        " CROSS JOIN LATERAL (SELECT CASE WHEN roaming THEN 'roaming'"
+        " WHEN international AND kind <> 'data' THEN 'international' ELSE 'domestic' END AS zone,"
+        " kind, sum(quantity)::bigint AS total"
+        " FROM usage_record WHERE product_id = i.product_id AND event_date >= i.period_start"
+        " AND event_date < i.period_end GROUP BY 1, 2) u",
         ([key[0] for key in keys], [key[1] for key in keys], [key[2] for key in keys]),
     )
-    totals = {key: dict.fromkeys(KINDS, 0) for key in keys}
+    totals = {key: empty_totals() for key in keys}
     for row in rows:
-        totals[(row["product_id"], row["period_start"], row["period_end"])][row["kind"]] = row[
-            "total"
-        ]
+        place = (row["product_id"], row["period_start"], row["period_end"])
+        totals[place][(row["zone"], row["kind"])] = row["total"]
     return totals
 
 
@@ -266,15 +286,19 @@ def period_of(conn: psycopg.Connection, product_id: UUID, day: date) -> Row | No
     )
 
 
-def used(conn: psycopg.Connection, product_id: UUID, start: date, end: date) -> dict[str, int]:
-    """Period totals per kind (bytes, seconds, messages)."""
+def used(
+    conn: psycopg.Connection, product_id: UUID, start: date, end: date
+) -> dict[tuple[str, str], int]:
+    """Period totals per (zone, kind) (bytes, seconds, messages)."""
     rows = fetch_all(
         conn,
-        "SELECT kind, sum(quantity)::bigint AS total FROM usage_record"
-        " WHERE product_id = %s AND event_date >= %s AND event_date < %s GROUP BY kind",
+        "SELECT CASE WHEN roaming THEN 'roaming' WHEN international AND kind <> 'data'"
+        " THEN 'international' ELSE 'domestic' END AS zone, kind,"
+        " sum(quantity)::bigint AS total FROM usage_record"
+        " WHERE product_id = %s AND event_date >= %s AND event_date < %s GROUP BY 1, 2",
         (product_id, start, end),
     )
-    return {kind: 0 for kind in KINDS} | {row["kind"]: row["total"] for row in rows}
+    return empty_totals() | {(row["zone"], row["kind"]): row["total"] for row in rows}
 
 
 def latest_throttled(
@@ -315,13 +339,14 @@ def insert_threshold(
     used_amount: int,
     included: int,
     now: datetime,
+    zone: str = "domestic",
 ) -> bool:
-    """True when this is the first time the threshold is reached in the period."""
+    """True when this is the first time the threshold is reached in the period and zone."""
     row = fetch_one(
         conn,
         "INSERT INTO usage_threshold (product_id, period_start, period_end, allowance,"
-        " threshold, usage_record_id, used, included, reached_at)"
-        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
+        " threshold, usage_record_id, used, included, reached_at, zone)"
+        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
         " ON CONFLICT DO NOTHING RETURNING threshold",
         (
             product_id,
@@ -333,6 +358,7 @@ def insert_threshold(
             used_amount,
             included,
             now,
+            zone,
         ),
     )
     return row is not None
@@ -342,7 +368,7 @@ def thresholds(conn: psycopg.Connection, product_id: UUID, start: date) -> list[
     return fetch_all(
         conn,
         "SELECT * FROM usage_threshold WHERE product_id = %s AND period_start = %s"
-        " ORDER BY allowance, threshold",
+        " ORDER BY zone, allowance, threshold",
         (product_id, start),
     )
 

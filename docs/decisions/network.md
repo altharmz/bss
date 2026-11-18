@@ -25,10 +25,18 @@ one of the specification's values; the command takes the offering's **effective*
 at acceptance and sent unchanged: a later catalog edit never alters a command already made.
 T-Mobile enforces caps and throttling; the BSS only sends the profile.
 
+**Roaming and international (issue #200):** the flag `roaming` (the line may roam outside the
+US) and the allowances `roamingDataMb`, `roamingMinutes`, `roamingSmsCount` (while roaming) and
+`internationalMinutes` (calls from the US to non-US numbers), integers of zero or more.
+`profile.combine` adds them up and switches the flags on, like the others. T-Mobile blocks or
+bills usage beyond the profile; the BSS sends only the profile.
+
 ## Commands
 
 `network_command` (migration 0052): one per order item, `id` = idempotency key
-(uuid5 of the item and the kind). Kinds: add -> `activate`, suspend -> `suspend`, resume ->
+(uuid5 of the item and the kind). Since #200 (migration 0084) an add-on pass item can also
+have one `purpose = passEnd` command: the change_profile on the day the pass ends before its
+plan period ([prepaid.md](prepaid.md#roaming-and-international-passes-2026-11-16-issue-200)). Kinds: add -> `activate`, suspend -> `suspend`, resume ->
 `restore`, terminate -> `deactivate`, offering change -> `change_profile` (the new
 offering's profile), IMSI change -> `swap_sim` ([sim.md](sim.md)). A number-only modify sends none. Each is due on the order's date. The
 worker (`app/worker/network.py`, called first in every prepaid dispatch) sends the due ones;

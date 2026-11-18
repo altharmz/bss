@@ -15,7 +15,7 @@ command, due that day, has the billing owner credit the unused dates
 """
 
 from dataclasses import replace
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from decimal import Decimal
 from uuid import uuid4
 from zoneinfo import ZoneInfo
@@ -627,7 +627,8 @@ def prepare(conn, request, account, quotes, start, now, *, future=False):
 
 def _prepare_charges(conn, request, account, core, start, now):
     """An add-on pack or a pay-as-you-go line: only its one-time fees are charged, held from
-    the spendable balance now. An add-on ends with its plan's paid period."""
+    the spendable balance now. An add-on ends with its plan's paid period, a pass with
+    passDays after them if that is earlier."""
     tz = ZoneInfo(settings.billing_tz)
     accepted = {}
     for item in request.items:
@@ -639,6 +640,11 @@ def _prepare_charges(conn, request, account, core, start, now):
             ends = entitlement.latest_grant(conn, parent)["period"].upper
             terminating = products.get_product(conn, parent)["termination_date"]
             ends = ends if terminating is None else min(ends, terminating)
+            # a pass of passDays ends after them, at the latest with the plan period (#200)
+            offering = catalog_repo.get_product_offering(conn, item.product_offering_id)
+            days = offering_kind.pass_days(None if offering is None else offering["details"])
+            if days is not None:
+                ends = min(ends, start + timedelta(days=days))
         accepted[item.item_id] = (
             new,
             Charge(

@@ -1017,14 +1017,14 @@ def load_fee_prices(
 
 def load_usage_prices(
     conn: psycopg.Connection, offering_id: UUID, currency: str, at: datetime
-) -> dict[str, tuple[Price, str, int]]:
-    """The usage prices of an offering in `currency` valid at `at`, per kind: the price, its
-    name and its block in the record unit (docs/decisions/usage.md)."""
+) -> dict[tuple[str, str], tuple[Price, str, int]]:
+    """The usage prices of an offering in `currency` valid at `at`, per (kind, zone): the
+    price, its name and its block in the record unit (docs/decisions/usage.md)."""
     rows = fetch_all(
         conn,
         """
         SELECT id, product_offering_id, coalesce(nullif(name, ''), 'Usage') AS name, amount,
-               currency, valid_for, details, usage_kind, usage_block
+               currency, valid_for, details, usage_kind, usage_block, usage_zone
         FROM product_offering_price
         WHERE product_offering_id = %s AND price_type = 'usage' AND currency = %s
           AND valid_for @> %s::timestamptz
@@ -1032,7 +1032,7 @@ def load_usage_prices(
         (offering_id, currency, at),
     )
     return {
-        row["usage_kind"]: (
+        (row["usage_kind"], row["usage_zone"]): (
             Price(
                 id=row["id"],
                 offering_id=row["product_offering_id"],

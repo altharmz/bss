@@ -107,6 +107,7 @@ def process_network(
     ensure_ownership(conn)
     now = clock.now()
     attempted = []
+    end_passes(conn, now.astimezone(tz).date(), now)
     for due in network.due(conn, now.astimezone(tz).date(), now):
         if checkpoint is not None and checkpoint():
             break
@@ -147,6 +148,36 @@ def process_network(
         if heartbeat is not None:
             heartbeat()
     return attempted
+
+
+def end_passes(conn: psycopg.Connection, today: date, now: datetime) -> list[UUID]:
+    """A pass (an add-on with passDays) that ended before its plan period gets one
+    change_profile on its end date: the plan's profile with the add-ons still live then. The
+    only revert command; an add-on ending with the period needs none (docs/decisions/prepaid.md,
+    #200). Due today, sent by the same wake-up."""
+    from app.ordering.network import offering_profile, with_add_ons
+
+    made = []
+    for row in network.ended_passes(conn, today):
+        with conn.transaction():
+            plan_offering = products.offering_on(
+                conn, row["parent_product_id"], row["termination_date"]
+            )
+            if offering_profile(conn, plan_offering) is None:
+                continue  # not a network line
+            cmd = network.insert(
+                conn,
+                order_id=row["product_order_id"],
+                order_item_id=row["created_by_item_id"],
+                product_id=row["parent_product_id"],
+                kind="change_profile",
+                due_date=row["termination_date"],
+                profile=with_add_ons(conn, row["parent_product_id"], row["termination_date"]),
+                now=now,
+                purpose="passEnd",
+            )
+            made.append(cmd["id"])
+    return made
 
 
 def gate(conn: psycopg.Connection, cmd: Row) -> tuple[str, Row | None]:

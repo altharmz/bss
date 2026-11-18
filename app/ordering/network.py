@@ -39,6 +39,17 @@ def offering_profile(conn, offering_id: UUID | None) -> dict[str, Any] | None:
     return profile.effective(spec["details"], offering["details"])
 
 
+def with_add_ons(conn, plan_id: UUID, day: date) -> dict[str, Any]:
+    """The plan line's profile on `day`: its offering's, combined with each of its add-ons
+    live that day (started, not ended, not cancelled), oldest first."""
+    base = offering_profile(conn, products.offering_on(conn, plan_id, day)) or {}
+    for row in products.live_add_ons(conn, plan_id, day):
+        extra = offering_profile(conn, row["product_offering_id"])
+        if extra is not None:
+            base = profile.combine(base, extra)
+    return base
+
+
 def _line_profile(conn, item):
     product = products.get_product(conn, item.product_id)
     return product, offering_profile(conn, product["product_offering_id"])
@@ -64,15 +75,16 @@ def plan(conn, request, start) -> list[Planned]:
             continue
         parent = add_on_parent(item)
         if item.action == "add" and parent is not None:
-            # an add-on pack: the plan line gets the plan's profile plus the pack's allowance
+            # an add-on pack: the plan line gets the plan's profile, the add-ons already live
+            # and the pack's allowance (#200: a second pack keeps the first)
             extra = offering_profile(conn, item.product_offering_id)
             if extra is not None:
-                base = offering_profile(
-                    conn, products.get_product(conn, parent)["product_offering_id"]
-                )
                 planned.append(
                     Planned(
-                        item.item_id, "change_profile", profile.combine(base or {}, extra), parent
+                        item.item_id,
+                        "change_profile",
+                        profile.combine(with_add_ons(conn, parent, start), extra),
+                        parent,
                     )
                 )
             continue

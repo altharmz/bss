@@ -309,10 +309,17 @@ def _usage(conn: psycopg.Connection, since: datetime) -> list[Event]:
     return [
         Event(
             f"usage_{row['threshold']}",
-            f"usage:{row['product_id']}:{row['period_start']}:{row['allowance']}:{row['threshold']}",
+            # the domestic key is the one from before zones (#200), so nothing is told twice
+            f"usage:{row['product_id']}:{row['period_start']}:{row['allowance']}:{row['threshold']}"
+            + ("" if row["zone"] == "domestic" else f":{row['zone']}"),
             row["billing_account_id"],
             row["product_id"],
-            {"allowance": ALLOWANCE[row["allowance"]], "line": line_of(row["product_id"])},
+            {
+                "allowance": ALLOWANCE[row["allowance"]]
+                if row["zone"] == "domestic"
+                else f"{row['zone']} {ALLOWANCE[row['allowance']]}",
+                "line": line_of(row["product_id"]),
+            },
         )
         for row in rows
     ]

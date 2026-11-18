@@ -217,6 +217,31 @@ product: a pay-as-you-go purchase UI is not part of this slice.
 **Deployment.** Migration `0057`; existing prepaid products are untouched (`grantless` false,
 their grants and paid-through dates stay; renewal by card applies from their next renewal).
 
+## Roaming and international passes (2026-11-16, issue #200)
+
+Epic #182; the UI is #383. Design approved on the issue (the human's delegation, decided
+following TMF). Migration `0084`.
+
+A pass is an add-on pack (above, "Add-on packs") whose specification has the new roaming or
+international profile characteristics ([network.md](network.md)); its usage is tracked per zone
+([usage.md](usage.md#usage-zones-2026-11-16-issue-200)).
+
+- **Pass duration:** the offering characteristic `passDays` (one whole number from 1 to 30, on
+  an add-on only; 400 otherwise). The pass ends after them or with the plan period, whichever is
+  first: `termination_date = min(start + passDays, plan paid-through)`. Without it an add-on ends
+  with the period, as before.
+- **The profile sent** at a purchase is the plan's profile combined with the add-ons already
+  live that day and the new pack. Before this slice it was the plan and the new pack only, so a
+  second pack dropped the first from the network profile.
+- **End of a pass:** a pass that ends before its plan period ends gets **one** `change_profile`
+  on its end date, with the plan's profile and the add-ons still live then
+  (`network_command.purpose = passEnd`, one per item beside its order command; the worker makes
+  it in the network step of the wake-up and sends it the same wake-up). It is the only revert
+  command: an add-on ending with the period needs none (the next period's profile applies), a
+  plan ended early ends its add-ons as before.
+- **Unchanged:** add-ons end with their plan, terminating the plan ends them, their fees are
+  charged once.
+
 ## Multi-line discounts (2026-11-16, issue #196)
 
 Slice 1 of multi-line prepaid (epic #182); pooled data is #379, the UI #380. Design approved on

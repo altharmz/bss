@@ -96,9 +96,12 @@ class StubNetwork:
         imsi: str | None = None,
         roaming: bool = False,
         throttled: bool = False,
+        international: bool = False,
     ) -> None:
         self.usage_queue.append(
-            UsageRecord(record_id, kind, quantity, event_at, msisdn, imsi, roaming, throttled)
+            UsageRecord(
+                record_id, kind, quantity, event_at, msisdn, imsi, roaming, throttled, international
+            )
         )
 
     def check_device(self, imei: str) -> DeviceCheck:

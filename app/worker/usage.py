@@ -76,6 +76,7 @@ def _store(
                     imsi=record.imsi,
                     roaming=record.roaming,
                     throttled=record.throttled,
+                    international=record.international,
                 )
                 for record in records
             ],

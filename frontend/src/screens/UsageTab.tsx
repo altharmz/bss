@@ -114,7 +114,7 @@ function Summary({ summary }: { summary: UsageSummary }) {
       {summary.period === null ? (
         <Note tone="info">No plan period covers today, so there is no allowance to show.</Note>
       ) : (
-        summary.allowances.map((a) => <AllowanceBar key={a.kind} allowance={a} />)
+        summary.allowances.map((a) => <AllowanceBar key={`${a.zone}-${a.kind}`} allowance={a} />)
       )}
       {pay !== null && (
         <KeyValue

@@ -2799,9 +2799,16 @@ components:
           items:
             type: object
             additionalProperties: false
-            required: [kind, unit, used, included, remaining, percent, thresholds]
+            required: [kind, zone, unit, used, included, remaining, percent, thresholds]
             properties:
               kind: {type: string, enum: [data, voice, sms]}
+              zone:
+                type: string
+                enum: [domestic, roaming, international]
+                description: >-
+                  The usage zone of the pool (issue 200): domestic always listed, roaming and
+                  international when they have an allowance or usage. Each zone counts only
+                  its own records.
               unit: {type: string, enum: [bytes, seconds, messages]}
               used: {type: integer, minimum: 0}
               included: {type: integer, minimum: 0, description: 0 means nothing included.}
