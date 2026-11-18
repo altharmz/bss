@@ -72,10 +72,13 @@ def insert(
     priority: str | None = None,
     sender: dict[str, Any] | None = None,
     resend_of: UUID | None = None,
+    customer_bill_id: UUID | None = None,
 ) -> Row | None:
-    """The new message, or None when the event's message (dedupe key and channel) exists."""
+    """The new message, or None when the event's message (dedupe key and channel) exists.
+    `customer_bill_id`: the bill whose PDF an email carries (only named when given, so the
+    old-schema factories keep working)."""
     open_ = state in OPEN
-    return fetch_one(
+    row = fetch_one(
         conn,
         "INSERT INTO notification_message (id, event_type, category, channel, template, state,"
         " state_reason, receiver_name, receiver_email, receiver_phone, customer_id,"
@@ -109,6 +112,13 @@ def insert(
             now,
         ),
     )
+    if row is not None and customer_bill_id is not None:
+        row = fetch_one(
+            conn,
+            "UPDATE notification_message SET customer_bill_id = %s WHERE id = %s RETURNING *",
+            (customer_bill_id, row["id"]),
+        )
+    return row
 
 
 def record_sent(

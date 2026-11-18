@@ -18,7 +18,7 @@ from decimal import Decimal
 from typing import Any, Literal
 
 import psycopg
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 
 from app.api import listing
 from app.api.account import (
@@ -52,8 +52,9 @@ from app.api.inventory import product_href
 from app.api.tmfjson import TmfJSONResponse
 from app.billing import multi_line, settlement
 from app.billing.adapter import settle_account
+from app.billing.bill_pdf import bill_no
 from app.config import settings
-from app.repository import accounts, billing
+from app.repository import accounts, bill_documents, billing
 from app.repository._sql import IS_NULL, NOT_NULL, Row, rows_by_id, select_page
 
 BASE = "/tmf-api/customerBillManagement/v5"
@@ -126,11 +127,6 @@ def payment_href(payment_id: Any) -> str:
     return f"{PAYMENT_BASE}/payment/{payment_id}"
 
 
-def bill_no(bill_id: Any) -> str:
-    """The display number, like BA-xxxxxxxx for accounts: the first 8 hex digits."""
-    return "BL-" + str(bill_id).replace("-", "")[:8].upper()
-
-
 def bill_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
     return bill_bodies(conn, [row])[0]
 
@@ -152,6 +148,9 @@ def bill_bodies(conn: psycopg.Connection, rows: list[Row]) -> list[dict[str, Any
     ids = [row["id"] for row in rows]
     allocated, payments = billing.bill_allocations_by_bill(conn, ids)
     taxes = billing.bill_taxes_by_bill(conn, ids)
+    # page_bills reads the PDF size with the bill; other rows look it up
+    pdf_sizes = {row["id"]: row["pdf_size"] for row in rows if "pdf_size" in row}
+    pdf_sizes |= bill_documents.sizes(conn, [i for i in ids if i not in pdf_sizes])
     return [
         _bill_body(
             row,
@@ -162,6 +161,7 @@ def bill_bodies(conn: psycopg.Connection, rows: list[Row]) -> list[dict[str, Any
             allocated[row["id"]],
             taxes[row["id"]],
             payments[row["id"]],
+            pdf_sizes.get(row["id"]),
         )
         for row in rows
     ]
@@ -176,6 +176,7 @@ def _bill_body(
     allocated: Decimal,
     taxes: tuple[Decimal, list[Row]],
     payments: list[Row],
+    pdf_size: int | None = None,
 ) -> dict[str, Any]:
     currency = row["currency"]
     net, tax_lines = taxes
@@ -211,7 +212,8 @@ def _bill_body(
         ],
         "category": row["category"],
         "runType": row["run_type"],
-        "billDocument": [_document_body(row)] if row["bill_document"] else [],
+        "billDocument": ([_document_body(row)] if row["bill_document"] else [])
+        + ([] if pdf_size is None else [_pdf_body(row, pdf_size)]),
         "state": row["state"],
         "billingAccount": account_ref(account),
         **({} if financial is None else {"financialAccount": financial_ref(financial)}),
@@ -227,7 +229,7 @@ def _bill_body(
 
 
 def _document_body(row: Row) -> dict[str, Any]:
-    """The bill's one document, embedded (`content`): it has no address of its own (no
+    """The bill's JSON snapshot, embedded (`content`): it has no address of its own (no
     href or url) and no validity period."""
     raw = base64.b64decode(row["bill_document"])
     fmt = json.loads(raw).get("format", {}).get("name", "JSON detailed")
@@ -240,6 +242,25 @@ def _document_body(row: Row) -> dict[str, Any]:
         "mimeType": "application/json",
         "content": row["bill_document"],
         "size": {"amount": len(raw), "units": "bytes"},
+    }
+
+
+def pdf_href(bill_id: Any) -> str:
+    return f"{bill_href(bill_id)}/document.pdf"
+
+
+def _pdf_body(row: Row, size: int) -> dict[str, Any]:
+    """The bill's PDF, by reference: TMF678's AttachmentRefOrValue `url`, served by
+    `GET .../customerBill/{id}/document.pdf`."""
+    return {
+        "@type": "Attachment",
+        "id": f"{row['id']}-pdf",
+        "name": f"{bill_no(row['id'])}.pdf",
+        "description": f"Bill {bill_no(row['id'])}, PDF",
+        "attachmentType": "bill",
+        "mimeType": "application/pdf",
+        "url": pdf_href(row["id"]),
+        "size": {"amount": size, "units": "bytes"},
     }
 
 
@@ -346,6 +367,24 @@ def get_bill(bill_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
             raise not_found("customerBill", bill_id)
         body = bill_body(conn, row)
     return TmfJSONResponse(listing.select_fields(body, fields))
+
+
+@router.get("/customerBill/{bill_id}/document.pdf")
+def get_bill_pdf(bill_id: str, tx: Tx) -> Response:
+    """The PDF the run rendered when it issued the bill (its billDocument `url`). A bill
+    issued before PDFs existed has none: 404, like a bill that does not exist."""
+    with tx() as conn:
+        uid = parse_id("customerBill", bill_id)
+        if billing.get_bill(conn, uid) is None:
+            raise not_found("customerBill", bill_id)
+        content = bill_documents.pdf(conn, uid)
+    if content is None:
+        raise not_found("customerBill document", bill_id)
+    return Response(
+        content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{bill_no(uid)}.pdf"'},
+    )
 
 
 @router.patch("/customerBill/{bill_id}")

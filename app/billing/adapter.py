@@ -12,12 +12,12 @@ from zoneinfo import ZoneInfo
 
 import psycopg
 
-from app.billing import settlement
+from app.billing import bill_pdf, settlement
 from app.billing.core import add_month, compute, cycle_period
-from app.billing.model import Account, BillingResult, BillingState, Price
+from app.billing.model import Account, BillingResult, BillingState, DocumentFailed, Price
 from app.config import settings
 from app.events import emit
-from app.repository import balance_actions, billing, presentation
+from app.repository import balance_actions, bill_documents, billing, presentation
 
 
 def visible_before(run_date: date, tz: ZoneInfo) -> datetime:
@@ -103,11 +103,13 @@ def apply_result(
         billing.attach_abrs_to_bill(conn, bill_id, account.id, members)
 
 
-def issue_bills(conn: psycopg.Connection, account: Account, *, now: datetime) -> None:
+def issue_bills(conn: psycopg.Connection, account: Account, *, now: datetime) -> list[UUID]:
     """Issue every bill of the account still waiting (written by this run, or `new` from
     before migration 0006): validate it, then new -> validated -> sent (-> settled when
     nothing is due). A bill that fails validation raises InconsistentState, so the account
-    fails in the run and nothing of it is written."""
+    fails in the run and nothing of it is written. Returns the ids of the bills issued:
+    the caller settles the account, then renders their PDFs (`store_documents`)."""
+    issued: list[UUID] = []
     for candidate in billing.load_issue_candidates(conn, account.id):
         end = (
             cycle_period(candidate.bill_date, account.bill_cycle_day).end
@@ -120,6 +122,19 @@ def issue_bills(conn: psycopg.Connection, account: Account, *, now: datetime) ->
             billing.record_bill_state(conn, change, now=now, cause="run", notify=False)
         # one event for the bill as issued: its new -> validated -> sent steps are internal
         emit.bill(conn, candidate.id, "Create", at=now)
+        issued.append(candidate.id)
+    return issued
+
+
+def store_documents(conn: psycopg.Connection, bill_ids: list[UUID], *, now: datetime) -> None:
+    """The PDF of each bill just issued, rendered after the settlement so it shows what
+    paid the bill at issue. A render failure is DocumentFailed: the account fails in the
+    run, and nothing of it is written (docs/decisions/bills.md)."""
+    for bill_id in bill_ids:
+        try:
+            bill_documents.store(conn, bill_id, now=now)
+        except bill_pdf.RenderError as error:
+            raise DocumentFailed(str(error)) from error
 
 
 def settle_account(
@@ -163,6 +178,7 @@ def bill_account(
         result = compute(state, run_date, tz)
         now = current["started_at"]
         apply_result(conn, state.account, run["id"], result, issued_at=now)
-        issue_bills(conn, state.account, now=now)
+        issued = issue_bills(conn, state.account, now=now)
         settle_account(conn, state.account, now=now, cause="run")
+        store_documents(conn, issued, now=now)
     return result

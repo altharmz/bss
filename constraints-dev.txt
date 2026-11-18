@@ -4,7 +4,9 @@
 # 2026-11-08 (#263): opentelemetry-api 1.45.1, certifi 2026.10.19, and the missing
 # prometheus_client the dev image already got from the runtime venv. Used as `pip
 # install -r requirements-dev.txt -c constraints-dev.txt`. Regenerate deliberately - see
-# docs/decisions/infra.md, "Dependencies are pinned".
+# docs/decisions/infra.md, "Dependencies are pinned". reportlab==5.1.0,
+# pillow, charset-normalizer and pypdf==7.1.1 added 2026-11-18 (#202), pip check clean;
+# opentelemetry-api 1.45.2 for CVE-2026-126360 the same day.
 alembic==1.20.0
 annotated-doc==0.0.5
 annotated-types==0.8.0
@@ -12,6 +14,7 @@ anyio==4.15.1
 attrs==26.1.0
 certifi==2026.10.19
 cffi==2.1.1
+charset-normalizer==3.5.2
 click==8.5.0
 coverage==7.17.0
 cryptography==50.0.2
@@ -33,8 +36,9 @@ MarkupSafe==3.0.3
 mcp==2.3.0
 mcp-types==2.3.0
 openapi-schema-validator==0.9.0
-opentelemetry-api==1.45.1
+opentelemetry-api==1.45.2
 packaging==26.3
+pillow==13.0.0
 pluggy==1.6.0
 prometheus_client==0.26.0
 psycopg==3.3.6
@@ -46,6 +50,7 @@ pydantic-settings==2.15.0
 pydantic_core==2.46.5
 Pygments==2.21.0
 PyJWT==2.15.1
+pypdf==7.1.1
 pytest==9.1.1
 pytest-testmon==2.2.0
 pytest-xdist==3.8.0
@@ -53,6 +58,7 @@ python-dotenv==1.2.4
 python-multipart==0.0.32
 PyYAML==6.0.3
 referencing==0.37.0
+reportlab==5.1.0
 rfc3339-validator==0.1.4
 rpds-py==2026.6.3
 ruff==0.16.10

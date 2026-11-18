@@ -15,10 +15,13 @@ from zoneinfo import ZoneInfo
 
 import psycopg
 
+from app.billing import bill_pdf
 from app.clock import Clock
 from app.config import settings
 from app.integrations.notify import NotifyError, adapter
+from app.integrations.notify.interface import Attachment
 from app.notify import events, service
+from app.repository import bill_documents
 from app.repository import notifications as repo
 from app.repository._sql import Row
 from app.worker.process import Checkpoint, Heartbeat
@@ -85,7 +88,11 @@ def send(conn: psycopg.Connection, row: Row, now: datetime, tz: ZoneInfo) -> Row
             ref = adapter().send_sms(str(row["id"]), row["receiver_phone"], row["content"])
         else:
             ref = adapter().send_email(
-                str(row["id"]), row["receiver_email"], row["subject"] or "", row["content"]
+                str(row["id"]),
+                row["receiver_email"],
+                row["subject"] or "",
+                row["content"],
+                _attachments(conn, row),
             )
     except NotifyError as error:
         return _failed(conn, row, str(error) or "the sender refused the message", now)
@@ -93,6 +100,18 @@ def send(conn: psycopg.Connection, row: Row, now: datetime, tz: ZoneInfo) -> Row
         log.exception("notification %s", row["id"])
         return _failed(conn, row, str(error) or type(error).__name__, now)
     return repo.completed(conn, row["id"], ref=ref, now=now)
+
+
+def _attachments(conn: psycopg.Connection, row: Row) -> tuple[Attachment, ...]:
+    """The bill's PDF of a bill email (docs/decisions/bills.md); nothing for other messages.
+    A bill email whose PDF is missing is not sent without it: the send fails and retries."""
+    bill_id = row.get("customer_bill_id")
+    if bill_id is None:
+        return ()
+    content = bill_documents.pdf(conn, bill_id)
+    if content is None:
+        raise NotifyError(f"bill {bill_id} has no PDF")
+    return ((f"{bill_pdf.bill_no(bill_id)}.pdf", "application/pdf", content),)
 
 
 def _failed(conn: psycopg.Connection, row: Row, error: str, now: datetime) -> Row:

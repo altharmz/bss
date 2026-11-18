@@ -273,7 +273,7 @@ def test_a_sim_swap_is_told(api, db_conn, line_world):
 def test_every_template_renders_for_both_channels():
     names = dict.fromkeys(
         ("name", "balance", "threshold", "plan", "date", "days", "shortfall", "line"), "x"
-    ) | dict.fromkeys(("allowance", "last4", "reason"), "x")
+    ) | dict.fromkeys(("allowance", "last4", "reason", "bill_no", "period", "amount", "total"), "x")
     for event in templates.EVENTS:
         for channel in ("sms", "email"):
             subject, body, template = templates.render(event, channel, names)

@@ -7,7 +7,8 @@ system itself writes for prepaid events (low balance, renewal, grace, ...) are l
 A message is a record of what was sent: DELETE is 405, and the spec's `/hub` is not
 implemented (it declares no listener events). A marketing message (characteristic
 `category` = `marketing`) is cancelled with `noConsent` unless the customer opted in.
-`attachment` and `logFlag: false` are not supported (422).
+An `attachment` in a POST and `logFlag: false` are not supported (422); a bill email lists
+the bill's PDF in `attachment` by its url (docs/decisions/bills.md).
 """
 
 from typing import Any
@@ -17,6 +18,7 @@ from fastapi import APIRouter, Request
 from pydantic import AwareDatetime, Field
 
 from app.api import listing
+from app.api.bill import pdf_href
 from app.api.common import (
     Ref,
     TmfModel,
@@ -33,6 +35,7 @@ from app.api.customer import customer_href
 from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
 from app.api.errors import conflict, not_found, unprocessable
 from app.api.tmfjson import TmfJSONResponse
+from app.billing.bill_pdf import bill_no
 from app.config import settings
 from app.notify import recipients, service
 from app.repository import notifications as repo
@@ -59,6 +62,7 @@ ATTRIBUTES = (
     "receiver",
     "sender",
     "state",
+    "attachment",
 )
 CATEGORY_NAMES = ("category",)
 READ_ONLY = ("sendTime", "sendTimeComplete", "tryTimes", "state")
@@ -114,6 +118,23 @@ def message_href(message_id: Any) -> str:
 
 def _trait(name: str, value: Any) -> dict[str, Any]:
     return {"@type": "StringCharacteristic", "name": name, "valueType": "string", "value": value}
+
+
+def _attachments(row: Row) -> list[dict[str, Any]] | None:
+    """A bill email carries the bill's PDF: referenced by its url (docs/decisions/bills.md)."""
+    bill_id = row.get("customer_bill_id")
+    if bill_id is None:
+        return None
+    return [
+        {
+            "@type": "Attachment",
+            "id": f"{bill_id}-pdf",
+            "attachmentType": "bill",
+            "mimeType": "application/pdf",
+            "name": f"{bill_no(bill_id)}.pdf",
+            "url": pdf_href(bill_id),
+        }
+    ]
 
 
 def message_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
@@ -178,6 +199,7 @@ def message_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
                 )
             ],
             "sender": sender,
+            "attachment": _attachments(row),
             "state": row["state"],
         }
     )

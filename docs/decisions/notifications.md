@@ -15,7 +15,8 @@ enum: `initial` (queued, or waiting for the quiet hours to end), `inProgress` (a
 is scheduled), `completed` (sent), `cancelled` (`stateReason`: `noConsent`, `noRecipient`,
 `operator`), `failed` (retries used up). One `receiver`, `sender` stored as sent, `characteristic`
 carries `category`, `event`, `template`, `stateReason`, `lastError`, `providerReference`,
-`resendOf`, `billingAccount`, `product`. `attachment` and `logFlag: false` are 422; `state`,
+`resendOf`, `billingAccount`, `product`. A bill email lists its PDF in `attachment` (by url, #202);
+an `attachment` in a POST and `logFlag: false` are 422; `state`,
 `sendTime`, `sendTimeComplete`, `tryTimes` are read-only (400). Filters: `id`, `state`,
 `messageType`, `receiver.party.id` (customer), `billingAccount.id`, `product.id`. MCP tools:
 list, get, create, patch.
@@ -30,7 +31,8 @@ list, get, create, patch.
 
 ## Adapter
 
-`app/integrations/notify/`: `send_sms(key, to, body)`, `send_email(key, to, subject, body)`; the key
+`app/integrations/notify/`: `send_sms(key, to, body)`, `send_email(key, to, subject, body,
+attachments=())` (each attachment `(filename, mime_type, bytes)`, since #202); the key
 is the message id and a repeated key must answer the first reference. `BSS_NOTIFY_ADAPTER=log`
 (default; unknown value fails startup) records the message and accepts it; test values: an SMS to a
 number ending `0000` or an email to `fail@example.test` is refused until `recover(to)`. A real SMS
@@ -54,6 +56,7 @@ state-based events describe the present (a low-balance account is told once afte
 | `card_declined` | `payment_command` declined | command |
 | `port_in_pending` / `_rejected` / `_completed` | port-in request state | request, submission, state |
 | `sim_swap` | `swap_sim` network command confirmed | command |
+| `bill_issued` | a bill's PDF rendered, account with the `email` medium (email only, PDF attached, `BSS_BILL_EMAIL_ENABLED`; [bills.md](bills.md#pdf-documents-and-email-delivery-202-2026-11-18)) | bill |
 
 A port-in has no customer until an order claims the number; it is told from then on. Recipients:
 the customer's (then the party's) `contactMedium` email and phone (preferred first); without a phone

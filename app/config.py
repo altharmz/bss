@@ -108,6 +108,23 @@ class Settings(BaseSettings):
     notify_quiet_end: str = Field(default="08:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
     notify_sender_email: str = "no-reply@bss.example.test"
     notify_sender_sms: str = "18005550100"
+    # Bill PDFs and delivery (docs/decisions/bills.md, "PDF documents and email delivery"): the
+    # issuer printed in every PDF's header (address lines separated by "\n" or ";"), and
+    # whether bills of accounts with the `email` presentation medium are emailed (the human's
+    # switch in production).
+    bill_issuer_name: str = Field(
+        default="BSS Mobile",
+        min_length=1,
+        validation_alias=AliasChoices("BSS_BILL_ISSUER_NAME", "bill_issuer_name"),
+    )
+    bill_issuer_address: str = Field(
+        default="",
+        validation_alias=AliasChoices("BSS_BILL_ISSUER_ADDRESS", "bill_issuer_address"),
+    )
+    bill_email_enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("BSS_BILL_EMAIL_ENABLED", "bill_email_enabled"),
+    )
     # Account security (docs/decisions/accounts.md): whether sensitive actions on a protected
     # customer (a live prepaid product) demand the account PIN (the rollout switch; locks and
     # the audit log always apply), consecutive wrong PINs before verification locks, and for how

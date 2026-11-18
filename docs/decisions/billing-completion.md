@@ -52,8 +52,9 @@ it requires a separately reviewed data migration. Earlier migrations are immutab
 ## Presentation configuration and documents
 
 BillFormat supports two real renderers, `JSON detailed` (charges and totals) and
-`JSON summary` (totals and dates). BillPresentationMedia describes preferences;
-it does not send email, postal mail, or initiate any external delivery.
+`JSON summary` (totals and dates). BillPresentationMedia describes preferences; since #202 a
+medium named `email` emails each new bill with its PDF ([bills.md](bills.md#pdf-documents-and-email-delivery-202-2026-11-18)),
+and nothing else sends postal mail or initiates any other delivery.
 Both expose list/retrieve/create/PATCH, name and optional description, strict fields
 and equality name filters. Names are unique; unsupported formats are a 422.
 
@@ -66,7 +67,8 @@ Every newly issued bill snapshots a base64 JSON Attachment in `billDocument`,
 including the selected format, media descriptions, account, dates, exact totals and
 (for detailed output) charge details. Settlement/configuration/name changes do not
 rewrite the document. Legacy bills keep no document rather than invented history.
-The TMF bill response serves the inline attachment; no new document API is needed.
+The TMF bill response serves the inline attachment; since #202 it also lists the bill's PDF
+by url (bills.md).
 
 Migration 0010 adds two refund tables, 0011 one request table, and 0012 three
 presentation tables plus account/document columns. Existing money and dates are

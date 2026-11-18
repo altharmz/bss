@@ -6,9 +6,10 @@ key answers the first reference without recording the message again.
 """
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 
-from app.integrations.notify.interface import NotifyError
+from app.integrations.notify.interface import Attachment, NotifyError
 
 log = logging.getLogger("app.notify")
 
@@ -20,6 +21,7 @@ class Sent:
     to: str
     subject: str | None
     body: str
+    attachments: tuple[Attachment, ...] = ()
 
 
 class LogNotify:
@@ -35,20 +37,31 @@ class LogNotify:
     def recover(self, to: str) -> None:
         self._recovered.add(to)
 
-    def _send(self, key: str, channel: str, to: str, subject: str | None, body: str) -> str:
+    def _send(
+        self,
+        key: str,
+        channel: str,
+        to: str,
+        subject: str | None,
+        body: str,
+        attachments: Sequence[Attachment] = (),
+    ) -> str:
         self.attempts.append((channel, to))
         if key in self._refs:
             return self._refs[key]
         bad = to.endswith("0000") if channel == "sms" else to == "fail@example.test"
         if bad and to not in self._recovered:
             raise NotifyError(f"the sender refused {to}")
-        self.sent.append(Sent(key, channel, to, subject, body))
-        log.info("notify %s to %s: %s", channel, to, body)
+        self.sent.append(Sent(key, channel, to, subject, body, tuple(attachments)))
+        names = ", ".join(f"{name} ({len(content)} bytes)" for name, _, content in attachments)
+        log.info("notify %s to %s: %s%s", channel, to, body, f" [{names}]" if names else "")
         self._refs[key] = f"log-{len(self.sent)}"
         return self._refs[key]
 
     def send_sms(self, key: str, to: str, body: str) -> str:
         return self._send(key, "sms", to, None, body)
 
-    def send_email(self, key: str, to: str, subject: str, body: str) -> str:
-        return self._send(key, "email", to, subject, body)
+    def send_email(
+        self, key: str, to: str, subject: str, body: str, attachments: Sequence[Attachment] = ()
+    ) -> str:
+        return self._send(key, "email", to, subject, body, attachments)

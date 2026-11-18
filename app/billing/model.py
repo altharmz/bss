@@ -28,6 +28,11 @@ class InconsistentState(BillingError):
     """Stored ABRs or bills contradict the billing rules (docs/decisions/billing-core.md)."""
 
 
+class DocumentFailed(BillingError):
+    """An issued bill's PDF could not be rendered (docs/decisions/bills.md): the account
+    fails in the run, so no bill is issued without its document."""
+
+
 @dataclass(frozen=True)
 class DateRange:
     """Half-open [start, end), like Postgres `daterange`. May be empty (start == end)."""

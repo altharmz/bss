@@ -772,6 +772,15 @@ def page_abrs(
     )
 
 
+# The size of the bill's PDF (#202), read with a page of bills: the TMF678 body lists it, and
+# the page keeps its statement count (tests/test_list_queries.py). get_bill stays `*`: the
+# billing paths call it, also on schemas before 0086 in the migration tests.
+PDF_SIZE = (
+    "(SELECT octet_length(d.pdf) FROM customer_bill_document d"
+    " WHERE d.customer_bill_id = customer_bill.id) AS pdf_size"
+)
+
+
 def get_bill(conn: psycopg.Connection, bill_id: UUID) -> Row | None:
     return fetch_one(conn, "SELECT * FROM customer_bill WHERE id = %s", (bill_id,))
 
@@ -781,7 +790,13 @@ def page_bills(
 ) -> tuple[list[Row], bool]:
     """Newest first (#314, decided by the human 2026-11-11)."""
     return select_page(
-        conn, "customer_bill", where=where, offset=offset, limit=limit, newest_first=True
+        conn,
+        "customer_bill",
+        where=where,
+        offset=offset,
+        limit=limit,
+        newest_first=True,
+        extra=sql.SQL(PDF_SIZE),
     )
 
 
