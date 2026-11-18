@@ -617,3 +617,14 @@ def offering_on(conn: psycopg.Connection, product_id: UUID, day: date) -> UUID:
     row = fetch_one(conn, "SELECT product_offering_on(%s, %s) AS id", (product_id, day))
     assert row is not None and row["id"] is not None
     return row["id"]
+
+
+def live_add_ons(conn: psycopg.Connection, plan_id: UUID, day: date) -> list[Row]:
+    """The add-ons of a plan product live on `day`, oldest first (docs/decisions/prepaid.md)."""
+    return fetch_all(
+        conn,
+        "SELECT * FROM product WHERE parent_product_id = %s AND grantless"
+        " AND start_date <= %s AND (termination_date IS NULL OR termination_date > %s)"
+        " AND status NOT IN ('cancelled', 'aborted') ORDER BY start_date, created_at, id",
+        (plan_id, day, day),
+    )

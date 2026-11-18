@@ -28,6 +28,7 @@ SID ProductOfferingPrice (TMF620 productOfferingPrice): a price created on its o
 | `usage_kind` | `text` | yes |  | For a usage price: the kind it rates, data, voice or sms (from the unit of measure). |
 | `usage_block` | `bigint` | yes |  | For a usage price: the block of the unit of measure in the usage record unit (bytes, seconds, messages); usage is rounded up to whole blocks and each block costs the price. |
 | `alteration_lines` | `integer` | yes |  | For a multi-line discount (priceType discount, unitOfMeasure in lines): the minimum number of live plan lines on the account, 2 or more. The price is the amount off per line and period. |
+| `usage_zone` | `text` | no | `'domestic'::text` | For a usage price: the usage zone it rates (TMF620 prodSpecCharValueUse usageZone): domestic (the default), roaming or international. |
 
 ## Foreign keys
 
@@ -54,15 +55,17 @@ SID ProductOfferingPrice (TMF620 productOfferingPrice): a price created on its o
 | `product_offering_price_usage_block_check` | check | `CHECK ((usage_block > 0))` |
 | `product_offering_price_usage_has_unit` | check | `CHECK (((((price_type)::text = 'usage'::text) = (usage_kind IS NOT NULL)) AND ((usage_kind IS NULL) = (usage_block IS NULL))))` |
 | `product_offering_price_usage_kind_check` | check | `CHECK ((usage_kind = ANY (ARRAY['data'::text, 'voice'::text, 'sms'::text])))` |
+| `product_offering_price_usage_zone_check` | check | `CHECK ((usage_zone = ANY (ARRAY['domestic'::text, 'roaming'::text, 'international'::text])))` |
 | `product_offering_price_valid_for_check` | check | `CHECK (((NOT isempty(valid_for)) AND (NOT lower_inf(valid_for)) AND lower_inc(valid_for) AND (NOT upper_inc(valid_for))))` |
+| `product_offering_price_zone_is_usage` | check | `CHECK (((usage_zone = 'domestic'::text) OR ((price_type)::text = 'usage'::text)))` |
 | `product_offering_price_pkey` | primary key | `PRIMARY KEY (id)` |
-| `product_offering_price_no_overlap` | exclusion | `EXCLUDE USING gist (product_offering_id WITH =, price_type WITH =, currency WITH =, COALESCE(usage_kind, ''::text) WITH =, COALESCE(alteration_lines, 0) WITH =, valid_for WITH &&)` |
+| `product_offering_price_no_overlap` | exclusion | `EXCLUDE USING gist (product_offering_id WITH =, price_type WITH =, currency WITH =, COALESCE(usage_kind, ''::text) WITH =, usage_zone WITH =, COALESCE(alteration_lines, 0) WITH =, valid_for WITH &&)` |
 
 ## Indexes
 
 | Name | Definition | Backs a constraint |
 |---|---|---|
-| `product_offering_price_no_overlap` | `CREATE INDEX product_offering_price_no_overlap ON product_offering_price USING gist (product_offering_id, price_type, currency, COALESCE(usage_kind, ''::text), COALESCE(alteration_lines, 0), valid_for)` | yes |
+| `product_offering_price_no_overlap` | `CREATE INDEX product_offering_price_no_overlap ON product_offering_price USING gist (product_offering_id, price_type, currency, COALESCE(usage_kind, ''::text), usage_zone, COALESCE(alteration_lines, 0), valid_for)` | yes |
 | `product_offering_price_pkey` | `CREATE UNIQUE INDEX product_offering_price_pkey ON product_offering_price USING btree (id)` | yes |
 | `product_offering_price_product_offering_id_idx` | `CREATE INDEX product_offering_price_product_offering_id_idx ON product_offering_price USING btree (product_offering_id)` | no |
 

@@ -35,16 +35,34 @@ class Incoming:
     roaming: bool = False
     throttled: bool = False
     product_id: UUID | None = None  # named by the caller (TMF635 POST): no matching
+    international: bool = False  # a voice or SMS record to a non-US destination (#200)
 
 
-def included(profile: dict[str, Any] | None) -> dict[str, int]:
-    """The allowance of a profile per kind in the record unit (0: nothing included)."""
+# the profile characteristic of each zone's allowance, and its size in the record unit
+ALLOWANCES: dict[tuple[str, str], tuple[str, int]] = {
+    ("domestic", "data"): ("dataAllowanceMb", MIB),
+    ("domestic", "voice"): ("voiceMinutes", 60),
+    ("domestic", "sms"): ("smsCount", 1),
+    ("roaming", "data"): ("roamingDataMb", MIB),
+    ("roaming", "voice"): ("roamingMinutes", 60),
+    ("roaming", "sms"): ("roamingSmsCount", 1),
+    ("international", "voice"): ("internationalMinutes", 60),
+}
+
+
+def included(profile: dict[str, Any] | None) -> dict[tuple[str, str], int]:
+    """The allowance of a profile per (zone, kind) in the record unit (0: nothing included,
+    no threshold). Roaming usage counts only against the roaming allowances, international
+    calls only against internationalMinutes (international SMS has none)."""
     profile = profile or {}
-    return {
-        "data": int(profile.get("dataAllowanceMb") or 0) * MIB,
-        "voice": int(profile.get("voiceMinutes") or 0) * 60,
-        "sms": int(profile.get("smsCount") or 0),
-    }
+    out = repo.empty_totals()
+    for key, (name, unit) in ALLOWANCES.items():
+        out[key] = int(profile.get(name) or 0) * unit
+    return out
+
+
+def zone(row: Row) -> str:
+    return repo.zone_of(row["kind"], row["roaming"], row.get("international", False))
 
 
 def line_profile(conn: psycopg.Connection, product_id: UUID, day: date) -> dict[str, Any] | None:
@@ -86,6 +104,7 @@ def ingest(
         event_date=day,
         product=product,
         now=now,
+        international=incoming.international,
     )
     if row is None:
         stored = repo.by_network_id(conn, incoming.network_record_id)
@@ -134,6 +153,7 @@ def ingest_batch(
                 "billing_account_id": None if line is None else line["billing_account_id"],
                 "status": "rejected" if line is None else "notRated",
                 "rejection_reason": "noLine" if line is None else None,
+                "international": incoming.international,
             }
             for incoming, day, line in zip(fresh, days, lines, strict=True)
         ],
@@ -165,7 +185,7 @@ def _check_thresholds_of(conn: psycopg.Connection, records: list[Row], *, now: d
     counted = []
     for row in records:
         place = (row["product_id"], row["event_date"])
-        if place in periods and allowance[place][row["kind"]] > 0:
+        if place in periods and allowance[place][(zone(row), row["kind"])] > 0:
             period = periods[place]
             counted.append((row, (row["product_id"], period["period_start"], period["period_end"])))
     if not counted:
@@ -175,9 +195,10 @@ def _check_thresholds_of(conn: psycopg.Connection, records: list[Row], *, now: d
     # that `ingest` would have seen right after storing it
     reached = []
     for row, key in reversed(counted):
-        total = totals[key][row["kind"]]
-        totals[key][row["kind"]] -= row["quantity"]
-        limit = allowance[(row["product_id"], row["event_date"])][row["kind"]]
+        pool = (zone(row), row["kind"])
+        total = totals[key][pool]
+        totals[key][pool] -= row["quantity"]
+        limit = allowance[(row["product_id"], row["event_date"])][pool]
         reached.append((row, key, total, limit))
     for row, key, total, limit in reversed(reached):
         for pct in THRESHOLDS:
@@ -193,6 +214,7 @@ def _check_thresholds_of(conn: psycopg.Connection, records: list[Row], *, now: d
                     used_amount=total,
                     included=limit,
                     now=now,
+                    zone=zone(row),
                 )
 
 
@@ -205,13 +227,14 @@ def check_thresholds(conn: psycopg.Connection, record: Row, *, now: datetime) ->
         return []
     allowance = included(line_profile(conn, record["product_id"], record["event_date"]))
     kind = record["kind"]
-    limit = allowance[kind]
+    pool = (zone(record), kind)
+    limit = allowance[pool]
     if limit <= 0:
-        return []
+        return []  # no allowance in the record's zone: stored and counted, no threshold
     total = repo.used(conn, record["product_id"], period["period_start"], period["period_end"])
     reached = []
     for pct in THRESHOLDS:
-        if total[kind] * 100 >= limit * pct and repo.insert_threshold(
+        if total[pool] * 100 >= limit * pct and repo.insert_threshold(
             conn,
             product_id=record["product_id"],
             period_start=period["period_start"],
@@ -219,9 +242,10 @@ def check_thresholds(conn: psycopg.Connection, record: Row, *, now: datetime) ->
             allowance=kind,
             threshold=pct,
             record_id=record["id"],
-            used_amount=total[kind],
+            used_amount=total[pool],
             included=limit,
             now=now,
+            zone=pool[0],
         ):
             reached.append(pct)
     return reached
@@ -237,27 +261,32 @@ def summary(conn: psycopg.Connection, product_id: UUID, day: date) -> dict[str, 
     profile = line_profile(conn, product_id, day) or {}
     limits = included(profile)
     total = repo.used(conn, product_id, start, end)
-    marks: dict[str, list[int]] = {}
+    marks: dict[tuple[str, str], list[int]] = {}
     for row in repo.thresholds(conn, product_id, start):
-        marks.setdefault(row["allowance"], []).append(row["threshold"])
+        marks.setdefault((row["zone"], row["allowance"]), []).append(row["threshold"])
     allowances = []
-    for kind, unit in UNITS.items():
-        limit, total_used = limits[kind], total[kind]
-        allowances.append(
-            {
-                "kind": kind,
-                "unit": unit,
-                "used": total_used,
-                "included": limit,
-                "remaining": max(limit - total_used, 0),
-                "percent": None if limit <= 0 else total_used * 100 // limit,
-                "thresholds": marks.get(kind, []),
-            }
-        )
+    for pool_zone in repo.ZONES:
+        for kind, unit in UNITS.items():
+            pool = (pool_zone, kind)
+            limit, total_used = limits[pool], total[pool]
+            if pool_zone != "domestic" and limit <= 0 and total_used <= 0:
+                continue  # a roaming or international pool is listed when it has something
+            allowances.append(
+                {
+                    "kind": kind,
+                    "zone": pool_zone,
+                    "unit": unit,
+                    "used": total_used,
+                    "included": limit,
+                    "remaining": max(limit - total_used, 0),
+                    "percent": None if limit <= 0 else total_used * 100 // limit,
+                    "thresholds": marks.get(pool, []),
+                }
+            )
     cap = int(profile.get("dataCapMb") or 0) * MIB
     reported = repo.latest_throttled(conn, product_id, start, end)
     return {
         "period": {"startDate": start, "endDate": end},
         "allowances": allowances,
-        "throttled": bool(reported) or (cap > 0 and total["data"] >= cap),
+        "throttled": bool(reported) or (cap > 0 and total[("domestic", "data")] >= cap),
     }

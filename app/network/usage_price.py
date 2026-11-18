@@ -37,3 +37,21 @@ def parse(unit_of_measure: Any) -> tuple[str, int]:
             " (bytes, seconds or messages)"
         )
     return UNITS[units][0], int(block)
+
+
+ZONE = "usageZone"
+ZONES = ("domestic", "roaming", "international")
+
+
+def zone_of(char_value_use: Any) -> str | None:
+    """The usage zone a price names in `prodSpecCharValueUse` (TMF620) as `usageZone`, with
+    one value: domestic, roaming or international; None when it names none (#200). ValueError
+    says what is wrong."""
+    for use in char_value_use or []:
+        if not isinstance(use, dict) or use.get("name") != ZONE:
+            continue
+        values = [v.get("value") for v in use.get("productSpecCharacteristicValue") or []]
+        if len(values) != 1 or values[0] not in ZONES:
+            raise ValueError(f"prodSpecCharValueUse {ZONE}: one value of {', '.join(ZONES)}")
+        return values[0]
+    return None

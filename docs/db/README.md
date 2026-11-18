@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0083**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0084**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -562,6 +562,7 @@ erDiagram
     text usage_kind
     bigint usage_block
     integer alteration_lines
+    text usage_zone
   }
   category {
     uuid id PK
@@ -1141,6 +1142,7 @@ erDiagram
     timestamptz created_at
     timestamptz attempted_at
     timestamptz confirmed_at
+    text purpose
   }
   prepaid_lifecycle_setting {
     boolean id PK
@@ -1323,6 +1325,7 @@ erDiagram
     text status
     text rejection_reason
     timestamptz created_at
+    boolean international
   }
   usage_threshold {
     uuid product_id PK,FK
@@ -1334,6 +1337,7 @@ erDiagram
     bigint used
     bigint included
     timestamptz reached_at
+    text zone PK
   }
   usage_charge {
     uuid usage_record_id PK

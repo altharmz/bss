@@ -609,6 +609,9 @@ def insert_price(
         raise problems_error(problems)
     usage_kind = usage_block = lines = None
     try:
+        zone = usage_price.zone_of(documents.get("prodSpecCharValueUse"))
+        if zone is not None and data.price_type != "usage":
+            raise ValueError(f"{usage_price.ZONE} is only for a usage price")
         if data.price_type == "usage":
             usage_kind, usage_block = usage_price.parse(documents.get("unitOfMeasure"))
         if data.price_type == "discount":
@@ -639,6 +642,7 @@ def insert_price(
         usage_kind=usage_kind,
         usage_block=usage_block,
         alteration_lines=lines,
+        usage_zone=zone or "domestic",
     )
     return with_meta(conn, "product_offering_price", row, data)
 
@@ -779,6 +783,17 @@ def _usage_guard(current: Row, data: PricePatch, documents: dict[str, Any]) -> N
         and documents["unitOfMeasure"] != current["details"].get("unitOfMeasure")
     ):
         raise conflict("the unitOfMeasure of a usage price cannot change: attach a new price")
+    if "prodSpecCharValueUse" in documents:
+        try:
+            zone = usage_price.zone_of(documents["prodSpecCharValueUse"])
+        except ValueError as error:
+            raise unprocessable(str(error)) from None
+        if zone is not None and current["price_type"] != "usage":
+            raise unprocessable(f"{usage_price.ZONE} is only for a usage price")
+        if current["price_type"] == "usage" and (zone or "domestic") != current["usage_zone"]:
+            raise conflict(
+                f"the {usage_price.ZONE} of a usage price cannot change: attach a new price"
+            )
 
 
 def _check_cadence(conn: psycopg.Connection, offering_id: UUID, price: Row) -> None:

@@ -19,6 +19,7 @@ An allowance threshold (80% or 100%) reached by a line in a plan period: one row
 | `used` | `bigint` | no |  | Period usage when the threshold was reached, in the usage_record unit. |
 | `included` | `bigint` | no |  | The allowance at that time in the same unit (MB x 1048576 bytes, minutes x 60 seconds, messages), add-ons included. |
 | `reached_at` | `timestamp with time zone` | no |  |  |
+| `zone` | `text` | no | `'domestic'::text` | The usage zone of the allowance: domestic, roaming or international. |
 
 ## Foreign keys
 
@@ -34,11 +35,12 @@ An allowance threshold (80% or 100%) reached by a line in a plan period: one row
 | `usage_threshold_check` | check | `CHECK ((period_end > period_start))` |
 | `usage_threshold_included_check` | check | `CHECK ((included > 0))` |
 | `usage_threshold_threshold_check` | check | `CHECK ((threshold = ANY (ARRAY[80, 100])))` |
-| `usage_threshold_pkey` | primary key | `PRIMARY KEY (product_id, period_start, allowance, threshold)` |
+| `usage_threshold_zone_check` | check | `CHECK ((zone = ANY (ARRAY['domestic'::text, 'roaming'::text, 'international'::text])))` |
+| `usage_threshold_pkey` | primary key | `PRIMARY KEY (product_id, period_start, allowance, zone, threshold)` |
 
 ## Indexes
 
 | Name | Definition | Backs a constraint |
 |---|---|---|
-| `usage_threshold_pkey` | `CREATE UNIQUE INDEX usage_threshold_pkey ON usage_threshold USING btree (product_id, period_start, allowance, threshold)` | yes |
+| `usage_threshold_pkey` | `CREATE UNIQUE INDEX usage_threshold_pkey ON usage_threshold USING btree (product_id, period_start, allowance, zone, threshold)` | yes |
 | `usage_threshold_reached_idx` | `CREATE INDEX usage_threshold_reached_idx ON usage_threshold USING btree (reached_at)` | no |

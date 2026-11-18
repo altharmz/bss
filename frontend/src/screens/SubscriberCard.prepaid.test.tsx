@@ -182,6 +182,7 @@ describe('usage tab', () => {
     allowances: [
       {
         kind: 'data',
+        zone: 'domestic',
         unit: 'bytes',
         used: 850 * MIB,
         included: 1000 * MIB,
@@ -191,6 +192,7 @@ describe('usage tab', () => {
       },
       {
         kind: 'voice',
+        zone: 'domestic',
         unit: 'seconds',
         used: 600,
         included: 6000,
@@ -200,6 +202,7 @@ describe('usage tab', () => {
       },
       {
         kind: 'sms',
+        zone: 'domestic',
         unit: 'messages',
         used: 3,
         included: 0,

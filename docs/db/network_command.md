@@ -26,6 +26,7 @@ Durable outbound provisioning command of one prepaid order item; sent by the bil
 | `created_at` | `timestamp with time zone` | no |  |  |
 | `attempted_at` | `timestamp with time zone` | yes |  |  |
 | `confirmed_at` | `timestamp with time zone` | yes |  |  |
+| `purpose` | `text` | no | `'order'::text` | order: the command of its order item; passEnd: the change_profile on the day a pass (an add-on with passDays) ends before its plan period, with the plan profile and the add-ons still live. |
 
 ## Foreign keys
 
@@ -43,11 +44,13 @@ Durable outbound provisioning command of one prepaid order item; sent by the bil
 | `network_command_check` | check | `CHECK (((state = 'refused'::text) = (refusal_code IS NOT NULL)))` |
 | `network_command_check1` | check | `CHECK (((state = 'confirmed'::text) = (confirmed_at IS NOT NULL)))` |
 | `network_command_kind_check` | check | `CHECK ((kind = ANY (ARRAY['activate'::text, 'suspend'::text, 'restore'::text, 'deactivate'::text, 'change_profile'::text, 'swap_sim'::text])))` |
+| `network_command_pass_end_is_profile` | check | `CHECK (((purpose = 'order'::text) OR (kind = 'change_profile'::text)))` |
 | `network_command_profile_check` | check | `CHECK ((jsonb_typeof(profile) = 'object'::text))` |
+| `network_command_purpose_check` | check | `CHECK ((purpose = ANY (ARRAY['order'::text, 'passEnd'::text])))` |
 | `network_command_request_check` | check | `CHECK ((jsonb_typeof(request) = 'object'::text))` |
 | `network_command_state_check` | check | `CHECK ((state = ANY (ARRAY['pending'::text, 'confirmed'::text, 'refused'::text, 'exhausted'::text, 'cancelled'::text])))` |
 | `network_command_pkey` | primary key | `PRIMARY KEY (id)` |
-| `network_command_product_order_item_id_key` | unique | `UNIQUE (product_order_item_id)` |
+| `network_command_item_purpose_key` | unique | `UNIQUE (product_order_item_id, purpose)` |
 
 ## Indexes
 
@@ -56,8 +59,8 @@ Durable outbound provisioning command of one prepaid order item; sent by the bil
 | `network_command_created_at_id_idx` | `CREATE INDEX network_command_created_at_id_idx ON network_command USING btree (created_at DESC, id)` | no |
 | `network_command_due_idx` | `CREATE INDEX network_command_due_idx ON network_command USING btree (due_date, id) WHERE (state = 'pending'::text)` | no |
 | `network_command_exhausted_idx` | `CREATE INDEX network_command_exhausted_idx ON network_command USING btree (created_at) WHERE (state = 'exhausted'::text)` | no |
+| `network_command_item_purpose_key` | `CREATE UNIQUE INDEX network_command_item_purpose_key ON network_command USING btree (product_order_item_id, purpose)` | yes |
 | `network_command_order_idx` | `CREATE INDEX network_command_order_idx ON network_command USING btree (product_order_id)` | no |
 | `network_command_pkey` | `CREATE UNIQUE INDEX network_command_pkey ON network_command USING btree (id)` | yes |
 | `network_command_product_idx` | `CREATE INDEX network_command_product_idx ON network_command USING btree (product_id) WHERE (product_id IS NOT NULL)` | no |
-| `network_command_product_order_item_id_key` | `CREATE UNIQUE INDEX network_command_product_order_item_id_key ON network_command USING btree (product_order_item_id)` | yes |
 | `network_command_sim_swapped_idx` | `CREATE INDEX network_command_sim_swapped_idx ON network_command USING btree (confirmed_at) WHERE ((kind = 'swap_sim'::text) AND (state = 'confirmed'::text))` | no |

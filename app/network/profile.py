@@ -19,6 +19,12 @@ PROFILE: dict[str, str] = {
     "hotspot": "flag",
     "international": "flag",
     "voicemail": "flag",
+    # roaming and international passes (#200, docs/decisions/network.md)
+    "roaming": "flag",
+    "roamingDataMb": "integer",
+    "roamingMinutes": "integer",
+    "roamingSmsCount": "integer",
+    "internationalMinutes": "integer",
 }
 
 
@@ -93,12 +99,22 @@ def effective(
     return out
 
 
-ADDITIVE = ("dataAllowanceMb", "dataCapMb", "voiceMinutes", "smsCount")
+ADDITIVE = (
+    "dataAllowanceMb",
+    "dataCapMb",
+    "voiceMinutes",
+    "smsCount",
+    "roamingDataMb",
+    "roamingMinutes",
+    "roamingSmsCount",
+    "internationalMinutes",
+)
 
 
 def combine(base: dict[str, Any], extra: dict[str, Any]) -> dict[str, Any]:
     """The profile of a line with an add-on pack: the pack's allowances added to the plan's
-    (data, cap, minutes, messages), its flags switched on, the throttle speed kept."""
+    (data, cap, minutes, messages, the roaming and international allowances), its flags
+    switched on, the throttle speed kept."""
     out = dict(base)
     for name, value in extra.items():
         if name in ADDITIVE:

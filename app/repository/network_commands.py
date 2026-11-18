@@ -17,8 +17,9 @@ NAMESPACE = UUID("3b8d2c4e-7a15-5f06-9e31-c0a4d7b2e815")
 BACKOFF = (timedelta(minutes=1), timedelta(minutes=5), timedelta(minutes=15), timedelta(hours=1))
 
 
-def command_id(order_item_id: UUID, kind: str) -> UUID:
-    return uuid5(NAMESPACE, f"{order_item_id}:{kind}")
+def command_id(order_item_id: UUID, kind: str, purpose: str = "order") -> UUID:
+    key = f"{order_item_id}:{kind}" if purpose == "order" else f"{order_item_id}:{kind}:{purpose}"
+    return uuid5(NAMESPACE, key)
 
 
 def get(conn: psycopg.Connection, uid: UUID, *, lock: bool = False) -> Row | None:
@@ -36,14 +37,18 @@ def insert(
     due_date: date,
     profile: dict[str, Any],
     now: datetime,
+    purpose: str = "order",
 ) -> Row:
+    """`purpose` passEnd: the change_profile that ends a pass of the item before its plan
+    period ends (docs/decisions/prepaid.md); one per item beside its order command."""
     return returning(
         conn,
         "INSERT INTO network_command (id, product_order_id, product_order_item_id, product_id,"
-        " kind, due_date, profile, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
+        " kind, due_date, profile, created_at, purpose)"
+        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
         " ON CONFLICT (id) DO UPDATE SET id = EXCLUDED.id RETURNING *",
         (
-            command_id(order_item_id, kind),
+            command_id(order_item_id, kind, purpose),
             order_id,
             order_item_id,
             product_id,
@@ -51,7 +56,32 @@ def insert(
             due_date,
             jsonb(profile),
             now,
+            purpose,
         ),
+    )
+
+
+def ended_passes(conn: psycopg.Connection, today: date) -> list[Row]:
+    """Add-on passes that ended on or before `today` inside a paid period of their plan (not
+    at its end, which needs no command), while the plan still runs, and whose pass-end
+    change_profile was not made yet."""
+    return fetch_all(
+        conn,
+        "SELECT a.id, a.parent_product_id, a.termination_date, a.created_by_item_id,"
+        " i.product_order_id FROM product a"
+        " JOIN product_order_item i ON i.id = a.created_by_item_id"
+        " JOIN product p ON p.id = a.parent_product_id"
+        " WHERE a.grantless AND a.termination_date <= %s"
+        " AND a.status NOT IN ('cancelled', 'aborted')"
+        " AND (p.termination_date IS NULL OR p.termination_date > a.termination_date)"
+        " AND EXISTS (SELECT 1 FROM funded_interval f WHERE f.product_id = p.id"
+        "  AND f.period @> a.termination_date AND lower(f.period) < a.termination_date)"
+        " AND EXISTS (SELECT 1 FROM network_command n WHERE n.product_order_item_id = i.id"
+        "  AND n.purpose = 'order' AND n.state = 'confirmed')"
+        " AND NOT EXISTS (SELECT 1 FROM network_command n WHERE n.product_order_item_id = i.id"
+        "  AND n.purpose = 'passEnd')"
+        " ORDER BY a.termination_date, a.id",
+        (today,),
     )
 
 

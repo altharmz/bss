@@ -132,7 +132,9 @@ def test_a_batch_is_stored_as_its_records_would_be_one_by_one(api, db_conn, worl
         Incoming("b-3", "data", 5 * MIB, at + 2 * hour, msisdn=MSISDN),  # the id again: a replay
         Incoming("b-4", "sms", 30, at, msisdn=MSISDN),  # sms: 80 % and 100 % at once
         Incoming("b-5", "voice", 60, at, msisdn="79990000001"),  # nobody's number
-        Incoming("b-6", "data", 1200 * MIB, at + 3 * hour, msisdn=MSISDN, roaming=True),  # 100 %
+        Incoming("b-6", "data", 1200 * MIB, at + 3 * hour, msisdn=MSISDN),  # 100 %
+        # roaming counts only against the roaming allowance (none here, #200): no mark
+        Incoming("b-9", "data", 2000 * MIB, at + 4 * hour, msisdn=MSISDN, roaming=True),
         Incoming("b-7", "voice", 120, at, imsi="001010000000009", throttled=True),  # nobody's SIM
         Incoming(
             "b-8", "data", 1 * MIB, at - timedelta(days=400), msisdn=MSISDN
@@ -157,8 +159,8 @@ def test_a_batch_is_stored_as_its_records_would_be_one_by_one(api, db_conn, worl
         news = [ingest(db_conn, incoming, now=now, tz=timeline.TZ)[1] for incoming in batch]
         expected = stored()
         raise psycopg.Rollback(one_by_one)
-    assert news.count(True) == 8 and stored() == ([], [])
-    assert ingest_batch(db_conn, batch, now=now, tz=timeline.TZ) == 8
+    assert news.count(True) == 9 and stored() == ([], [])
+    assert ingest_batch(db_conn, batch, now=now, tz=timeline.TZ) == 9
     assert stored() == expected
     assert [mark[:5] for mark in expected[1]] == [
         ("data", 80, "b-3", 4000 * MIB, 5000 * MIB),

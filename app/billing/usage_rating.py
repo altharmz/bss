@@ -1,10 +1,11 @@
 """Rating of pay-as-you-go usage against the prepaid balance (docs/decisions/usage.md).
 
 One pass rates an account's closed days (event date before today) of unrated records of its
-pay-as-you-go lines. The records of a line, event date and kind are summed, rounded up once
-to whole blocks of the usage price's unit and charged `blocks x price`: one `oneTime` ABR per
-group (taxed through the tax adapter as usage), all on one off-cycle bill that is issued and
-settled against the account's unused payments at once. The balance is the ledger, so the
+pay-as-you-go lines. The records of a line, event date, kind and usage zone (#200) are summed,
+rounded up once to whole blocks of the usage price's unit and charged `blocks x price`: one
+`oneTime` ABR per group (taxed through the tax adapter as usage), all on one off-cycle bill
+that is issued and settled against the account's unused payments at once. The balance is the
+ledger, so the
 charge draws it down; what the balance cannot pay stays an open bill and the next payment
 settles it first (a negative balance recovered from the top-up).
 
@@ -61,14 +62,15 @@ def rate_account(
     state = fetch_one(conn, "SELECT rating_type FROM billing_account WHERE id = %s", (account_id,))
     if state is None or state["rating_type"] != "prepaid":
         return None
-    groups: dict[tuple[UUID, date, str], list[Row]] = defaultdict(list)
+    groups: dict[tuple[UUID, date, str, str], list[Row]] = defaultdict(list)
     for record in repo.unrated(conn, account_id, today, BATCH):
         offering = products.offering_on(conn, record["product_id"], record["event_date"])
         details = conn.execute(
             "SELECT details FROM product_offering WHERE id = %s", (offering,)
         ).fetchone()[0]
         if offering_kind.kind_of(details) == offering_kind.PAY_AS_YOU_GO:
-            groups[record["product_id"], record["event_date"], record["kind"]].append(record)
+            zone = repo.zone_of(record["kind"], record["roaming"], record["international"])
+            groups[record["product_id"], record["event_date"], record["kind"], zone].append(record)
     if not groups:
         return None
     first = min((r["id"] for rows in groups.values() for r in rows), key=str)
@@ -86,10 +88,11 @@ def rate_account(
     run = commands.ensure_run(conn, command_id, run_date=today, now=now)
     abrs: list[UUID] = []
     gross = Decimal(0)
-    for (product_id, day, usage_kind), records in sorted(groups.items(), key=lambda g: g[0]):
+    for (product_id, day, usage_kind, zone), records in sorted(groups.items(), key=lambda g: g[0]):
         offering = products.offering_on(conn, product_id, day)
         found = billing.load_usage_prices(conn, offering, account.currency, midnight(day, tz))
-        priced = found.get(usage_kind)
+        # a zone without a price of its own is not charged (operators define zone prices)
+        priced = found.get((usage_kind, zone))
         abr_id = None
         blocks = None
         if priced is not None:

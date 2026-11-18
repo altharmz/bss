@@ -56,6 +56,7 @@ class UsageRecord:
     imsi: str | None = None
     roaming: bool = False
     throttled: bool = False
+    international: bool = False  # voice or SMS to a non-US destination (#200)
 
 
 @dataclass(frozen=True)
