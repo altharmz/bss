@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from psycopg.types.range import Range
 
-from app.billing.adapter import issue_bills, settle_account
+from app.billing.adapter import issue_bills, settle_account, store_documents
 from app.billing.core import cycle_period
 from app.billing.model import BillingError
 from app.config import settings
@@ -107,8 +107,9 @@ def _fulfill(conn, account, demand, run, abrs, now):
     )
     billing.record_bill_issue(conn, bill["id"], now=now)
     billing.attach_abrs_to_bill(conn, bill["id"], account.id, [a["id"] for a in abrs])
-    issue_bills(conn, account, now=now)
+    issued = issue_bills(conn, account, now=now)
     settle_account(conn, account, now=now, cause="run")
+    store_documents(conn, issued, now=now)
     conn.execute(
         "UPDATE customer_bill_on_demand SET state = 'done', customer_bill_id = %s,"
         " updated_at = %s WHERE id = %s",

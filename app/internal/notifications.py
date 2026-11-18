@@ -142,6 +142,7 @@ def resend_message(message_id: str, request: Request, tx: Tx, clock: ClockDep) -
             priority=row["priority"],
             sender=row["sender"],
             resend_of=row["id"],
+            customer_bill_id=row.get("customer_bill_id"),
         )
         assert copy is not None
         body = message_body(conn, copy)

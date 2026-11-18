@@ -14,3 +14,5 @@ pytest-xdist==3.8.0
 # The pre-commit hook runs only the tests a change affects (make test-changed); the data
 # file is .testmon/.testmondata, see docs/decisions/harness.md.
 pytest-testmon==2.2.0
+# Reads the bill PDFs back in tests (tests/test_bill_pdf.py, #202).
+pypdf==7.1.1

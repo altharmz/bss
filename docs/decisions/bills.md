@@ -104,3 +104,77 @@ Deviations: the API has no `billingDate` filter on bills, so the date filter com
 the loaded rows (bill cycles likewise, on their `billingDate`); a bill cycle is a daily run and has no
 account, so the cycles tab has name, billing date and payment due instead of an account column;
 "kind" is the bill's `runType`. TEST-CHANGE: the shell test's expected sidebar links gain `/bills`.
+
+## PDF documents and email delivery (#202, 2026-11-18)
+
+Slice 1 of postpaid for the MVNO (epic #182); dunning is #385, the UI #386. Decided in the issue
+(2026-11-15, the human's delegation). Migration `0086`.
+
+- **A PDF next to the JSON snapshot, not instead of it.** `billDocument` lists the inline JSON
+  attachment first, then the PDF as a TMF678 `AttachmentRefOrValue` with `url`
+  `/tmf-api/customerBillManagement/v5/customerBill/{id}/document.pdf`, `mimeType`
+  `application/pdf`, `size` in bytes and `id` `{bill id}-pdf`. The gap
+  `missing billDocument.url` is closed (`tests/tmf-gaps.txt`).
+- **Rendering:** `app/billing/bill_pdf.py` (pure, `reportlab` 5.1.0, BSD; its `pillow` and
+  `charset-normalizer` are pinned in `constraints.txt`) with the vendored DejaVu Sans 2.37 regular
+  and bold (`app/billing/fonts/`, licence beside them; the release tarball's SHA-256
+  `fa9ca4d1...e17d7`), so any name prints. Layout: issuer (`BSS_BILL_ISSUER_NAME`, default "BSS
+  Mobile"; `BSS_BILL_ISSUER_ADDRESS`, lines separated by `;` or newlines), bill number, bill date,
+  billing period (last day printed), payment due date, account name and id, the customer's name
+  and billing address (the account's `contact`: the first postal medium of a `billingAddress`
+  contact, else of any contact), the charges (format `JSON detailed`) or none (`JSON summary`),
+  the totals with tax per category and rate, the payments and credit notes applied, and the amount
+  still due by the due date (a credit note says there is nothing to pay). Money is formatted from
+  `Decimal` (`money` refuses anything else). `invariant=1`: the same data gives the same bytes.
+- **When:** in the account's billing transaction, **after** the run settles it
+  (`adapter.store_documents`, called by `bill_account` and the off-cycle `_fulfill` with the ids
+  `issue_bills` now returns), so the PDF shows what paid the bill at issue. The format is read
+  from the bill's JSON snapshot, written earlier in the same transaction. A render failure is
+  `DocumentFailed` (a `BillingError`): the account fails in the run with nothing of it written,
+  like any inconsistency; an off-cycle request ends `terminatedWithError`. Prepaid postings
+  (which snapshot JSON on their own path) get no PDF: the issue is about postpaid bills.
+- **Storage:** `customer_bill_document` (bill id PK/FK, `pdf` bytea, `sha256`, `rendered_at` =
+  the attempt's `started_at`), immutable by trigger (UPDATE and DELETE raise). Bills issued
+  before 0086 have none (no invented history): no PDF attachment, and their URL is a 404.
+- **Serving:** `GET .../customerBill/{id}/document.pdf` streams it (`Content-Type:
+  application/pdf`, `inline` with `BL-xxxxxxxx.pdf`) behind the same authentication as every
+  route; 404 for an unknown bill or one without a PDF. TMF678 defines the url, not this
+  operation, so the generated docs list it under `NO_SPEC`. Not an MCP tool (scope excluded:
+  the connector answers JSON, and `get_customer_bill` carries the bill and its JSON document).
+- **Cost:** measured 13 ms a bill (a five-charge detailed bill, 1000 renders in the dev
+  container, alone; 21 ms of CPU with other stacks busy), about 45 KB a PDF with the subset
+  font. `tests/test_bill_pdf.py::test_rendering_takes_under_50_ms_a_bill` holds the 50 ms target
+  when run alone; under `-n auto` (the hook, `make test`) the same renders took 79 ms on the wall
+  clock and 154 ms of CPU, so there it fails only above 1 s a bill (a timing gate would be flaky,
+  like the worker heartbeat test). The bill list reads the PDF size in its
+  page query (`billing.PDF_SIZE`), so a page keeps its statement count.
+- **Delivery:** a presentation medium named `email` (any case) on the account means *email the
+  bill*; other media stay descriptive, postal mail is out of scope. The notification worker's
+  detector `bills_issued` (`app/notify/events.py`) finds bills whose PDF was rendered within the
+  lookback (so only bills issued since 0086) on such accounts and queues event `bill_issued`
+  (dedupe key `bill_issued:{bill id}`, transactional, **email only**: no SMS, not even to the
+  line) to the customer's preferred email (notifications.md recipient rules); no email address
+  gives one cancelled `noRecipient` Email row. Subject "Your bill BL-xxxxxxxx", a body with the
+  period, the bill total, the amount due and the due date, and the PDF attached
+  (`notification_message.customer_bill_id`; a resend carries it again). The medium is read when
+  the detector runs. **`BSS_BILL_EMAIL_ENABLED`** (default true) switches the detector off; the
+  three settings are not passed in `compose.prod.yaml`, so production runs the defaults until the
+  human sets them.
+- **Adapter:** `send_email(key, to, subject, body, attachments=())`, each attachment
+  `(filename, mime_type, bytes)`; the `log` sender records them (and logs names and sizes, not
+  content). A bill email whose PDF is missing is not sent without it: the attempt fails and
+  retries. The real provider is #203.
+- **TMF681:** a bill email lists the PDF in `attachment` (by `url`, `attachmentType` bill); an
+  operator's POST with `attachment` is still a 422.
+- **Tests:** `tests/test_bill_pdf.py` (text read back with `pypdf` 7.1.1, dev only: bill number,
+  total, amount due after a payment applied at issue, every charge name, the due date; summary vs
+  detailed; not rewritten by a rename or the next run; immutability trigger; render failure fails
+  only that account with no bill or ABR written; off-cycle bill; legacy bill and unknown bill
+  404; 401 without a session; one email with the PDF even when the worker runs twice, none
+  without the medium, none with the switch off, any-case medium name, no address cancelled and
+  not texted, resend carries the PDF; render time). Negative proofs, each made once and
+  reverted: the switch check removed (the switch test failed), the PDF rendered before the
+  settlement (the payment-applied assertion failed). TEST-CHANGE: the bill's `billDocument` has
+  two entries (`test_api_last_gaps.py`), the template test knows the bill parameters, the table
+  count is 97 (`test_migrations.py`, `test_nonsuperuser_migration.py`), the url gap line is
+  removed.

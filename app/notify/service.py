@@ -32,6 +32,8 @@ class Event:
     # the addresses on record before the change).
     contact: recipients.Contact | None = None
     urgent: bool = False  # a security alert: an SMS does not wait for the end of quiet hours
+    channels: tuple[str, ...] = ("sms", "email")  # a bill goes by email only
+    customer_bill_id: UUID | None = None  # the bill whose PDF the email carries
 
 
 def _clock(value: str) -> time:
@@ -71,8 +73,8 @@ def notify(conn: psycopg.Connection, event: Event, *, now: datetime, tz: ZoneInf
         contact = recipients.for_account(conn, event.account_id)
     if contact is None or repo.event_exists(conn, event.key):
         return []  # an event is told once, on whichever channels could be reached then
-    phones = list(contact.phones)
-    if not phones and event.sms_to_line:
+    phones = list(contact.phones) if "sms" in event.channels else []
+    if not phones and event.sms_to_line and "sms" in event.channels:
         number = (
             recipients.line_number(conn, event.product_id)
             if event.product_id is not None
@@ -86,10 +88,11 @@ def notify(conn: psycopg.Connection, event: Event, *, now: datetime, tz: ZoneInf
     targets: list[tuple[str, str | None, str | None]] = []
     if phones:
         targets.append(("sms", phones[0], None))
-    if contact.emails:
+    if contact.emails and "email" in event.channels:
         targets.append(("email", None, contact.emails[0]))
     if not targets:
-        targets = [("sms", None, None)]  # one cancelled row says nobody could be reached
+        # one cancelled row says nobody could be reached
+        targets = [(event.channels[0], None, None)]
     for channel, phone, email in targets:
         subject, body, template = templates.render(event.type, channel, params)
         reachable = phone is not None or email is not None
@@ -114,6 +117,7 @@ def notify(conn: psycopg.Connection, event: Event, *, now: datetime, tz: ZoneInf
             scheduled_send_time=(
                 quiet_until(now, tz) if channel == "sms" and not event.urgent else None
             ),
+            customer_bill_id=event.customer_bill_id,
         )
         if row is not None:
             made.append(row)

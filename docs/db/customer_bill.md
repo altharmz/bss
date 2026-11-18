@@ -73,4 +73,4 @@ SID CustomerBill (TMF678 customerBill): issued on a cycle day, collects every un
 
 ## Referenced by
 
-[`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`bill_allocation`](bill_allocation.md), [`customer_bill_on_demand`](customer_bill_on_demand.md), [`customer_bill_state_change`](customer_bill_state_change.md), [`funding_consumption`](funding_consumption.md), [`funding_conversion_bill`](funding_conversion_bill.md), [`funding_hold_conversion`](funding_hold_conversion.md), [`funding_hold_source`](funding_hold_source.md), [`refund_source`](refund_source.md)
+[`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`bill_allocation`](bill_allocation.md), [`customer_bill_document`](customer_bill_document.md), [`customer_bill_on_demand`](customer_bill_on_demand.md), [`customer_bill_state_change`](customer_bill_state_change.md), [`funding_consumption`](funding_consumption.md), [`funding_conversion_bill`](funding_conversion_bill.md), [`funding_hold_conversion`](funding_hold_conversion.md), [`funding_hold_source`](funding_hold_source.md), [`notification_message`](notification_message.md), [`refund_source`](refund_source.md)

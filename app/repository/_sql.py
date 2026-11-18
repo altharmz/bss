@@ -165,6 +165,7 @@ def select_page(
     offset: int,
     limit: int,
     newest_first: bool = False,
+    extra: sql.Composable | None = None,
 ) -> tuple[list[Row], bool]:
     """One page of `table` matching every `column = value` in `where` (a value may also
     be IS_NULL or NOT_NULL), and whether more rows follow it: no total is counted (#312;
@@ -177,6 +178,7 @@ def select_page(
     (#286). A string for an enum column is checked against the enum's labels first: one
     that is not a label matches nothing, and the answer is an empty page with no query. A
     string for a column that is neither text nor an enum keeps the `column::text` match.
+    `extra`: more select-list items after `*` (a correlated subquery, for example).
     """
     filters = conditions(conn, table, where)
     if filters is None:
@@ -186,7 +188,9 @@ def select_page(
     ident = sql.Identifier(table)
     rows = fetch_all(
         conn,
-        sql.SQL("SELECT * FROM {}").format(ident)
+        sql.SQL("SELECT *{} FROM {}").format(
+            sql.SQL("") if extra is None else sql.SQL(", ") + extra, ident
+        )
         + clause
         + sql.SQL(
             " ORDER BY created_at DESC, id DESC OFFSET %s LIMIT %s"

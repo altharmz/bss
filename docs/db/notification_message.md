@@ -38,12 +38,14 @@ One customer message (TMF681 CommunicationMessage): what was sent, to whom, on w
 | `provider_ref` | `text` | yes |  | The adapter's reference of the accepted message. |
 | `resend_of` | `uuid` | yes |  | The message this one repeats (an operator resend). |
 | `created_at` | `timestamp with time zone` | no |  |  |
+| `customer_bill_id` | `uuid` | yes |  | The bill whose PDF the message carries as an attachment (the bill_issued email and its resends); null for every other message. |
 
 ## Foreign keys
 
 | Columns | References | Name |
 |---|---|---|
 | `billing_account_id` | [`billing_account`](billing_account.md) (id) | `notification_message_billing_account_id_fkey` |
+| `customer_bill_id` | [`customer_bill`](customer_bill.md) (id) | `notification_message_customer_bill_id_fkey` |
 | `customer_id` | [`customer`](customer.md) (id) | `notification_message_customer_id_fkey` |
 | `product_id` | [`product`](product.md) (id) | `notification_message_product_id_fkey` |
 | `resend_of` | [`notification_message`](notification_message.md) (id) | `notification_message_resend_of_fkey` |

@@ -16,3 +16,6 @@ mcp==2.3.0
 PyYAML==6.0.3
 # Prometheus text exposition for GET /metrics (app/metrics.py, bss_mcp); no dependencies.
 prometheus-client==0.26.0
+# Bill PDFs (app/billing/bill_pdf.py, #202): BSD, pure Python; pillow and
+# charset-normalizer come with it (constraints.txt).
+reportlab==5.1.0

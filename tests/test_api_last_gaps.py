@@ -109,7 +109,9 @@ def test_a_bill_names_its_parties_accounts_and_document(api, db_conn):
     assert party["role"] == "customer" and party["partyOrPartyRole"]["@referredType"] == "Customer"
     assert "financialAccount" not in b  # the account is linked to none
     assert b["billCycle"]["name"] == f"Daily billing {DEC1}"
-    (document,) = b["billDocument"]
+    # TEST-CHANGE (#202): the run also renders a PDF, listed second by its url
+    document, pdf = b["billDocument"]
+    assert pdf["mimeType"] == "application/pdf" and pdf["url"] == f"{b['href']}/document.pdf"
     raw = base64.b64decode(document["content"])
     assert document["size"] == {"amount": len(raw), "units": "bytes"}
     assert document["id"] == b["id"]

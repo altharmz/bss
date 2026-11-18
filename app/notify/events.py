@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 
 import psycopg
 
-from app.billing import entitlement
+from app.billing import bill_pdf, entitlement
 from app.billing import lifecycle as plan
 from app.billing.lifecycle import funded_state, is_payg
 from app.config import settings
@@ -68,6 +68,7 @@ def detectors(
         ("ports", lambda conn: _ports(conn, since)),
         ("sim_swaps", lambda conn: _sim_swaps(conn, since)),
         ("security", lambda conn: _security(conn, since)),
+        ("bills_issued", lambda conn: _bills_issued(conn, since)),
     ]
 
 
@@ -433,6 +434,55 @@ def _security(conn: psycopg.Connection, since: datetime) -> list[Event]:
                 {"line": line_of(row["product_id"])},
                 contact=contact,
                 urgent=True,
+            )
+        )
+    return events
+
+
+def _bills_issued(conn: psycopg.Connection, since: datetime) -> list[Event]:
+    """A bill whose PDF the run rendered (so a bill issued since migration 0086), on an
+    account with the presentation medium named `email` (any case), is emailed once with the
+    PDF attached (docs/decisions/bills.md). Transactional, email only; nothing while
+    BSS_BILL_EMAIL_ENABLED is off."""
+    if not settings.bill_email_enabled:
+        return []
+    rows = fetch_all(
+        conn,
+        """
+        SELECT b.id, b.billing_account_id, b.amount_due, b.currency, b.payment_due_date,
+               b.bill_period, coalesce(sum(al.amount), 0) AS allocated
+        FROM customer_bill_document d
+        JOIN customer_bill b ON b.id = d.customer_bill_id
+        LEFT JOIN bill_allocation al ON al.customer_bill_id = b.id
+        WHERE d.rendered_at >= %s AND EXISTS (
+            SELECT 1 FROM account_presentation_media am
+            JOIN bill_presentation_media m ON m.id = am.media_id
+            WHERE am.billing_account_id = b.billing_account_id AND lower(m.name) = 'email')
+        GROUP BY b.id, d.rendered_at ORDER BY d.rendered_at, b.id
+        """,
+        (since,),
+    )
+    events = []
+    for row in rows:
+        period = row["bill_period"]
+        events.append(
+            Event(
+                "bill_issued",
+                f"bill_issued:{row['id']}",
+                row["billing_account_id"],
+                None,
+                {
+                    "bill_no": bill_pdf.bill_no(row["id"]),
+                    "period": f"{day(period.lower)} - {day(period.upper - timedelta(days=1))}",
+                    "amount": money(
+                        billing.remaining_amount(row, row["allocated"]), row["currency"]
+                    ),
+                    "total": money(row["amount_due"], row["currency"]),
+                    "date": day(row["payment_due_date"]),
+                },
+                sms_to_line=False,
+                channels=("email",),
+                customer_bill_id=row["id"],
             )
         )
     return events

@@ -159,6 +159,11 @@ NO_SPEC = {
         "tmf666-account",
         "JSON Schema of the BssBillingAccount extension (`app/api/account.py`)",
     ),
+    ("GET", "/tmf-api/customerBillManagement/v5/customerBill/{bill_id}/document.pdf"): (
+        "tmf678-customer-bill",
+        "the PDF a bill's billDocument `url` names (TMF678 defines the url, not the"
+        " operation; `app/api/bill.py`, #202)",
+    ),
 }
 
 # Where each operation's handler lives (for the "Code" column).
@@ -254,6 +259,7 @@ AREAS = {
         "refund",
         "refund_source",
         "customer_bill_on_demand",
+        "customer_bill_document",
         "bill_format",
         "bill_presentation_media",
         "account_presentation_media",

@@ -66,6 +66,7 @@ from app.internal.prepaid_commands import STATES
 # Not tools: the same list as docs/progress/scope.yaml `excluded` (area api).
 EXCLUDED = {
     ("GET", "/"),
+    ("GET", "/tmf-api/customerBillManagement/v5/customerBill/{bill_id}/document.pdf"),
     ("GET", "/internal/v1/sim/batch"),
     ("POST", "/internal/v1/sim/batch"),
     ("POST", "/internal/v1/sim/esim-generate"),

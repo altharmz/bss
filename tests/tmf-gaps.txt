@@ -120,10 +120,9 @@ TMF654 GET /transferBalance/{id} missing relatedParty
 TMF654 POST /reserveBalance requires amount
 # accountBalance: one current balance per currency - the balance now, with no period.
 TMF666 GET /billingAccount/{id} missing accountBalance.validFor
-# billDocument: the document is embedded (content); it has no address of its own (href,
-# url) and no validity period.
+# billDocument: the JSON snapshot is embedded (content) and the PDF (#202) is referenced by
+# its url; neither has an href or a validity period.
 TMF678 GET /customerBill/{id} missing billDocument.href
-TMF678 GET /customerBill/{id} missing billDocument.url
 TMF678 GET /customerBill/{id} missing billDocument.validFor
 # TMF683 interactions (docs/decisions/care.md): attachments, interaction relationships and
 # external identifiers are not built (422 when sent, never returned). An interaction records

@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0085**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0086**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -41,6 +41,7 @@ PostgreSQL schema at Alembic head **0085**, read from `pg_catalog` of a throwawa
 | [`refund`](refund.md) | billing | TMF676 recorded refund and its consumed credit. |
 | [`refund_source`](refund_source.md) | billing | TMF676 recorded refund and its consumed credit. |
 | [`customer_bill_on_demand`](customer_bill_on_demand.md) | billing | Durable TMF678 on-demand request consumed by the billing owner. |
+| [`customer_bill_document`](customer_bill_document.md) | billing | The PDF of an issued bill, rendered by the billing run in the bill's issue transaction and served at customerBill/{id}/document.pdf. Immutable: later name, address or settlement changes never rewrite it. Bills issued before migration 0086 have none. |
 | [`bill_format`](bill_format.md) | billing | TMF666 bill presentation configuration. |
 | [`bill_presentation_media`](bill_presentation_media.md) | billing | TMF666 bill presentation configuration. |
 | [`account_presentation_media`](account_presentation_media.md) | billing | Account bill delivery preferences; no external delivery is performed. |
@@ -152,6 +153,7 @@ flowchart LR
     refund[refund]
     refund_source[refund_source]
     customer_bill_on_demand[customer_bill_on_demand]
+    customer_bill_document[customer_bill_document]
     bill_format[bill_format]
     bill_presentation_media[bill_presentation_media]
     account_presentation_media[account_presentation_media]
@@ -270,6 +272,7 @@ flowchart LR
   customer -->|"party_id"| party
   customer_bill -->|"billing_account_id"| billing_account
   customer_bill -->|"billing_run_id"| billing_run
+  customer_bill_document -->|"customer_bill_id"| customer_bill
   customer_bill_on_demand -->|"billing_account_id"| billing_account
   customer_bill_on_demand -->|"customer_bill_id"| customer_bill
   customer_bill_state_change -->|"customer_bill_id"| customer_bill
@@ -315,6 +318,7 @@ flowchart LR
   network_command -->|"product_order_item_id"| product_order_item
   notification_consent -->|"customer_id"| customer
   notification_message -->|"billing_account_id"| billing_account
+  notification_message -->|"customer_bill_id"| customer_bill
   notification_message -->|"customer_id"| customer
   notification_message -->|"product_id"| product
   notification_message -->|"resend_of"| notification_message
@@ -1045,6 +1049,12 @@ erDiagram
     text schema_location
     jsonb details
   }
+  customer_bill_document {
+    uuid customer_bill_id PK,FK
+    bytea pdf
+    text sha256
+    timestamptz rendered_at
+  }
   bill_format {
     uuid id PK
     timestamptz created_at
@@ -1423,6 +1433,7 @@ erDiagram
   customer_bill |o--o{ funding_hold_source : "credit_bill_id, billing_account_id"
   customer_bill |o--o{ refund_source : "credit_bill_id, billing_account_id"
   customer_bill ||--o{ bill_allocation : "customer_bill_id, billing_account_id"
+  customer_bill ||--o{ customer_bill_document : "customer_bill_id"
   customer_bill ||--o{ customer_bill_state_change : "customer_bill_id"
   customer_bill ||--o{ funding_conversion_bill : "customer_bill_id, billing_account_id"
   funded_interval |o--o{ funded_interval : "supersedes_interval_id, product_id"
@@ -1616,6 +1627,7 @@ erDiagram
     text provider_ref
     uuid resend_of FK
     timestamptz created_at
+    uuid customer_bill_id FK
   }
   notification_consent {
     uuid id PK
@@ -1631,6 +1643,9 @@ erDiagram
   billing_account {
     uuid id PK
   }
+  customer_bill {
+    uuid id PK
+  }
   customer {
     uuid id PK
   }
@@ -1640,11 +1655,12 @@ erDiagram
   billing_account |o--o{ notification_message : "billing_account_id"
   customer |o--o{ notification_message : "customer_id"
   customer ||--o{ notification_consent : "customer_id"
+  customer_bill |o--o{ notification_message : "customer_bill_id"
   notification_message |o--o{ notification_message : "resend_of"
   product |o--o{ notification_message : "product_id"
 ```
 
-Tables from other areas are shown with their key only: [`billing_account`](billing_account.md), [`customer`](customer.md), [`product`](product.md).
+Tables from other areas are shown with their key only: [`billing_account`](billing_account.md), [`customer_bill`](customer_bill.md), [`customer`](customer.md), [`product`](product.md).
 
 ## Account security: PIN, line locks, audit log (ours)
 

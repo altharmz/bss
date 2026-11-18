@@ -5,6 +5,16 @@ from typing import Any
 
 # event -> channel -> (subject, body). SMS has no subject.
 TEMPLATES: dict[str, dict[str, tuple[str | None, str]]] = {
+    # sent by email only, with the bill's PDF attached (docs/decisions/bills.md); the SMS text
+    # exists because every event renders for both channels
+    "bill_issued": {
+        "sms": (None, "Your bill {bill_no} is ready: {amount} due by {date}."),
+        "email": (
+            "Your bill {bill_no}",
+            "Hello {name},\n\nYour bill {bill_no} for {period} is attached (PDF). The bill"
+            " total is {total}; the amount due is {amount}, to be paid by {date}.",
+        ),
+    },
     "low_balance": {
         "sms": (None, "Your balance is low: {balance}. Top up to keep your plan renewing."),
         "email": (

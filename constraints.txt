@@ -4,13 +4,16 @@
 # image's version, so both images run the same one; opentelemetry-api 1.45.1 for
 # CVE-2026-114603 on 2026-11-08, #263). Used as `pip install -r
 # requirements.txt -c constraints.txt`. Regenerate deliberately - see
-# docs/decisions/infra.md, "Dependencies are pinned".
+# docs/decisions/infra.md, "Dependencies are pinned". reportlab==5.1.0 with
+# pillow and charset-normalizer added 2026-11-18 (#202, bill PDFs), resolved in the pinned base
+# image, pip check clean.
 alembic==1.20.0
 annotated-doc==0.0.5
 annotated-types==0.8.0
 anyio==4.15.1
 attrs==26.1.0
 cffi==2.1.1
+charset-normalizer==3.5.2
 click==8.5.0
 cryptography==50.0.2
 fastapi==0.142.2
@@ -26,6 +29,7 @@ MarkupSafe==3.0.3
 mcp==2.3.0
 mcp-types==2.3.0
 opentelemetry-api==1.45.1
+pillow==13.0.0
 prometheus_client==0.26.0
 psycopg==3.3.6
 psycopg-binary==3.3.6
@@ -39,6 +43,7 @@ python-dotenv==1.2.4
 python-multipart==0.0.32
 PyYAML==6.0.3
 referencing==0.37.0
+reportlab==5.1.0
 rpds-py==2026.6.3
 SQLAlchemy==2.1.2
 sse-starlette==3.5.0

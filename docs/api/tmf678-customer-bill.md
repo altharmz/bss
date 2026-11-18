@@ -4,7 +4,7 @@
 
 - Base path here: `/tmf-api/customerBillManagement/v5`
 - Contract: [`spec/TMF678-CustomerBill-v5.0.0.oas.yaml`](../../spec/TMF678-CustomerBill-v5.0.0.oas.yaml) - CustomerBill version 5.0.0; the spec's server URL is `https://serverRoot`
-- Operations exposed: 12
+- Operations exposed: 13
 
 
 ## Operations
@@ -18,6 +18,7 @@
 | GET | `/tmf-api/customerBillManagement/v5/customerBill` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `billingAccount.id`, `state` | - | 200 `array of CustomerBill` | [`app/api/bill.py`](../../app/api/bill.py) |
 | GET | `/tmf-api/customerBillManagement/v5/customerBill/{bill_id}` | path: `bill_id`; query: `fields` | - | 200 `CustomerBill` | [`app/api/bill.py`](../../app/api/bill.py) |
 | PATCH | `/tmf-api/customerBillManagement/v5/customerBill/{bill_id}` | path: `bill_id`; query: `fields`; body: `application/merge-patch+json` | `CustomerBill_MVO` | 200 `CustomerBill` | [`app/api/bill.py`](../../app/api/bill.py) |
+| GET | `/tmf-api/customerBillManagement/v5/customerBill/{bill_id}/document.pdf` | path: `bill_id` | - | 200 - the PDF a bill's billDocument `url` names (TMF678 defines the url, not the operation; `app/api/bill.py`, #202) | [`app/api/bill.py`](../../app/api/bill.py) |
 | GET | `/tmf-api/customerBillManagement/v5/customerBillOnDemand` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `billingAccount.id`, `state` | - | 200 `array of CustomerBillOnDemand` | [`app/api/on_demand.py`](../../app/api/on_demand.py) |
 | POST | `/tmf-api/customerBillManagement/v5/customerBillOnDemand` | query: `fields`; body: `application/json` | `CustomerBillOnDemand_FVO` | 201 `CustomerBillOnDemand` | [`app/api/on_demand.py`](../../app/api/on_demand.py) |
 | GET | `/tmf-api/customerBillManagement/v5/customerBillOnDemand/{demand_id}` | path: `demand_id`; query: `fields` | - | 200 `CustomerBillOnDemand` | [`app/api/on_demand.py`](../../app/api/on_demand.py) |
