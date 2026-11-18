@@ -33,6 +33,7 @@ from app.internal import (
     subscribers,
     usage,
     users,
+    wholesale,
 )
 
 
@@ -60,6 +61,7 @@ def install(app: FastAPI) -> None:
         bills,
         users,
         event_subscriptions,
+        wholesale,
     ):
         app.include_router(module.router)
     app.include_router(payments.accounts)

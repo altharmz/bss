@@ -1510,6 +1510,119 @@ paths:
               schema: {$ref: '#/components/schemas/CareLogin'}
         '400': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
+  /wholesale/invoice:
+    post:
+      summary: Import and reconcile a wholesale invoice of the network partner (issue 197).
+      description: >-
+        The body is the invoice file itself, `text/csv` (at most 64 MB and 200,000 rows), with the
+        header `msisdn,iccid,period_start,period_end,charge_type,quantity,unit,amount,currency`
+        (docs/decisions/wholesale.md; our format until the partner's is mapped). Each row is
+        matched to the product that held its MSISDN (else its SIM's ICCID) on its period start,
+        and the invoice is reconciled in the same transaction: billedNotActive, activeNotBilled,
+        usageMismatch, duplicateCharge. Answers the summary. 409 for an invoice number already
+        imported (a correction is a new import), 413 for a larger file, 415 for another content
+        type, 422 for a malformed file (the message names the row and column). Not an MCP tool.
+      parameters:
+        - name: invoiceNumber
+          in: query
+          required: true
+          schema: {type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._/-]{0,63}$'}
+      requestBody:
+        required: true
+        content:
+          text/csv:
+            schema: {type: string}
+      responses:
+        '201':
+          description: Imported and reconciled
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WholesaleInvoice'}
+        '400': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '413': {$ref: '#/components/responses/Error'}
+        '415': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+    get:
+      summary: Imported wholesale invoices, newest first (issue 197).
+      parameters:
+        - {$ref: '#/components/parameters/Offset'}
+        - {$ref: '#/components/parameters/Limit'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/WholesaleInvoice'}
+        '400': {$ref: '#/components/responses/Error'}
+  /wholesale/invoice/{id}:
+    get:
+      summary: A wholesale invoice's summary (issue 197).
+      description: >-
+        Totals, the count of each discrepancy kind, and the invoice's cost (its lines), the BSS
+        revenue of the matched products for the invoice period (ABR amounts before tax, prorated
+        by overlapping days) and the margin.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WholesaleInvoice'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /wholesale/invoice/{id}/discrepancies:
+    get:
+      summary: What the reconciliation of a wholesale invoice found (issue 197).
+      description: >-
+        By kind (billedNotActive, activeNotBilled, usageMismatch, duplicateCharge), then line.
+        `expected` and `invoiced` are days live for the line kinds and usage in MB, minutes or
+        messages for usageMismatch.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+        - name: kind
+          in: query
+          schema: {type: string, enum: [billedNotActive, activeNotBilled, usageMismatch, duplicateCharge]}
+        - {$ref: '#/components/parameters/Offset'}
+        - {$ref: '#/components/parameters/Limit'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/WholesaleDiscrepancy'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /wholesale/invoice/{id}/lines:
+    get:
+      summary: Cost, revenue and margin per line of a wholesale invoice (issue 197).
+      description: >-
+        One row per matched product and one per number no product held. Cost is the sum of its
+        invoice lines; revenue the product's ABR amounts before tax whose period overlaps the
+        invoice period, prorated by overlapping days; margin = revenue - cost. `sort`: msisdn
+        (default), margin (lowest first) or -margin.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+        - name: sort
+          in: query
+          schema: {type: string, enum: [msisdn, margin, -margin]}
+        - {$ref: '#/components/parameters/Offset'}
+        - {$ref: '#/components/parameters/Limit'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/WholesaleLine'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
 components:
   securitySchemes:
     AppSession:
@@ -2504,6 +2617,68 @@ components:
         createdBy: {type: string}
         createdAt: {type: string, format: date-time}
         updatedAt: {type: string, format: date-time}
+    WholesaleInvoice:
+      type: object
+      additionalProperties: false
+      required: [id, href, invoiceNumber, period, currency, total, lineCount, state, importedAt,
+                 importedBy, discrepancies, cost, revenue, margin, matchedProducts, unmatchedNumbers]
+      properties:
+        id: {type: string, format: uuid}
+        href: {type: string}
+        invoiceNumber: {type: string}
+        period: {$ref: '#/components/schemas/DateRange'}
+        currency: {type: string, pattern: '^[A-Z]{3}$'}
+        total: {$ref: '#/components/schemas/Money'}
+        lineCount: {type: integer, minimum: 0}
+        state: {type: string, enum: [imported, reconciled]}
+        importedAt: {type: string, format: date-time}
+        importedBy: {type: string}
+        discrepancies:
+          type: object
+          additionalProperties: false
+          required: [billedNotActive, activeNotBilled, usageMismatch, duplicateCharge]
+          properties:
+            billedNotActive: {type: integer, minimum: 0}
+            activeNotBilled: {type: integer, minimum: 0}
+            usageMismatch: {type: integer, minimum: 0}
+            duplicateCharge: {type: integer, minimum: 0}
+        cost: {$ref: '#/components/schemas/Money'}
+        revenue: {$ref: '#/components/schemas/Money'}
+        margin: {$ref: '#/components/schemas/Money'}
+        matchedProducts: {type: integer, minimum: 0}
+        unmatchedNumbers: {type: integer, minimum: 0}
+    WholesaleDiscrepancy:
+      type: object
+      additionalProperties: false
+      required: [id, kind, product, msisdn, lineNumber, usageKind, expected, invoiced, detail]
+      properties:
+        id: {type: string, format: uuid}
+        kind: {type: string, enum: [billedNotActive, activeNotBilled, usageMismatch, duplicateCharge]}
+        product: &wholesaleProduct
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [id]
+          properties:
+            id: {type: string, format: uuid}
+        msisdn: {type: string, nullable: true}
+        lineNumber: {type: integer, nullable: true}
+        usageKind: {type: string, nullable: true, enum: [data, voice, sms, null]}
+        expected: {type: number, nullable: true}
+        invoiced: {type: number, nullable: true}
+        detail: {type: object}
+    WholesaleLine:
+      type: object
+      additionalProperties: false
+      required: [product, msisdn, iccid, invoiceLines, cost, revenue, margin]
+      properties:
+        product: *wholesaleProduct
+        msisdn: {type: string, nullable: true}
+        iccid: {type: string, nullable: true}
+        invoiceLines: {type: integer, minimum: 1}
+        cost: {$ref: '#/components/schemas/Money'}
+        revenue: {$ref: '#/components/schemas/Money'}
+        margin: {$ref: '#/components/schemas/Money'}
     LineLock:
       type: object
       additionalProperties: false
