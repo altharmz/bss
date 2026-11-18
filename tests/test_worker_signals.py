@@ -48,25 +48,42 @@ def finish(process: subprocess.Popen, timeout: float = 60) -> tuple[int, str]:
     return process.returncode, output
 
 
-BLOCK_LIMIT = 60  # seconds
+WORKER_BLOCK_DEADLINE = 60  # seconds, the same as finish's timeout
+
+WORKER_SESSIONS = (
+    "SELECT state, wait_event_type, wait_event, left(query, 200) AS query"
+    " FROM pg_stat_activity WHERE datname = current_database()"
+    " AND application_name = 'bss-worker'"
+)
 
 
-def wait_until_blocked(url: str, process: subprocess.Popen) -> None:
-    """Until the worker's session waits for a row lock (it is inside an account)."""
-    query = (
-        "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database()"
-        " AND application_name = 'bss-worker' AND wait_event_type = 'Lock'"
-    )
-    # Up to 60 s, ended as soon as the worker blocks: a slow machine (another slot running
-    # tests) can take longer than 10 s to start it, and a passing run is no slower (#395).
-    deadline = time.monotonic() + BLOCK_LIMIT
+def wait_until_blocked(
+    url: str, process: subprocess.Popen, deadline: float = WORKER_BLOCK_DEADLINE
+) -> None:
+    """Until the worker's session waits for a row lock (it is inside an account).
+
+    Ends as soon as the worker blocks; a loaded host (other slots' test runs) can take
+    well over 10 s to start the process (#270). On timeout the message tells start-up
+    (no session) from ordering (a session doing something else).
+    """
+    ends = time.monotonic() + deadline
     with psycopg.connect(url, autocommit=True) as admin:
-        while time.monotonic() < deadline:
-            if admin.execute(query).fetchone()[0]:
+        while True:
+            sessions = admin.execute(WORKER_SESSIONS).fetchall()
+            if any(wait_event_type == "Lock" for _, wait_event_type, _, _ in sessions):
                 return
             assert process.poll() is None, finish(process)[1]
-            time.sleep(0.05)
-    pytest.fail("the worker never waited for the held account")
+            if time.monotonic() >= ends:
+                break
+            time.sleep(0.1)
+    state = "alive" if process.poll() is None else f"exited with {process.returncode}"
+    process.kill()  # to read its output so far
+    output = finish(process, timeout=10)[1]
+    pytest.fail(
+        f"the worker never waited for the held account within {deadline} s"
+        f"\nprocess: {state}\nbss-worker sessions: {sessions or 'none'}"
+        f"\noutput so far:\n{output}"
+    )
 
 
 def outcomes(url: str, day: date) -> tuple[dict, str]:
@@ -106,6 +123,28 @@ def test_the_worker_refuses_to_start(api, migrated_db_url, tmp_path, env, reason
 
 
 # --- signals mid-run ---
+
+
+def test_wait_until_blocked_fails_with_diagnostics_within_its_deadline(migrated_db_url):
+    never_blocks = subprocess.Popen(  # noqa: S603 - our own interpreter, no outside input
+        [sys.executable, "-c", "import time; print('booting', flush=True); time.sleep(60)"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    began = time.monotonic()
+    try:
+        with pytest.raises(pytest.fail.Exception) as failure:
+            wait_until_blocked(migrated_db_url, never_blocks, deadline=0.5)
+    finally:
+        if never_blocks.poll() is None:
+            never_blocks.kill()
+    assert time.monotonic() - began < 10  # the deadline, not the 60 s default
+    message = str(failure.value)
+    assert "within 0.5 s" in message
+    assert "process: alive" in message
+    assert "bss-worker sessions: none" in message  # never connected: start-up
+    assert "booting" in message  # its output so far
 
 
 @pytest.mark.capability("worker.signals")
