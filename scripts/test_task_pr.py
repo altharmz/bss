@@ -69,7 +69,9 @@ class PrTests(unittest.TestCase):
             " d['creates']=d.get('creates',0)+1; p.write_text(json.dumps(d)); sys.exit(0)\n"
             "elif '/files?' in a[-1]:\n"
             " print('\\n'.join(json.dumps(page) for page in d['files'])); sys.exit(0)\n"
-            "elif '/compare/' in a[-1]: out={'behind_by':d['behind']}\n"
+            "elif '/compare/master...' in a[-1]: out={'behind_by':d['behind']}\n"
+            "elif a[-1].endswith('...master'):\n"
+            " out={'files':d.get('incoming',[{'filename':'scripts/task_pr.py'}])}\n"
             "else: sys.exit(2)\n"
             "print(json.dumps(out))\n"
         )
@@ -151,6 +153,30 @@ class PrTests(unittest.TestCase):
             self.outcome(expected, code)
             self.pr[field] = old
         self.state["behind"] = 1
+        self.assertIn("base-behind", self.outcome("pending", 2)["reasons"])
+
+    def test_behind_master_is_ready_when_nothing_is_shared(self):
+        self.state["behind"] = 3
+        self.state["incoming"] = [{"filename": "app/api/bills.py"}]
+        data = self.outcome("ready", 0)
+        self.assertEqual((data["base_behind"], data["reasons"]), (3, []))
+        # A rename on master away from a path the PR changes is shared.
+        self.state["incoming"] = [
+            {"filename": "scripts/moved.py", "previous_filename": "scripts/task_pr.py"}
+        ]
+        data = self.outcome("pending", 2)
+        self.assertEqual(data["reasons"], ["base-behind"])
+        self.assertEqual(
+            data["next_command"], "make sync-task, make push, then make check-pr WAIT=600"
+        )
+
+    def test_a_migration_on_each_side_or_an_unlisted_incoming_side_needs_a_sync(self):
+        self.state["behind"] = 1
+        self.state["files"] = [[{"filename": "alembic/versions/0081_task.py"}]]
+        self.state["incoming"] = [{"filename": "alembic/versions/0081_master.py"}]
+        self.assertIn("base-behind", self.outcome("pending", 2)["reasons"])
+        self.state["files"] = [[{"filename": "docs/a.md"}]]
+        self.state["incoming"] = [{"filename": f"f{n}.txt"} for n in range(300)]
         self.assertIn("base-behind", self.outcome("pending", 2)["reasons"])
 
     def test_review_and_human_policy(self):

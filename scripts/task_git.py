@@ -248,6 +248,40 @@ def sync(root, task):
     run(root, "commit", "-m", "Merge origin/master into task branch")
 
 
+MIGRATIONS = "alembic/versions/"
+
+
+def shared_paths(own, incoming):
+    """What both sides of a merge change (#390): the same path, or a migration on each side
+    (two migrations on one parent are two Alembic heads, whatever their file names). A task
+    behind master with nothing shared needs no local sync: GitHub merges it, and what came
+    in passed the hook and CI on master. Anything shared needs the merge tested locally."""
+    own, incoming = set(own), set(incoming)
+    found = own & incoming
+    if any(p.startswith(MIGRATIONS) for p in own) and any(
+        p.startswith(MIGRATIONS) for p in incoming
+    ):
+        found.add(MIGRATIONS)
+    return sorted(found)
+
+
+def behind_and_shared(root, base):
+    """None when HEAD contains `base`, else the paths the task and the commits it lacks
+    both change (empty: behind, but nothing shared)."""
+    if (
+        subprocess.run(  # noqa: S603, S607
+            ["git", "-C", str(root), "merge-base", "--is-ancestor", base, "HEAD"],
+            capture_output=True,
+        ).returncode
+        == 0
+    ):
+        return None
+    fork = query(root, "merge-base", base, "HEAD").decode().strip()
+    own = paths(root, "diff", "--no-renames", "--name-only", "-z", fork, "HEAD")
+    incoming = paths(root, "diff", "--no-renames", "--name-only", "-z", fork, base)
+    return shared_paths(own, incoming)
+
+
 def push(root, task):
     remote_configuration(root, task)
     refs = query(root, "ls-remote", "--heads", "origin", "refs/heads/master", f"refs/heads/{task}")
@@ -256,14 +290,16 @@ def push(root, task):
     run(root, "fetch", "--no-tags", "--refmap=", "origin", "refs/heads/master")
     base = query(root, "rev-parse", "FETCH_HEAD").decode().strip()
     require(base == remote["refs/heads/master"], "origin changed during inspection; retry")
+    shared = behind_and_shared(root, base)
     require(
-        subprocess.run(  # noqa: S603, S607
-            ["git", "-C", str(root), "merge-base", "--is-ancestor", base, "HEAD"],
-            capture_output=True,
-        ).returncode
-        == 0,
-        "task is behind origin/master; run make sync-task, then retry",
+        not shared,
+        "task is behind origin/master and both change "
+        + ", ".join((shared or [])[:5])
+        + (" and more" if len(shared or []) > 5 else "")
+        + "; run make sync-task, then retry",
     )
+    if shared is not None:
+        print("task push: behind origin/master with no shared path; publishing without a sync")
     ref = f"refs/heads/{task}"
     if ref in remote:
         run(root, "fetch", "--no-tags", "--refmap=", "origin", ref)

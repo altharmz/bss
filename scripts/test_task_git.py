@@ -401,6 +401,7 @@ class GitTests(unittest.TestCase):
     def advance_master(self, filename="upstream.txt", content="upstream\n"):
         other = self.base / "upstream"
         self.call(["git", "clone", "-q", str(self.remote), str(other)])
+        (other / filename).parent.mkdir(parents=True, exist_ok=True)
         (other / filename).write_text(content)
         self.call(["git", "add", filename], cwd=other)
         self.call(
@@ -415,10 +416,11 @@ class GitTests(unittest.TestCase):
         self.assertEqual(self.command().returncode, 0)
         self.assertEqual(self.command("push").returncode, 0)
         previous = self.call(["git", "rev-parse", "HEAD"]).stdout.strip()
-        upstream = self.advance_master()
+        # The same file on both sides (identical, so the merge is clean): a sync is due.
+        upstream = self.advance_master("chosen.txt", "chosen\n")
         refused = self.command("push")
         self.assertNotEqual(refused.returncode, 0)
-        self.assertIn("make sync-task", refused.stderr)
+        self.assertIn("both change chosen.txt; run make sync-task", refused.stderr)
         result = self.command("sync-task")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.call(["git", "merge-base", "--is-ancestor", previous, "HEAD"])
@@ -427,6 +429,39 @@ class GitTests(unittest.TestCase):
         head = self.call(["git", "rev-parse", "HEAD"]).stdout
         self.assertEqual(self.command("sync-task").returncode, 0)
         self.assertEqual(self.call(["git", "rev-parse", "HEAD"]).stdout, head)
+
+    def test_behind_master_with_nothing_shared_publishes_without_a_sync(self):
+        self.change()
+        self.assertEqual(self.command().returncode, 0)
+        upstream = self.advance_master()  # upstream.txt only
+        result = self.command("push")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("no shared path; publishing without a sync", result.stdout)
+        head = self.call(["git", "rev-parse", "HEAD"]).stdout.strip()
+        published = self.call(["git", "ls-remote", "origin", f"refs/heads/{self.task}"]).stdout
+        self.assertTrue(published.startswith(head))
+        merged = self.call(["git", "merge-base", "--is-ancestor", upstream, "HEAD"], check=False)
+        self.assertNotEqual(merged.returncode, 0)  # nothing was merged in
+
+    def test_a_migration_on_each_side_needs_a_sync(self):
+        (self.work / "alembic/versions").mkdir(parents=True)
+        (self.work / "alembic/versions/0081_task.py").write_text("task\n")
+        self.assertEqual(self.command(files=["alembic/versions/0081_task.py"]).returncode, 0)
+        self.advance_master("alembic/versions/0081_master.py", "master\n")
+        refused = self.command("push")
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn("both change alembic/versions/; run make sync-task", refused.stderr)
+
+    def test_shared_paths(self):
+        import task_git
+
+        self.assertEqual(task_git.shared_paths(["a", "b"], ["b", "c"]), ["b"])
+        self.assertEqual(task_git.shared_paths(["a"], ["c"]), [])
+        self.assertEqual(
+            task_git.shared_paths(["alembic/versions/1.py"], ["alembic/versions/2.py", "x"]),
+            ["alembic/versions/"],
+        )
+        self.assertEqual(task_git.shared_paths(["alembic/env.py"], ["alembic/versions/2.py"]), [])
 
     def test_sync_hook_failure_preserves_merge_and_index(self):
         flag = self.base / "fail-hook"

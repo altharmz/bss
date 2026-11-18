@@ -58,7 +58,8 @@ does not know and lists the ones it accepts.
    without selecting another ([why](decisions/harness.md#human-approved-task-selection)).
 2. **Work** in the returned worktree. `make format` skips the UI formatter when the branch has
    no changes under `frontend/` or `spec/`; run `make web-install` once before it formats UI
-   files. After another task merged, `make sync-task` merges `master` into the branch.
+   files. After another task merged, `make sync-task` merges `master` into the branch; it is
+   needed only when `push`, `create-pr` or `check-pr` asks for it (both sides change a path).
 3. **Commit** with `make commit`. It stages only the listed files and runs the normal
    pre-commit hook, which is the one local verification run (see Hooks and checks). Run
    `make test` (the full suite) before a PR touching billing, migrations or the API.
@@ -93,7 +94,10 @@ starts: run it in the background too, and do not start a second copy.
 
 **After `make sync-task` pulls in UI changes**, run `make web-install` before committing, or
 the hook stops at `web-lint`. If `master` moves while the hook runs, `create-pr` asks for
-another `make sync-task`; run it and go straight on to `make push` and `make check-pr`.
+another `make sync-task` only when the new commits change a path the task changes too (or
+both add a migration); otherwise it publishes as is
+([#390](decisions/harness.md#tests-in-the-hook-smoke-plus-affected)). When asked, run it and go
+straight on to `make push` and `make check-pr`.
 
 **Subagents** work in the returned task worktree only, with the same targets. Give them the
 full task and check back at most every few minutes; do not poll in a loop. The main agent
@@ -247,7 +251,9 @@ names them) except the presentation-only `GIT_PAGER`, `GIT_EDITOR` and
 
 `make push` publishes `HEAD` to the same-named branch on `origin` (upstream set if needed),
 refuses unexpected destinations, remote history outside local ancestry and protected
-paths, and runs the pre-push hook. No force, tags or unrelated refs.
+paths, and runs the pre-push hook. No force, tags or unrelated refs. A task behind
+`origin/master` is published when the two sides share no path; otherwise it asks for
+`make sync-task`.
 
 `make sync-task` merges current `origin/master` into a clean task without rewriting history
 (the merge runs the commit hook). Conflicts and hook failures preserve the merge state:
