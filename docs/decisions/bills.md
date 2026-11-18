@@ -141,6 +141,10 @@ Slice 1 of postpaid for the MVNO (epic #182); dunning is #385, the UI #386. Deci
   route; 404 for an unknown bill or one without a PDF. TMF678 defines the url, not this
   operation, so the generated docs list it under `NO_SPEC`. Not an MCP tool (scope excluded:
   the connector answers JSON, and `get_customer_bill` carries the bill and its JSON document).
+- **Dependencies:** besides the new pins, the transitive `opentelemetry-api` moved 1.45.1 ->
+  1.45.2 (CVE-2026-126360, published after master's last green run; the PR's pip-audit gate
+  refused it), by the procedure of [infra.md](infra.md) "Dependencies are pinned": both images
+  resolve exactly to the constraints, pip check clean.
 - **Cost:** measured 13 ms a bill (a five-charge detailed bill, 1000 renders in the dev
   container, alone; 21 ms of CPU with other stacks busy), about 45 KB a PDF with the subset
   font. `tests/test_bill_pdf.py::test_rendering_takes_under_50_ms_a_bill` holds the 50 ms target

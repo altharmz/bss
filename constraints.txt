@@ -6,7 +6,8 @@
 # requirements.txt -c constraints.txt`. Regenerate deliberately - see
 # docs/decisions/infra.md, "Dependencies are pinned". reportlab==5.1.0 with
 # pillow and charset-normalizer added 2026-11-18 (#202, bill PDFs), resolved in the pinned base
-# image, pip check clean.
+# image, pip check clean. opentelemetry-api 1.45.2 for CVE-2026-126360 on 2026-11-18 (#202,
+# the pip-audit gate).
 alembic==1.20.0
 annotated-doc==0.0.5
 annotated-types==0.8.0
@@ -28,7 +29,7 @@ Mako==1.4.3
 MarkupSafe==3.0.3
 mcp==2.3.0
 mcp-types==2.3.0
-opentelemetry-api==1.45.1
+opentelemetry-api==1.45.2
 pillow==13.0.0
 prometheus_client==0.26.0
 psycopg==3.3.6

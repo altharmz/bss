@@ -5,7 +5,8 @@
 # prometheus_client the dev image already got from the runtime venv. Used as `pip
 # install -r requirements-dev.txt -c constraints-dev.txt`. Regenerate deliberately - see
 # docs/decisions/infra.md, "Dependencies are pinned". reportlab==5.1.0,
-# pillow, charset-normalizer and pypdf==7.1.1 added 2026-11-18 (#202), pip check clean.
+# pillow, charset-normalizer and pypdf==7.1.1 added 2026-11-18 (#202), pip check clean;
+# opentelemetry-api 1.45.2 for CVE-2026-126360 the same day.
 alembic==1.20.0
 annotated-doc==0.0.5
 annotated-types==0.8.0
@@ -35,7 +36,7 @@ MarkupSafe==3.0.3
 mcp==2.3.0
 mcp-types==2.3.0
 openapi-schema-validator==0.9.0
-opentelemetry-api==1.45.1
+opentelemetry-api==1.45.2
 packaging==26.3
 pillow==13.0.0
 pluggy==1.6.0
