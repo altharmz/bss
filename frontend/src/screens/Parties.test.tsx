@@ -261,6 +261,7 @@ describe('party and customer dialogs', () => {
     });
     await open();
     fireEvent.click(screen.getByRole('button', { name: 'New individual' }));
+    expectUi('ui.parties.newIndividual');
     const dialog = await screen.findByRole('dialog', { name: 'New individual' });
     expectUi('ui.parties.newIndividualForm');
     fireEvent.change(within(dialog).getByLabelText('Given name'), { target: { value: ' Anna ' } });
@@ -305,6 +306,7 @@ describe('party and customer dialogs', () => {
     });
     await open();
     fireEvent.click(screen.getByRole('button', { name: 'New organization' }));
+    expectUi('ui.parties.newOrganization');
     const dialog = await screen.findByRole('dialog', { name: 'New organization' });
     expectUi('ui.parties.newOrganizationForm');
     expect(within(dialog).queryByRole('button', { name: 'deceased' })).toBeNull();
@@ -456,7 +458,10 @@ describe('party and customer dialogs', () => {
     tab('Organizations');
     fireEvent.click(await screen.findByText('Lone Ltd'));
     const partyDialog = await screen.findByRole('dialog', { name: 'Lone Ltd' });
-    fireEvent.click(within(partyDialog).getByRole('button', { name: 'New customer' }));
+    expect(partyDialog).toBe(expectUi('ui.parties.organization'));
+    const newCustomer = within(partyDialog).getByRole('button', { name: 'New customer' });
+    expect(newCustomer).toBe(expectUi('ui.parties.newCustomer'));
+    fireEvent.click(newCustomer);
     const dialog = await screen.findByRole('dialog', { name: 'New customer' });
     expectUi('ui.parties.newCustomerForm');
     expect((within(dialog).getByLabelText('Customer name') as HTMLInputElement).value).toBe(
@@ -577,9 +582,9 @@ describe('party and customer dialogs', () => {
     dialog = await screen.findByRole('dialog', { name: 'Ivan Petrov' });
     // only the account's own Delete is there; the customer's waits for the accounts to go
     expect(within(dialog).getAllByRole('button', { name: 'Delete' })).toHaveLength(1);
-    expect(
-      within(dialog).getByRole('button', { name: 'Remove billing accounts first' }),
-    ).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: 'Remove billing accounts first' })).toBe(
+      expectUi('ui.parties.removeAccountsFirst'),
+    );
   });
 
   it('deletes a customer without accounts and shows the server 409 for a party', async () => {
@@ -683,7 +688,9 @@ describe('billing accounts of a customer', () => {
     });
     const dialog = await customerDialog();
     expectUi('ui.parties.customerAccounts');
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    const remove = within(dialog).getByRole('button', { name: 'Delete' });
+    expect(remove).toBe(expectUi('ui.parties.deleteAccount'));
+    fireEvent.click(remove);
     expect(writes(fetchMock)).toEqual([]);
     fireEvent.click(within(dialog).getByRole('button', { name: 'Yes' }));
     await screen.findByText('Ivan main deleted');

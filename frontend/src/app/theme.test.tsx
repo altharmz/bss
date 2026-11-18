@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { expectUi } from '../test/expectUi';
 import { ThemeChoice } from './Shell';
 import { applyTheme, readTheme, saveTheme, THEME_KEY } from './theme';
 
@@ -12,6 +13,7 @@ afterEach(() => {
 describe('theme choice', () => {
   it('applies and removes data-theme and persists the choice', () => {
     render(<ThemeChoice />);
+    expectUi('ui.shell.theme');
     const html = document.documentElement;
     expect(screen.getByRole('button', { name: 'System' }).getAttribute('aria-pressed')).toBe(
       'true',

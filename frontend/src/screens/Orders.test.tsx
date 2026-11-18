@@ -158,6 +158,8 @@ describe('orders list', () => {
     expect(calls.filter((call) => call.includes('productOrder?offset'))).toEqual([
       `GET ${ORDERS}?offset=0&limit=50`,
     ]);
+    expect(screen.getByRole('button', { name: 'Previous' })).toBe(expectUi('ui.orders.previous'));
+    expect(screen.getByRole('button', { name: 'Next' })).toBe(expectUi('ui.orders.next'));
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     await waitFor(() => expect(finish).toBeTypeOf('function'));
     expect(screen.queryByLabelText('Loading')).toBeNull();
@@ -221,6 +223,8 @@ describe('orders list', () => {
     expect(within(dialog).getByText('Add Fiber')).toBeTruthy();
     expect(within(dialog).getByText('Target status')).toBeTruthy();
     expect(within(dialog).getByText('Suspended')).toBeTruthy();
+    const none = await waitFor(() => expectUi('ui.orders.noCancellations'));
+    expect(dialog.contains(none)).toBe(true);
     expect(calls.filter((call) => call.includes('/productInventory/'))).toEqual([
       `GET /tmf-api/productInventory/v5/product/${P1}`,
     ]);
@@ -263,6 +267,7 @@ describe('orders list', () => {
     const chip = await screen.findByText(/Account/, {
       selector: '[data-ui="ui.orders.accountChip"]',
     });
+    expect(chip).toBe(expectUi('ui.orders.accountChip'));
     await screen.findByText('C0000001');
     expect((await screen.findAllByRole('link', { name: 'Ivan Ivanov' })).length).toBe(2);
     expect(screen.getByRole('button', { name: 'In progress' }).getAttribute('title')).toBe(
@@ -438,6 +443,7 @@ describe('orders list', () => {
     open();
     fireEvent.click((await screen.findByText('C0000001')).closest('[role="row"]') as HTMLElement);
     expect(await screen.findByText('The offering is retired')).toBeTruthy();
+    expect(expectUi('ui.orders.errors').textContent).toContain('The offering is retired');
   });
 });
 

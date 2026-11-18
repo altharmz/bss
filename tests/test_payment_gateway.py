@@ -141,6 +141,7 @@ def test_card_write_rules(api, db_conn):
 # --- card top-up ---
 
 
+@pytest.mark.capability("worker.paymentGateway")
 def test_a_card_top_up_raises_the_balance_only_after_the_gateway_confirms(api, db_conn):
     _, acc = prepaid(api, db_conn, funds="10")
     card = save(api, acc)
@@ -281,6 +282,7 @@ def commands_of(db_conn):
     ).fetchall()
 
 
+@pytest.mark.capability("worker.paymentGateway")
 def test_auto_top_up_fires_once_when_the_balance_crosses_the_threshold(api, db_conn):
     _, acc = prepaid(api, db_conn, funds="30")
     save(api, acc)

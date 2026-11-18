@@ -18,7 +18,7 @@ Status is derived, never written by hand:
   tested        worker: at least one test marked with the capability passed and none
                 failed (implemented and tested together - a capability is proven, not
                 detected); ui: a passing component test saw the marker on screen
-                (expectUi); db: a passing test's database got rows in the table
+                (expectUi); db: a passing test's database wrote rows (inserted or updated)
                 (pg_stat_user_tables); api: a passing test sent a request the app routes
                 to the operation
 
@@ -184,8 +184,8 @@ def render(status: dict) -> str:
         "component test saw it on screen (ui). Worker:",
         "implemented and tested when a test marked with the capability passes and none fails.",
         "Tested (ui): a passing component test saw the marker on screen (`expectUi`). Tested",
-        "(db): a passing test's database got rows in the table. Tested (api): a passing test",
-        "sent a request the app routes to the operation.",
+        "(db): a passing test's database inserted or updated rows in the table. Tested (api): a",
+        "passing test sent a request the app routes to the operation.",
         "",
         "| Area | Items | Implemented | Tested |",
         "|---|---|---|---|",

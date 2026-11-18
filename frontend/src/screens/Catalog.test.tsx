@@ -30,6 +30,8 @@ describe('catalog', () => {
       'Active2Sellable',
       'Retired1Billing only',
     ]);
+    expect(document.querySelectorAll('[data-ui="ui.catalog.lifecycleGroup"]')).toHaveLength(3);
+    expect(expectUi('ui.catalog.lifecycleGroup').textContent).toBe('In design1Not sellable yet');
     expect(
       dataRows().map(
         (element) =>
@@ -330,6 +332,7 @@ describe('catalog sellability', () => {
       const marker = within(row(name)).getByText('Not sellable').parentElement;
       expect(marker).toHaveProperty('dataset.ui', 'ui.catalog.notSellable');
     }
+    expectUi('ui.catalog.notSellable');
   });
 });
 

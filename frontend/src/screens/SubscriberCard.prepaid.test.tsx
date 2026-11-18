@@ -66,6 +66,9 @@ describe('prepaid card', () => {
     expect(note.previousElementSibling).toBe(strip.firstElementChild);
     expect(within(expectUi('ui.subscriber.prepaid.available')).getByText('—')).toBeTruthy();
     expect(within(expectUi('ui.subscriber.prepaid.reserved')).getByText('—')).toBeTruthy();
+    expect(within(strip).getByRole('link', { name: 'Commands' })).toBe(
+      expectUi('ui.subscriber.prepaid.commands'),
+    );
   });
 
   it('keeps ledger, available, reserved, paid-through and shortfall distinct', async () => {
@@ -246,6 +249,7 @@ describe('usage tab', () => {
     });
     await open('#usage');
     const data = await waitFor(() => expectUi('ui.subscriber.usage.data'));
+    expect(expectUi('ui.subscriber.usage').contains(data)).toBe(true);
     expect(data.textContent).toContain('850.0 MB of 1000.0 MB');
     expect(data.textContent).toContain('150.0 MB left');
     expect(data.textContent).toContain('80% reached');
@@ -267,10 +271,13 @@ describe('usage tab', () => {
     expect(await screen.findByText('Roaming')).toBeTruthy();
     expect(screen.getByText('2026-10-01 09:00:00')).toBeTruthy();
     expect(screen.getByText('5.0 MB')).toBeTruthy();
+    expect(expectUi('ui.subscriber.usage.status').textContent).toContain('Not rated');
     expect(screen.queryByText('Throttled', { selector: '.bss-badge' })).toBeNull();
+    expect(expectUi('ui.subscriber.usage.previous').hasAttribute('disabled')).toBe(true);
     fireEvent.click(expectUi('ui.subscriber.usage.next'));
     expect(await screen.findByText('Showing 26–26')).toBeTruthy();
     expect(expectUi('ui.subscriber.usage.next').hasAttribute('disabled')).toBe(true);
+    expect(expectUi('ui.subscriber.usage.previous').hasAttribute('disabled')).toBe(false);
   });
 
   it('shows the rating status and the applied price only on a rated record', async () => {
@@ -349,6 +356,7 @@ describe('usage tab', () => {
     });
     await open('#usage');
     expect(await screen.findByText('Barred')).toBeTruthy();
+    expect(expectUi('ui.subscriber.usage.barred').textContent).toContain('Barred');
     expect(screen.getByText('-2.5 USD')).toBeTruthy();
     expect(await screen.findByText('No usage')).toBeTruthy();
   });
@@ -696,7 +704,11 @@ describe('prepaid transfer', () => {
     expectUi('ui.subscriber.prepaid.transfer.balances');
     press(form, 'Review transfer');
     expectUi('ui.subscriber.prepaid.transfer.acknowledgement');
-    expectUi('ui.subscriber.prepaid.transfer.summary');
+    expect(
+      expectUi('ui.subscriber.prepaid.transfer.confirm').contains(
+        expectUi('ui.subscriber.prepaid.transfer.summary'),
+      ),
+    ).toBe(true);
     expect(within(form).getByText(/This is final/).textContent).toContain("can't be undone here");
     expect(posts(fetchMock)).toEqual([]); // nothing is sent before the confirmation
     const primary = within(form).getByRole('button', { name: 'Transfer 30.00 USD' });

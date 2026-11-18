@@ -60,6 +60,9 @@ describe('Users', () => {
   it('denies a non-admin without requesting users or showing the menu link', async () => {
     const { calls } = start('user');
     await screen.findByRole('heading', { name: 'Not allowed' });
+    expect(expectUi('ui.users.denied').textContent).toContain(
+      'Only administrators can manage users.',
+    );
     expect(calls).not.toContain(`GET ${PATH}`);
     expect(
       within(screen.getByRole('navigation', { name: 'User menu', hidden: true })).queryByText(

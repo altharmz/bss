@@ -96,6 +96,7 @@ describe('products screen', () => {
     expect(await screen.findByText('No matches')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Filter by number'), { target: { value: '' } });
     // server side: status
+    expect(screen.getByLabelText('Status')).toBe(expectUi('ui.products.status'));
     fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'terminated' } });
     await waitFor(() => expect(calls).toContain(`GET ${PRODUCTS}?status=terminated&${PAGE}`));
     fireEvent.change(screen.getByLabelText('Status'), { target: { value: '' } });

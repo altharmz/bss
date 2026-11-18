@@ -126,6 +126,9 @@ describe('party and settlement accounts', () => {
     await open('Settlement');
     await screen.findByText('Partner payouts');
     expectUi('ui.accounts.settlement');
+    expect(expectUi('ui.accounts.settlement.edit')).toBe(
+      screen.getByRole('button', { name: 'Edit Partner payouts' }),
+    );
     expect(screen.queryByText('Payroll')).toBeNull();
   });
 
@@ -139,6 +142,9 @@ describe('party and settlement accounts', () => {
     expectUi('ui.accounts.party.new');
     const dialog = await screen.findByRole('dialog', { name: 'New party account' });
     expectUi('ui.accounts.party.form');
+    expect(within(dialog).getByLabelText('Financial account')).toBe(
+      expectUi('ui.accounts.party.financialLink'),
+    );
     expect((within(dialog).getByLabelText('Financial account') as HTMLSelectElement).disabled).toBe(
       true,
     ); // no owner yet
@@ -178,6 +184,9 @@ describe('party and settlement accounts', () => {
     expectUi('ui.accounts.settlement.new');
     const dialog = await screen.findByRole('dialog', { name: 'New settlement account' });
     expectUi('ui.accounts.settlement.form');
+    expect(within(dialog).getByLabelText('Financial account')).toBe(
+      expectUi('ui.accounts.settlement.financialLink'),
+    );
     const owner = within(dialog).getByRole('combobox', { name: 'Owner' });
     fireEvent.focus(owner);
     fireEvent.click(await within(dialog).findByRole('option', { name: /Romashka LLC/ }));
@@ -292,12 +301,9 @@ describe('party and settlement accounts', () => {
     );
     fireEvent.click(await screen.findByRole('button', { name: 'Delete Partner payouts' }));
     expectUi('ui.accounts.settlement.delete');
-    fireEvent.click(
-      within(await screen.findByRole('dialog', { name: 'Delete Partner payouts' })).getByRole(
-        'button',
-        { name: 'Delete' },
-      ),
-    );
+    const confirm = await screen.findByRole('dialog', { name: 'Delete Partner payouts' });
+    expect(confirm).toBe(expectUi('ui.accounts.settlement.confirmDelete'));
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Delete' }));
     await screen.findByText('Partner payouts deleted');
     expect(writes(fetchMock)).toEqual([
       ['DELETE', `${ACC}/partyAccount/${A1}`, null],

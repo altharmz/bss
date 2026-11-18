@@ -78,7 +78,14 @@ if PROGRESS_RECORD:
 
 
 def _record_written_tables(url: str) -> None:
-    """The tables of the database at `url` that got rows (pg_stat_user_tables.n_tup_ins).
+    _tables.update(written_tables(url))
+
+
+def written_tables(url: str) -> set[str]:
+    """The tables of the database at `url` that were written: rows inserted or updated
+    (pg_stat_user_tables.n_tup_ins + n_tup_upd). An update counts: a one-row settings
+    table is seeded by its migration, which the template clone does not count, and is
+    only ever updated afterwards (#276).
     A backend reports its counts when it ends, before it leaves pg_stat_activity: wait
     for every other session of the database to be gone first (5 s at most)."""
     with psycopg.connect(url, autocommit=True) as conn:
@@ -90,8 +97,10 @@ def _record_written_tables(url: str) -> None:
             if time.monotonic() > deadline:
                 raise RuntimeError("progress: sessions of the test database did not end")
             time.sleep(0.01)
-        rows = conn.execute("SELECT relname FROM pg_stat_user_tables WHERE n_tup_ins > 0")
-        _tables.update(row[0] for row in rows)
+        rows = conn.execute(
+            "SELECT relname FROM pg_stat_user_tables WHERE n_tup_ins + n_tup_upd > 0"
+        )
+        return {row[0] for row in rows}
 
 
 # --- data files testmon cannot follow (scripts/hook_selection.py, #344) ---

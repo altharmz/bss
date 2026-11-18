@@ -257,6 +257,7 @@ describe('billing settings', () => {
     await screen.findByText('JSON summary');
     expectUi('ui.billingSettings.formats');
     fireEvent.click(screen.getByRole('button', { name: '+ New bill format' }));
+    expectUi('ui.billingSettings.formats.new');
     let dialog = await screen.findByRole('dialog', { name: 'New bill format' });
     expectUi('ui.billingSettings.formats.form');
     const name = within(dialog).getByLabelText('Name') as HTMLSelectElement;
@@ -271,6 +272,7 @@ describe('billing settings', () => {
     await screen.findByText('JSON summary created');
 
     fireEvent.click(await screen.findByRole('button', { name: 'Edit JSON summary' }));
+    expectUi('ui.billingSettings.formats.edit');
     dialog = await screen.findByRole('dialog', { name: 'Edit JSON summary' });
     fireEvent.change(within(dialog).getByLabelText('Description'), { target: { value: 'Totals' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
@@ -278,12 +280,10 @@ describe('billing settings', () => {
 
     await shown('JSON summary');
     fireEvent.click(await screen.findByRole('button', { name: 'Delete JSON summary' }));
-    fireEvent.click(
-      within(await screen.findByRole('dialog', { name: 'Delete JSON summary' })).getByRole(
-        'button',
-        { name: 'Delete' },
-      ),
-    );
+    expectUi('ui.billingSettings.formats.delete');
+    dialog = await screen.findByRole('dialog', { name: 'Delete JSON summary' });
+    expect(dialog).toBe(expectUi('ui.billingSettings.formats.confirmDelete'));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
     await screen.findByText('JSON summary deleted');
     expect(writes(fetchMock)).toEqual([
       [
@@ -310,22 +310,24 @@ describe('billing settings', () => {
     await screen.findByText('Post');
     expectUi('ui.billingSettings.media');
     fireEvent.click(screen.getByRole('button', { name: '+ New presentation medium' }));
+    expectUi('ui.billingSettings.media.new');
     let dialog = await screen.findByRole('dialog', { name: 'New presentation medium' });
+    expect(dialog).toBe(expectUi('ui.billingSettings.media.form'));
     fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'SMS' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
     await screen.findByText('SMS created');
     fireEvent.click(await screen.findByRole('button', { name: 'Edit Post' }));
+    expectUi('ui.billingSettings.media.edit');
     dialog = await screen.findByRole('dialog', { name: 'Edit Post' });
     fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Paper post' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
     await screen.findByText('Paper post saved');
     await shown('Post');
     fireEvent.click(await screen.findByRole('button', { name: 'Delete Post' }));
-    fireEvent.click(
-      within(await screen.findByRole('dialog', { name: 'Delete Post' })).getByRole('button', {
-        name: 'Delete',
-      }),
-    );
+    expectUi('ui.billingSettings.media.delete');
+    dialog = await screen.findByRole('dialog', { name: 'Delete Post' });
+    expect(dialog).toBe(expectUi('ui.billingSettings.media.confirmDelete'));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
     await screen.findByText('Post deleted');
     expect(writes(fetchMock)).toEqual([
       [

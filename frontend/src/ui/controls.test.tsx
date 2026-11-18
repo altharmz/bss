@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { useState } from 'react';
 import { unlabeledControls } from '../test/unlabeled';
@@ -106,6 +106,9 @@ describe('Ledger controls', () => {
       screen.getByRole('heading', { name: 'UI kit' }).parentElement?.getAttribute('data-ui'),
     ).toBe('ui.kit');
     expectUi('ui.kit');
+    expect(
+      within(expectUi('ui.uikit.combobox')).getByRole('combobox', { name: 'Empty combobox' }),
+    ).toBeTruthy();
     expect(screen.getByRole('radiogroup', { name: 'Choose mode' })).toBeTruthy();
     const unlabeled = Array.from(
       document.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
