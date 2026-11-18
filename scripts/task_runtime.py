@@ -1,12 +1,15 @@
 """Validate local runtime contexts before invoking Docker Compose."""
 
 import errno
+import io
 import json
 import os
 import re
 import socket
 import subprocess
 import sys
+import tarfile
+import tempfile
 import time
 from pathlib import Path
 
@@ -75,6 +78,65 @@ def rerun(root, script, *arguments):
         env={**os.environ, REEXEC_MARKER: "1"},
         check=False,
     ).returncode
+
+
+def master_harness(root, target):
+    """Run `target` with the harness scripts of current origin/master, or return None (#395).
+
+    A task branch that started before a harness fix still runs its own, older scripts, so
+    `check-pr` and `merge-task` applied old gates (#197 blocked on a behind-but-unshared
+    base that #390 had made fine). They hand over to master's scripts, as `finish-task`
+    does after its fast-forward, when master's scripts/ changed since the branch forked
+    and the branch changed none of its own: never an older copy than the task's own. A
+    branch that changes the harness itself keeps its copy (`make sync-task` brings master's
+    in). The copy runs from a temporary directory, in the task worktree, once (the marker).
+    """
+    if os.environ.get(REEXEC_MARKER):
+        return None
+    root = Path(root)
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_") or k == "GIT_PAGER"}
+
+    def git(*args, check=True):
+        return subprocess.run(  # noqa: S603 - fixed program, argv
+            ["git", "-C", str(root), *args],  # noqa: S607
+            capture_output=True,
+            check=check,
+            env=env,
+        )
+
+    git("fetch", "-q", "--no-tags", "--refmap=", "origin", "refs/heads/master")
+    base = git("rev-parse", "FETCH_HEAD").stdout.decode().strip()
+    if not git("merge-base", "--is-ancestor", base, "HEAD", check=False).returncode:
+        return None
+    fork = git("merge-base", base, "HEAD").stdout.decode().strip()
+    if not git("diff", "--name-only", fork, base, "--", "scripts").stdout.strip():
+        return None
+    if git("diff", "--name-only", fork, "HEAD", "--", "scripts").stdout.strip():
+        print(
+            f"{target}: master's harness scripts changed, and so do this branch's; running "
+            "the branch's own (make sync-task brings master's in)",
+            file=sys.stderr,
+            flush=True,
+        )
+        return None
+    # Telemetry finds its storage next to the scripts (task_telemetry.ROOT).
+    paths = ["scripts"]
+    if not git("cat-file", "-e", f"{base}:compose.telemetry.yaml", check=False).returncode:
+        paths.append("compose.telemetry.yaml")
+    with tempfile.TemporaryDirectory(prefix="bss-harness-") as directory:
+        archive = git("archive", "--format=tar", base, "--", *paths).stdout
+        with tarfile.open(fileobj=io.BytesIO(archive)) as bundle:
+            bundle.extractall(directory, filter="data")
+        print(
+            f"{target}: harness scripts changed on master; running master's {target}",
+            flush=True,
+        )
+        return subprocess.run(  # noqa: S603 - fixed interpreter, master's own script
+            [sys.executable, "-B", str(Path(directory) / "scripts" / "task.py"), target],
+            cwd=root,
+            env={**os.environ, REEXEC_MARKER: "1"},
+            check=False,
+        ).returncode
 
 
 def printable(value, limit=32):

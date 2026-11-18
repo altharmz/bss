@@ -26,6 +26,8 @@ class WorkflowLifecycleTests(unittest.TestCase):
             "task_quality.py",
             "task_git.py",
             "task_pr.py",
+            "full_suite.py",
+            "hook_selection.py",
             "task_finish.py",
             "install-hooks.py",
             "task-compose",
