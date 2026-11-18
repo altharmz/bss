@@ -652,8 +652,16 @@ def get_arguments(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return by_id
 
 
-def test_every_get_tool_answers_against_the_app(mcp, world, db_conn):
+def test_every_get_tool_answers_against_the_app(api, mcp, world, db_conn):
     reader = mcp.token("reader", "read")
+    invoice = api.client.post(  # a wholesale invoice to read (the upload is not a tool)
+        "/internal/v1/wholesale/invoice?invoiceNumber=MCP-1",
+        content=b"msisdn,iccid,period_start,period_end,charge_type,quantity,unit,amount,currency\n"
+        b"12025550188,,2026-11-01,2026-12-01,line,,,10.00,USD\n",
+        headers={"Content-Type": "text/csv"},
+    )
+    assert invoice.status_code == 201, invoice.text
+    invoice_id = invoice.json()["id"]
     db_conn.execute(  # an invited self-care login (inviting needs BSS_SELF_CARE_ENABLED)
         "INSERT INTO customer_login (id, customer_id, email, created_by, created_at, updated_at)"
         " VALUES (%s, %s, 'mcp-reader@example.org', 'test', now(), now())",
@@ -661,6 +669,8 @@ def test_every_get_tool_answers_against_the_app(mcp, world, db_conn):
     )
     db_conn.commit()
     arguments = get_arguments(world)
+    for name in ("get_wholesale_invoice", "list_wholesale_discrepancies", "list_wholesale_lines"):
+        arguments[name] = {"invoice_id": invoice_id}
     called = set()
     for name, tool in generated().items():
         if not tool.read_only:

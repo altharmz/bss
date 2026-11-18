@@ -122,6 +122,6 @@ Unknown values stay unknown, never zero. Setup and reporting: [telemetry-usage.m
 [billing-completion](docs/decisions/billing-completion.md) ·
 [internal-api](docs/decisions/internal-api.md) · [mcp](docs/decisions/mcp.md) ·
 [users](docs/decisions/users.md) · [self-care](docs/decisions/self-care.md) ·
-[frontend](docs/decisions/frontend.md) ·
+[wholesale](docs/decisions/wholesale.md) · [frontend](docs/decisions/frontend.md) ·
 [infra](docs/decisions/infra.md) · [harness](docs/decisions/harness.md) ·
 [tracking](docs/decisions/tracking.md)
