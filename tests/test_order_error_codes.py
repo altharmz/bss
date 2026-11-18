@@ -9,7 +9,7 @@ from pathlib import Path
 def test_order_refusal_codes_have_operator_explanations():
     root = Path(__file__).resolve().parents[1]
     codes = set()
-    for name in ("process", "numbers", "prepaid", "cancel", "devices"):
+    for name in ("process", "numbers", "prepaid", "cancel", "devices", "e911"):
         tree = ast.parse((root / "app" / "ordering" / f"{name}.py").read_text())
         for node in ast.walk(tree):
             # Problem(item_id, code, reason), or (code, reason) / (item_id, code, reason).

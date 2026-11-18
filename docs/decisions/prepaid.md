@@ -242,6 +242,14 @@ international profile characteristics ([network.md](network.md)); its usage is t
 - **Unchanged:** add-ons end with their plan, terminating the plan ends them, their fees are
   charged once.
 
+## E911 address of Wi-Fi calling lines (2026-11-18, issue #201)
+
+A prepaid line whose profile has `wifiCalling = 1` has a registered E911 address: given on the
+add item (`product.place`, role `e911Address`), else copied from the account's service address,
+else the order is rejected `e911AddressRequired`. It is changed by a modify item of its own,
+sent to the network as `update_e911`, and taken only on confirmation. The rules are in
+[network.md](network.md#e911-address-issue-201).
+
 ## Multi-line discounts (2026-11-16, issue #196)
 
 Slice 1 of multi-line prepaid (epic #182); pooled data is #379, the UI #380. Design approved on

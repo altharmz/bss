@@ -693,8 +693,8 @@ paths:
       summary: Network provisioning commands, newest first (issue 183).
       description: >-
         The commands of prepaid order items sent to the network (activate, suspend,
-        restore, deactivate, change_profile, swap_sim) with their internal state, attempts, last
-        error, refusal code, profile and the request as sent. Filter by order, product
+        restore, deactivate, change_profile, swap_sim, update_e911) with their internal state,
+        attempts, last error, refusal code, profile and the request as sent. Filter by order, product
         and state.
       parameters:
         - {$ref: '#/components/parameters/Offset'}
@@ -2228,6 +2228,30 @@ components:
               status: {type: string, enum: [suspended, active], nullable: true}
               productOffering: {$ref: '#/components/schemas/NullableNamed'}
               productOrder: {$ref: '#/components/schemas/Link'}
+        e911Address:
+          description: >-
+            The line's registered E911 address (TMF637 place of role e911Address, a US
+            GeographicAddress without @type); null when none is registered (issue 201).
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [streetName, city, stateOrProvince, postcode, country]
+          properties:
+            streetNr: {type: string}
+            streetName: {type: string}
+            streetSuffix: {type: string}
+            city: {type: string}
+            stateOrProvince: {type: string}
+            postcode: {type: string}
+            country: {type: string, enum: [US]}
+            geographicSubAddress:
+              type: array
+              items: {type: object, additionalProperties: true}
+        wifiCalling:
+          description: >-
+            Whether the line's offering enables Wi-Fi calling (network profile flag wifiCalling
+            = 1); such a line always has an E911 address (issue 201).
+          type: boolean
         offeringKind:
           description: Prepaid accounts only. plan, addOn (a pack bought for a plan's period) or payAsYouGo.
           type: string
@@ -2711,7 +2735,7 @@ components:
         product: *optionalRef
         action:
           type: string
-          enum: [sim_swap, number_change, number_transfer_pin, contact_change, port_out, pin_set, pin_reset, lock_set, lock_cleared, pin_lockout, interaction_logged, ticket_opened, ticket_status_changed, care_note_added, care_sign_in, care_locked, care_password_changed]
+          enum: [sim_swap, number_change, number_transfer_pin, contact_change, port_out, pin_set, pin_reset, lock_set, lock_cleared, pin_lockout, e911_changed, interaction_logged, ticket_opened, ticket_status_changed, care_note_added, care_sign_in, care_locked, care_password_changed]
         outcome: {type: string, enum: [done, refused]}
         reason: {type: string, nullable: true}
         verification: {type: string, enum: [pin, notRequired, none, password+code, code]}
@@ -2938,7 +2962,7 @@ components:
                  confirmedAt, createdAt]
       properties:
         id: {type: string, format: uuid, description: The idempotency key sent to the network.}
-        kind: {type: string, enum: [activate, suspend, restore, deactivate, change_profile, swap_sim]}
+        kind: {type: string, enum: [activate, suspend, restore, deactivate, change_profile, swap_sim, update_e911]}
         state:
           description: Internal state, not a TMF enum.
           type: string

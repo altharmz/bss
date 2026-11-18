@@ -289,6 +289,7 @@ only: postpaid keeps working as before. Migration `0062`. The UI half is issue #
 | `number_change` | TMF622 modify that changes the MSISDN of a prepaid line | the same codes |
 | `number_transfer_pin` | `POST /internal/v1/port/pin` | 403 with the code (`portOutLocked` too) |
 | `contact_change` | PATCH of `contactMedium` (Individual, Organization, Customer) or `contact` (BillingAccount) that changes it, for a protected customer; a party with several protected customers needs the PIN of any one of them | 403 with the code |
+| `e911_changed` | TMF622 modify that changes only the E911 address (`product.place`) of a prepaid line (#201, [network.md](network.md#e911-address-issue-201)) | the same codes as `sim_swap` |
 | `port_out` | the carrier's request; an approved one is audited, one for a line with the port-out lock is rejected `portOutLocked` | rejected to the carrier |
 | `lock_cleared` | `PUT /security/lock/{productId}` clearing a lock | 403 with the code |
 

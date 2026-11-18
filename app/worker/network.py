@@ -21,6 +21,7 @@ from app.clock import Clock
 from app.config import settings
 from app.events import emit
 from app.integrations.network import NetworkRefused, NetworkTemporary, adapter
+from app.network import e911
 from app.ordering import numbers as number_orders
 from app.ordering.process import ItemRequest
 from app.ordering.states import item_transition, order_transition
@@ -40,6 +41,7 @@ ACTION = {
     "restore": "modify",
     "change_profile": "modify",
     "swap_sim": "modify",
+    "update_e911": "modify",
     "deactivate": "delete",
 }
 STATE = {
@@ -66,6 +68,9 @@ def line_request(conn: psycopg.Connection, cmd: Row) -> dict[str, Any]:
             ids.setdefault(row["kind"], row)
     msisdn, imsi = ids.get("msisdn"), ids.get("imsi")
     characteristics = [{"name": k, "value": v} for k, v in sorted(cmd["profile"].items())]
+    address = e911_address(conn, cmd)
+    if address is not None:
+        characteristics.append({"name": "e911Address", "value": address})
     new = None
     if cmd["kind"] == "swap_sim":
         new = sims.reserved_of(conn, cmd["product_id"])
@@ -86,6 +91,8 @@ def line_request(conn: psycopg.Connection, cmd: Row) -> dict[str, Any]:
             },
         },
     }
+    if address is not None:
+        request["e911Address"] = address
     if new is not None:  # the SIM the line moves to
         request |= {
             "newImsi": new["value"],
@@ -93,6 +100,24 @@ def line_request(conn: psycopg.Connection, cmd: Row) -> dict[str, Any]:
             "newSimType": new["sim_type"],
         }
     return request
+
+
+def e911_address(conn: psycopg.Connection, cmd: Row) -> dict[str, Any] | None:
+    """The E911 address the command carries: update_e911 the item's new one; activate and
+    change_profile to a Wi-Fi calling profile the line's own (docs/decisions/network.md)."""
+    if cmd["kind"] == "update_e911":
+        item = fetch_one(
+            conn,
+            "SELECT details FROM product_order_item WHERE id = %s",
+            (cmd["product_order_item_id"],),
+        )
+        return e911.requested(item["details"])
+    if cmd["kind"] not in ("activate", "change_profile") or cmd["product_id"] is None:
+        return None
+    if not e911.wifi_calling(cmd["profile"]):
+        return None
+    product = products.get_product(conn, cmd["product_id"])
+    return None if product is None else product["e911_address"]
 
 
 def process_network(
@@ -144,6 +169,8 @@ def process_network(
                 network.confirm(conn, cmd["id"], now=now)
                 if cmd["kind"] == "activate" and cmd["product_id"] is not None:
                     sims.activate_reserved(conn, cmd["product_id"], now)
+                if cmd["kind"] == "update_e911":  # the line takes what the network has
+                    products.set_e911_address(conn, cmd["product_id"], request["e911Address"])
         attempted.append(cmd["id"])
         if heartbeat is not None:
             heartbeat()
@@ -282,6 +309,33 @@ def post_sim_swap(
         return commands.complete(conn, command_id, {"outcome": "simSwapped"}, now=now)["result"]
 
 
+def post_e911_change(
+    conn: psycopg.Connection, command_id: UUID, *, now: datetime, tz: ZoneInfo
+) -> dict:
+    """The network confirmed every update_e911 of the order (each stored the new address
+    when confirmed): the items and the order complete."""
+    if not holds_ownership(conn):
+        raise ValueError("prepaid posting requires billing ownership")
+    today = now.astimezone(tz).date()
+    with conn.transaction():
+        cmd = commands.ready(conn, command_id, now=now, today=today)
+        if cmd["state"] == "completed":
+            return cmd["result"]
+        order_id = UUID(cmd["request"]["order_id"])
+        orders.lock_order(conn, order_id)
+        order = orders.get_order(conn, order_id)
+        if order is None or order["state"] != "inProgress":
+            raise ValueError("E911 command must match its pending order")
+        for row in order["items"]:
+            orders.set_order_item_state(conn, row["id"], item_transition(row["state"], "completed"))
+            emit.product(conn, row["product_id"], "AttributeValueChange", at=now, today=today)
+        orders.set_order_state(
+            conn, order["id"], order_transition(order["state"], "completed"), completion_date=now
+        )
+        _order_event(conn, order["id"], now)
+        return commands.complete(conn, command_id, {"outcome": "e911Changed"}, now=now)["result"]
+
+
 def refuse_order(
     conn: psycopg.Connection, cmd: Row, refused: Row, *, now: datetime, today: date
 ) -> dict:
@@ -315,6 +369,8 @@ def refuse_order(
     elif "profile_changes" in request:
         for item in items:
             products.undo_change(conn, item["id"])
+    elif "e911_changes" in request:
+        pass  # the worker stores an address only when confirmed: the old one stays
     elif "sim_swaps" in request:  # nothing moved: the reserved SIMs go back in stock
         for swap in request["sim_swaps"]:
             sims.release_hold(conn, UUID(swap["subscriber_number_id"]), now)

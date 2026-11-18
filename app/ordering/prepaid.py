@@ -27,7 +27,7 @@ from app.billing.prepaid import IntervalQuote, fee_quotes, net_of
 from app.config import settings
 from app.events import emit
 from app.network import kind as offering_kind
-from app.ordering import devices, network, numbers
+from app.ordering import devices, e911, network, numbers
 from app.ordering.states import item_transition, order_transition
 from app.repository import balance_actions, billing, funding, orders, parties, products, sims
 from app.repository import catalog as catalog_repo
@@ -63,6 +63,16 @@ def problems(conn, request, account, start, today):
         return _not_started(conn, request)
     if all(item.action == "modify" and item.product_offering_id for item in request.items):
         return _offering_problems(conn, request, start, today)
+    if any(e911.address_only(item) for item in request.items):
+        if all(e911.address_only(item) for item in request.items):
+            return []
+        return [
+            (
+                None,
+                "e911ChangeAlone",
+                "change E911 addresses in an order of their own, changing nothing else",
+            )
+        ]
     if number_only(request):
         return []
     if any(item.action != "modify" or item.product_status is None for item in request.items):
@@ -379,6 +389,7 @@ def change_offerings(
             product_offering_id=item.product_offering_id,
             changed_by_item_id=row["id"],
         )
+        e911.execute(conn, item, item.product_id)
         if numbers.references(item) is not None:
             numbers.execute(conn, item, item.product_id, row["id"], start, now)
             if start <= today:
@@ -525,6 +536,30 @@ def schedule_sim_swaps(conn, order, request, rows, command_id, start, now, targe
         kind="order",
         due_date=start,
         request={"order_id": str(order["id"]), "sim_swaps": swaps},
+        now=now,
+    )
+
+
+def schedule_e911_changes(conn, order, request, rows, command_id, today, now):
+    """E911 address changes, at least one on a Wi-Fi calling line: those are sent to the
+    network (update_e911, due today) and one `order` command completes the items once every one
+    is confirmed (app/worker/network.py), when the worker has stored the new address; a refusal
+    leaves the old one. An item on another line stores its address now."""
+    orders.set_order_state(conn, order["id"], order_transition(order["state"], "inProgress"))
+    for item in request.items:
+        row = rows[item.item_id]
+        orders.set_order_item_state(conn, row["id"], item_transition(row["state"], "inProgress"))
+        e911.execute(conn, item, item.product_id)
+    commands.enqueue(
+        conn,
+        command_id,
+        order["billing_account_id"],
+        kind="order",
+        due_date=today,
+        request={
+            "order_id": str(order["id"]),
+            "e911_changes": [str(i.product_id) for i in request.items],
+        },
         now=now,
     )
 
@@ -690,6 +725,7 @@ def accept(conn, order, request, rows, prepared, command_id, start, now):
         orders.set_order_item_product(conn, row["id"], product["id"])
         numbers.execute(conn, item, product["id"], row["id"], start, now)
         devices.execute(conn, item, product["id"], row["id"], now)
+        e911.execute(conn, item, product["id"])
         emit.product(conn, product["id"], "Create", at=now, today=start)
     commands.enqueue(
         conn,
@@ -737,6 +773,7 @@ def _accept_charges(conn, order, request, rows, accepted, total, command_id, sta
         orders.set_order_item_product(conn, row["id"], product["id"])
         numbers.execute(conn, item, product["id"], row["id"], start, now)
         devices.execute(conn, item, product["id"], row["id"], now)
+        e911.execute(conn, item, product["id"])
         emit.product(conn, product["id"], "Create", at=now, today=start)
     commands.enqueue(
         conn,

@@ -91,6 +91,11 @@ def get_product(conn: psycopg.Connection, product_id: UUID) -> Row | None:
     return fetch_one(conn, "SELECT * FROM product WHERE id = %s", (product_id,))
 
 
+def set_e911_address(conn: psycopg.Connection, product_id: UUID, address: dict[str, Any]) -> None:
+    """The line's registered E911 address (docs/decisions/network.md#e911-address)."""
+    conn.execute("UPDATE product SET e911_address = %s WHERE id = %s", (jsonb(address), product_id))
+
+
 def set_product_status(conn: psycopg.Connection, product_id: UUID, status: str) -> Row:
     return returning(
         conn, "UPDATE product SET status = %s WHERE id = %s RETURNING *", (status, product_id)
@@ -303,7 +308,8 @@ def list_open_products(conn: psycopg.Connection, billing_account_id: UUID, on: d
         conn,
         """
         SELECT p.*, o.id AS offering_id, o.name AS offering_name, o.code AS offering_code,
-               o.details AS offering_details, s.id AS specification_id, s.name AS specification_name
+               o.details AS offering_details, s.id AS specification_id,
+               s.name AS specification_name, s.details AS specification_details
         FROM product p
         JOIN product_offering o
           ON o.id = product_offering_on(p.id, greatest(p.start_date, %s::date))

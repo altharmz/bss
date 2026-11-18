@@ -1,5 +1,6 @@
 """Account security in the order engine (docs/decisions/accounts.md): a SIM swap or a number
-change on a prepaid line is an agent action that can take the line over, so the order must carry
+change on a prepaid line is an agent action that can take the line over, and an E911 address
+change redirects emergency calls (docs/decisions/network.md#e911-address), so the order must carry
 the customer's PIN (`OrderRequest.actor`, from the X-Account-Pin header), and a SIM swap is also
 refused while the line has a SIM swap lock.
 
@@ -15,7 +16,7 @@ from datetime import datetime
 
 import psycopg
 
-from app.ordering import network, numbers
+from app.ordering import e911, network, numbers
 from app.repository import security as repo
 from app.repository._sql import Row
 from app.security import guard
@@ -26,7 +27,7 @@ UNVERIFIED = guard.Actor("system")
 @dataclass(frozen=True)
 class Sensitive:
     item_id: str
-    action: str  # sim_swap | number_change
+    action: str  # sim_swap | number_change | e911_changed
     product_id: object
     customer_id: object
     account_id: object
@@ -38,6 +39,18 @@ def sensitive_items(conn: psycopg.Connection, request, account: Row, locked, sta
     found = []
     for item in request.items:
         if item.action != "modify" or item.product_id is None:
+            continue
+        if e911.address_only(item) and item.product_id in locked:
+            product = locked[item.product_id]
+            found.append(
+                Sensitive(
+                    item.item_id,
+                    "e911_changed",
+                    product["id"],
+                    account["customer_id"],
+                    account["id"],
+                )
+            )
             continue
         if numbers.references(item) is None or item.product_id not in locked:
             continue

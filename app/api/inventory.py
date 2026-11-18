@@ -50,14 +50,15 @@ from app.api.common import (
     without_nulls,
 )
 from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
-from app.api.errors import bad_request, conflict, not_found, unprocessable
+from app.api.errors import bad_request, conflict, not_found, problems_error, unprocessable
 from app.api.prices import monthly_price, tax_on, total_rate
 from app.api.tmfjson import TmfJSONResponse
 from app.billing.core import cycle_period, product_charge_period
 from app.billing.model import MissingPrice, OfferingChange
 from app.config import settings
 from app.events import emit
-from app.network import device
+from app.network import device, e911, profile
+from app.ordering.network import offering_profile
 from app.ordering.process import ItemRequest, OrderRefused, OrderRequest, place_order
 from app.repository import billing, catalog, orders, parties, products
 from app.repository._sql import Row, fetch_all, rows_by_id, rows_grouped_by
@@ -332,6 +333,13 @@ def _product_body(
                 )
             ]
     details = _with_device(dict(row["details"]), current_device)
+    if row.get("e911_address") is not None or (
+        specification is not None and profile.is_line(specification["details"])
+    ):
+        # a line's place is its E911 address, derived from the column (never what was sent)
+        details.pop("place", None)
+        if (place := e911.place_body(row.get("e911_address"))) is not None:
+            details["place"] = place
     if row.get("requires_msisdn") or row.get("requires_imsi"):
         claims = [
             n
@@ -510,6 +518,10 @@ def _end(conn, product_id: UUID, raw_id: str, ends: date | None, *, now, today) 
     return ended
 
 
+def _is_line(conn: psycopg.Connection, offering_id: UUID) -> bool:
+    return offering_profile(conn, offering_id) is not None
+
+
 def _check_offering_version(conn: psycopg.Connection, reference: OfferingRef) -> None:
     """A version sent must be the offering's current one (as in TMF620's references);
     an offering that does not exist is the order's to refuse."""
@@ -542,8 +554,22 @@ def create_product(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) ->
         name=data.name,
         details={name: value for name, value in documents.items() if value is not None},
     )
-    item = ItemRequest("1", "add", product_offering_id=data.product_offering.id, new_product=chosen)
     with tx() as conn:
+        # a line's place is its E911 address: the order checks and stores it
+        line_place = documents.get("place") if _is_line(conn, data.product_offering.id) else None
+        if line_place is not None:
+            if (why := e911.role_problem(line_place)) is not None:
+                raise bad_request(why)
+            found = e911.address_problems(line_place[0].get("place"), "place.0.place")
+            if found:
+                raise problems_error([(where, message, False) for where, message in found])
+        item = ItemRequest(
+            "1",
+            "add",
+            product_offering_id=data.product_offering.id,
+            new_product=chosen,
+            details=None if line_place is None else {"product": {"place": line_place}},
+        )
         _check_offering_version(conn, data.product_offering)
         check_rated(conn, data.billing_account)
         claim_id(conn, "product", uid)
@@ -633,6 +659,8 @@ def patch_product(
             current.get("requires_msisdn") or current.get("requires_imsi")
         ) and "realizingResource" in documents:
             raise conflict("realizingResource: change subscriber numbers through a product order")
+        if "place" in documents and _is_line(conn, current["product_offering_id"]):
+            raise conflict("place: change the E911 address of a line through a product order")
         check_server_set(server_set, before)
         _check_fixed(data, current)
         check_rated(conn, data.billing_account if "billing_account" in sent else None)

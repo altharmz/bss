@@ -18,6 +18,7 @@ export const NETWORK_KIND_LABEL: Record<NetworkKind, string> = {
   deactivate: 'Deactivate',
   change_profile: 'Change profile',
   swap_sim: 'Swap SIM',
+  update_e911: 'Update E911 address',
 };
 
 export const NETWORK_STATE_LABEL: Record<NetworkState, string> = {

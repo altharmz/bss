@@ -165,6 +165,18 @@ TEMPLATES: dict[str, dict[str, tuple[str | None, str]]] = {
             "were changed. If this was not you, contact us at once.",
         ),
     },
+    "security_e911_changed": {
+        "sms": (
+            None,
+            "The emergency (E911) address of your line {line} was changed. Call us at once if"
+            " this was not you.",
+        ),
+        "email": (
+            "Your emergency address was changed",
+            "Hello {name},\n\nThe emergency (E911) address registered for Wi-Fi calls on line"
+            " {line} was changed. If this was not you, contact us at once.",
+        ),
+    },
     "security_port_out": {
         "sms": (
             None,
