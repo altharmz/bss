@@ -98,7 +98,9 @@ describe('port requests', () => {
     fireEvent.click(await screen.findByRole('button', { name: '15551230001' }));
     const dialog = screen.getByRole('dialog');
     expectUi('ui.ports.detail');
-    fireEvent.click(await within(dialog).findByText('Correct and resubmit'));
+    const correct = await within(dialog).findByText('Correct and resubmit');
+    expect(correct).toBe(expectUi('ui.ports.resubmit'));
+    fireEvent.click(correct);
     const submit = within(dialog).getByText('Resubmit');
     expect(submit.hasAttribute('disabled')).toBe(true);
     fireEvent.change(within(dialog).getByLabelText('Number Transfer PIN'), {

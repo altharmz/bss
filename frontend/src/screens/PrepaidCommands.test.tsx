@@ -8,7 +8,7 @@ const COMMANDS = '/internal/v1/prepaid/command';
 const COMMAND_ID = 'c0000001-0000-4000-8000-000000000001';
 const ACCOUNT_ID = 'a0000001-0000-4000-8000-000000000001';
 
-function command(state = 'failedTechnical') {
+function command(state = 'failedTechnical', extra: Record<string, unknown> = {}) {
   return {
     id: COMMAND_ID,
     kind: 'order',
@@ -27,6 +27,7 @@ function command(state = 'failedTechnical') {
     products: [],
     billingRun: null,
     bills: [],
+    ...extra,
   };
 }
 
@@ -81,5 +82,52 @@ describe('prepaid commands', () => {
     expect(post?.[0]).toBe(`${COMMANDS}/${COMMAND_ID}/retry`);
     expect(post?.[1]?.body).toBeUndefined();
     expect(calls.filter((call) => call === `GET ${COMMANDS}?offset=0&limit=50`)).toHaveLength(2);
+    expectUi('ui.prepaidCommands');
+    expectUi('ui.prepaidCommands.previous');
+    expectUi('ui.prepaidCommands.next');
+  });
+
+  it('filters by the account in the URL, with a removable chip', async () => {
+    const { calls } = backend({
+      [`GET ${COMMANDS}?billingAccount.id=${ACCOUNT_ID}&offset=0&limit=50`]: () =>
+        json([command('pending')], { total: 1 }),
+      [`GET ${COMMANDS}?offset=0&limit=50`]: () => json([], { total: 0 }),
+    });
+    window.history.replaceState(null, '', `/prepaid-commands?account=${ACCOUNT_ID}`);
+    render(<App />);
+
+    expect(await screen.findByText('C0000001')).toBeTruthy();
+    const chip = await waitFor(() => expectUi('ui.prepaidCommands.accountChip'));
+    expect(chip.textContent).toContain('Account Olga Kuznetsova main');
+    fireEvent.click(within(chip).getByRole('button', { name: 'Remove the account filter' }));
+
+    await waitFor(() => expect(calls).toContain(`GET ${COMMANDS}?offset=0&limit=50`));
+    expect(screen.queryByText('Remove the account filter')).toBeNull();
+    expect(window.location.search).toBe('');
+  });
+
+  it('says a command waits for a top-up and links to the card', async () => {
+    const waiting = command('pending', {
+      needs_topup: {
+        required: 650,
+        available: 100,
+        shortfall: 550,
+        observedAt: '2026-10-01T06:00:00Z',
+      },
+    });
+    backend({
+      [`GET ${COMMANDS}?offset=0&limit=50`]: () => json([waiting], { total: 1 }),
+      [`GET ${COMMANDS}/${COMMAND_ID}`]: () => json(waiting),
+    });
+    window.history.replaceState(null, '', '/prepaid-commands');
+    render(<App />);
+
+    expect(await screen.findByText('C0000001')).toBeTruthy();
+    fireEvent.click(screen.getByText('order'));
+    const dialog = await screen.findByRole('dialog', { name: 'Command C0000001' });
+    const note = await waitFor(() => expectUi('ui.prepaidCommands.needsTopup'));
+    expect(dialog.contains(note)).toBe(true);
+    expect(note.textContent).toContain('requires 650.00, available 100.00, short 550.00');
+    expect(within(note).getByRole('link', { name: 'Open the card to top up' })).toBeTruthy();
   });
 });

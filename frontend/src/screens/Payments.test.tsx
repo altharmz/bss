@@ -135,6 +135,7 @@ describe('payments screen', () => {
     const chip = await screen.findByText(/Account/, {
       selector: '[data-ui="ui.payments.accountChip"]',
     });
+    expect(chip).toBe(expectUi('ui.payments.accountChip'));
     await screen.findByRole('link', { name: 'Ivan Ivanov' });
     expect(screen.queryByText('Olga Kuznetsova')).toBeNull();
     expect(screen.queryByLabelText('From')).toBeNull();

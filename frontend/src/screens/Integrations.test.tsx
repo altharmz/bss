@@ -69,6 +69,14 @@ describe('Integrations', () => {
     await screen.findByText('https://example.org/pay');
     expectUi('ui.integrations');
     expectUi('ui.integrations.list');
+    expect(screen.getByRole('button', { name: 'New subscription' })).toBe(
+      expectUi('ui.integrations.new'),
+    );
+    expect(
+      expectUi('ui.integrations.delete')
+        .getAttribute('aria-label')
+        ?.startsWith('Delete subscription '),
+    ).toBe(true);
     expect(screen.getByText('All events')).toBeTruthy();
     expect(screen.getByText('failed')).toBeTruthy();
     expect(screen.getByText('None yet')).toBeTruthy();

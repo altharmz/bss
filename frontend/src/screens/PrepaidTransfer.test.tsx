@@ -4,6 +4,7 @@ import { json, stubFetch, tmfError } from '../test/fetch';
 import { PrepaidTransferModal, TransferWatch } from './PrepaidTransfer';
 import { toAccount, PATHS } from '../api/bss';
 import { accountBody } from '../test/fixtures';
+import { expectUi } from '../test/expectUi';
 import { POLL_CAP_MS, watch as follow } from './watched';
 
 const ID = 'f0000001-0000-4000-8000-000000000001';
@@ -46,6 +47,7 @@ describe('following an accepted transfer', () => {
     const { calls } = stubFetch({ [URL]: () => json({ id: ID, status }) });
     const { onSettled } = watch();
     await advance(1); // the first answer arrives and arms the timer
+    expect(expectUi('ui.subscriber.prepaid.transferWatch').getAttribute('role')).toBe('status');
     await advance(4_000);
     expect(calls).toHaveLength(1); // the next look is at 5 s
     await advance(1_000);

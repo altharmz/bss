@@ -68,6 +68,7 @@ def charges(conn):
     ).fetchall()
 
 
+@pytest.mark.capability("worker.taxEngine")
 def test_a_purchase_gets_the_engine_taxes_and_the_total_is_net_plus_taxes(api, db_conn, engine):
     off, acc, order = buy(api, db_conn, CA)
     assert order["state"] == "inProgress"
@@ -218,6 +219,7 @@ def test_engine_failure_at_acceptance_holds_and_books_nothing(api, db_conn):
     assert db_conn.execute("SELECT count(*) FROM funding_hold").fetchone() == (0,)
 
 
+@pytest.mark.capability("worker.taxEngine")
 def test_engine_failure_at_renewal_is_retried_and_nothing_is_charged_without_tax(api, db_conn):
     off, acc, order = buy(api, db_conn, CA)
     tick(db_conn, api.clock.now())

@@ -347,6 +347,9 @@ describe('offering detail, edit and delete', () => {
       });
       const price = await openPrice();
       expectUi('ui.catalog.priceDetail');
+      expect(within(price).getByRole('button', { name: 'Save' })).toBe(
+        expectUi('ui.catalog.editPrice'),
+      );
       expect(within(price).getByRole('button', { name: 'Save' })).toHaveProperty('disabled', true);
       fireEvent.change(within(price).getByLabelText(/^Name/), { target: { value: 'Mobile L 2' } });
       fireEvent.change(within(price).getByLabelText(/^Price,/), { target: { value: '1300.5' } });

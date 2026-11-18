@@ -155,6 +155,7 @@ describe('balances screen', () => {
     });
     open('/balances');
     expect(await screen.findByText('Jan Petrov')).toBeTruthy();
+    expect(screen.getByLabelText('Status')).toBe(expectUi('ui.balances.status'));
     fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'suspended' } });
     await waitFor(() => expect(calls).toContain(`GET ${BUCKETS}?status=suspended&${LIST}`));
     expect(await screen.findByText('Jan Petrov')).toBeTruthy();

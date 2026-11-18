@@ -126,6 +126,7 @@ describe('bills screen', () => {
     const chip = await screen.findByText(/Account/, {
       selector: '[data-ui="ui.bills.accountChip"]',
     });
+    expect(chip).toBe(expectUi('ui.bills.accountChip'));
     await screen.findByRole('link', { name: 'Ivan Ivanov' });
     expect(screen.getByRole('button', { name: 'Partly paid' }).getAttribute('title')).toBe(
       'partiallyPaid',

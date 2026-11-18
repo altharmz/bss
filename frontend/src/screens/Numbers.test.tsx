@@ -75,6 +75,9 @@ describe('number inventory', () => {
     });
     inventory();
     expectUi('ui.numbers.list');
+    expect(screen.getByRole('button', { name: 'Request numbers' })).toBe(
+      expectUi('ui.numbers.pool'),
+    );
     fireEvent.change(screen.getByLabelText('Search numbers'), { target: { value: '999' } });
     expect(await screen.findByText('No matches')).toBeTruthy();
     // TEST-CHANGE (#314): an exact value on the server (the API has no partial match)
@@ -142,6 +145,9 @@ describe('number inventory', () => {
     const detail = screen.getByRole('dialog');
     fireEvent.click(await within(detail).findByText('Delete number'));
     expectUi('ui.numbers.delete');
+    expect(within(detail).getByRole('button', { name: 'Confirm delete' })).toBe(
+      expectUi('ui.numbers.deleteConfirm'),
+    );
     fireEvent.click(within(detail).getByText('Confirm delete'));
     // the server's refusal is shown and the dialog stays open
     expect(await within(detail).findByText(/assignment history cannot be deleted/)).toBeTruthy();

@@ -74,6 +74,7 @@ describe('Payment methods', () => {
     show();
     await screen.findByText(/Visa A · visa ending 4242/);
     expectUi('ui.subscriber.paymentMethods');
+    expect(expectUi('ui.subscriber.paymentMethods.card').textContent).toContain('Visa A');
     fireEvent.click(screen.getByRole('button', { name: 'Make default' }));
     await waitFor(() => expect(bodyOf(fetchMock, 'PATCH')).toBe('{"isPreferred":true}'));
     fireEvent.click(await screen.findByRole('button', { name: 'Remove Visa A' }));
@@ -134,6 +135,9 @@ describe('Payment methods', () => {
     expectUi('ui.subscriber.paymentMethods.topup');
     expect((screen.getByLabelText('Card') as HTMLSelectElement).value).toBe(CARD2);
     await screen.findByText(/Last error: gateway timeout/);
+    expect(expectUi('ui.subscriber.paymentMethods.charges').textContent).toContain(
+      'gateway timeout',
+    );
     fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '25' } });
     fireEvent.click(screen.getByRole('button', { name: 'Charge card' }));
     await waitFor(() =>
@@ -169,7 +173,10 @@ describe('Payment methods', () => {
       [`PATCH ${AUTO}`]: () => json({ ...RULE_OFF, enabled: true }),
     });
     show();
-    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    const edit = await screen.findByRole('button', { name: 'Edit' });
+    expect(edit).toBe(expectUi('ui.subscriber.autoTopup.edit'));
+    expect(expectUi('ui.subscriber.autoTopup').textContent).toContain('Off');
+    fireEvent.click(edit);
     expectUi('ui.subscriber.autoTopup.dialog');
     fireEvent.click(screen.getByLabelText('Top up automatically'));
     expect(screen.getByText(/No default card is saved/)).toBeTruthy();

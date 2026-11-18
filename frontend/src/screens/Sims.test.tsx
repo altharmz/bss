@@ -73,6 +73,10 @@ describe('SIM stock', () => {
     });
     stock();
     expectUi('ui.sims.list');
+    expect(screen.getByRole('button', { name: 'Import CSV' })).toBe(expectUi('ui.sims.import'));
+    expect(screen.getByRole('button', { name: 'Generate eSIMs' })).toBe(
+      expectUi('ui.sims.generate'),
+    );
     expect(await screen.findByText('001010000000001')).toBeTruthy();
     await screen.findByRole('option', { name: 'B1 (2)' });
     fireEvent.change(screen.getByLabelText('State'), { target: { value: 'in_stock' } });
@@ -138,7 +142,10 @@ describe('SIM stock', () => {
     let detail = screen.getByRole('dialog');
     expectUi('ui.sims.detail');
     expect(await within(detail).findByText(CODE)).toBeTruthy();
-    expect(within(detail).getByRole('img', { name: /Activation code QR/ })).toBeTruthy();
+    expect(detail.contains(expectUi('ui.sims.activationCode'))).toBe(true);
+    expect(within(detail).getByRole('img', { name: /Activation code QR/ })).toBe(
+      expectUi('ui.sims.qr'),
+    );
     fireEvent.click(within(detail).getByText('Close'));
     fireEvent.click(await screen.findByRole('button', { name: '001010000000002' }));
     detail = screen.getByRole('dialog');

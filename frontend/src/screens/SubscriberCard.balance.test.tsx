@@ -752,14 +752,15 @@ describe('prepaid plans (#212)', () => {
     routes();
     await open();
     const row = await waitFor(() => productRow('Mobile L'));
-    expect(
-      within(row).getByText(/Plan · Renews from the balance, then the default card/),
-    ).toBeTruthy();
+    expect(within(row).getByText(/Plan · Renews from the balance, then the default card/)).toBe(
+      expectUi('ui.subscriber.planFacts'),
+    );
     expect(within(row).getByText(/on 2026-10-20/)).toBeTruthy();
     const addOn = productRow('Extra 2 GB');
     expect(within(addOn).getByText(/Add-on · plan PRD-ABCD1234 · ends 2026-10-20/)).toBeTruthy();
     fireEvent.click(within(row).getByRole('button', { name: /renewal history \(1\)/ }));
     const table = within(row).getByRole('table', { name: 'Renewal history' });
+    expect(expectUi('ui.subscriber.renewalHistory').contains(table)).toBe(true);
     expect(table.textContent).toContain('2026-09-20 – 2026-10-20');
     expect(table.textContent).toContain('Card');
     expect(table.textContent).toContain('12.00 USD');
@@ -793,6 +794,7 @@ describe('prepaid plans (#212)', () => {
     ).toBeNull();
     fireEvent.click(productAction(row, 'Buy add-on…'));
     const dialog = await screen.findByRole('dialog', { name: /Buy add-on/ });
+    expect(dialog).toBe(expectUi('ui.subscriber.buyAddOn'));
     // only the add-on offering is listed, not the plan
     const radios = await within(dialog).findAllByRole('radio');
     expect(radios).toHaveLength(1);
@@ -800,6 +802,8 @@ describe('prepaid plans (#212)', () => {
     expect((await within(dialog).findByTestId('addon-required')).textContent).toContain('4.80 USD');
     expect(within(dialog).getByText(/4\.00 \+ tax 0\.80 = 4\.80 USD/)).toBeTruthy();
     expect(within(dialog).getByText(/Insufficient funds: top up at least 1\.80/)).toBeTruthy();
+    expect(expectUi('ui.subscriber.buyAddOn.quote').textContent).toContain('4.80 USD');
+    expect(dialog.contains(expectUi('ui.subscriber.buyAddOn.topUp'))).toBe(true);
     fireEvent.click(within(dialog).getByRole('button', { name: 'Buy add-on' }));
     await screen.findByRole('status');
     const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');

@@ -131,6 +131,7 @@ describe('routes', () => {
     start('/billing');
     expect(await screen.findByText('Page not found')).toBeTruthy();
     expect(screen.getByText(/Nothing lives at \/billing\./)).toBeTruthy();
+    expectUi('ui.notFound');
   });
 });
 
@@ -202,6 +203,10 @@ describe('shell', () => {
       '/users',
       '/settings/logging',
     ]);
+    for (const section of ['customers', 'products', 'billing', 'reports', 'system']) {
+      expect(nav.contains(expectUi(`ui.shell.section.${section}`))).toBe(true);
+    }
+    expectUi('ui.shell.theme');
     // no item carries a count: the link text is the label alone
     for (const label of ['Subscribers', 'Product catalog', 'Orders']) {
       expect(within(nav).getByRole('link', { name: new RegExp(`^${label}`) }).textContent).toBe(

@@ -16,9 +16,10 @@ Prints one JSON object to stdout:
 - tested:  from the same run, what the passing tests exercised (tests/conftest.py
            records it when BSS_PROGRESS_RECORD=1): api - the app.openapi() operations
            their requests were routed to (method + path template); tables - the tables
-           their throwaway databases got rows in (pg_stat_user_tables.n_tup_ins, read
-           before each database is dropped). A test that failed in any phase counts for
-           nothing, whatever it sent or wrote before failing.
+           their throwaway databases wrote, rows inserted or updated
+           (pg_stat_user_tables.n_tup_ins + n_tup_upd, read before each database is
+           dropped; a one-row settings table is only ever updated). A test that failed
+           in any phase counts for nothing, whatever it sent or wrote before failing.
 
 Lives in tests/ (like tests/seed.py) because the app container mounts it; it is a tool,
 not a test. Everything but the JSON goes to stderr.

@@ -106,6 +106,12 @@ describe('product actions', () => {
     expect(within(productMenu(active)).getByRole('menuitem', { name: 'End on a date…' })).toBe(
       expectUi('ui.subscriber.endOnDate'),
     );
+    expect(within(productMenu(active)).getByRole('menuitem', { name: 'Change offering…' })).toBe(
+      expectUi('ui.subscriber.changeOffering'),
+    );
+    expect(
+      within(productMenu(active)).getByRole('menuitem', { name: 'Number Transfer PIN…' }),
+    ).toBe(expectUi('ui.subscriber.transferPinItem'));
     const suspended = productRow('Fiber 100');
     openMenu(suspended);
     expect(items(suspended)).toEqual([
@@ -121,6 +127,7 @@ describe('product actions', () => {
     );
     // a pending status change leaves no second one; an ending product only its Undo
     const pending = productRow('Pending 1');
+    expect(expectUi('ui.subscriber.pendingChange').textContent).toContain('2026-11-03');
     openMenu(pending);
     expect(items(pending)).toEqual([
       'Subscriber number',
@@ -174,6 +181,9 @@ describe('product actions', () => {
       'Change offering…',
       'End on a date…',
     ]);
+    expect(within(productMenu(funding)).getByRole('menuitem', { name: 'Top up' })).toBe(
+      expectUi('ui.subscriber.topUpProduct'),
+    );
     expect(within(funding).getByText(/Waiting for funds: short 17\.75/)).toBeTruthy();
     openMenu(productRow('Fiber 100'));
     expect(items(productRow('Fiber 100'))).toEqual([
