@@ -17,8 +17,8 @@ products get no command on deploy; only new order items are sent.
 Held as TMF620 characteristics (`app/network/profile.py`), edited in the catalog:
 `productSpecCharacteristic` entries named `dataAllowanceMb`, `dataCapMb`, `throttleKbps`,
 `voiceMinutes`, `smsCount` (integers of zero or more) and the flags `hotspot`,
-`international`, `voicemail` (0 or 1: the vendored TMF620 schema does not validate boolean
-values). The values listed are what offerings may use, the default first. Profile values may
+`international`, `voicemail`, `wifiCalling` (0 or 1: the vendored TMF620 schema does not
+validate boolean values; `wifiCalling` since #201, [below](#e911-address-issue-201)). The values listed are what offerings may use, the default first. Profile values may
 be **narrowed per offering** with a `prodSpecCharValueUse` entry of the same name holding
 one of the specification's values; the command takes the offering's **effective** values
 (default, narrowed). Both writes are validated (400). The profile is copied into the command
@@ -38,7 +38,8 @@ bills usage beyond the profile; the BSS sends only the profile.
 have one `purpose = passEnd` command: the change_profile on the day the pass ends before its
 plan period ([prepaid.md](prepaid.md#roaming-and-international-passes-2026-11-16-issue-200)). Kinds: add -> `activate`, suspend -> `suspend`, resume ->
 `restore`, terminate -> `deactivate`, offering change -> `change_profile` (the new
-offering's profile), IMSI change -> `swap_sim` ([sim.md](sim.md)). A number-only modify sends none. Each is due on the order's date. The
+offering's profile), IMSI change -> `swap_sim` ([sim.md](sim.md)), a new E911 address on a Wi-Fi
+calling line -> `update_e911` ([below](#e911-address-issue-201)). A number-only modify sends none. Each is due on the order's date. The
 worker (`app/worker/network.py`, called first in every prepaid dispatch) sends the due ones;
 the request (line identifiers MSISDN/IMSI/ICCID from the product's number claims, the
 profile, a TMF641-shaped `serviceOrderItem`: add / modify / delete) is built once and
@@ -88,6 +89,8 @@ whose command the network already confirmed, or an offering change waiting for i
 
 The line's MSISDN ending `0000`: refused. Ending `0001`: temporary error until
 `adapter().recover(msisdn)`. `adapter().refuse_kinds` refuses a command kind for every line.
+A command carrying an E911 address with postcode `00911` (also `00911-xxxx`): refused
+`e911AddressInvalid`.
 The stub answers a repeated key with the first answer.
 
 ## Device (issue #194)
@@ -123,6 +126,65 @@ approved by the human's standing delegation (decided following TMF). The UI is i
   unknown), anything else unknown.
 - **Not in this slice:** a mandatory IMEI at activation (a later setting if wanted);
   a real device database (#203).
+
+## E911 address (issue #201)
+
+US rules (Kari's Law, RAY BAUM'S Act) require a dispatchable location for 911 calls made over
+Wi-Fi. The carrier routes them, so the MVNO registers an address per line. Design approved on
+the issue (the human's delegation, decided following TMF); the UI is #384; the real T-Mobile
+field mapping comes with #203. Migration `0085`. Code: `app/network/e911.py` (validation,
+shape), `app/ordering/e911.py` (order rules), `app/worker/network.py` (send, confirm).
+
+- **Which lines.** A line whose effective profile has `wifiCalling = 1` needs an address. For an
+  add-on pack, the plan line's combined profile counts.
+- **Where it lives.** TMF637 `product.place`: one `RelatedPlaceRefOrValue` with role
+  `e911Address` and a `GeographicAddress` (`streetNr`, `streetName`, `streetSuffix`, `city`,
+  `stateOrProvince`, `postcode`, `country`, `geographicSubAddress`). It is stored normalized
+  (trimmed, `country` US, without `@type`) in `product.e911_address` (jsonb, null), not in the
+  product's documents. On a network line the product's `place` is derived from the column and
+  is never what an order sent.
+- **Validation** (TMF622 add or modify item, and TMF637 POST /product of a network line): as
+  the service address ([taxes.md](taxes.md#service-address-design-approved-2026-11-05)): US
+  only, a state or territory code, a ZIP or ZIP+4, `streetName` and `city` non-empty
+  (`streetNr` and `streetSuffix` optional, never empty). An invalid address is a 422 naming the
+  path (`productOrderItem.0.product.place.0.place.postcode`). Another role, or more than one
+  place, is a 400: we implement only this role. `place` on a delete or noChange item is a 422.
+- **Add.** The address sent is stored on the new product. A Wi-Fi calling line without one takes
+  the billing account's service address, **copied, not linked** (`street1` becomes `streetName`,
+  `street2` a `geographicSubAddress` name; a later service address change leaves it). With
+  neither, the order is rejected `e911AddressRequired`. A line without Wi-Fi calling stores an
+  address sent (customers may pre-register) and the network gets it only once the line's
+  profile enables Wi-Fi calling.
+- **An offering change or an add-on pack** that enables Wi-Fi calling on a line without an
+  address copies the service address the same way at acceptance, or is rejected
+  `e911AddressRequired`. An add-on item cannot carry a place (`e911NotApplicable`).
+- **Sent to the network.** `activate` and `change_profile` to a Wi-Fi calling profile carry the
+  line's address as `e911Address` in the request and as a TMF641 `serviceCharacteristic`
+  named `e911Address`. The request is built at the first send and retained, so every retry sends
+  the same address.
+- **A change** is a TMF622 **modify** item whose only content is `product.place` (anything else
+  with it is a 422; an order mixing it with other kinds of items is rejected `e911ChangeAlone`).
+  Its requested start date is ignored, as for a device change. On a Wi-Fi calling line it makes
+  an `update_e911` command (TMF641 modify, the line's current profile and the new address), due
+  today, with the same gating, retry, `exhausted` and operator retry rules. The worker stores the
+  new address when the network confirms; the order's `e911_changes` command then completes the
+  items. A refusal fails the order (`networkRefused`, the network's code in `message`) and leaves
+  the old address ([refusal rule](#refusal-leaves-the-product-as-before-the-order)).
+  `cancelProductOrder` cancels a change the network has not confirmed. On a line without Wi-Fi
+  calling the change is stored at acceptance and the order completes at once, with no command.
+  In an order with both kinds of lines, the lines without Wi-Fi calling take theirs at
+  acceptance and a later cancellation does not undo them.
+- **Protected action.** A change is audited like a contact change: it needs the account PIN of a
+  protected customer (`X-Account-Pin`; refusals as for a SIM swap) and writes an `account_audit`
+  row with action `e911_changed`, which raises the `security_e911_changed` alert
+  ([accounts.md](accounts.md#sensitive-actions)). An address given at activation or copied
+  from the service address is not a change and is not audited.
+- **Postpaid** products and offerings that are no network line take no address
+  (`e911NotApplicable`); on other products TMF637 `place` stays a plain document. TMF637 PATCH
+  of `place` on a network line is a 409: the address changes only through an order.
+- **Read.** TMF637 `product.place` returns the role and the address.
+  `GET /internal/v1/billingAccount/{id}/products` adds `e911Address` (the stored address or null)
+  and `wifiCalling` (the offering's flag).
 
 ## Not in this slice
 

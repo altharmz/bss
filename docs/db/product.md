@@ -30,6 +30,7 @@ SID Product (TMF637 product): an instance of an offering on a billing account. W
 | `parent_product_id` | `uuid` | yes |  | An add-on pack's plan product (TMF637 productRelationship, type addOn); the add-on ends with the plan's paid period. |
 | `grantless` | `boolean` | no | `false` | Prepaid: an add-on or pay-as-you-go product. Active between its dates with no funded interval, never renewed; the order that created it completes it. |
 | `lifecycle_suspended` | `boolean` | no | `false` | The status timeline's suspension was taken by the prepaid lifecycle (manually_suspended is then true as well); it does not block renewal. |
+| `e911_address` | `jsonb` | yes |  | The registered E911 address of the line (TMF637 place, role e911Address): a normalized US GeographicAddress (streetNr, streetName, streetSuffix, city, stateOrProvince, postcode, country, geographicSubAddress). Sent to the network while the profile has wifiCalling; changed by an order only once the network confirmed it. Null: none. |
 
 ## Foreign keys
 

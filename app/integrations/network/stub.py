@@ -2,9 +2,11 @@
 
 Test values (the line's MSISDN): ending `0000` is refused, ending `0001` fails
 temporarily until `recover()` is called for it; a command kind put in `refuse_kinds` is
-refused for every line. `generate_esim_profiles` is deterministic in the batch name
-(IMSI `00199...`, ICCID `8999...`, SM-DP+ `smdp.stub.example`). The answer to a key is
-remembered, so a repeated key gets the first answer and counts as one command in `received`.
+refused for every line; a command carrying an E911 address with postcode `00911` (also
+`00911-xxxx`) is refused `e911AddressInvalid`. `generate_esim_profiles` is deterministic in
+the batch name (IMSI `00199...`, ICCID `8999...`, SM-DP+ `smdp.stub.example`). The answer
+to a key is remembered, so a repeated key gets the first answer and counts as one command in
+`received`.
 
 Numbers: `request_numbers` hands out `1<NPA>5550100` to `...0199`, the range reserved for
 fiction (100 per area code, then the pool is exhausted). Port-in (the request's values):
@@ -46,6 +48,7 @@ if TYPE_CHECKING:
 log = logging.getLogger("app.network.usage_load")
 
 REFUSE_SUFFIX = "0000"
+REFUSED_E911_POSTCODE = "00911"
 TEMPORARY_SUFFIX = "0001"
 PORT_PENDING_SUFFIX = "0001"
 PORT_TEMPORARY_SUFFIX = "0002"
@@ -151,6 +154,11 @@ class StubNetwork:
             return
         if msisdn.endswith(REFUSE_SUFFIX) or command in self.refuse_kinds:
             raise NetworkRefused(f"stub: the network refused {command} for {msisdn}", "stubRefused")
+        postcode = (request.get("e911Address") or {}).get("postcode") or ""
+        if postcode.split("-")[0] == REFUSED_E911_POSTCODE:
+            raise NetworkRefused(
+                f"stub: the E911 address {postcode} cannot be validated", "e911AddressInvalid"
+            )
         if msisdn.endswith(TEMPORARY_SUFFIX) and msisdn not in self.recovered:
             raise NetworkTemporary(f"stub: the network is unavailable for {msisdn}")
         self.received[key] = (command, request)

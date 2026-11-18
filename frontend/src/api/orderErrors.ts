@@ -26,6 +26,10 @@ export const ORDER_ERRORS: Record<string, string> = {
   deviceChangeAlone: 'Change the device in an order item of its own, changing nothing else.',
   deviceIncompatible: 'The device does not work on the network. Use another device.',
   deviceNotApplicable: 'A device is recorded on prepaid network lines only.',
+  e911AddressRequired:
+    'A Wi-Fi calling line needs an E911 address: send one, or set the service address on the billing account.',
+  e911ChangeAlone: 'Change the E911 address in an order of its own, changing nothing else.',
+  e911NotApplicable: 'An E911 address is recorded on prepaid network lines only.',
   imsiNotRequired: 'This product does not require an IMSI.',
   imsiRequired: 'Choose exactly one IMSI.',
   imsiUnavailable: 'This IMSI is unavailable (unknown, locked or in use). Choose another.',

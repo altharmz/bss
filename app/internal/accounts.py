@@ -27,6 +27,7 @@ from app.billing.prepaid import IntervalQuote, fee_quotes, net_of
 from app.billing.termination import credit
 from app.config import settings
 from app.internal.context import no_query
+from app.network import e911, profile
 from app.network import kind as offering_kind
 from app.ordering.cancel import undoable_status_change
 from app.repository import billing, catalog, funding, parties, products
@@ -560,6 +561,13 @@ def open_products(account_id: str, request: Request, tx: Tx, clock: ClockDep) ->
                 if p["id"] in prepaid_views
                 else nxt,
                 "undoableStatusChange": undoable[p["id"]],
+                # the line's E911 address and whether its offering enables Wi-Fi calling (#201)
+                "e911Address": p.get("e911_address"),
+                "wifiCalling": e911.wifi_calling(
+                    profile.effective(p["specification_details"], p["offering_details"])
+                    if profile.is_line(p["specification_details"])
+                    else None
+                ),
                 "pendingChanges": [_pending_change(c) for c in pending.get(p["id"], [])],
                 **prepaid_views.get(p["id"], {}),
                 **(

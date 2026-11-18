@@ -10,7 +10,15 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Protocol
 
-COMMANDS = ("activate", "suspend", "restore", "deactivate", "change_profile", "swap_sim")
+COMMANDS = (
+    "activate",
+    "suspend",
+    "restore",
+    "deactivate",
+    "change_profile",
+    "swap_sim",
+    "update_e911",
+)
 
 
 @dataclass(frozen=True)

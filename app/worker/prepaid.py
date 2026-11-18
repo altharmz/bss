@@ -227,6 +227,8 @@ def process_commands(
                     if "profile_changes" in current["request"]
                     else network.post_sim_swap
                     if "sim_swaps" in current["request"]
+                    else network.post_e911_change
+                    if "e911_changes" in current["request"]
                     else post_termination
                     if "terminations" in current["request"]
                     else post_offering_change

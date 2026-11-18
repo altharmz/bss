@@ -53,7 +53,14 @@ from app.api.common import (
     without_nulls,
 )
 from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
-from app.api.errors import Problem, bad_request, conflict, not_found, unprocessable
+from app.api.errors import (
+    Problem,
+    bad_request,
+    conflict,
+    not_found,
+    problems_error,
+    unprocessable,
+)
 from app.api.guards import actor_of
 from app.api.inventory import ORDERING_BASE as BASE
 from app.api.inventory import order_href, product_href
@@ -61,7 +68,7 @@ from app.api.prices import monthly_price, tax_on, total_rate
 from app.api.tmfjson import TmfJSONResponse
 from app.billing.model import Tax
 from app.events import emit
-from app.network import device
+from app.network import device, e911
 from app.ordering import cancel as cancellation
 from app.ordering import process
 from app.ordering.process import ItemRequest, OrderRefused, OrderRequest, place_order
@@ -156,6 +163,8 @@ class ItemProduct(ProductRef):
     product_characteristic: list[dict[str, Any]] | None = None
     # an add-on pack's plan: [{relationshipType: addOn, id: <plan product>}] (add items only)
     product_relationship: list[dict[str, Any]] | None = None
+    # the line's E911 address: [{role: e911Address, place: GeographicAddress}] (add or modify)
+    place: list[dict[str, Any]] | None = None
 
 
 class OrderItemIn(ItemDocuments):  # type: ignore[misc,valid-type]
@@ -277,12 +286,20 @@ def _flatten(
     return flat
 
 
+def _flatten_paths(items: list[OrderItemIn], path: str = "productOrderItem") -> list[str]:
+    paths = []
+    for index, item in enumerate(items):
+        paths.append(f"{path}.{index}")
+        paths += _flatten_paths(item.product_order_item or [], f"{path}.{index}.productOrderItem")
+    return paths
+
+
 def _item_requests(items: list[OrderItemIn], sent: list[ItemSent]) -> tuple[ItemRequest, ...]:
     flat = _flatten(items)
     assert len(flat) == len(sent)  # both walk the body in the same order
     return tuple(
-        _item_request(item, parent, extra.documents)
-        for (item, parent), extra in zip(flat, sent, strict=True)
+        _item_request(item, parent, extra.documents, path)
+        for (item, parent), extra, path in zip(flat, sent, _flatten_paths(items), strict=True)
     )
 
 
@@ -331,7 +348,38 @@ def _is_device_change(item: OrderItemIn) -> bool:
     )
 
 
-def _item_request(item: OrderItemIn, parent: str | None, documents: dict[str, Any]) -> ItemRequest:
+def _is_address_change(item: OrderItemIn) -> bool:
+    return (
+        item.action == "modify"
+        and item.product is not None
+        and item.product_offering is None
+        and item.product.status is None
+        and item.product.realizing_resource is None
+        and item.product.product_characteristic is None
+        and item.product.place is not None
+    )
+
+
+def _check_place(item: OrderItemIn, index: str) -> None:
+    """product.place on an item: the E911 address (role e911Address) of an add, or of a modify
+    that changes nothing else (docs/decisions/network.md#e911-address)."""
+    if item.action not in ("add", "modify"):
+        raise unprocessable(f"item {item.id}: place is writable only on add or modify items")
+    if (why := e911.role_problem(item.product.place)) is not None:
+        raise bad_request(f"item {item.id}: {why}")
+    if item.action == "modify" and not _is_address_change(item):
+        raise unprocessable(
+            f"item {item.id}: an E911 address change (place) is a modify item of its own,"
+            " changing nothing else"
+        )
+    path = f"{index}.product.place.0.place"
+    if problems := e911.address_problems(item.product.place[0].get("place"), path):
+        raise problems_error([(where, message, False) for where, message in problems])
+
+
+def _item_request(
+    item: OrderItemIn, parent: str | None, documents: dict[str, Any], path: str = "productOrderItem"
+) -> ItemRequest:
     if item.action == "add":
         if item.product_offering is None:
             raise unprocessable(f"item {item.id}: an add item needs productOffering")
@@ -353,7 +401,7 @@ def _item_request(item: OrderItemIn, parent: str | None, documents: dict[str, An
             )
         if item.product.realizing_resource is not None:
             raise unprocessable("realizingResource is writable only on add or modify items")
-    elif _is_device_change(item):
+    elif _is_device_change(item) or _is_address_change(item):
         if item.product.id is None:
             raise unprocessable(f"item {item.id}: a modify item needs product")
     elif (
@@ -367,6 +415,8 @@ def _item_request(item: OrderItemIn, parent: str | None, documents: dict[str, An
             " product.status (suspended or active), or product.realizingResource (a prepaid"
             " renewal may change productOffering and product.realizingResource together)"
         )
+    if item.product and item.product.place is not None:
+        _check_place(item, path)
     if item.product and item.product.product_characteristic is not None:
         _check_characteristics(item)
     if item.product and item.product.product_relationship is not None and item.action != "add":
@@ -375,6 +425,7 @@ def _item_request(item: OrderItemIn, parent: str | None, documents: dict[str, An
         item.product.realizing_resource is not None
         or item.product.product_characteristic is not None
         or item.product.product_relationship is not None
+        or item.product.place is not None
     ):
         sent = {
             key: value
@@ -382,13 +433,12 @@ def _item_request(item: OrderItemIn, parent: str | None, documents: dict[str, An
                 ("realizingResource", item.product.realizing_resource),
                 ("productCharacteristic", item.product.product_characteristic),
                 ("productRelationship", item.product.product_relationship),
+                ("place", item.product.place),
             )
             if value is not None
         }
         values, problems = specschema.check(API, "Product_FVO", sent)
         if problems:
-            from app.api.errors import problems_error
-
             raise problems_error(problems)
         documents = {**documents, "product": values}
     return ItemRequest(

@@ -58,9 +58,20 @@ def _line_profile(conn, item):
 def plan(conn, request, start) -> list[Planned]:
     """The commands the order's items need: add -> activate, delete -> deactivate,
     offering change -> change_profile (the new offering's profile), status ->
-    suspend / restore, an IMSI change -> swap_sim. A number-only modify sends none."""
+    suspend / restore, an IMSI change -> swap_sim, a new E911 address on a Wi-Fi calling
+    line -> update_e911. A number-only modify sends none."""
     planned = []
     for item in request.items:
+        if item.e911.get("send"):  # a new E911 address alone on a Wi-Fi calling line
+            planned.append(
+                Planned(
+                    item.item_id,
+                    "update_e911",
+                    with_add_ons(conn, item.product_id, start),
+                    item.product_id,
+                )
+            )
+            continue
         if (
             item.action == "modify"
             and item.product_offering_id is None
@@ -119,8 +130,16 @@ def add_on_parent(item) -> UUID | None:
     return None
 
 
-def record(conn, order_id: UUID, planned: list[Planned], start: date, now: datetime) -> None:
-    """Insert the planned commands, due on the order's date (an add's product exists now)."""
+def record(
+    conn,
+    order_id: UUID,
+    planned: list[Planned],
+    start: date,
+    now: datetime,
+    today: date | None = None,
+) -> None:
+    """Insert the planned commands, due on the order's date (an add's product exists now);
+    an E911 address change is due today."""
     if not planned:
         return
     rows = {row["item_id"]: row for row in orders.items_of(conn, order_id)}
@@ -134,7 +153,7 @@ def record(conn, order_id: UUID, planned: list[Planned], start: date, now: datet
             order_item_id=row["id"],
             product_id=entry.product_id or row["product_id"],
             kind=entry.kind,
-            due_date=start,
+            due_date=today if entry.kind == "update_e911" and today else start,
             profile=entry.profile,
             now=now,
         )

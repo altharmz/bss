@@ -27,6 +27,7 @@ export const AUDIT_ACTIONS: Record<AuditAction, string> = {
   lock_set: 'Lock set',
   lock_cleared: 'Lock cleared',
   pin_lockout: 'PIN lockout',
+  e911_changed: 'E911 address changed',
   interaction_logged: 'Interaction logged',
   ticket_opened: 'Case opened',
   ticket_status_changed: 'Case status change',

@@ -303,6 +303,14 @@ def _cancel_sim_swap(conn, order, command, request, now):
     return _cancelled(conn, order, request, now)
 
 
+def _cancel_e911(conn, order, command, request, now):
+    """E911 address changes the network has not confirmed: the old addresses stay."""
+    for item in orders.items_of(conn, order["id"]):
+        orders.set_order_item_state(conn, item["id"], item_transition(item["state"], "cancelled"))
+    commands.complete(conn, command["id"], {"outcome": "cancelled"}, now=now)
+    return _cancelled(conn, order, request, now)
+
+
 def _network_blocks_cancel(conn, order, command, now) -> None:
     """A network step in flight is cancelled with the order; one the network confirmed,
     or an offering change waiting for its change_profile, is not undone."""
@@ -325,6 +333,12 @@ def _cancel_prepaid(conn, order, command, request, now, today):
         products.lock_products(conn, [i["product_id"] for i in orders.items_of(conn, order["id"])])
         number_orders.lock(conn, [i["product_id"] for i in orders.items_of(conn, order["id"])])
         return _cancel_sim_swap(conn, order, command, request, now)
+    if "e911_changes" in command["request"]:
+        if order["state"] != "inProgress" or command["state"] == "completed":
+            raise CancelRefused(
+                f"productOrder {order['id']} is {order['state']}: it cannot be cancelled"
+            )
+        return _cancel_e911(conn, order, command, request, now)
     if "status_changes" in command["request"]:
         if order["state"] != "inProgress" or command["state"] == "completed":
             raise CancelRefused(

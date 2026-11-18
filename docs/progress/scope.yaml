@@ -729,6 +729,7 @@ items:
   - {id: worker.prepaidLifecycle, area: worker, stage: 5, title: "An unfunded prepaid line follows grace, suspension and deactivation by business date through internal orders; a top-up brings it back; the deactivated number is aged"}
   - {id: worker.simInventory, area: worker, stage: 5, title: "Activation picks a SIM or eSIM from stock; a SIM swap moves the line to another SIM when the network confirms"}
   - {id: worker.networkProvisioning, area: worker, stage: 5, title: "Prepaid order items send their network command and complete only when the network confirms"}
+  - {id: worker.e911Address, area: worker, stage: 5, title: "A Wi-Fi calling line has a validated E911 address (sent, else the service address), sent to the network; a change is an order, sent as update_e911 and taken on confirmation"}
   - {id: worker.taxEngine, area: worker, stage: 5, title: "Prepaid charges are taxed by the tax engine for the account's service address; an unavailable engine retries and books nothing"}
   - {id: worker.paymentGateway, area: worker, stage: 5, title: "Card charges go to the payment gateway and the balance rises only when it confirms; automatic top-up below a threshold"}
   - {id: worker.roamingPasses, area: worker, stage: 5, title: "Roaming and international passes: pass profiles, passDays with one end-of-pass change_profile, usage counted per zone with zone thresholds, pay-as-you-go zone prices (#200)"}

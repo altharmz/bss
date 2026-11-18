@@ -19,6 +19,8 @@ PROFILE: dict[str, str] = {
     "hotspot": "flag",
     "international": "flag",
     "voicemail": "flag",
+    # the line can make Wi-Fi calls: it needs an E911 address (#201, docs/decisions/network.md)
+    "wifiCalling": "flag",
     # roaming and international passes (#200, docs/decisions/network.md)
     "roaming": "flag",
     "roamingDataMb": "integer",

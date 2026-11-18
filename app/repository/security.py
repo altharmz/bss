@@ -25,6 +25,7 @@ ACTIONS = (
     "lock_set",
     "lock_cleared",
     "pin_lockout",
+    "e911_changed",
     *CARE_ACTIONS,
     *SELF_CARE_ACTIONS,
 )
