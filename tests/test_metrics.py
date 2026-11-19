@@ -19,6 +19,8 @@ FAMILIES = (
     "bss_http_requests_total",
     "bss_http_request_duration_seconds",
     "bss_http_requests_in_progress",
+    "bss_http_in_flight",
+    "bss_http_rejected_overload_total",
     "bss_db_up",
     "bss_billing_last_run_status",
     "bss_billing_last_run_age_seconds",

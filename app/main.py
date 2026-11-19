@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
 from fastapi.responses import JSONResponse
 
-from app import api, db, internal, logsetup, metrics, status
+from app import api, db, internal, logsetup, metrics, overload, status
 from app.auth import authenticate
 from app.care import routes as care_routes
 from app.clock import SystemClock
@@ -44,6 +44,7 @@ internal.install(app)
 app.include_router(care_routes.router)
 app.include_router(status.router)
 app.include_router(metrics.router)
+app.add_middleware(overload.InFlightLimitMiddleware)  # inside: rejections logged, counted
 app.add_middleware(metrics.HttpMetricsMiddleware)
 app.add_middleware(logsetup.RequestLogMiddleware)  # added last = outermost
 metrics.set_build_info()

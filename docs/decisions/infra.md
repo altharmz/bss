@@ -653,7 +653,35 @@ Unsupported statements remain unbound and coverage below 90% fails. The runbook 
   - Metrics run in Prometheus multiprocess mode, always (`docs/operations.md`, "Metrics").
   - What stays per process, accepted: the DB pools, the log-level poller (one cheap query
     every 15 s), the metrics database collector's 30 s cache, and the in-memory stub
-    adapters (deterministic per call).
+    adapters (deterministic per call), and the request bound below.
+
+## Request bound (2026-11-19, #341)
+
+Found by the load test: at the 1x peak and production limits the app answered about 16
+of 47 requests/s, held the rest, and grew from 109 to 386 MiB in 103 s until the kernel
+killed it ([results](../loadtest-results.md#prod-shaped)). Nothing bounded the requests a
+process holds: they queued for the threadpool and the DB pool, and memory grew with the
+queue.
+
+- **Requests, not connections.** `InFlightLimitMiddleware` (`app/overload.py`, pure ASGI)
+  counts the requests one process is serving. Beyond `BSS_MAX_IN_FLIGHT` a request gets,
+  at once and without touching the database, `503` with `Retry-After: 1` and the TMF error
+  body (`code: "overloaded"`). Uvicorn's `--limit-concurrency` was rejected for the app:
+  it counts open connections, and Caddy (vps-infra, shared) keeps idle keep-alive
+  connections open, so it would refuse requests while the app is idle. The MCP keeps its
+  `--limit-concurrency 32` (its own process and history, [mcp.md](mcp.md)).
+- **Default `2 x DB_POOL_SIZE`** (20 with the pool of 10), per process, `ge=1`. A request
+  beyond that only waits for a pooled connection, adding memory and latency. Set
+  `BSS_MAX_IN_FLIGHT` to override; production keeps the default.
+- **Exempt:** `/healthz` (a probe failing under load would take the container out, the
+  outcome this avoids) and `/metrics` (the scrape is how the load is seen).
+- **Order:** inside `RequestLogMiddleware` and `HttpMetricsMiddleware`, so a rejected
+  request is logged and counted (status 503, route `unmatched`: no route has matched yet).
+- **Metrics:** `bss_http_rejected_overload_total` (counter) and `bss_http_in_flight` (the
+  admitted requests, a `livesum` gauge; `bss_http_requests_in_progress` also counts the
+  rejected ones while they are answered). Rejections also count in `BssHigh5xxRate`.
+- **Proof:** `make loadtest SCENARIO=prod-shaped` before and after, in
+  [loadtest-results.md](../loadtest-results.md#prod-shaped).
 
 ## Supply-chain scanning (2026-11-08)
 

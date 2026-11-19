@@ -1,7 +1,7 @@
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     # The API's connection pool (app/db.py): at most this many connections to postgres,
     # whatever the number of requests in flight (37 usable on the VPS's postgres).
     db_pool_size: int = Field(default=10, ge=1)
+    # Requests one app process serves at once (app/overload.py, #341); beyond it a 503 at
+    # once. Unset = 2 x DB_POOL_SIZE: more would only wait for a pooled connection.
+    bss_max_in_flight: int | None = Field(default=None, ge=1)
     # "Today" for billing is the calendar date in this zone (see app/clock.py).
     billing_tz: str = "Europe/Moscow"
     msisdn_quarantine_days: int = Field(default=0, ge=0)
@@ -167,6 +170,12 @@ class Settings(BaseSettings):
     # Separate credentials: smoke can only read; MCP cannot access user/session APIs.
     bss_service_secret: str = ""
     bss_smoke_secret: str = ""
+
+    @model_validator(mode="after")
+    def _derived_defaults(self) -> "Settings":
+        if self.bss_max_in_flight is None:
+            self.bss_max_in_flight = 2 * self.db_pool_size
+        return self
 
 
 settings = Settings()
