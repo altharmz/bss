@@ -1,7 +1,7 @@
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import AliasChoices, Field, model_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -33,7 +33,8 @@ class Settings(BaseSettings):
     # whatever the number of requests in flight (37 usable on the VPS's postgres).
     db_pool_size: int = Field(default=10, ge=1)
     # Requests one app process serves at once (app/overload.py, #341); beyond it a 503 at
-    # once. Unset = 2 x DB_POOL_SIZE: more would only wait for a pooled connection.
+    # once. Unset = DB_POOL_SIZE: more only wait for a pooled connection and hold memory
+    # (measured: docs/decisions/infra.md, "Request bound").
     bss_max_in_flight: int | None = Field(default=None, ge=1)
     # "Today" for billing is the calendar date in this zone (see app/clock.py).
     billing_tz: str = "Europe/Moscow"
@@ -171,10 +172,16 @@ class Settings(BaseSettings):
     bss_service_secret: str = ""
     bss_smoke_secret: str = ""
 
+    @field_validator("bss_max_in_flight", mode="before")
+    @classmethod
+    def _empty_is_unset(cls, value: object) -> object:
+        # compose passes ${VAR:-} through as an empty string
+        return None if value == "" else value
+
     @model_validator(mode="after")
     def _derived_defaults(self) -> "Settings":
         if self.bss_max_in_flight is None:
-            self.bss_max_in_flight = 2 * self.db_pool_size
+            self.bss_max_in_flight = self.db_pool_size
         return self
 
 

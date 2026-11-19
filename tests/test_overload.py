@@ -138,10 +138,12 @@ def test_the_app_rejects_at_the_limit_and_keeps_healthz_and_metrics(monkeypatch)
     assert client.get("/metrics").status_code == 404  # off without a token, never 503
 
 
-def test_the_default_is_twice_the_pool_and_zero_is_refused(monkeypatch):
+def test_the_default_is_the_pool_size_and_zero_is_refused(monkeypatch):
     monkeypatch.delenv("BSS_MAX_IN_FLIGHT", raising=False)
     monkeypatch.setenv("DB_POOL_SIZE", "7")
-    assert Settings().bss_max_in_flight == 14
+    assert Settings().bss_max_in_flight == 7
+    monkeypatch.setenv("BSS_MAX_IN_FLIGHT", "")  # compose's ${VAR:-} when unset
+    assert Settings().bss_max_in_flight == 7
     monkeypatch.setenv("BSS_MAX_IN_FLIGHT", "5")
     assert Settings().bss_max_in_flight == 5
     monkeypatch.setenv("BSS_MAX_IN_FLIGHT", "0")

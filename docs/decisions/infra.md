@@ -670,9 +670,14 @@ queue.
   it counts open connections, and Caddy (vps-infra, shared) keeps idle keep-alive
   connections open, so it would refuse requests while the app is idle. The MCP keeps its
   `--limit-concurrency 32` (its own process and history, [mcp.md](mcp.md)).
-- **Default `2 x DB_POOL_SIZE`** (20 with the pool of 10), per process, `ge=1`. A request
-  beyond that only waits for a pooled connection, adding memory and latency. Set
-  `BSS_MAX_IN_FLIGHT` to override; production keeps the default.
+- **Default `DB_POOL_SIZE`** (10 with the pool of 10), per process, `ge=1`. The issue
+  planned `2 x DB_POOL_SIZE`; the load test changed it (2026-11-20, prod-shaped on one
+  settled dump): with 20 the app survived but its memory settled at 330 MiB, 87 % of its
+  384m; with 10 it settled at 228 MiB (59 %), answered more requests (54 % vs 51 % of
+  those offered) and halved the read p95 (499 vs 1,038 ms). A request beyond the pool
+  only waits for a connection while holding a thread and memory. `BSS_MAX_IN_FLIGHT`
+  overrides it (`compose.prod.yaml` passes it through, empty = the default; the load-test
+  overlay takes `LOADTEST_MAX_IN_FLIGHT`).
 - **Exempt:** `/healthz` (a probe failing under load would take the container out, the
   outcome this avoids) and `/metrics` (the scrape is how the load is seen).
 - **Order:** inside `RequestLogMiddleware` and `HttpMetricsMiddleware`, so a rejected
