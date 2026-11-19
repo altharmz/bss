@@ -77,6 +77,24 @@ test('numbered prepaid subscribers complete a transfer by subscriber number', as
       billCycleDay: 1,
       currency: context.currency,
       ratingType: 'prepaid',
+      // a prepaid line needs a service address (BSS_TAX_REQUIRE_SERVICE_ADDRESS, on by
+      // default); the same one the seed gives its prepaid accounts (tests/seed.py)
+      contact: [
+        {
+          '@type': 'Contact',
+          contactType: 'serviceAddress',
+          contactMedium: [
+            {
+              '@type': 'GeographicAddressContactMedium',
+              street1: '1 Market St',
+              city: 'San Francisco',
+              stateOrProvince: 'CA',
+              postCode: '94105',
+              country: 'US',
+            },
+          ],
+        },
+      ],
       relatedParty: [
         {
           '@type': 'RelatedPartyRefOrPartyRoleRef',

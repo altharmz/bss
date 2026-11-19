@@ -120,6 +120,10 @@ TMF654 GET /transferBalance/{id} missing relatedParty
 TMF654 POST /reserveBalance requires amount
 # accountBalance: one current balance per currency - the balance now, with no period.
 TMF666 GET /billingAccount/{id} missing accountBalance.validFor
+# appliedTax: a tax line is embedded in its rate (Entity's id and href); probed since the
+# seed's prepaid accounts have a service address and are taxed (#321).
+TMF678 GET /appliedCustomerBillingRate/{id} missing appliedTax.href
+TMF678 GET /appliedCustomerBillingRate/{id} missing appliedTax.id
 # billDocument: the JSON snapshot is embedded (content) and the PDF (#202) is referenced by
 # its url; neither has an href or a validity period.
 TMF678 GET /customerBill/{id} missing billDocument.href

@@ -13,7 +13,7 @@ from app.integrations.tax import ChargeLine, TaxUnavailable, adapter
 from app.integrations.tax.stub import FAILING_ZIP
 from app.worker import loop
 from tests import apidata
-from tests.apidata import ACCOUNT, ORDER
+from tests.apidata import ACCOUNT, ORDER, service_address_contact
 from tests.test_prepaid_orders import shop
 from tests.test_prepaid_renewal_producer import TZ, tick
 from tests.test_prepaid_terminations import terminate
@@ -27,20 +27,8 @@ CA = {
 NY = {"street1": "5 Main St", "city": "Albany", "stateOrProvince": "NY", "postCode": "12207-1234"}
 
 
-def contact(address, contact_type="serviceAddress"):
-    return [
-        {
-            "@type": "Contact",
-            "contactType": contact_type,
-            "contactMedium": [
-                {"@type": "GeographicAddressContactMedium", "country": "US", **address}
-            ],
-        }
-    ]
-
-
 def set_address(api, acc, address, **kw):
-    return api.patch(f"{ACCOUNT}/{acc['id']}", {"contact": contact(address)}, **kw)
+    return api.patch(f"{ACCOUNT}/{acc['id']}", {"contact": service_address_contact(address)}, **kw)
 
 
 @pytest.fixture(autouse=True)
@@ -170,7 +158,9 @@ def test_a_line_cannot_be_activated_without_a_service_address(api, db_conn):
 )
 def test_the_service_address_is_validated(api, db_conn, bad):
     _, acc = shop(api, db_conn, numbers=False)
-    response = api.patch(f"{ACCOUNT}/{acc['id']}", {"contact": contact({"country": "US"} | bad)})
+    response = api.patch(
+        f"{ACCOUNT}/{acc['id']}", {"contact": service_address_contact({"country": "US"} | bad)}
+    )
     assert response.status_code == 422, response.text
 
 
@@ -179,7 +169,7 @@ def test_the_service_address_is_stored_and_removed_with_the_contact(api, db_conn
     assert set_address(api, acc, NY).status_code == 200
     stored = db_conn.execute("SELECT service_address FROM billing_account").fetchone()[0]
     assert stored == NY | {"country": "US"}
-    other = contact(CA, "billing")  # another kind of contact is no service address
+    other = service_address_contact(CA, "billing")  # another kind of contact is no service address
     assert api.patch(f"{ACCOUNT}/{acc['id']}", {"contact": other}).status_code == 200
     assert db_conn.execute("SELECT service_address FROM billing_account").fetchone() == (None,)
 

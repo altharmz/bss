@@ -42,6 +42,14 @@ TZ = ZoneInfo(settings.billing_tz)
 MARKER_CODE = "MOB-S"  # the first offering the seed creates
 MOBILE_SPEC = "Mobile Voice & Data (numbered)"  # requires a subscriber number
 NUMBERS = "/tmf-api/resourceInventory/v5/resource"
+# every prepaid account's service address; the stub tax engine has a rate for CA
+SERVICE_ADDRESS = {
+    "street1": "1 Market St",
+    "city": "San Francisco",
+    "stateOrProvince": "CA",
+    "postCode": "94105",
+    "country": "US",
+}
 FIRST_NUMBER, NUMBER_COUNT = 12025550100, 20
 
 
@@ -273,7 +281,10 @@ def build_accounts(api: Api) -> dict[str, dict[str, Any]]:
             else {"creditLimit": {"unit": "USD", "value": int(plan.credit_limit)}}
         )
         if plan.prepaid:
+            # the prepaid gate wants a service address before a line is activated
+            # (BSS_TAX_REQUIRE_SERVICE_ADDRESS, on by default); postpaid accounts have none
             extra["ratingType"] = "prepaid"
+            extra["contact"] = apidata.service_address_contact(SERVICE_ADDRESS)
         accounts[plan.key] = api.post(
             ACCOUNT,
             apidata.account_body(
@@ -409,12 +420,13 @@ def events(today: date, start: date) -> dict[date, Callable[[Api, World], None]]
     on(d(95), lambda a, w: pay(a, w, "romashka", 130, "Bank transfer"))
     on(d(100), lambda a, w: delete(a, w, "ivan-mob", "ivan"))  # mid-period: a refund
     on(d(110), lambda a, w: pay(a, w, "romashka", 130, "Bank transfer"))
-    on(d(4), lambda a, w: pay(a, w, "pavel", 60, "Bank card"))  # a top-up
+    # prepaid amounts cover the taxed price: MOB-S 29.00 + CA tax = 32.77 a period
+    on(d(4), lambda a, w: pay(a, w, "pavel", 66, "Bank card"))  # a top-up: two periods
     on(d(5), lambda a, w: add_prepaid(a, w, "pavel", "MOB-S"))
-    on(d(75), lambda a, w: pay(a, w, "pavel", 30, "Bank card"))  # after running out: resumes
-    on(d(110), lambda a, w: pay(a, w, "pavel", 30, "Bank card"))  # resumes the lapsed renewal
-    on(d(70), lambda a, w: pay(a, w, "vera", 30, "Bank card"))
-    on(d(71), lambda a, w: add_prepaid(a, w, "vera", "MOB-S"))  # her renewal at d(101) finds 10
+    on(d(75), lambda a, w: pay(a, w, "pavel", 33, "Bank card"))  # after running out: resumes
+    on(d(110), lambda a, w: pay(a, w, "pavel", 33, "Bank card"))  # resumes the lapsed renewal
+    on(d(70), lambda a, w: pay(a, w, "vera", 34, "Bank card"))
+    on(d(71), lambda a, w: add_prepaid(a, w, "vera", "MOB-S"))  # her renewal at d(101) finds 1.23
     # today: a product starting in 5 days, one starting today (charged by tomorrow's
     # run), and a termination ordered for 12 days from now (pendingTerminate)
     on(today, lambda a, w: add(a, w, "elena-mob", "elena", "MOB-S", today + timedelta(days=5)))
