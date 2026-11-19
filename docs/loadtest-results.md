@@ -2,7 +2,8 @@
 
 How the runs are made: [loadtest.md](loadtest.md#the-k6-scenarios-281). Each scenario's
 full report is `loadtest/out/<scenario>-<time>/report.md` on the workstation (not
-committed); this page keeps the numbers. Run dates: 13 and 14 November 2026.
+committed); this page keeps the numbers. Run dates: 13 and 14 November 2026; the
+midnight retry on 19 November.
 
 ## Summary
 
@@ -13,6 +14,7 @@ committed); this page keeps the numbers. Run dates: 13 and 14 November 2026.
 | `stress` (1x, 2x, 3x, 5x) | ceiling found | 1x and 2x meet every target; the first break is `read` at 3x; 5x collapses |
 | `soak` (1x, 3 h) | targets held; 2 flags | 603,439 requests, no errors, worst p99 147 ms; flagged: the worker's memory grew 73 % (26 MiB an hour), and k6 dropped 6 of 474,951 arrivals |
 | `billing-night` | pass | the daily run of 100,000 accounts in 22.4 min with 20 % of the mix; API p99 under 110 ms during it |
+| midnight retry (#340, 19 November) | pass | the retry of unfunded renewals in 72 s instead of 81 min; the midnight wake-up as a whole is still 26 to 30 min (the daily full review) |
 | `prod-shaped` | fails, as expected | at today's production limits the app serves about 16 requests/s of the 47 offered and is killed for memory after 103 s |
 
 The targets hold at the 1x peak with a factor of two to spare, on the load-test budget
@@ -403,6 +405,41 @@ The whole two hours (80,202 requests, no errors):
 
 </details>
 
+### midnight retry (#340)
+
+The wake-up that crosses midnight, after #340: one worker wake-up run by hand on the
+restored `seed100k-0078` (no k6 traffic) with the clock moved one and then two days
+ahead, so each run is the first wake-up of a new business date. A first wake-up at the
+real date (the catch-up after the restore, no budget) took 103 min and attempted all
+39,576 renewals it produced; the two runs below follow it. Phases are seconds /
+statements.
+
+| Phase | Before (#281 runs) | Date +1 | Date +2 |
+|---|---|---|---|
+| `process_commands` | **81 min** at midnight (2 h 55 min after the restore) | **71.9 s** / 60,845 | **72.3 s** / 57,809 |
+| of it, the date-only retry (`_record_date_only_shortfalls`) | one attempt per renewal, about 6 a second | 10.2 s / 4 | 10.7 s / 4 |
+| `produce_renewals` | | 101.4 s / 15,644 | 93.6 s / 15,002 |
+| `process_lifecycle` | | 545.6 s / 536,895 | 447.3 s / 476,875 |
+| `observe_entitlements` | | 400.9 s / 304,800 | 360.8 s / 304,562 |
+| `process_notifications` | | 673.5 s / 718,983 | 599.5 s / 716,207 |
+| Whole wake-up | over 81 min | 1,793.7 s (29.9 min) / 1,637,182 | 1,574.0 s (26.2 min) / 1,570,470 |
+| Worker peak RSS | 198 MiB at the end of the soak, growing 26 MiB an hour | 142.5 MiB | 146.0 MiB |
+
+- **`process_commands` meets its target** (under 2 min): the renewals due again only by
+  the date get the day's shortfall observation in four statements, and the per-account
+  attempts stop at `COMMAND_BUDGET` (60 s), the rest taken by the next wake-ups.
+- **A queued `worker_request` runs first**, before any of these phases; **the usage feed**
+  runs at the start of `process_commands`, about 11 minutes into the wake-up (after
+  renewals and the lifecycle pass), not after the hour-long retry.
+- **The wake-up is still 26 to 30 minutes at midnight.** The rest is the once-a-date full
+  review of every prepaid account (#292) by lifecycle, entitlements and notifications:
+  about 1.5M statements, in the same order on both dates, so it is the daily cost and not
+  catch-up. Only 200 notifications were sent in each run; the statements are the
+  per-account review, not the detectors (which now leave told events out in SQL and no
+  longer grow with them). Left open: #404.
+- The worker's memory peaked at 143 to 146 MiB in a wake-up of 1.6M statements. Memory
+  over hours was not measured again here (no soak run).
+
 ### prod-shaped
 
 `prod-shaped-20261114T054630`: the 1x mix at today's production limits: app 0.5 CPU / 384m / 1
@@ -478,11 +515,11 @@ and wrote no summary (the runner reports such a run as failed, with its groups m
 
 ## Found and left open
 
-- **The first wake-up of a business date can take over an hour.** Unfunded prepaid
-  renewals are attempted again once a day. The aged dataset has 24,874 of them; at about
-  6 a second the wake-up that crosses midnight took 81 min, and a queued catch-up, the
-  feed and the notifications waited for it. The first wake-up after the restore (nine
-  missed days) took 2 h 55 min for the same reason. Issue #340.
+- **The first wake-up of a business date takes 26 to 30 minutes.** Unfunded prepaid
+  renewals no longer hold it (#340 took the retry from 81 min to 72 s, see
+  [midnight retry](#midnight-retry-340)); the once-a-date full review of every prepaid
+  account by lifecycle, entitlements and notifications does, and the feed and the
+  notifications wait for it. Issue #404.
 - **The app does not bound the requests it holds.** Under overload its memory grows with
   the queue until the limit: 1,421 of 1,536 MiB at 5x, and the kill at 384 MiB in
   prod-shaped. Issue #341.
