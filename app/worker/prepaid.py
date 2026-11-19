@@ -6,6 +6,7 @@ diagnostics commit with the pass after that savepoint has rolled back.
 """
 
 import logging
+from datetime import timedelta
 from decimal import Decimal
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -31,6 +32,10 @@ from app.worker.process import Checkpoint, Heartbeat
 from app.worker.runs import ensure_ownership
 
 log = logging.getLogger("app.worker")
+
+# The per-account attempts of one wake-up stop after this, between accounts (#340), so
+# a backlog of renewals cannot hold up billing requests, the usage feed and notifications.
+COMMAND_BUDGET = timedelta(seconds=60)
 
 # A product's latest grant ended on or before today, with nothing blocking renewal
 # and no renewal produced for it yet. Manual and account suspension block renewal.
@@ -137,6 +142,32 @@ def _retire(conn, cmd, now):
     commands.complete(conn, cmd["id"], {"outcome": "cancelled", "reason": "productEnded"}, now=now)
 
 
+def _record_date_only_shortfalls(
+    conn: psycopg.Connection, *, clock: Clock, scan: dict
+) -> list[UUID]:
+    """The daily retry of renewals with no credit signal, without loading or locking each
+    (#340): one statement reads the spendable balance of their accounts, one writes today's
+    observation for those still short of their latest `required`. The covered ones, and any
+    row the insert refuses, stay due and are attempted per account. The observation instant
+    is read before the balances, so a payment received after it is still a credit signal.
+    A changed price is not seen until the next attempt (docs/decisions/prepaid.md).
+    Returns the renewals given today's observation."""
+    retries = commands.date_only_retries(conn, **scan)
+    if not retries:
+        return []
+    observed = clock.now()
+    spendable = funding.spendable_many(conn, [row["billing_account_id"] for row in retries])
+    short = {
+        row["id"]: max(Decimal(0), spendable[row["billing_account_id"]])
+        for row in retries
+        if spendable[row["billing_account_id"]] < row["required"]
+    }
+    with conn.transaction():
+        written = commands.record_daily_shortfalls(conn, short, now=observed)
+    log.info("prepaid: %d renewals still short on %s", len(written), scan["today"])
+    return [row["id"] for row in retries if row["id"] in written]
+
+
 def process_commands(
     conn: psycopg.Connection,
     *,
@@ -144,14 +175,17 @@ def process_commands(
     tz: ZoneInfo,
     checkpoint: Checkpoint | None = None,
     heartbeat: Heartbeat | None = None,
+    budget: timedelta | None = None,
 ) -> list[UUID]:
     """Attempt each eligible command once per tick, independently of daily gaps.
 
     Funding shortfalls retain a needs-top-up reason and remain pending. They are
-    attempted again after a later credit (a payment or a released hold) or on a
-    later business date, never as technical failures. A renewal of an ended product
-    is retired at once. Transfers complete in their own pass afterwards
-    (`process_transfers`).
+    attempted again after a later credit (a payment, a released hold or a funding
+    source) or on a later business date, never as technical failures. A renewal due
+    again only by the date and still short gets the day's observation in one statement
+    (`_record_date_only_shortfalls`). A renewal of an ended product is retired at once.
+    The per-account attempts stop after `budget` (COMMAND_BUDGET), signalled accounts
+    first. Transfers complete in their own pass afterwards (`process_transfers`).
     """
     ensure_ownership(conn)
     now = clock.now()
@@ -161,34 +195,20 @@ def process_commands(
     usage.process_usage(conn, clock=clock, tz=tz, checkpoint=checkpoint, heartbeat=heartbeat)
     rating.process_rating(conn, clock=clock, tz=tz, checkpoint=checkpoint, heartbeat=heartbeat)
     balance_actions.release_all_expired(conn, now)
-    candidates = fetch_all(
-        conn,
-        "SELECT c.* FROM prepaid_command c LEFT JOIN funded_interval f"
-        " ON f.id = (c.request->>'previous_interval_id')::uuid"
-        " LEFT JOIN product p ON p.id = f.product_id"
-        " LEFT JOIN LATERAL (SELECT observed_at FROM prepaid_funding_shortfall"
-        " WHERE command_id = c.id ORDER BY observed_at DESC LIMIT 1) s ON true"
-        " WHERE c.state <> 'completed'"
-        " AND c.kind IN ('order', 'renewal') AND c.due_date <= %(today)s"
-        " AND (c.next_retry_at IS NULL OR c.next_retry_at <= %(now)s)"
-        " AND (s.observed_at IS NULL OR c.attempted_at > s.observed_at"
-        " OR p.termination_date <= %(today)s"
-        " OR (s.observed_at AT TIME ZONE %(tz)s)::date < %(today)s"
-        " OR EXISTS (SELECT FROM payment p WHERE p.billing_account_id = c.billing_account_id"
-        " AND p.status = 'done' AND p.received_at > s.observed_at)"
-        " OR EXISTS (SELECT FROM funding_hold h WHERE h.billing_account_id = c.billing_account_id"
-        " AND h.released_at > s.observed_at))"
-        " ORDER BY c.billing_account_id, c.due_date,"
-        " COALESCE(c.request->>'product_id', f.product_id::text, c.id::text), c.id",
-        {"today": now.astimezone(tz).date(), "now": now, "tz": tz.key},
-    )
-    accounts = {}
-    for cmd in candidates:
+    scan = {"now": now, "today": now.astimezone(tz).date(), "tz": tz.key}
+    attempted = _record_date_only_shortfalls(conn, clock=clock, scan=scan)
+    accounts: dict[UUID, list[Row]] = {}
+    for cmd in commands.candidates(conn, **scan):
         accounts.setdefault(cmd["billing_account_id"], []).append(cmd)
-    attempted = []
-    for account_id, pending in accounts.items():
+    # an account with a credit signal (or a new command) before those due only by the date
+    ordered = sorted(accounts.items(), key=lambda item: not any(c["signalled"] for c in item[1]))
+    budget = COMMAND_BUDGET if budget is None else budget
+    started = clock.now()
+    for index, (account_id, pending) in enumerate(ordered):
         if checkpoint is not None and checkpoint():
             break
+        if index and clock.now() - started >= budget:
+            break  # the rest keep their eligibility and are taken by the next wake-up
         with conn.transaction():
             # Command identity precedes account locks, as in producers/posting.
             for cmd in sorted(pending, key=lambda c: c["id"]):

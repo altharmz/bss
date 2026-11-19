@@ -82,6 +82,15 @@ drops the ones that have a message already with one statement per detector
 one up: on the 100k dataset about 47,500 told events, two statements and a commit each, some
 100 s of every wake-up.
 
+Since #340 the detectors that key an event on row ids (`renewals`, `lifecycle`, `usage`,
+`card_declines`, `ports`, `sim_swaps`, `security`) also leave out told events in their own SQL:
+`NOT EXISTS (SELECT FROM notification_message m WHERE m.dedupe_key = <the key in SQL>)`, served by
+the unique `(dedupe_key, channel)` index, before any per-row enrichment (grants, line numbers in
+one `recipients.line_numbers` call per detector). A wake-up then reads only new events: before,
+`_renewals` alone fetched about 28,700 told events on every wake-up at 100k, and the worker
+allocated and freed some 65 MiB each time. The `existing_events` check stays as the guard. The
+SQL key must equal the Python one; the usage key has a test of that (zones included).
+
 ## Internal API (ours)
 
 `GET`/`POST /internal/v1/notification/consent` (customer's consent per channel and history; record

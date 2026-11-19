@@ -51,6 +51,14 @@ def lines(conn: psycopg.Connection, product_ids: list[UUID | None]) -> Callable[
     return lambda product_id: f"+{numbers[product_id]}" if product_id in numbers else "your line"
 
 
+def untold(key: str) -> str:
+    """An SQL condition: no message has the dedupe key `key` (an SQL expression) yet. The
+    detectors fetch only what is new, so a wake-up does not re-read every event it told
+    within the lookback (#340); the unique (dedupe_key, channel) index answers it. The
+    worker's `existing_events` check stays as the guard."""
+    return f" AND NOT EXISTS (SELECT FROM notification_message m WHERE m.dedupe_key = {key})"
+
+
 def detectors(
     now: datetime, tz: ZoneInfo, accounts: list[UUID] | None = None
 ) -> list[tuple[str, Callable[[psycopg.Connection], list[Event]]]]:
@@ -218,11 +226,13 @@ def _renewals(conn: psycopg.Connection, since: datetime) -> list[Event]:
     events = []
     done = fetch_all(
         conn,
-        "SELECT c.id, c.billing_account_id, f.product_id, p.name FROM prepaid_command c"
+        "SELECT c.id, c.billing_account_id, f.product_id, p.name FROM prepaid_command c"  # noqa: S608 - untold() is fixed SQL
         " JOIN funded_interval f ON f.id = (c.request->>'previous_interval_id')::uuid"
         " JOIN product p ON p.id = f.product_id WHERE c.kind = 'renewal'"
         " AND c.state = 'completed' AND c.result->>'outcome' = 'funded'"
-        " AND c.attempted_at >= %s ORDER BY c.attempted_at, c.id",
+        " AND c.attempted_at >= %s"
+        + untold("'renewal_done:' || c.id")
+        + " ORDER BY c.attempted_at, c.id",
         (since,),
     )
     grants = entitlement.latest_grants(conn, [row["product_id"] for row in done])
@@ -240,13 +250,15 @@ def _renewals(conn: psycopg.Connection, since: datetime) -> list[Event]:
         )
     failed = fetch_all(
         conn,
-        "SELECT DISTINCT ON (c.id) c.id, c.billing_account_id, f.product_id, p.name,"
+        "SELECT DISTINCT ON (c.id) c.id, c.billing_account_id, f.product_id, p.name,"  # noqa: S608 - untold() is fixed SQL
         " s.required - s.available AS shortfall, a.currency FROM prepaid_funding_shortfall s"
         " JOIN prepaid_command c ON c.id = s.command_id"
         " JOIN funded_interval f ON f.id = (c.request->>'previous_interval_id')::uuid"
         " JOIN product p ON p.id = f.product_id JOIN billing_account a"
         " ON a.id = c.billing_account_id WHERE c.kind = 'renewal' AND c.state = 'pending'"
-        " AND s.observed_at >= %s ORDER BY c.id, s.observed_at DESC",
+        " AND s.observed_at >= %s"
+        + untold("'renewal_failed:' || c.id")
+        + " ORDER BY c.id, s.observed_at DESC",
         (since,),
     )
     for row in failed:
@@ -271,7 +283,9 @@ def _lifecycle(conn: psycopg.Connection, since: datetime) -> list[Event]:
         " prepaid_lifecycle_event e JOIN product_order o ON o.id = e.product_order_id"
         " JOIN product p ON p.id = e.product_id WHERE e.outcome = 'placed'"
         " AND e.action IN ('suspend', 'deactivate') AND o.state = 'completed'"
-        " AND o.completion_date >= %s ORDER BY o.completion_date, e.id",
+        " AND o.completion_date >= %s"
+        + untold("'lifecycle:' || e.id")
+        + " ORDER BY o.completion_date, e.id",
         (since,),
     )
     if not rows:
@@ -299,11 +313,21 @@ def _lifecycle(conn: psycopg.Connection, since: datetime) -> list[Event]:
     return events
 
 
+# The usage event's key (`_usage`) in SQL; the domestic key is the one from before zones.
+_USAGE_KEY = (
+    "'usage:' || t.product_id || ':' || to_char(t.period_start, 'YYYY-MM-DD') || ':'"
+    " || t.allowance || ':' || t.threshold"
+    " || CASE WHEN t.zone = 'domestic' THEN '' ELSE ':' || t.zone END"
+)
+
+
 def _usage(conn: psycopg.Connection, since: datetime) -> list[Event]:
     rows = fetch_all(
         conn,
-        "SELECT t.*, p.billing_account_id FROM usage_threshold t JOIN product p"
-        " ON p.id = t.product_id WHERE t.reached_at >= %s ORDER BY t.reached_at, t.threshold",
+        "SELECT t.*, p.billing_account_id FROM usage_threshold t JOIN product p"  # noqa: S608 - untold() is fixed SQL
+        " ON p.id = t.product_id WHERE t.reached_at >= %s"
+        + untold(_USAGE_KEY)
+        + " ORDER BY t.reached_at, t.threshold",
         (since,),
     )
     line_of = lines(conn, [row["product_id"] for row in rows])
@@ -329,9 +353,11 @@ def _usage(conn: psycopg.Connection, since: datetime) -> list[Event]:
 def _card_declines(conn: psycopg.Connection, since: datetime) -> list[Event]:
     rows = fetch_all(
         conn,
-        "SELECT c.id, c.billing_account_id, c.decline_reason, m.last_four"
+        "SELECT c.id, c.billing_account_id, c.decline_reason, m.last_four"  # noqa: S608 - untold() is fixed SQL
         " FROM payment_command c JOIN payment_method m ON m.id = c.payment_method_id"
-        " WHERE c.state = 'declined' AND c.created_at >= %s ORDER BY c.created_at, c.id",
+        " WHERE c.state = 'declined' AND c.created_at >= %s"
+        + untold("'card_declined:' || c.id")
+        + " ORDER BY c.created_at, c.id",
         (since,),
     )
     return [
@@ -354,13 +380,15 @@ def _ports(conn: psycopg.Connection, since: datetime) -> list[Event]:
     yet has no customer: it is picked up once the order claims the number)."""
     rows = fetch_all(
         conn,
-        "SELECT r.id, r.state, r.submissions, r.number_value, r.rejection_reason, a.product_id,"
+        "SELECT r.id, r.state, r.submissions, r.number_value, r.rejection_reason, a.product_id,"  # noqa: S608 - untold() is fixed SQL
         " p.billing_account_id FROM port_request r JOIN LATERAL ("
         "  SELECT product_id FROM number_assignment WHERE subscriber_number_id ="
         "  r.subscriber_number_id AND cancelled_at IS NULL ORDER BY effective_from DESC LIMIT 1)"
         " a ON true JOIN product p ON p.id = a.product_id"
         " WHERE r.direction = 'in' AND r.state IN ('pending', 'rejected', 'completed')"
-        " AND r.updated_at >= %s ORDER BY r.updated_at, r.id",
+        " AND r.updated_at >= %s"
+        + untold("'port_in:' || r.id || ':' || r.submissions || ':' || r.state")
+        + " ORDER BY r.updated_at, r.id",
         (since,),
     )
     return [
@@ -381,9 +409,11 @@ def _ports(conn: psycopg.Connection, since: datetime) -> list[Event]:
 def _sim_swaps(conn: psycopg.Connection, since: datetime) -> list[Event]:
     rows = fetch_all(
         conn,
-        "SELECT c.id, c.product_id, p.billing_account_id FROM network_command c JOIN product p"
+        "SELECT c.id, c.product_id, p.billing_account_id FROM network_command c JOIN product p"  # noqa: S608 - untold() is fixed SQL
         " ON p.id = c.product_id WHERE c.kind = 'swap_sim' AND c.state = 'confirmed'"
-        " AND c.confirmed_at >= %s ORDER BY c.confirmed_at, c.id",
+        " AND c.confirmed_at >= %s"
+        + untold("'sim_swap:' || c.id")
+        + " ORDER BY c.confirmed_at, c.id",
         (since,),
     )
     line_of = lines(conn, [row["product_id"] for row in rows])
@@ -404,7 +434,7 @@ def _security(conn: psycopg.Connection, since: datetime) -> list[Event]:
     customer, once per audit entry. A contact change goes to the addresses on record before
     the change (kept in the entry), so it cannot redirect its own alert."""
     events = []
-    audit = security_repo.audit_since(conn, since)
+    audit = security_repo.audit_since(conn, since, untold("'security:' || account_audit.id"))
     line_of = lines(conn, [row["product_id"] for row in audit])
     for row in audit:
         kind = row["action"]

@@ -12,6 +12,7 @@ import pytest
 from app.integrations.network import adapter as network
 from app.network import usage as rules
 from app.network.usage import Incoming, ingest, ingest_batch
+from app.notify import events
 from tests import apidata, timeline
 from tests.apidata import CATALOG
 from tests.test_network_provisioning import PROFILE, characteristics
@@ -222,6 +223,13 @@ def test_roaming_and_international_usage_count_only_against_their_zone(api, db_c
     ).fetchall()
     db_conn.commit()
     assert marks == [("international", "voice", 80), ("roaming", "data", 80)]
+    # the notifier's SQL key of a threshold is the event's key, zones included (#340)
+    found = sorted(e.key for e in events._usage(db_conn, when - timedelta(days=1)))
+    in_sql = db_conn.execute(
+        "SELECT " + events._USAGE_KEY + " FROM usage_threshold t ORDER BY 1"  # noqa: S608
+    ).fetchall()
+    db_conn.commit()
+    assert len(found) == 2 and found == [row[0] for row in in_sql]
 
 
 def test_roaming_without_a_pass_is_stored_with_nothing_included(api, db_conn, passes):
