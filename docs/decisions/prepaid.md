@@ -217,6 +217,45 @@ product: a pay-as-you-go purchase UI is not part of this slice.
 **Deployment.** Migration `0057`; existing prepaid products are untouched (`grantless` false,
 their grants and paid-through dates stay; renewal by card applies from their next renewal).
 
+## Daily retry of unfunded renewals (2026-11-15, issue #340)
+
+On the 100k load-test dataset 24,874 renewals were unfunded, and the wake-up after midnight
+spent 81 minutes retrying them one account at a time (load, lock, attempt; about 6 a second)
+while billing requests, the usage feed and notifications waited. The retry now has two paths.
+
+**Signalled renewals go through the per-account path, unchanged.** A pending command is
+signalled when it was never attempted since its latest shortfall, its product ends, or a credit
+reached its account after that shortfall: a done payment (a top-up records one), a released
+hold, or a **funding source** with a later `available_at`. The funding source is the account
+credit signal added here: an adjustment credit, an incoming transfer and a debit's reversal each
+make one, so these credits retry the renewal in the same wake-up, not on the next date.
+
+**A renewal due again only because the business date changed is decided in bulk.** The
+dispatcher (`_record_date_only_shortfalls` in app/worker/prepaid.py) reads those renewals
+(`prepaid_commands.date_only_retries`: pending renewals, no signal, product and account able to
+post, no unanswered network profile change). It then reads their accounts' spendable balance in
+one statement (`funding.spendable_many`: the ledger less outstanding holds, equal to
+`funding.load(...).spendable`, without the account lock or the reconciliation check). A renewal
+still short of its latest `required` gets today's observation in one `INSERT ... SELECT`
+(`prepaid_commands.record_daily_shortfalls`), with `required` carried over and `available` = the
+spendable balance (zero when negative). Nothing is locked, loaded or posted for it. Card auto-pay
+still charges once per observation, so once per business date. A covered renewal, and any row the
+insert refuses (the table's uniqueness on `(command_id, observed_at)` or its
+`required > available >= 0` rule), stays due and is attempted per account like a signalled one.
+The observation instant is read before the balances, so a payment received after it still
+counts as a credit signal.
+
+**Accepted limit: a changed price.** The carried-over `required` is out of date only when the
+offering's price or tax changed since the last attempt. Such a renewal is attempted on its next
+credit signal, or on the first date the balance covers the old `required`. Before #340 the daily
+rescan was also what picked up price changes (P3e below).
+
+**Time budget.** The per-account loop of `process_commands` stops after `COMMAND_BUDGET`
+(60 s, as `FEED_BUDGET` and housekeeping's `TICK_BUDGET` do). The check runs between accounts,
+never inside an account's transaction, and at least one account is always attempted. Accounts
+with a signalled command go first. Commands left over keep their eligibility and the next wake-up
+takes them; a covered date-only renewal is found covered again then.
+
 ## Roaming and international passes (2026-11-16, issue #200)
 
 Epic #182; the UI is #383. Design approved on the issue (the human's delegation, decided
@@ -718,7 +757,8 @@ A shortfall leaves the renewal pending with its reason; entitlement already ends
 paid-through and the worker stores the funding suspension. A pending command with a
 recorded shortfall is attempted again only after a later payment or released hold
 on its account, or on a later business date (the fallback rescan that also picks up
-price changes), not on every tick. P4d top-ups must join that credit signal. Manual
+price changes), not on every tick. Since #340 a funding source is a credit signal too and
+the date-only rescan is decided in bulk (see the #340 section). P4d top-ups must join that credit signal. Manual
 suspension, a Suspended/Closed account or an ended product leaves a produced renewal
 pending and unattempted rather than a technical failure. A funded resumption makes
 the product active again in the same tick. No schema, API or public prepaid creation

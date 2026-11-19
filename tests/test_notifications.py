@@ -15,6 +15,7 @@ from pydantic import ValidationError
 from app.config import Settings, settings
 from app.integrations import notify as notify_module
 from app.integrations.notify import adapter as sender
+from app.notify import events as notify_events
 from app.notify import service as notify_service
 from app.notify import templates
 from tests import timeline
@@ -94,6 +95,14 @@ def counts(api):
     return found
 
 
+def fetched(db_conn, now, name):
+    """The keys detector `name` fetches at `now`: none of a told event (#340)."""
+    run = dict(notify_events.detectors(now, timeline.TZ))[name]
+    keys = [event.key for event in run(db_conn)]
+    db_conn.commit()
+    return keys
+
+
 def quiet(day, hour):
     return datetime.combine(day, time(hour), timeline.TZ)
 
@@ -119,6 +128,7 @@ def test_the_lifecycle_phases_each_tell_the_customer_once(api, db_conn, numbered
     assert [m["state"] for m in of_event(api, "suspended")] == ["completed", "completed"]
     go(api, db_conn, due + timedelta(days=3, hours=0))
     assert counts(api)["suspended"] == 2
+    assert fetched(db_conn, api.clock.now(), "lifecycle") == []  # told: not read again
     go(api, db_conn, due + timedelta(days=33))
     deactivated = of_event(api, "deactivated")
     assert sorted(m["messageType"] for m in deactivated) == ["Email", "SMS"]
@@ -182,12 +192,14 @@ def test_a_failed_renewal_and_the_renewal_after_a_top_up_are_each_told_once(api,
     )  # 12.00 with tax needed, nothing there
     go(api, db_conn, due + timedelta(days=1))
     assert counts(api)["renewal_failed"] == 1  # the daily rescan is the same failure
+    assert fetched(db_conn, api.clock.now(), "renewals") == []
     assert "renewal_done" not in counts(api)
     top_up(api, db_conn, numbered.acc, "20", due + timedelta(days=1))
     done = of_event(api, "renewal_done")
     assert len(done) == 1 and "Paid through" in done[0]["content"]
     go(api, db_conn, due + timedelta(days=2))
     assert counts(api)["renewal_done"] == 1
+    assert fetched(db_conn, api.clock.now(), "renewals") == []
 
 
 def test_usage_80_and_100_percent_each_tell_once(api, db_conn, numbered):
@@ -203,6 +215,7 @@ def test_usage_80_and_100_percent_each_tell_once(api, db_conn, numbered):
     tick(db_conn, now + timedelta(minutes=1))
     tick(db_conn, now + timedelta(minutes=2))
     assert counts(api)["usage_80"] == 1 and counts(api)["usage_100"] == 1
+    assert fetched(db_conn, now + timedelta(minutes=2), "usage") == []
     assert "all of your" in of_event(api, "usage_100")[0]["content"]
 
 
@@ -217,6 +230,7 @@ def test_a_declined_card_tells_the_customer_with_the_reason(api, db_conn):
     assert "4242" in declined[0]["content"] and "card_declined" in declined[0]["content"]
     run(db_conn, api, 2)
     assert len(of_event(api, "card_declined")) == 1
+    assert fetched(db_conn, api.clock.now(), "card_declines") == []
 
 
 def test_port_in_status_is_told_when_the_line_claims_the_number(api, db_conn, world):
@@ -239,6 +253,7 @@ def test_port_in_status_is_told_when_the_line_claims_the_number(api, db_conn, wo
     tick(db_conn, api.clock.now())
     assert len(of_event(api, "port_in_completed")) == 1
     assert len(of_event(api, "port_in_pending")) == 1
+    assert fetched(db_conn, api.clock.now(), "ports") == []
     assert BODY  # (the module's default request, unused: the number differs)
 
 
@@ -268,6 +283,7 @@ def test_a_sim_swap_is_told(api, db_conn, line_world):
     assert len(swaps) == 1 and "+79991234500" in swaps[0]["content"]
     tick(db_conn, api.clock.now())
     assert len(of_event(api, "sim_swap")) == 1
+    assert fetched(db_conn, api.clock.now(), "sim_swaps") == []
 
 
 def test_every_template_renders_for_both_channels():

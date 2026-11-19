@@ -230,13 +230,13 @@ def audit_page(
     return rows[:limit], len(rows) > limit
 
 
-def audit_since(conn: psycopg.Connection, since: datetime) -> list[Row]:
+def audit_since(conn: psycopg.Connection, since: datetime, extra: str = "") -> list[Row]:
     """The entries the customer is told about: done actions, and a port-out that a lock
     stopped. Care work (interactions, cases, notes) and a customer's own self-care sign-in are
-    no alert."""
+    no alert. `extra` is a further fixed SQL condition (the notifier's `untold`)."""
     return fetch_all(
         conn,
-        "SELECT * FROM account_audit WHERE at >= %s AND action <> ALL(%s) AND (outcome = 'done'"
-        " OR (action = 'port_out' AND outcome = 'refused')) ORDER BY at, seq",
+        "SELECT * FROM account_audit WHERE at >= %s AND action <> ALL(%s) AND (outcome = 'done'"  # noqa: S608 - extra is fixed SQL
+        " OR (action = 'port_out' AND outcome = 'refused'))" + extra + " ORDER BY at, seq",
         (since, [*CARE_ACTIONS, *SELF_CARE_ACTIONS]),
     )

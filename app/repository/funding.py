@@ -132,6 +132,24 @@ def load(conn: psycopg.Connection, account_id: UUID, *, locked: Row | None = Non
     return Snapshot(account_id, currency, sources, ledger, obligations, spendable)
 
 
+def spendable_many(conn: psycopg.Connection, account_ids: list[UUID]) -> dict[UUID, Decimal]:
+    """`load(...).spendable` of many accounts in one statement, without their locks (#340):
+    the ledger L less the outstanding holds H. It does not reconcile the sources with the
+    ledger: a caller that acts on the money goes through `load` under the account lock."""
+    if not account_ids:
+        return {}
+    ledger = billing.PAYMENTS_LESS_CHARGES.replace("%(id)s", "a.id")
+    if billing.has_balance_ledger(conn):
+        ledger += " + (" + billing.BALANCE_ACTION_LEDGER.replace("%(id)s", "a.id") + ")"
+    query = (
+        f"SELECT a.id, ({ledger}) - (SELECT coalesce(sum(s.amount), 0)"  # noqa: S608 - fixed SQL
+        " FROM funding_hold_source s JOIN funding_hold h ON h.id = s.hold_id"
+        " WHERE h.billing_account_id = a.id AND h.released_at IS NULL)"
+        " FROM unnest(%s::uuid[]) AS a(id)"
+    )
+    return dict(conn.execute(query, (sorted(set(account_ids)),)).fetchall())
+
+
 def reserve(
     conn: psycopg.Connection, account_id: UUID, amount: Decimal, *, held_at: datetime
 ) -> UUID:

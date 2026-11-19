@@ -16,7 +16,7 @@ from tests.test_api_account_attributes import CONTACT
 from tests.test_api_resource_inventory import number
 from tests.test_imsi import all_refs
 from tests.test_network_provisioning import stub, world  # noqa: F401 - fixtures
-from tests.test_notifications import contact, customer_of, of_event, quiet
+from tests.test_notifications import contact, customer_of, fetched, of_event, quiet
 from tests.test_prepaid_renewal_producer import tick
 from tests.test_sim_inventory import (  # noqa: F401 - fixtures
     activate_line,
@@ -546,6 +546,7 @@ def test_a_blocked_port_out_and_a_lockout_are_told_to_the_customer(api, db_conn,
     assert len(alerts(api, "pin_lockout")) == 2
     tick(db_conn, api.clock.now())
     assert len(alerts(api, "port_out_blocked")) == 2
+    assert fetched(db_conn, api.clock.now(), "security") == []  # told: not read again (#340)
 
 
 def test_a_security_alert_is_not_held_for_the_quiet_hours(api, db_conn, line):

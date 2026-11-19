@@ -173,3 +173,26 @@ def test_plan_keeps_reconciliation_failure_technical(db_conn):
     make_payment(db_conn, w.account, "60")
     with pytest.raises(InconsistentState, match="reconcile"):
         funding.plan(db_conn, w.account["id"], D("100"))
+
+
+def test_spendable_many_equals_each_accounts_loaded_spendable(db_conn):
+    # #340: one statement for many accounts, the same figure as the locked snapshot
+    from tests.test_prepaid_posting import prepared
+
+    settled = world(db_conn)
+    billed_charge(db_conn, settled, date(2026, 1, 1), "40")
+    billed_charge(db_conn, settled, date(2026, 2, 1), "-10", "settled")
+    charge(db_conn, settled, days(date(2026, 3, 1), date(2026, 4, 1)), "5")
+    make_payment(db_conn, settled.account, "60")
+    settle_account(db_conn, settled.account)
+    held, *_ = prepared(db_conn)  # a 30.00 payment, 12.00 of it held
+    empty = account(db_conn, name="Empty")
+    ids = [settled.account["id"], held["id"], empty["id"]]
+    expected = {i: funding.load(db_conn, i).spendable for i in ids}
+    assert expected == {
+        settled.account["id"]: D("25"),
+        held["id"]: D("18"),
+        empty["id"]: D("0"),
+    }
+    assert funding.spendable_many(db_conn, ids) == expected
+    assert funding.spendable_many(db_conn, []) == {}
