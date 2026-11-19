@@ -84,6 +84,20 @@ def account(api, cust=None, **over) -> dict[str, Any]:
     return _post(api, ACCOUNT, account_body(cust or customer(api), **over))
 
 
+def service_address_contact(address: dict[str, Any], contact_type="serviceAddress") -> list:
+    """A billing account's `contact` with one US address: a service address by default, the
+    one the tax engine and the prepaid gate read (BSS_TAX_REQUIRE_SERVICE_ADDRESS)."""
+    return [
+        {
+            "@type": "Contact",
+            "contactType": contact_type,
+            "contactMedium": [
+                {"@type": "GeographicAddressContactMedium", "country": "US", **address}
+            ],
+        }
+    ]
+
+
 def payment_body(acc: dict[str, Any], value=1500, unit="USD", **over) -> dict[str, Any]:
     return {
         "@type": "Payment",

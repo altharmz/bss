@@ -172,6 +172,20 @@ def test_seed_builds_the_demo_and_is_idempotent(api, db_conn):
     assert counts(db_conn) == before
 
 
+def test_seed_runs_with_the_production_gates_on(api, db_conn, monkeypatch):
+    """`make seed` runs on a default local stack: the service-address gate and the account
+    PIN gate are on there, while the suite's autouse fixtures turn them off (#321)."""
+    monkeypatch.setattr(settings, "tax_require_service_address", True)
+    monkeypatch.setattr(settings, "account_pin_required", True)
+    assert seeding.seed(api, api.clock, TODAY) is True
+    prepaid = db_conn.execute(
+        "SELECT a.name, p.status FROM product p"
+        " JOIN billing_account a ON a.id = p.billing_account_id"
+        " WHERE a.rating_type = 'prepaid' ORDER BY a.name"
+    ).fetchall()
+    assert prepaid == [("Linda Harris main", "suspended"), ("Robert Taylor main", "active")]
+
+
 def test_a_partial_seed_is_reported_not_patched(api):
     api.clock.set(seeding.at(TODAY, 9))
     seeding.build_catalog(seeding.Api(api, api.clock), TODAY + timedelta(days=1))
