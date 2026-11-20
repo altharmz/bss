@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
-import { json, stubFetch, tmfCodeError, tmfError } from '../test/fetch';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { json, overloadedError, pending, stubFetch, tmfCodeError, tmfError } from '../test/fetch';
 import {
   accountPinHeader,
   AMOUNT,
@@ -9,6 +9,9 @@ import {
   getJson,
   getPage,
   jsonWithAmount,
+  OVERLOAD_RETRIES,
+  postJson,
+  READ_SLOTS,
 } from './client';
 
 const PATH = '/tmf-api/accountManagement/v5/billingAccount';
@@ -106,5 +109,113 @@ describe('pages', () => {
   it('getAll joins the paging to a path that ends in a bare question mark', async () => {
     stubFetch({ [`GET ${PATH}?offset=0&limit=100`]: () => json([{ id: 1 }], { total: 1 }) });
     expect(await getAll(`${PATH}?`)).toEqual([{ id: 1 }]);
+  });
+});
+
+// Issue #412: reads under the app's request bound (app/overload.py).
+describe('reads under the request bound', () => {
+  const settle = () => new Promise((resolve) => setImmediate(resolve));
+  const fake = () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    vi.spyOn(Math, 'random').mockReturnValue(0); // the backoff with no jitter
+  };
+  afterEach(() => vi.restoreAllMocks());
+
+  it('sends at most READ_SLOTS reads at a time, the rest in order as slots free', async () => {
+    const answers: ((response: Response) => void)[] = [];
+    const { calls } = stubFetch({
+      [`GET ${PATH}/*`]: () => new Promise<Response>((resolve) => answers.push(resolve)),
+    });
+    const reads = Array.from({ length: READ_SLOTS + 2 }, (_, i) => getJson(`${PATH}/${i}`));
+    await settle();
+    expect(calls).toEqual(Array.from({ length: READ_SLOTS }, (_, i) => `GET ${PATH}/${i}`));
+    answers[1]?.(json({ id: 1 }));
+    await settle();
+    expect(calls.at(-1)).toBe(`GET ${PATH}/${READ_SLOTS}`);
+    answers.forEach((answer, i) => answer(json({ id: i })));
+    await settle();
+    answers.forEach((answer, i) => answer(json({ id: i })));
+    expect(await Promise.all(reads)).toEqual(reads.map((_, i) => ({ id: i })));
+    expect(calls).toHaveLength(READ_SLOTS + 2);
+  });
+
+  it('drops a waiting read whose signal aborts, without sending it', async () => {
+    const { calls } = stubFetch({ [`GET ${PATH}/*`]: pending });
+    for (let i = 0; i < READ_SLOTS; i++) void getJson(`${PATH}/${i}`);
+    const controller = new AbortController();
+    const waiting = getJson(`${PATH}/late`, controller.signal);
+    controller.abort();
+    await expect(waiting).rejects.toMatchObject({ name: 'AbortError' });
+    await settle();
+    expect(calls).not.toContain(`GET ${PATH}/late`);
+  });
+
+  it('sends an overloaded read again after Retry-After and returns its answer', async () => {
+    fake();
+    let n = 0;
+    const { calls } = stubFetch({
+      [`GET ${PATH}`]: () => (n++ === 0 ? overloadedError() : json({ id: 'a' })),
+    });
+    const read = getJson(PATH);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(calls).toHaveLength(1); // waits the full Retry-After
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await read).toEqual({ id: 'a' });
+    expect(calls).toHaveLength(2);
+  });
+
+  it('gives up after OVERLOAD_RETRIES, backing off, and then sends nothing more', async () => {
+    fake();
+    const { calls } = stubFetch({ [`GET ${PATH}`]: overloadedError });
+    const read = getJson(PATH).catch((e: unknown) => e);
+    const waits: number[] = [];
+    for (let retry = 0; retry < OVERLOAD_RETRIES; retry++) {
+      const before = calls.length;
+      let waited = 0;
+      while (calls.length === before) {
+        await vi.advanceTimersByTimeAsync(500);
+        waited += 500;
+      }
+      waits.push(waited);
+    }
+    expect(waits).toEqual([1000, 2000, 4000, 8000]);
+    const error = (await read) as ApiError;
+    expect(error).toBeInstanceOf(ApiError);
+    expect([error.status, error.code, error.message]).toEqual([
+      503,
+      'overloaded',
+      `GET ${PATH} → 503 Service Unavailable`,
+    ]);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(calls).toHaveLength(OVERLOAD_RETRIES + 1);
+  });
+
+  it('stops backing off when the read is aborted', async () => {
+    fake();
+    const { calls } = stubFetch({ [`GET ${PATH}`]: overloadedError });
+    const controller = new AbortController();
+    const read = getJson(PATH, controller.signal).catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(0);
+    controller.abort();
+    expect(await read).toMatchObject({ name: 'AbortError' });
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(calls).toHaveLength(1);
+  });
+
+  it('does not resend a 503 that is not the overload refusal', async () => {
+    const { calls } = stubFetch({ [`GET ${PATH}`]: () => tmfError(503, 'Service Unavailable') });
+    await expect(getJson(PATH)).rejects.toThrow('503');
+    expect(calls).toHaveLength(1);
+  });
+
+  it('leaves writes alone: never queued behind reads, never resent', async () => {
+    const { calls } = stubFetch({
+      [`GET ${PATH}/*`]: pending,
+      [`POST ${PATH}`]: overloadedError,
+    });
+    for (let i = 0; i < READ_SLOTS; i++) void getJson(`${PATH}/${i}`);
+    const error = (await postJson(PATH, {}).catch((e: unknown) => e)) as ApiError;
+    expect([error.status, error.code]).toEqual([503, 'overloaded']);
+    expect(calls.filter((call) => call.startsWith('POST'))).toEqual([`POST ${PATH}`]);
   });
 });

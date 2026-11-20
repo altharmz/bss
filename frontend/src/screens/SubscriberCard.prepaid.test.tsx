@@ -335,7 +335,10 @@ describe('usage tab', () => {
     expect(await screen.findByText('Failed to load the usage summary')).toBeTruthy();
     expect(await screen.findByText('Roaming')).toBeTruthy();
     fail = false;
-    fireEvent.click(screen.getByRole('button', { name: /retry/i }));
+    // the usage panel's Retry (the balance note, failing on no bucket, has its own: #412)
+    fireEvent.click(
+      within(expectUi('ui.subscriber.usage')).getByRole('button', { name: /retry/i }),
+    );
     expect(await screen.findByText(/150.0 MB left/)).toBeTruthy();
   });
 

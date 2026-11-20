@@ -1,5 +1,6 @@
 import { cleanup, configure } from '@testing-library/react';
 import { afterEach, expect, vi } from 'vitest';
+import { resetReadGate } from '../api/client';
 import { takeUnexpectedRequests } from './fetch';
 import { unlabeledControls } from './unlabeled';
 
@@ -20,6 +21,7 @@ afterEach(() => {
   const unlabeled = unlabeledControls();
   cleanup();
   vi.unstubAllGlobals();
+  resetReadGate(); // a `pending` stub holds its read slot for good
   vi.useRealTimers();
   window.history.replaceState(null, '', '/');
   expect(unexpected, 'requests without a stub (src/test/fetch.ts)').toEqual([]);
