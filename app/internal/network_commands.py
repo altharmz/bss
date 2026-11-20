@@ -30,14 +30,18 @@ STATES = ("pending", "confirmed", "refused", "exhausted", "cancelled")
 
 
 def command_body(row: Row) -> dict[str, Any]:
-    order = str(row["product_order_id"])
+    """A dataPool command (#379) belongs to no order: productOrder and its item are null."""
+    order = None if row["product_order_id"] is None else str(row["product_order_id"])
     product = None if row["product_id"] is None else str(row["product_id"])
+    item = row["product_order_item_id"]
     return {
         "id": str(row["id"]),
         "kind": row["kind"],
+        "purpose": row["purpose"],
         "state": row["state"],
-        "productOrder": {"id": order, "href": order_href(order)},
-        "productOrderItem": {"id": str(row["product_order_item_id"])},
+        "productOrder": None if order is None else {"id": order, "href": order_href(order)},
+        "productOrderItem": None if item is None else {"id": str(item)},
+        "dataPool": row["data_pool"],
         "product": None if product is None else {"id": product, "href": product_href(product)},
         "dueDate": row["due_date"],
         "profile": row["profile"],

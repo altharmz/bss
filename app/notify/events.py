@@ -72,6 +72,7 @@ def detectors(
         ("renewals", lambda conn: _renewals(conn, since)),
         ("lifecycle", lambda conn: _lifecycle(conn, since)),
         ("usage", lambda conn: _usage(conn, since)),
+        ("usage_pool", lambda conn: _usage_pool(conn, since)),
         ("card_declines", lambda conn: _card_declines(conn, since)),
         ("ports", lambda conn: _ports(conn, since)),
         ("sim_swaps", lambda conn: _sim_swaps(conn, since)),
@@ -345,6 +346,35 @@ def _usage(conn: psycopg.Connection, since: datetime) -> list[Event]:
                 else f"{row['zone']} {ALLOWANCE[row['allowance']]}",
                 "line": line_of(row["product_id"]),
             },
+        )
+        for row in rows
+    ]
+
+
+_POOL_KEY = (
+    "'usage_pool:' || t.billing_account_id || ':' || to_char(t.period_start, 'YYYY-MM-DD')"
+    " || ':' || t.threshold"
+)
+
+
+def _usage_pool(conn: psycopg.Connection, since: datetime) -> list[Event]:
+    """An account data pool reached 80% or 100% (#379): told to the account, naming the line
+    whose record reached it."""
+    rows = fetch_all(
+        conn,
+        "SELECT t.* FROM usage_pool_threshold t WHERE t.reached_at >= %s"  # noqa: S608 - untold() is fixed SQL
+        + untold(_POOL_KEY)
+        + " ORDER BY t.reached_at, t.threshold",
+        (since,),
+    )
+    line_of = lines(conn, [row["product_id"] for row in rows])
+    return [
+        Event(
+            f"usage_{row['threshold']}",
+            f"usage_pool:{row['billing_account_id']}:{row['period_start']}:{row['threshold']}",
+            row["billing_account_id"],
+            row["product_id"],
+            {"allowance": "shared data allowance", "line": line_of(row["product_id"])},
         )
         for row in rows
     ]

@@ -291,7 +291,8 @@ sent to the network as `update_e911`, and taken only on confirmation. The rules 
 
 ## Multi-line discounts (2026-11-16, issue #196)
 
-Slice 1 of multi-line prepaid (epic #182); pooled data is #379, the UI #380. Design approved on
+Slice 1 of multi-line prepaid (epic #182); pooled data is #379
+([usage.md](usage.md#pooled-data-2026-11-20-issue-379)), the UI #380. Design approved on
 the issue (the human's delegation, decided following TMF). Migration `0082`.
 
 **A shared balance needs no work:** a prepaid account has one money balance and every line on

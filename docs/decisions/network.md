@@ -186,6 +186,32 @@ shape), `app/ordering/e911.py` (order rules), `app/worker/network.py` (send, con
   `GET /internal/v1/billingAccount/{id}/products` adds `e911Address` (the stored address or null)
   and `wifiCalling` (the offering's flag).
 
+## Data pool commands (2026-11-20, issue #379)
+
+The account data pool ([usage.md](usage.md#pooled-data-2026-11-20-issue-379)) reaches the
+network as fields on each member's profile commands. Migration `0089`.
+
+- **Fields:** a member's `activate` and `change_profile` carry `dataPoolId` (the billing account
+  id) and `dataPoolMb` (the pool size on the due date), at the top of the request and as
+  TMF641 `serviceCharacteristic`s of the same names. They are computed at the first send and
+  retained with the request, so a retry sends the same size. `network_command.data_pool`
+  keeps `{id, mb, periodStart}`.
+- **Pool changes:** each wake-up (`sync_pools`, before the due commands) looks at the
+  accounts with a live line on a pooled offering. A live member that was told another size
+  or period, or nothing yet while it is active on the network, gets one `change_profile`
+  with purpose **`dataPool`**: its current profile (plan and live add-ons), the new pool
+  fields, due today, and sent by the same wake-up. It belongs to no order
+  (`product_order_id` and its item are null; the internal API shows `productOrder: null` and
+  `purpose`), so it gates nothing. The same retry, `exhausted` and operator-retry rules
+  apply. A refusal is recorded and final.
+- **When:** a line joins (its own activate carries the size, and the others are told), an add-on adds
+  data, or a pool period starts. A line that leaves changes nothing until the next period,
+  because its share stays. A member whose own activate or change_profile is due and unsent
+  is skipped: it carries the size when it is sent.
+- **Once:** the id is uuid5 of the member, the period start and the size. The size never falls
+  inside a period, so each size is told once, and an unsent older size is cancelled when a
+  newer one is made.
+
 ## Not in this slice
 
 The admin UI (network profile editor, network step and state on order and product, Retry

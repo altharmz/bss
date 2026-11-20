@@ -3000,7 +3000,8 @@ components:
           items:
             type: object
             additionalProperties: false
-            required: [kind, zone, unit, used, included, remaining, percent, thresholds]
+            required: [kind, zone, unit, used, included, remaining, percent, thresholds,
+                       pooled, pool]
             properties:
               kind: {type: string, enum: [data, voice, sms]}
               zone:
@@ -3018,6 +3019,23 @@ components:
               thresholds:
                 type: array
                 items: {type: integer, enum: [80, 100]}
+              pooled:
+                type: boolean
+                description: >-
+                  The domestic data entry of a pooled line (issue 379): used, included,
+                  remaining, percent and thresholds are the account data pool's, in the pool
+                  period. False for every other entry.
+              pool:
+                nullable: true
+                type: object
+                additionalProperties: false
+                required: [id, startDate, endDate, members]
+                description: The account data pool of a pooled entry; null otherwise.
+                properties:
+                  id: {type: string, format: uuid, description: The billing account id.}
+                  startDate: {type: string, format: date}
+                  endDate: {type: string, format: date, description: Exclusive (half-open).}
+                  members: {type: integer, minimum: 1, description: Pooled lines live on the date.}
         throttled:
           description: The network said so on the period's latest record, or data passed the cap.
           type: boolean
@@ -3134,18 +3152,38 @@ components:
     NetworkCommand:
       type: object
       additionalProperties: false
-      required: [id, kind, state, productOrder, productOrderItem, product, dueDate, profile,
-                 request, attempts, attemptedAt, nextAttemptAt, lastError, refusalCode,
-                 confirmedAt, createdAt]
+      required: [id, kind, purpose, state, productOrder, productOrderItem, dataPool, product,
+                 dueDate, profile, request, attempts, attemptedAt, nextAttemptAt, lastError,
+                 refusalCode, confirmedAt, createdAt]
       properties:
         id: {type: string, format: uuid, description: The idempotency key sent to the network.}
         kind: {type: string, enum: [activate, suspend, restore, deactivate, change_profile, swap_sim, update_e911]}
+        purpose:
+          type: string
+          enum: [order, passEnd, dataPool]
+          description: >-
+            order - the command of its order item; passEnd - the change_profile that ends a
+            pass before its plan period (issue 200); dataPool - the change_profile that tells
+            a pool member the account data pool's new size (issue 379), of no order.
+        dataPool:
+          nullable: true
+          type: object
+          additionalProperties: false
+          required: [id, mb, periodStart]
+          description: >-
+            The account data pool the command carried (issue 379); null for a line outside a
+            pool and before an order command's first send.
+          properties:
+            id: {type: string, format: uuid, description: The billing account id.}
+            mb: {type: integer, minimum: 0, description: The pool size in MB.}
+            periodStart: {type: string, format: date}
         state:
           description: Internal state, not a TMF enum.
           type: string
           enum: [pending, confirmed, refused, exhausted, cancelled]
-        productOrder: {$ref: '#/components/schemas/Link'}
+        productOrder: {$ref: '#/components/schemas/NullableLink'}
         productOrderItem:
+          nullable: true
           type: object
           additionalProperties: false
           required: [id]

@@ -14,7 +14,9 @@ from zoneinfo import ZoneInfo
 
 import psycopg
 
+from app.billing import data_pool
 from app.ordering import network as network_orders
+from app.repository import data_pool as pool_repo
 from app.repository import products
 from app.repository import usage as repo
 from app.repository._sql import Row
@@ -165,6 +167,10 @@ def ingest_batch(
 
 def _check_thresholds_of(conn: psycopg.Connection, records: list[Row], *, now: datetime) -> None:
     """`check_thresholds` for the batch's stored records, in their order."""
+    pooled = _pooled_records(conn, [row for row in records if counts_in_pool(row)])
+    _note_pool(conn, pooled, now=now)
+    in_pool = {id(row) for row, _ in pooled}
+    records = [row for row in records if id(row) not in in_pool]
     places = sorted({(row["product_id"], row["event_date"]) for row in records})
     if not places:
         return
@@ -218,10 +224,77 @@ def _check_thresholds_of(conn: psycopg.Connection, records: list[Row], *, now: d
                 )
 
 
+def counts_in_pool(record: Row) -> bool:
+    """Only domestic data is pooled; voice, SMS and roaming stay per line."""
+    return record["kind"] == "data" and zone(record) == "domestic"
+
+
+def profiles(conn: psycopg.Connection):
+    return data_pool.cached(lambda offering_id: network_orders.offering_profile(conn, offering_id))
+
+
+def _pooled_records(
+    conn: psycopg.Connection, records: list[Row]
+) -> list[tuple[Row, data_pool.Pool]]:
+    """The records (of `counts_in_pool`) whose line is a member of its account's pool on
+    the record's date, with the pool, in their order."""
+    if not records or not data_pool.pooled_offerings(conn):
+        return []
+    places = sorted({(row["billing_account_id"], row["event_date"]) for row in records})
+    keys, found = data_pool.pools(conn, places, profiles(conn))
+    out = []
+    for row in records:
+        pool = found.get(keys.get((row["billing_account_id"], row["event_date"])))
+        if pool is not None and row["product_id"] in pool.members:
+            out.append((row, pool))
+    return out
+
+
+def _note_pool(
+    conn: psycopg.Connection, items: list[tuple[Row, data_pool.Pool]], *, now: datetime
+) -> list[int]:
+    """Note the 80% and 100% marks of each record's pool, once per account, pool period and
+    threshold, as `ingest` would note them record by record; returns those noted now."""
+    if not items:
+        return []
+    pools = {pool.key: pool for _, pool in items}
+    totals = pool_repo.used(
+        conn, sorted({(key, member) for key, pool in pools.items() for member in pool.members})
+    )
+    # the totals hold every record stored so far: walking back gives each record the total
+    # right after it was stored
+    seen = []
+    for row, pool in reversed(items):
+        seen.append((row, pool, totals[pool.key]))
+        totals[pool.key] -= row["quantity"]
+    reached = []
+    for row, pool, total in reversed(seen):
+        limit = pool.size_mb(row["event_date"]) * MIB
+        if limit <= 0:
+            continue
+        for pct in THRESHOLDS:
+            if total * 100 >= limit * pct and pool_repo.insert_threshold(
+                conn,
+                key=pool.key,
+                threshold=pct,
+                product_id=row["product_id"],
+                record_id=row["id"],
+                used_amount=total,
+                included=limit,
+                now=now,
+            ):
+                reached.append(pct)
+    return reached
+
+
 def check_thresholds(conn: psycopg.Connection, record: Row, *, now: datetime) -> list[int]:
-    """Note the 80% and 100% marks the record's kind has now reached in its plan period.
-    Each is stored once per product, period and kind; the thresholds reached now are
-    returned."""
+    """Note the 80% and 100% marks the record's kind has now reached in its plan period, or
+    in its account's data pool for a pool member's domestic data. Each is stored once per
+    product (or account), period and kind; the thresholds reached now are returned."""
+    if counts_in_pool(record):
+        pooled = _pooled_records(conn, [record])
+        if pooled:
+            return _note_pool(conn, pooled, now=now)
     period = repo.period_of(conn, record["product_id"], record["event_date"])
     if period is None:
         return []
@@ -249,6 +322,36 @@ def check_thresholds(conn: psycopg.Connection, record: Row, *, now: datetime) ->
         ):
             reached.append(pct)
     return reached
+
+
+def _summary_pool(conn: psycopg.Connection, product_id: UUID, day: date) -> dict[str, Any] | None:
+    """The domestic data entry of a pool member: the pool's used, included and remaining in
+    the pool period, with the members live on `day`."""
+    line = repo.product_row(conn, product_id)
+    if line is None:
+        return None
+    pool = data_pool.pool_on(conn, line["billing_account_id"], day, profiles(conn))
+    if pool is None or product_id not in pool.members:
+        return None
+    used = pool_repo.used(conn, [(pool.key, member) for member in pool.members])[pool.key]
+    limit = pool.size_mb(day) * MIB
+    return {
+        "kind": "data",
+        "zone": "domestic",
+        "unit": UNITS["data"],
+        "used": used,
+        "included": limit,
+        "remaining": max(limit - used, 0),
+        "percent": None if limit <= 0 else used * 100 // limit,
+        "thresholds": pool_repo.thresholds(conn, pool.account_id, pool.start),
+        "pooled": True,
+        "pool": {
+            "id": str(pool.account_id),
+            "startDate": pool.start,
+            "endDate": pool.end,
+            "members": len(pool.live(day)),
+        },
+    }
 
 
 def summary(conn: psycopg.Connection, product_id: UUID, day: date) -> dict[str, Any]:
@@ -281,8 +384,16 @@ def summary(conn: psycopg.Connection, product_id: UUID, day: date) -> dict[str, 
                     "remaining": max(limit - total_used, 0),
                     "percent": None if limit <= 0 else total_used * 100 // limit,
                     "thresholds": marks.get(pool, []),
+                    "pooled": False,
+                    "pool": None,
                 }
             )
+    shared = _summary_pool(conn, product_id, day)
+    if shared is not None:  # the domestic data entry is the account pool's
+        allowances = [
+            shared if (entry["zone"], entry["kind"]) == ("domestic", "data") else entry
+            for entry in allowances
+        ]
     cap = int(profile.get("dataCapMb") or 0) * MIB
     reported = repo.latest_throttled(conn, product_id, start, end)
     return {

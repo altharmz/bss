@@ -11,8 +11,8 @@ Durable outbound provisioning command of one prepaid order item; sent by the bil
 | Column | Type | Null | Default | Description |
 |---|---|---|---|---|
 | `id` | `uuid` | no |  | Idempotency key sent to the network: derived from the order item and the command kind. |
-| `product_order_id` | `uuid` | no |  |  |
-| `product_order_item_id` | `uuid` | no |  |  |
+| `product_order_id` | `uuid` | yes |  |  |
+| `product_order_item_id` | `uuid` | yes |  |  |
 | `product_id` | `uuid` | yes |  |  |
 | `kind` | `text` | no |  | activate (add), suspend, restore (resume), deactivate (terminate), change_profile (offering change), swap_sim (the line moves to another SIM or eSIM), update_e911 (a new E911 address alone). |
 | `state` | `text` | no | `'pending'::text` | pending (to send, or retried after a temporary error), confirmed, refused (final: the network said no), exhausted (temporary errors used up the automatic attempts; an operator retries), cancelled (the order was cancelled first). |
@@ -26,7 +26,8 @@ Durable outbound provisioning command of one prepaid order item; sent by the bil
 | `created_at` | `timestamp with time zone` | no |  |  |
 | `attempted_at` | `timestamp with time zone` | yes |  |  |
 | `confirmed_at` | `timestamp with time zone` | yes |  |  |
-| `purpose` | `text` | no | `'order'::text` | order: the command of its order item; passEnd: the change_profile on the day a pass (an add-on with passDays) ends before its plan period, with the plan profile and the add-ons still live. |
+| `purpose` | `text` | no | `'order'::text` | order: the command of its order item; passEnd: the change_profile on the day a pass (an add-on with passDays) ends before its plan period, with the plan profile and the add-ons still live; dataPool: the change_profile that tells a pool member the pool's new size (no order). |
+| `data_pool` | `jsonb` | yes |  | The data pool the command carried: {id (the billing account), mb (the pool size), periodStart}; set at the first send of a member's activate or change_profile, and on every dataPool command. Null for a line outside a pool. |
 
 ## Foreign keys
 
@@ -43,10 +44,13 @@ Durable outbound provisioning command of one prepaid order item; sent by the bil
 | `network_command_attempts_check` | check | `CHECK ((attempts >= 0))` |
 | `network_command_check` | check | `CHECK (((state = 'refused'::text) = (refusal_code IS NOT NULL)))` |
 | `network_command_check1` | check | `CHECK (((state = 'confirmed'::text) = (confirmed_at IS NOT NULL)))` |
+| `network_command_data_pool_check` | check | `CHECK ((jsonb_typeof(data_pool) = 'object'::text))` |
 | `network_command_kind_check` | check | `CHECK ((kind = ANY (ARRAY['activate'::text, 'suspend'::text, 'restore'::text, 'deactivate'::text, 'change_profile'::text, 'swap_sim'::text, 'update_e911'::text])))` |
+| `network_command_order_unless_pool` | check | `CHECK (((purpose = 'dataPool'::text) = ((product_order_id IS NULL) AND (product_order_item_id IS NULL))))` |
 | `network_command_pass_end_is_profile` | check | `CHECK (((purpose = 'order'::text) OR (kind = 'change_profile'::text)))` |
+| `network_command_pool_carries_pool` | check | `CHECK (((purpose <> 'dataPool'::text) OR ((data_pool IS NOT NULL) AND (product_id IS NOT NULL))))` |
 | `network_command_profile_check` | check | `CHECK ((jsonb_typeof(profile) = 'object'::text))` |
-| `network_command_purpose_check` | check | `CHECK ((purpose = ANY (ARRAY['order'::text, 'passEnd'::text])))` |
+| `network_command_purpose_check` | check | `CHECK ((purpose = ANY (ARRAY['order'::text, 'passEnd'::text, 'dataPool'::text])))` |
 | `network_command_request_check` | check | `CHECK ((jsonb_typeof(request) = 'object'::text))` |
 | `network_command_state_check` | check | `CHECK ((state = ANY (ARRAY['pending'::text, 'confirmed'::text, 'refused'::text, 'exhausted'::text, 'cancelled'::text])))` |
 | `network_command_pkey` | primary key | `PRIMARY KEY (id)` |

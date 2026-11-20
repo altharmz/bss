@@ -17,14 +17,17 @@ from zoneinfo import ZoneInfo
 
 import psycopg
 
+from app.billing import data_pool
 from app.clock import Clock
 from app.config import settings
 from app.events import emit
 from app.integrations.network import NetworkRefused, NetworkTemporary, adapter
 from app.network import e911
+from app.network import usage as usage_rules
 from app.ordering import numbers as number_orders
 from app.ordering.process import ItemRequest
 from app.ordering.states import item_transition, order_transition
+from app.repository import data_pool as pool_repo
 from app.repository import funding, orders, products, sims
 from app.repository import network_commands as network
 from app.repository import prepaid_commands as commands
@@ -53,8 +56,12 @@ STATE = {
 }
 
 
-def line_request(conn: psycopg.Connection, cmd: Row) -> dict[str, Any]:
-    """The request as the network gets it: line identifiers, the profile, TMF641-shaped."""
+def line_request(
+    conn: psycopg.Connection, cmd: Row, data_pool: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """The request as the network gets it: line identifiers, the profile, TMF641-shaped;
+    a pool member's activate or change_profile carries the pool (`dataPoolId`,
+    `dataPoolMb`)."""
     ids: dict[str, dict[str, Any]] = {}
     if cmd["product_id"] is not None:
         rows = fetch_all(
@@ -71,6 +78,11 @@ def line_request(conn: psycopg.Connection, cmd: Row) -> dict[str, Any]:
     address = e911_address(conn, cmd)
     if address is not None:
         characteristics.append({"name": "e911Address", "value": address})
+    if data_pool is not None:
+        characteristics += [
+            {"name": "dataPoolId", "value": data_pool["id"]},
+            {"name": "dataPoolMb", "value": data_pool["mb"]},
+        ]
     new = None
     if cmd["kind"] == "swap_sim":
         new = sims.reserved_of(conn, cmd["product_id"])
@@ -93,6 +105,8 @@ def line_request(conn: psycopg.Connection, cmd: Row) -> dict[str, Any]:
     }
     if address is not None:
         request["e911Address"] = address
+    if data_pool is not None:
+        request |= {"dataPoolId": data_pool["id"], "dataPoolMb": data_pool["mb"]}
     if new is not None:  # the SIM the line moves to
         request |= {
             "newImsi": new["value"],
@@ -133,6 +147,7 @@ def process_network(
     now = clock.now()
     attempted = []
     end_passes(conn, now.astimezone(tz).date(), now)
+    sync_pools(conn, now.astimezone(tz).date(), now)
     for due in network.due(conn, now.astimezone(tz).date(), now):
         if checkpoint is not None and checkpoint():
             break
@@ -142,8 +157,9 @@ def process_network(
                 continue
             request = cmd["request"]
             if request is None:
-                request = line_request(conn, cmd)
-                network.freeze_request(conn, cmd["id"], request)
+                pool = cmd["data_pool"] or member_pool(conn, cmd)
+                request = line_request(conn, cmd, pool)
+                network.freeze_request(conn, cmd["id"], request, pool)
             try:
                 adapter().send(str(cmd["id"]), cmd["kind"], request)
             except NetworkRefused as refused:
@@ -204,6 +220,76 @@ def end_passes(conn: psycopg.Connection, today: date, now: datetime) -> list[UUI
                 purpose="passEnd",
             )
             made.append(cmd["id"])
+    return made
+
+
+def pool_fields(pool: data_pool.Pool, day: date) -> dict[str, Any]:
+    return {"id": str(pool.account_id), "mb": pool.size_mb(day), "periodStart": str(pool.start)}
+
+
+def member_pool(conn: psycopg.Connection, cmd: Row) -> dict[str, Any] | None:
+    """The pool an activate or change_profile carries: its line's account pool on the due
+    date, when the line is a member (docs/decisions/network.md, "Data pool commands")."""
+    if cmd["kind"] not in ("activate", "change_profile") or cmd["product_id"] is None:
+        return None
+    product = products.get_product(conn, cmd["product_id"])
+    if product is None:
+        return None
+    pool = data_pool.pool_on(
+        conn, product["billing_account_id"], cmd["due_date"], usage_rules.profiles(conn)
+    )
+    if pool is None or cmd["product_id"] not in pool.members:
+        return None
+    return pool_fields(pool, cmd["due_date"])
+
+
+def sync_pools(conn: psycopg.Connection, today: date, now: datetime) -> list[UUID]:
+    """Tell every live pool member the pool size when it changed: a line joined (or an
+    add-on added data), or a new pool period started. One change_profile per member with
+    its current profile, due today and sent by the same wake-up; nothing for a member whose
+    own activate or change_profile is due and unsent (it carries the size when sent), or
+    that was told this size in this period already. A line leaving keeps its share until the
+    period ends, so it changes nothing."""
+    from app.ordering.network import with_add_ons
+
+    profile_of = usage_rules.profiles(conn)
+    accounts = pool_repo.accounts_with_lines(conn, data_pool.pooled_offerings(conn), today)
+    if not accounts:
+        return []
+    keys, pools = data_pool.pools(conn, [(account, today) for account in accounts], profile_of)
+    made = []
+    for account in accounts:
+        pool = pools.get(keys.get((account, today)))
+        if pool is None:
+            continue
+        wanted = pool_fields(pool, today)
+        live = pool.live(today)
+        told = network.pool_told(conn, live, today)
+        on_network = network.activated(conn, live)
+        for product_id in live:
+            last = told.get(product_id)
+            if last is None and product_id not in on_network:
+                continue  # not on the network yet: its activate carries the pool
+            known = None if last is None else last["data_pool"]
+            if last is not None and known is None:
+                continue  # its own command is due and unsent: it carries the pool
+            if known is not None and (known["periodStart"], known["mb"]) == (
+                wanted["periodStart"],
+                wanted["mb"],
+            ):
+                continue
+            with conn.transaction():
+                cmd = network.insert_pool(
+                    conn,
+                    product_id=product_id,
+                    due_date=today,
+                    profile=with_add_ons(conn, product_id, today),
+                    data_pool=wanted,
+                    now=now,
+                )
+                if cmd is not None:
+                    network.cancel_superseded_pool(conn, product_id, cmd["id"])
+                    made.append(cmd["id"])
     return made
 
 

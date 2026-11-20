@@ -82,6 +82,43 @@ notification keeps its old dedupe key, the others add the zone. `ingest` and `in
 stay equal (the test stores one batch both ways). The summary lists the domestic pools always
 and a roaming or international pool when it has an allowance or usage, each with its `zone`.
 
+## Pooled data (2026-11-20, issue #379)
+
+Slice 2 of multi-line prepaid (#196 is slice 1, the UI is #380). Design approved on the
+issue (the human's delegation, data-model plan included). Migration `0089`; the code is
+`app/billing/data_pool.py`.
+
+- **Pooled plan:** the network profile flag `dataPool` (0/1, a `productSpecCharacteristic`
+  like `hotspot`). The account's lines on pooled offerings form **the account's pool**: one
+  per account, with no pool resource. A `dataPool` offering takes only a monthly recurring
+  price (422 for daily, weekly or yearly, when the price is attached, the offering's profile
+  changes or its specification's profile changes).
+- **Pool period:** the billing month starting on the account's `bill_cycle_day`
+  (`cycle_period`), on business dates in `BILLING_TZ`. It does not follow each line's funded
+  interval, so a pooled line's other allowances keep their plan period.
+- **Members:** the plan lines live on some day of the period whose offering on their first
+  day in it is pooled. Membership and the line's share are fixed by that day: **an offering
+  change counts in the pool from the next period** (a simplification of the issue, which
+  did not cover changes). Pay-as-you-go lines are never members.
+- **Size on a day:** the `dataAllowanceMb` of each member and of each member's add-on that
+  started in the period on or before that day. A line or add-on that ends keeps its share
+  until the period ends, so the size never falls inside a period. Add-ons on a member add
+  their data to the pool, not to the line.
+- **Usage:** domestic data of every member counts against the pool. Voice, SMS and the
+  roaming allowances stay per line, and a member's domestic data has no per-line threshold.
+  The 80% and 100% marks go to `usage_pool_threshold` (PK account, period start, threshold)
+  against the size on the record's date. The notification (`usage_80` / `usage_100`, the
+  allowance "shared data allowance", key `usage_pool:<account>:<period start>:<threshold>`)
+  goes to the account and names the line whose record crossed the mark. `ingest` and
+  `ingest_batch` give the same rows: the batch reads the cycle days, the pool lines, the
+  offering profiles and the pool totals in one statement per step and walks the batch back
+  from the totals, like the per-line thresholds (`tests/test_data_pool.py`).
+- **Summary:** each allowance entry has `pooled` and `pool`. A member's domestic data entry
+  is the pool's: used, included and remaining in the pool period, its thresholds, and
+  `pool {id (the account), startDate, endDate, members}`, where `members` counts the members
+  live on the date. The internal API, self-care and the MCP tool share it. The network
+  commands are in [network.md](network.md#data-pool-commands-2026-11-20-issue-379).
+
 ## Internal API
 
 `GET /internal/v1/usage/summary?product.id=[&date=]` (ours; also an MCP tool): period, per kind

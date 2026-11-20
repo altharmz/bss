@@ -378,7 +378,7 @@ def test_cloned_test_databases_are_at_the_current_head(db_conn):
         " t.schemaname, t.tablename)::regclass WHERE t.schemaname = 'public'"
         " AND NOT c.relispartition"
     ).fetchone()[0]
-    assert tables == 99  # 98 domain tables + alembic_version
+    assert tables == 100  # 99 domain tables + alembic_version
 
 
 def test_0027_offering_changes(temp_db_url):
