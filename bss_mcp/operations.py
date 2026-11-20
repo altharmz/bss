@@ -919,7 +919,9 @@ OPERATIONS: dict[str, Op] = {
     "usage_summary": Op(
         "A line's usage against its plan allowance for the plan period covering today (or"
         " date): per kind used, included (add-ons included), remaining, percent, the 80/100"
-        " marks reached, and whether the line is throttled.",
+        " marks reached, and whether the line is throttled. A pooled line's domestic data"
+        " entry has pooled true: the account data pool's used, included and remaining in"
+        " the pool period, with the member count.",
         extra={"product.id": UUID_ARG, "date": DATE_ARG},
         required=("product.id",),
     ),

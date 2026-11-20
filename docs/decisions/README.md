@@ -15,10 +15,10 @@ changing it, and record a new decision in it.
 | [billing-core.md](billing-core.md) | Billing (stage 3); Open questions (changing `billCycleDay`, suspension semantics) |
 | [charge-periods.md](charge-periods.md) | Product charge intervals and activation-date anniversaries; monthly invoices remain separate (2026-10-20) |
 | [prepaid.md](prepaid.md) | Prepaid MVNO on T-Mobile: scope and the placeholder pattern for external systems (2026-11-05, epic #182); subscriber numbers and prepaid as built; multi-line discounts (2026-11-16, issue #196); the full design is [prepaid-design.md](../prepaid-design.md) |
-| [network.md](network.md) | Network provisioning adapter (T-Mobile placeholder): commands, profile, gating, refusals (2026-11-05, issue #183); device IMEI and compatibility check (issue #194) |
+| [network.md](network.md) | Network provisioning adapter (T-Mobile placeholder): commands, profile, gating, refusals (2026-11-05, issue #183); device IMEI and compatibility check (issue #194); data pool commands (issue #379) |
 | [sim.md](sim.md) | SIM and eSIM inventory on the IMSI resource, activation pick, SIM swap (2026-11-05, issue #186) |
 | [numbers.md](numbers.md) | Carrier number pools, port-in and port-out, Number Transfer PIN (2026-11-06, issue #189) |
-| [usage.md](usage.md) | Usage records (TMF635), the network usage feed, allowance tracking and 80/100% thresholds (2026-11-06, issue #190) |
+| [usage.md](usage.md) | Usage records (TMF635), the network usage feed, allowance tracking and 80/100% thresholds (2026-11-06, issue #190); pooled data per account (issue #379) |
 | [care.md](care.md) | Customer care: interaction notes (TMF683) and cases (TMF621), linked to the audit log (2026-11-15, issue #199) |
 | [self-care.md](self-care.md) | Customer self-care: logins, emailed one-time codes, customer sessions under /self-care/v1, the scope rule (2026-11-16, issue #195); the self-care API (#376); online signup with the identity check adapter (#377) |
 | [wholesale.md](wholesale.md) | Wholesale reconciliation with the partner's invoices: CSV import, matching, discrepancies, cost and margin per line (2026-11-16, issue #197) |

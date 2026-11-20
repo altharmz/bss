@@ -801,7 +801,8 @@ components:
           items:
             type: object
             additionalProperties: false
-            required: [kind, zone, unit, used, included, remaining, percent, thresholds]
+            required: [kind, zone, unit, used, included, remaining, percent, thresholds,
+                       pooled, pool]
             properties:
               kind: {type: string, enum: [data, voice, sms]}
               zone: {type: string, enum: [domestic, roaming, international]}
@@ -813,6 +814,23 @@ components:
               thresholds:
                 type: array
                 items: {type: integer, enum: [80, 100]}
+              pooled:
+                type: boolean
+                description: >-
+                  The domestic data entry of a pooled line (issue 379): used, included,
+                  remaining, percent and thresholds are the account data pool's, in the pool
+                  period. False for every other entry.
+              pool:
+                nullable: true
+                type: object
+                additionalProperties: false
+                required: [id, startDate, endDate, members]
+                description: The account data pool of a pooled entry; null otherwise.
+                properties:
+                  id: {type: string, format: uuid, description: The billing account id.}
+                  startDate: {type: string, format: date}
+                  endDate: {type: string, format: date, description: Exclusive (half-open).}
+                  members: {type: integer, minimum: 1, description: Pooled lines live on the date.}
         throttled: {type: boolean}
         payAsYouGo:
           nullable: true

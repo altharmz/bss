@@ -17,6 +17,12 @@ NAMESPACE = UUID("3b8d2c4e-7a15-5f06-9e31-c0a4d7b2e815")
 BACKOFF = (timedelta(minutes=1), timedelta(minutes=5), timedelta(minutes=15), timedelta(hours=1))
 
 
+def pool_command_id(product_id: UUID, period_start: date, size_mb: int) -> UUID:
+    """A dataPool command is one per member, pool period and pool size: the size never falls
+    inside a period, so a size is told once."""
+    return uuid5(NAMESPACE, f"dataPool:{product_id}:{period_start}:{size_mb}")
+
+
 def command_id(order_item_id: UUID, kind: str, purpose: str = "order") -> UUID:
     key = f"{order_item_id}:{kind}" if purpose == "order" else f"{order_item_id}:{kind}:{purpose}"
     return uuid5(NAMESPACE, key)
@@ -58,6 +64,71 @@ def insert(
             now,
             purpose,
         ),
+    )
+
+
+def insert_pool(
+    conn: psycopg.Connection,
+    *,
+    product_id: UUID,
+    due_date: date,
+    profile: dict[str, Any],
+    data_pool: dict[str, Any],
+    now: datetime,
+) -> Row | None:
+    """A dataPool change_profile (no order): the member's profile with the pool's new size.
+    None when it exists already."""
+    return fetch_one(
+        conn,
+        "INSERT INTO network_command (id, product_id, kind, due_date, profile, created_at,"
+        " purpose, data_pool) VALUES (%s, %s, 'change_profile', %s, %s, %s, 'dataPool', %s)"
+        " ON CONFLICT (id) DO NOTHING RETURNING *",
+        (
+            pool_command_id(
+                product_id, date.fromisoformat(data_pool["periodStart"]), data_pool["mb"]
+            ),
+            product_id,
+            due_date,
+            jsonb(profile),
+            now,
+            jsonb(data_pool),
+        ),
+    )
+
+
+def pool_told(conn: psycopg.Connection, product_ids: list[UUID], today: date) -> dict[UUID, Row]:
+    """What each line was last told, or is about to be told, of its pool: its newest
+    activate or change_profile not cancelled or refused that carries pool fields, or that is
+    due and not sent yet (it carries the pool when it is sent). `data_pool` null: unsent."""
+    rows = fetch_all(
+        conn,
+        "SELECT DISTINCT ON (product_id) product_id, id, state, data_pool FROM network_command"
+        " WHERE product_id = ANY(%s::uuid[]) AND kind IN ('activate', 'change_profile')"
+        " AND state NOT IN ('cancelled', 'refused')"
+        " AND (data_pool IS NOT NULL OR (request IS NULL AND due_date <= %s))"
+        " ORDER BY product_id, (request IS NULL) DESC, created_at DESC, id",
+        (product_ids, today),
+    )
+    return {row["product_id"]: row for row in rows}
+
+
+def activated(conn: psycopg.Connection, product_ids: list[UUID]) -> set[UUID]:
+    """The lines the network confirmed an activate for."""
+    rows = fetch_all(
+        conn,
+        "SELECT DISTINCT product_id FROM network_command WHERE product_id = ANY(%s::uuid[])"
+        " AND kind = 'activate' AND state = 'confirmed'",
+        (product_ids,),
+    )
+    return {row["product_id"] for row in rows}
+
+
+def cancel_superseded_pool(conn: psycopg.Connection, product_id: UUID, keep: UUID) -> None:
+    """An unsent dataPool command of the line other than `keep` names an old size."""
+    conn.execute(
+        "UPDATE network_command SET state = 'cancelled' WHERE product_id = %s"
+        " AND purpose = 'dataPool' AND id <> %s AND state IN ('pending', 'exhausted')",
+        (product_id, keep),
     )
 
 
@@ -109,10 +180,18 @@ def due(conn: psycopg.Connection, today: date, now: datetime) -> list[Row]:
     )
 
 
-def freeze_request(conn: psycopg.Connection, uid: UUID, request: dict[str, Any]) -> None:
+def freeze_request(
+    conn: psycopg.Connection,
+    uid: UUID,
+    request: dict[str, Any],
+    data_pool: dict[str, Any] | None = None,
+) -> None:
+    """The request as first sent; with it the pool it carried (a dataPool command has its
+    own from the start)."""
     conn.execute(
-        "UPDATE network_command SET request = %s WHERE id = %s AND request IS NULL",
-        (jsonb(request), uid),
+        "UPDATE network_command SET request = %s, data_pool = coalesce(data_pool, %s)"
+        " WHERE id = %s AND request IS NULL",
+        (jsonb(request), None if data_pool is None else jsonb(data_pool), uid),
     )
 
 

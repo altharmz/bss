@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0088**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0089**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -68,6 +68,7 @@ PostgreSQL schema at Alembic head **0088**, read from `pg_catalog` of a throwawa
 | [`funding_consumption`](funding_consumption.md) | billing | Exact source amounts consumed by debits, outgoing transfer principal and credit reversals. |
 | [`usage_record`](usage_record.md) | billing | One usage record from the network feed (TMF635 ProductUsage): data, voice or SMS used on a line, stored once per network record id and matched to the product that held the number on the event date. Partitioned by month of event_date; partitions older than 13 months are dropped by the worker's housekeeping (rated amounts stay in usage_charge and the ABRs). |
 | [`usage_threshold`](usage_threshold.md) | billing | An allowance threshold (80% or 100%) reached by a line in a plan period: one row is one event, once per product, period and allowance. The notifications slice reads it. |
+| [`usage_pool_threshold`](usage_pool_threshold.md) | billing | A data pool threshold (80% or 100%) reached by an account in a pool period: one row is one event, once per account, period and threshold. The notifications slice reads it. |
 | [`usage_charge`](usage_charge.md) | billing | The rating of one usage record of a pay-as-you-go line: the pass that rated it (a usage command), the usage price applied and the ABR that charged its line, kind and day. The primary key is what keeps a record from ever being charged twice. Without a price (the offering has none for the kind) or with a zero price there is no charge (abr_id null). |
 | [`usage_bar`](usage_bar.md) | billing | The barring (suspend) and lifting (restore) a pay-as-you-go line gets from its balance: at zero or below the line is barred on the network, above zero it is restored. One row per command, numbered per product; the latest row is the line's barring state. Sent by the billing worker through the network adapter; the id is the idempotency key. |
 | [`billing_run_account`](billing_run_account.md) | worker | The outcome of one billing account in one billing run (ours): ok, failed (with the error) or blocked (waiting for an earlier failed run of that account). |
@@ -182,6 +183,7 @@ flowchart LR
     funding_consumption[funding_consumption]
     usage_record[usage_record]
     usage_threshold[usage_threshold]
+    usage_pool_threshold[usage_pool_threshold]
     usage_charge[usage_charge]
     usage_bar[usage_bar]
   end
@@ -418,6 +420,8 @@ flowchart LR
   usage_charge -->|"command_id"| prepaid_command
   usage_charge -->|"price_id"| product_offering_price
   usage_charge -->|"product_id"| product
+  usage_pool_threshold -->|"billing_account_id"| billing_account
+  usage_pool_threshold -->|"product_id"| product
   usage_record -->|"billing_account_id"| billing_account
   usage_record -->|"product_id"| product
   usage_threshold -->|"product_id"| product
@@ -1169,6 +1173,7 @@ erDiagram
     timestamptz attempted_at
     timestamptz confirmed_at
     text purpose
+    jsonb data_pool
   }
   prepaid_lifecycle_setting {
     boolean id PK
@@ -1365,6 +1370,17 @@ erDiagram
     timestamptz reached_at
     text zone PK
   }
+  usage_pool_threshold {
+    uuid billing_account_id PK,FK
+    date period_start PK
+    smallint threshold PK
+    date period_end
+    uuid product_id FK
+    uuid usage_record_id
+    bigint used
+    bigint included
+    timestamptz reached_at
+  }
   usage_charge {
     uuid usage_record_id PK
     uuid command_id FK
@@ -1437,6 +1453,7 @@ erDiagram
   billing_account ||--o{ refund : "billing_account_id, currency"
   billing_account ||--o{ tax_transaction : "billing_account_id"
   billing_account ||--o{ usage_charge : "billing_account_id"
+  billing_account ||--o{ usage_pool_threshold : "billing_account_id"
   billing_run ||--o{ applied_customer_billing_rate : "billing_run_id"
   billing_run ||--o{ customer_bill : "billing_run_id"
   billing_run ||--o{ funded_interval : "billing_run_id, command_id"
@@ -1491,14 +1508,15 @@ erDiagram
   product ||--o{ prepaid_lifecycle_event : "product_id"
   product ||--o{ usage_bar : "product_id"
   product ||--o{ usage_charge : "product_id"
+  product ||--o{ usage_pool_threshold : "product_id"
   product ||--o{ usage_threshold : "product_id"
   product_offering |o--o{ applied_customer_billing_rate : "product_offering_id"
   product_offering_price |o--o{ applied_customer_billing_rate : "discount_price_id"
   product_offering_price |o--o{ applied_customer_billing_rate : "one_time_price_id"
   product_offering_price |o--o{ usage_charge : "price_id"
+  product_order |o--o{ network_command : "product_order_id"
   product_order |o--o{ prepaid_lifecycle_event : "product_order_id"
-  product_order ||--o{ network_command : "product_order_id"
-  product_order_item ||--o{ network_command : "product_order_item_id"
+  product_order_item |o--o{ network_command : "product_order_item_id"
   refund ||--o{ refund_source : "refund_id, billing_account_id"
 ```
 

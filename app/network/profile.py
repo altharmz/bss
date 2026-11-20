@@ -27,6 +27,9 @@ PROFILE: dict[str, str] = {
     "roamingMinutes": "integer",
     "roamingSmsCount": "integer",
     "internationalMinutes": "integer",
+    # the line shares one data allowance with the account's other pooled lines (#379,
+    # docs/decisions/usage.md "Pooled data")
+    "dataPool": "flag",
 }
 
 

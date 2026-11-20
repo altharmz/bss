@@ -294,6 +294,7 @@ AREAS = {
         "funding_consumption",
         "usage_record",
         "usage_threshold",
+        "usage_pool_threshold",
         "usage_charge",
         "usage_bar",
     ),

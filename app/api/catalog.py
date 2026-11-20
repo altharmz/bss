@@ -87,6 +87,7 @@ from app.billing import multi_line
 from app.billing.core import tax_of
 from app.events import emit
 from app.network import kind, profile, usage_price
+from app.ordering import network as network_orders
 from app.repository import catalog, classification
 from app.repository._sql import (
     Row,
@@ -415,6 +416,18 @@ def patch_specification(
         if documents:
             changes["details"] = merge_documents(current["details"], documents)
             _network_spec(changes["details"])
+            if profile.is_line(changes["details"]):
+                for offering in conn.execute(
+                    "SELECT id, details FROM product_offering WHERE product_specification_id = %s",
+                    (uid,),
+                ).fetchall():
+                    written = profile.effective(changes["details"], offering[1])
+                    _check_pool(
+                        conn,
+                        offering[0],
+                        catalog.prices_of_offering(conn, offering[0]),
+                        pooled=bool(written.get("dataPool")),
+                    )
             from app.ordering.numbers import required
 
             if any(
@@ -745,6 +758,7 @@ def _charge_changes(
         if changes.get("amount", current["amount"]) is None:
             raise conflict("price cannot be removed from a price attached to an offering")
         _check_cadence(conn, offering_id, current | changes)
+        _check_pool(conn, offering_id, [current | changes])
     return changes
 
 
@@ -793,6 +807,27 @@ def _usage_guard(current: Row, data: PricePatch, documents: dict[str, Any]) -> N
         if current["price_type"] == "usage" and (zone or "domestic") != current["usage_zone"]:
             raise conflict(
                 f"the {usage_price.ZONE} of a usage price cannot change: attach a new price"
+            )
+
+
+def _check_pool(
+    conn: psycopg.Connection, offering_id: UUID, prices: list[Row], *, pooled: bool | None = None
+) -> None:
+    """A pooled offering (network profile dataPool 1) renews monthly: its pool period is the
+    account's billing month (docs/decisions/usage.md, "Pooled data"). `pooled`: the profile
+    being written, else the stored offering's."""
+    recurring = [p for p in prices if p["price_type"] == "recurring"]
+    if not recurring:
+        return
+    if pooled is None:
+        pooled = bool((network_orders.offering_profile(conn, offering_id) or {}).get("dataPool"))
+    if not pooled:
+        return
+    for price in recurring:
+        if (price["recurring_period"], price["recurring_period_length"]) != ("monthly", 1):
+            raise unprocessable(
+                "a dataPool offering takes a monthly recurring price: its pool period is the"
+                " account's billing month"
             )
 
 
@@ -1224,6 +1259,7 @@ def _attach_prices(
                 _check_kind(conn, offering_id, candidate["price_type"])
                 _check_discount(conn, offering_id, candidate)
                 _check_cadence(conn, offering_id, candidate)
+                _check_pool(conn, offering_id, [candidate])
                 attached = catalog.attach_price(conn, price_id, offering_id)
         except pg_errors.ExclusionViolation:
             raise conflict(
@@ -1396,6 +1432,18 @@ def patch_offering(
                 p["alteration_lines"] is not None for p in catalog.prices_of_offering(conn, uid)
             ):
                 raise unprocessable(f"a {new_kind} offering has no multi-line discount")
+            spec_id = changes.get("product_specification_id", current["product_specification_id"])
+            spec = None if spec_id is None else catalog.get_product_specification(conn, spec_id)
+            if spec is not None and profile.is_line(spec["details"]):
+                written = profile.effective(
+                    spec["details"], changes.get("details", current["details"])
+                )
+                _check_pool(
+                    conn,
+                    uid,
+                    catalog.prices_of_offering(conn, uid),
+                    pooled=bool(written.get("dataPool")),
+                )
         category_ids = None if data.category is None else _categories(conn, data.category)
         if category_ids is not None and not changes:
             # membership is part of this resource: fire its lastUpdate trigger too
