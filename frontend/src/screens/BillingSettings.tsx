@@ -32,10 +32,10 @@ import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import { Footer, useWrite } from './FinancialForms';
 import { Field } from './SubscriberForms';
 import './screens.css';
-import { LifecycleSettingsTab } from './LifecycleSettings';
 
 // Billing settings (docs/ui.md): the cycle specifications, bill
 // formats and presentation media a billing account may name in its billStructure. The
+// prepaid lifecycle has its own screen under Prepaid (#414). The
 // subscriber Edit form selects them. The server decides: its 409/422 text is shown in the
 // dialog and the entered values stay.
 
@@ -75,28 +75,21 @@ const COLUMNS: Column[] = [
 
 export function BillingSettingsScreen() {
   useSetCrumbs([{ label: 'Billing settings' }], 'billingSettings');
-  const [tab, setTab] = useState<SettingKind | 'lifecycle'>('cycles');
+  const [tab, setTab] = useState<SettingKind>('cycles');
   const tabs = (
     <div className="bss-toolbar">
       <Segmented
         label="Billing settings sections"
         value={tab}
         onChange={setTab}
-        options={[
-          ...(Object.keys(TABS) as SettingKind[]).map((key) => ({
-            key,
-            label: TABS[key].title,
-          })),
-          { key: 'lifecycle' as const, label: 'Prepaid lifecycle' },
-        ]}
+        options={(Object.keys(TABS) as SettingKind[]).map((key) => ({
+          key,
+          label: TABS[key].title,
+        }))}
       />
     </div>
   );
-  return tab === 'lifecycle' ? (
-    <LifecycleSettingsTab tabs={tabs} />
-  ) : (
-    <SettingsTab key={tab} kind={tab} tabs={tabs} />
-  );
+  return <SettingsTab key={tab} kind={tab} tabs={tabs} />;
 }
 
 function SettingsTab({ kind, tabs }: { kind: SettingKind; tabs: React.ReactNode }) {

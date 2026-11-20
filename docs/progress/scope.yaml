@@ -218,7 +218,7 @@ items:
   - {id: ui.accounts.settlement.delete, area: ui, stage: 5, title: "Delete a settlement account"}
   - {id: ui.accounts.settlement.confirmDelete, area: ui, stage: 5, title: "Confirm deleting a settlement account"}
   - {id: ui.accounts.settlement.financialLink, area: ui, stage: 5, title: "Link or unlink a financial account on a settlement account"}
-  - {id: ui.billingSettings.lifecycle, area: ui, stage: 5, title: "Prepaid lifecycle durations in Billing settings"}
+  - {id: ui.billingSettings.lifecycle, area: ui, stage: 5, title: "Prepaid lifecycle screen (/prepaid-lifecycle, under Prepaid since #414): the lifecycle durations"}
   - {id: ui.billingSettings.lifecycle.form, area: ui, stage: 5, title: "Edit prepaid lifecycle durations"}
   - {id: ui.subscriber.productLifecycle, area: ui, stage: 5, title: "Product lifecycle state and next transition"}
   - {id: ui.subscriber.lifecycleSuspension, area: ui, stage: 5, title: "Product suspension caused by lifecycle"}
@@ -715,6 +715,9 @@ items:
   - {id: ui.shell.section.customers, area: ui, stage: 5, title: "Sidebar section: Customers"}
   - {id: ui.shell.section.products, area: ui, stage: 5, title: "Sidebar section: Products"}
   - {id: ui.shell.section.billing, area: ui, stage: 5, title: "Sidebar section: Billing"}
+  - {id: ui.shell.section.resources, area: ui, stage: 5, title: "Sidebar section: Resources (TMF639 numbers, SIMs, port requests, #414)"}
+  - {id: ui.shell.section.prepaid, area: ui, stage: 5, title: "Sidebar section: Prepaid (balances, prepaid commands, prepaid lifecycle, #414)"}
+  - {id: ui.shell.section.reports, area: ui, stage: 5, title: "Sidebar section: Reports"}
   - {id: ui.orders, area: ui, stage: 5, title: "Orders screen: newest-first tail paging, state filter and one-row write refresh"}
   - {id: ui.orders.detailsSaved, area: ui, stage: 5, title: "Order details saved in the open dialog footer"}
   - {id: ui.orders.accountChip, area: ui, stage: 5, title: "Orders account filter chip"}

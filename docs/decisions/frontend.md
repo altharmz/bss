@@ -346,6 +346,8 @@ Deviations (the code differs from the design's facts):
 
 ## Sidebar grouped by TMF area; global Orders screen (2026-10-21)
 
+**Superseded for the sidebar** by [Sidebar by TMF domain and DB area](#sidebar-by-tmf-domain-and-db-area-2026-11-20-issue-414) (#414); the Orders screen part stands.
+
 Decided by the human on 2026-10-21; built in slice 9 (entry below). It replaces the single "Operations"
 heading from the design handoff (`design-ref/`, which is left unedited). TMF does not
 define a UI menu. The groups follow the TMF Open API and ODA component areas
@@ -954,3 +956,60 @@ refused, and the card showed both as final panel errors.
   warning, and leaving during backoff. The fetch stub now rejects on abort as `fetch`
   does, and `setup.ts` resets the slots after each test, because a `pending` stub holds
   its slot.
+
+## Sidebar by TMF domain and DB area (2026-11-20, issue #414)
+
+Supersedes the 2026-10-21 sidebar table. Items were added one at a time to that
+three-section menu, which by then had five sections and 18 items. Products mixed TMF620/622/637
+commerce with TMF639 resources, Billing mixed TMF678, TMF676, TMF654, TMF666 and internal items,
+and nothing checked that a screen was in the menu exactly once.
+
+- **Seven sections** in TMF / ODA domain order, each item's `title` naming its API:
+
+  | Section | Item (route) | TMF API · resource | Main DB tables |
+  |---|---|---|---|
+  | Customers | Subscribers (`/subscribers`) | TMF666 billingAccount | `billing_account`, `customer`, `party` |
+  | | Parties (`/parties`) | TMF632 individual/organization, TMF629 customer | `party`, `customer` |
+  | | Financial accounts (`/financial-accounts`) | TMF666 financialAccount | `financial_account` |
+  | Products | Product catalog (`/catalog`) | TMF620 offering, specification, category, catalog | `product_offering`, `product_offering_price`, `product_specification`, `category`, `product_catalog`, `catalog_job` |
+  | | Orders (`/orders`) | TMF622 productOrder | `product_order`, `product_order_item`, `cancel_product_order` |
+  | | Products (`/products`) | TMF637 product | `product`, `product_status_change` |
+  | Resources | Numbers (`/numbers`) | TMF639 logicalResource (MSISDN) | `subscriber_number`, `number_assignment` |
+  | | SIMs (`/sims`) | TMF639 resource (IMSI, SIM batch) | `sim_batch`, `subscriber_number` |
+  | | Port requests (`/ports`) | internal (number portability) | `port_request` |
+  | Billing | Billing runs (`/billing-runs`, failed badge) | internal | `billing_run`, `billing_run_account` |
+  | | Bills (`/bills`) | TMF678 customerBill | `customer_bill`, `applied_customer_billing_rate` |
+  | | Payments (`/payments`) | TMF676 payment, refund | `payment`, `refund`, `bill_allocation` |
+  | | Billing settings (`/billing-settings`) | TMF678 billingCycleSpecification, billFormat, billPresentationMedia | `billing_cycle_specification`, `bill_format`, `bill_presentation_media` |
+  | Prepaid | Balances (`/balances`) | TMF654 bucket, accumulatedBalance, top-up, adjust, reserve, transfer | `prepaid_bucket`, `balance_action` |
+  | | Prepaid commands (`/prepaid-commands`, failed badge) | internal | `prepaid_command` |
+  | | Prepaid lifecycle (`/prepaid-lifecycle`) | internal | `prepaid_lifecycle_setting` |
+  | Reports | Prepaid KPIs (`/reports`) | internal | (reads) |
+  | System | Integrations (`/integrations`) | TMF630 hub, event subscriptions | `event_subscription`, `event_delivery` |
+  | | Users, Logging (admin only) | internal | `app_user`, `log_setting` |
+
+- **Financial accounts moves to Customers.** It aggregates billing accounts by owner party,
+  and billing ignores it ([accounts.md](accounts.md#financial-accounts-slice-1)).
+- **Payments stays in Billing.** A section with one item is noise, and TMF676 and TMF678
+  together make up ODA Billing & Revenue Management.
+- **Product catalog stays one item** with its tabs.
+- **The prepaid lifecycle leaves Billing settings** for its own screen, `/prepaid-lifecycle`,
+  the only new route. It is a prepaid setting, not TMF678 configuration. Billing settings
+  keeps three tabs. The `ui.billingSettings.lifecycle(.form)` markers and the lifecycle
+  requests are unchanged, to avoid parity churn. Its breadcrumb is the screen name alone,
+  like every other screen: a section crumb without a link would render as a second current
+  page.
+- **Every existing URL is kept** (bookmarks, e2e, card links).
+- **The nav is data** (`frontend/src/app/nav.ts`): label, href, the routes that mark the item
+  active, the `tmf` title, an `admin` flag and an optional failed badge. `Sidebar` binds the
+  badges to `useRunsFailed` / `useCommandsNav`. `nav.test.ts` fails when a navigable route
+  has no item or has two. Its route table is a `Record` over the `Route` names, so a new
+  route does not compile until it is listed. `OFF_NAV` lists the routes the menu does not
+  link: sign-in, password, the kit, not-found and the subscriber card, which marks
+  Subscribers active.
+- **The Integrations title is "TMF630 hub, event subscriptions".** The hub pattern comes from
+  the TMF630 design guidelines and each API carries it, so no single API number fits.
+- **Not in scope:** TMF621, TMF683, TMF681, TMF635, network commands and wholesale (#381)
+  have no global screen. Each one is a separate screen issue, with no placeholder item.
+- The nav already scrolls (`.bss-nav { overflow-y: auto }`), so seven sections fit at
+  1366×768 and the operator footer stays visible.

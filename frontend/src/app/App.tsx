@@ -35,6 +35,7 @@ import { NumbersScreen } from '../screens/Numbers';
 import { SimsScreen } from '../screens/Sims';
 import { PortRequestsScreen } from '../screens/PortRequests';
 import { ReportsScreen } from '../screens/Reports';
+import { LifecycleSettingsScreen } from '../screens/LifecycleSettings';
 
 const CONTEXT = '/internal/v1/context';
 
@@ -86,6 +87,8 @@ function Screen() {
       return <BalancesScreen />;
     case 'reports':
       return <ReportsScreen />;
+    case 'prepaidLifecycle':
+      return <LifecycleSettingsScreen />;
     case 'notFound':
       return <NotFoundScreen path={route.path} />;
   }

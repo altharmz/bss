@@ -35,7 +35,7 @@ Tested means a passing component test saw the marker on screen (`expectUi`, see 
 | Part | Where | What |
 |---|---|---|
 | Routing | `frontend/src/app/router.tsx` | a minimal History-API router: `/subscribers`, `/subscribers/{accountId}`, `/catalog`, `/billing-runs` (not `/billing`, so it can never be confused with the app's `/billing-status`); `/` redirects to `/subscribers`; anything else is the not-found page. Deep links work because Caddy answers unknown paths with `index.html` |
-| Shell | `frontend/src/app/Shell.tsx` | sidebar (brand, environment tag, navigation "Main" in three sections, operator), top bar (breadcrumbs, business date, time zone) |
+| Shell | `frontend/src/app/Shell.tsx` | sidebar (brand, environment tag, navigation "Main" in seven sections from `app/nav.ts`, operator), top bar (breadcrumbs, business date, time zone) |
 | System context | `frontend/src/app/context.tsx` | loads `GET /internal/v1/context` before any screen: no date can be shown without the business date and zone |
 | API client | `frontend/src/api/client.ts`, `bss.ts` | fetch wrapper; every failure is an `ApiError` whose message is the call ("GET /path -> 503 Service Unavailable"); `getAll` pages by 100; `useResource` = loading / error / ok + retry; `usePolled` = the same, refreshed in the background every few seconds while a predicate on the data holds (a failed refresh keeps the data and stops) |
 | Types | `frontend/scripts/gen-types.mjs` -> `src/api/generated/` (git-ignored) | generated from `spec/` (TMF620, 622, 637, 666 and the internal API) on every build, lint and test - never from FastAPI's `/openapi.json` |
@@ -72,10 +72,21 @@ its badge whenever the latest run it shows changes.
 API: `GET /internal/v1/context`, `GET /internal/v1/billingRun?limit=1` (the latest run's
 status).
 
-The sidebar is one `<nav aria-label="Main">` with four labelled sections
-(`ui.shell.section.customers|products|billing|system`): Customers (Subscribers, Parties), Products (Product
-catalog, Orders, Numbers) and Billing (Billing runs, Prepaid commands, Financial accounts,
-Bills, Payments, Balances, Billing settings, without a count or count request) and System (Integrations, and Users and Logging for an admin). No item has a count or a count request (G8; it replaces epic D6's counts). Design: [frontend.md](decisions/frontend.md#sidebar-grouped-by-tmf-area-global-orders-screen-2026-10-21).
+The sidebar is one `<nav aria-label="Main">` rendered from the data in `app/nav.ts`, with seven
+labelled sections in TMF / ODA domain order (`ui.shell.section.<key>`, #414):
+
+- **Customers:** Subscribers, Parties, Financial accounts
+- **Products:** Product catalog, Orders, Products
+- **Resources:** Numbers, SIMs, Port requests
+- **Billing:** Billing runs (failed badge), Bills, Payments, Billing settings
+- **Prepaid:** Balances, Prepaid commands (failed badge), Prepaid lifecycle
+- **Reports:** Prepaid KPIs
+- **System:** Integrations, and Users and Logging for an admin
+
+Each item's `title` names its TMF API and resource, or "internal". No item has a count or a
+count request (G8; it replaces epic D6's counts). `nav.test.ts` fails when a navigable route
+has no nav item or has two. Design and the per-item TMF/DB mapping:
+[frontend.md](decisions/frontend.md#sidebar-by-tmf-domain-and-db-area-2026-11-20-issue-414).
 
 ### Logging settings
 
@@ -527,7 +538,7 @@ Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use
 
 Ledger v2: command StatusPill uses the `command` kind mapping (Queued, Completed, Failed (technical)). Slice 13: the table is `density="dense"`, ids are `Id` (`CMD-`, `BA-`, `ORD-`, `PRD-`, `BL-`), and the detail is a `Dialog` (M) with a `KeyValue` list. The Id copies on click and does not open the row.
 
-Route `/prepaid-commands`, sidebar after Billing runs with a red badge while any command is
+Route `/prepaid-commands`, sidebar Prepaid > Prepaid commands with a red badge while any command is
 `failedTechnical`. Lists the internal prepaid command journal (id, kind, account, state, due date,
 attempts, next retry, result), 50 per page, filtered by state and by `?account=<id>` (a removable
 chip; the card's "Commands" link, `ui.subscriber.prepaid.commands`, sets it). A row opens every
@@ -596,14 +607,15 @@ and its next transition action and business date. Null or absent lifecycle proje
 no lifecycle detail. Lifecycle-caused suspension has an explicit label. Dates and actions
 come from `GET /internal/v1/billingAccount/{id}/products`; the browser derives no policy.
 
-Billing settings has a **Prepaid lifecycle** tab, loaded on selection from
+Route `/prepaid-lifecycle`, sidebar Prepaid > Prepaid lifecycle (`ui.billingSettings.lifecycle`,
+the marker kept its name when the Billing settings tab became a screen in #414), loaded from
 `GET /internal/v1/lifecycle/settings`. Edit changes grace days (0–365), suspension days
 (0–3650), number aging days (0–3650), and pay-as-you-go zero-balance days (0–365).
 Save sends only changed integer durations in a JSON PUT to the same endpoint. Zero is valid.
 The page explains that policy changes apply to transitions not yet taken and number aging
 is fixed at deactivation. Refusals retain values; uncertain writes require Refresh before
 another attempt. Successful saves reload the settings. Read failures offer Retry.
-Tests: `BillingSettings.test.tsx`, `SubscriberCard.test.tsx`, and the lifecycle settings
+Tests: `LifecycleSettings.test.tsx`, `SubscriberCard.test.tsx`, and the lifecycle settings
 request replay in `tests/test_ui_requests.py`.
 
 ### Billing settings (`ui.billingSettings.cycles|formats|media`) - `screens/BillingSettings.tsx`
@@ -668,7 +680,7 @@ Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use
 
 Ledger v2: bucket and balanceAction StatusPill retain the action-specific note labels.
 
-Reads only, TMF654. Route `/balances`, sidebar Billing > Balances (no count). Tabs **Buckets** |
+Reads only, TMF654. Route `/balances`, sidebar Prepaid > Balances (no count). Tabs **Buckets** |
 **Account totals** | **Top-ups** | **Adjustments** | **Holds** | **Transfers**. Account totals
 lists `accumulatedBalance` records independently of buckets and opens `GET accumulatedBalance/{id}`
 in a KeyValue detail; both show the returned currency. The account filter applies to totals;

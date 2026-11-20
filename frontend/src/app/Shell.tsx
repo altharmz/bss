@@ -4,15 +4,17 @@ import { countFailedCommands } from '../api/commands';
 import { useResource } from '../api/useResource';
 import { businessDate, utcLabel } from '../format/dates';
 import { useCrumbs, useNavVersion, type SystemContext } from './context';
-import { Link, useRouter, type Route } from './router';
+import { visibleNav } from './nav';
+import { Link, useRouter } from './router';
 import './shell.css';
 import { Badge, Segmented, Tag } from '../ui/kit';
 import { readTheme, saveTheme, type Theme } from './theme';
 import { SignOut, useSession } from './session';
 
 // The frame around every screen: sidebar (brand, navigation, operator) and top bar
-// (breadcrumbs, business date, time zone). Billing runs shows a red "failed" badge when the
-// latest run failed, Prepaid commands when a command failed (no item counts, #51).
+// (breadcrumbs, business date, time zone). The sections are data in nav.ts (#414). Billing
+// runs shows a red "failed" badge when the latest run failed, Prepaid commands when a command
+// failed (no item counts, #51).
 
 /** Whether the latest run failed: one run, newest first. Reloaded when the Billing runs
  * screen sees its latest run change (useRefreshNav). */
@@ -28,13 +30,6 @@ function useCommandsNav(): boolean {
   const version = useNavVersion();
   const failed = useResource(`nav:commands:${version}`, countFailedCommands);
   return failed.status === 'ok' && failed.data > 0;
-}
-
-interface NavItem {
-  label: string;
-  href: string;
-  failed?: boolean;
-  active: (route: Route) => boolean;
 }
 
 export function operatorInitials(login: string, displayName?: string): string {
@@ -57,109 +52,8 @@ export function Sidebar({ context }: { context: SystemContext }) {
   const { route } = useRouter();
   const runsFailed = useRunsFailed();
   const commandsFailed = useCommandsNav();
-  // Sections follow the TMF areas: party/customer, product, billing
-  const sections: { label: string; items: NavItem[] }[] = [
-    {
-      label: 'Customers',
-      items: [
-        {
-          label: 'Subscribers',
-          href: '/subscribers',
-          active: (r) => r.name === 'subscribers' || r.name === 'subscriber',
-        },
-        { label: 'Parties', href: '/parties', active: (r) => r.name === 'parties' },
-      ],
-    },
-    {
-      label: 'Products',
-      items: [
-        {
-          label: 'Product catalog',
-          href: '/catalog',
-          active: (r) => r.name === 'catalog',
-        },
-        {
-          label: 'Products',
-          href: '/products',
-          active: (r) => r.name === 'products',
-        },
-        { label: 'Orders', href: '/orders', active: (r) => r.name === 'orders' },
-        { label: 'Numbers', href: '/numbers', active: (r) => r.name === 'numbers' },
-        { label: 'SIMs', href: '/sims', active: (r) => r.name === 'sims' },
-        { label: 'Port requests', href: '/ports', active: (r) => r.name === 'ports' },
-      ],
-    },
-    {
-      label: 'Billing',
-      items: [
-        {
-          label: 'Billing runs',
-          href: '/billing-runs',
-          failed: runsFailed,
-          active: (r) => r.name === 'billingRuns',
-        },
-        {
-          label: 'Prepaid commands',
-          href: '/prepaid-commands',
-          failed: commandsFailed,
-          active: (r) => r.name === 'prepaidCommands',
-        },
-        {
-          label: 'Financial accounts',
-          href: '/financial-accounts',
-          active: (r) => r.name === 'financialAccounts',
-        },
-        {
-          label: 'Bills',
-          href: '/bills',
-          active: (r) => r.name === 'bills',
-        },
-        {
-          label: 'Payments',
-          href: '/payments',
-          active: (r) => r.name === 'payments',
-        },
-        {
-          label: 'Balances',
-          href: '/balances',
-          active: (r) => r.name === 'balances',
-        },
-        {
-          label: 'Billing settings',
-          href: '/billing-settings',
-          active: (r) => r.name === 'billingSettings',
-        },
-      ],
-    },
-    {
-      label: 'Reports',
-      items: [{ label: 'Prepaid KPIs', href: '/reports', active: (r) => r.name === 'reports' }],
-    },
-    {
-      label: 'System',
-      items: [
-        {
-          label: 'Integrations',
-          href: '/integrations',
-          active: (r) => r.name === 'integrations',
-        },
-        ...(session?.role === 'admin'
-          ? [
-              {
-                label: 'Users',
-                href: '/users',
-                active: (r: Route) => r.name === 'users',
-              },
-              {
-                label: 'Logging',
-                href: '/settings/logging',
-                active: (r: Route) => r.name === 'logging',
-              },
-            ]
-          : []),
-      ],
-    },
-  ];
+  const failed = { runs: runsFailed, commands: commandsFailed };
+  const sections = visibleNav(session?.role === 'admin');
   return (
     <aside className="bss-sidebar">
       <div className="bss-brand">
@@ -169,21 +63,25 @@ export function Sidebar({ context }: { context: SystemContext }) {
       </div>
       <nav className="bss-nav" aria-label="Main">
         {sections.map((section) => (
-          <Fragment key={section.label}>
-            <div className="section" data-ui={`ui.shell.section.${section.label.toLowerCase()}`}>
+          <Fragment key={section.key}>
+            <div className="section" data-ui={`ui.shell.section.${section.key}`}>
               {section.label}
             </div>
-            {section.items.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={item.active(route) ? 'is-active' : undefined}
-                aria-current={item.active(route) ? 'page' : undefined}
-              >
-                {item.label}
-                {item.failed && <Badge kind="failed">failed</Badge>}
-              </Link>
-            ))}
+            {section.items.map((item) => {
+              const active = item.routes.includes(route.name);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  title={item.tmf}
+                  className={active ? 'is-active' : undefined}
+                  aria-current={active ? 'page' : undefined}
+                >
+                  {item.label}
+                  {item.badge && failed[item.badge] && <Badge kind="failed">failed</Badge>}
+                </Link>
+              );
+            })}
           </Fragment>
         ))}
       </nav>
