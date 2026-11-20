@@ -47,6 +47,24 @@ def invite(
     )
 
 
+def create_verified(
+    conn: psycopg.Connection,
+    customer_id: UUID,
+    email: str,
+    password_hash: str,
+    created_by: str,
+    now: datetime,
+) -> Row:
+    """An active login whose email a signup verified with a code (#377). Raises UniqueViolation
+    for an email in use."""
+    return returning(
+        conn,
+        "INSERT INTO customer_login (id, customer_id, email, password_hash, email_verified_at,"
+        " created_by, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING *",
+        (uuid4(), customer_id, email, password_hash, now, created_by, now, now),
+    )
+
+
 def disable(conn: psycopg.Connection, login_id: UUID, now: datetime) -> Row:
     return returning(
         conn,

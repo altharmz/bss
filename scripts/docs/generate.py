@@ -212,6 +212,7 @@ HANDLERS = {
     "/internal/v1/users": "app/internal/users.py",
     "/internal/v1/wholesale": "app/internal/wholesale.py",
     "/internal/v1/customer": "app/internal/care_logins.py",
+    "/internal/v1/careSignup": "app/internal/care_signups.py",
     "/self-care/v1": "app/care/routes.py",
     **{
         f"/self-care/v1/{name}": "app/care/api.py"
@@ -219,6 +220,7 @@ HANDLERS = {
     },
     "/self-care/v1/autoTopUp": "app/care/api.py",
     "/self-care/v1/addOn": "app/care/api.py",
+    "/self-care/v1/signup": "app/care/signup.py",
     "/tmf-api/schema": "app/api/account.py",
     "/billing-status": "app/status.py",
     "/healthz": "app/main.py",
@@ -314,7 +316,13 @@ AREAS = {
         "trouble_ticket_note",
         "trouble_ticket_status_change",
     ),
-    "selfcare": ("customer_login", "customer_session", "customer_login_code"),
+    "selfcare": (
+        "customer_login",
+        "customer_session",
+        "customer_login_code",
+        "care_signup",
+        "identity_check",
+    ),
     "wholesale": ("wholesale_invoice", "wholesale_invoice_line", "wholesale_discrepancy"),
     "users": (
         "app_user",

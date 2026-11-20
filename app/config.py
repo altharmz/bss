@@ -97,6 +97,13 @@ class Settings(BaseSettings):
         default="stub", validation_alias=AliasChoices("BSS_PAYMENT_ADAPTER", "payment_adapter")
     )
     payment_max_attempts: int = Field(default=5, ge=1)
+    # Identity check of online signup (docs/decisions/self-care.md). Only the stub exists; an
+    # unknown value fails startup. Temporary errors: attempts before the signup goes to an
+    # operator for a decision.
+    identity_adapter: Literal["stub"] = Field(
+        default="stub", validation_alias=AliasChoices("BSS_IDENTITY_ADAPTER", "identity_adapter")
+    )
+    identity_max_attempts: int = Field(default=5, ge=1)
     # Customer notifications (docs/decisions/notifications.md). Only the `log` sender exists;
     # an unknown value fails startup. Send attempts before a message is `failed`; how far back
     # the detectors look for events (so a deploy does not replay history); the low-balance and

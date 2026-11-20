@@ -276,6 +276,7 @@ def request_reset(tx, request: Request, email: str, now: datetime) -> None:
 
 # --- the session check (app/auth.py) ---
 
+SIGNUP = "/self-care/v1/signup"
 OPEN = {
     ("POST", "/self-care/v1/session"),
     ("POST", "/self-care/v1/session/verify"),
@@ -286,7 +287,7 @@ OPEN = {
 
 def authenticate(request: Request, tx, now: datetime) -> None:
     """Every /self-care route: 404 while the feature is off, the CSRF header on writes, and a
-    live customer session except on the sign-in and password endpoints. Operator cookies and
+    live customer session except on the sign-in, password and signup endpoints. Operator cookies and
     service credentials mean nothing here, as a customer cookie means nothing elsewhere."""
     if not settings.self_care_enabled:
         raise TmfError(404, "not found")
@@ -295,6 +296,9 @@ def authenticate(request: Request, tx, now: datetime) -> None:
             raise TmfError(403, "X-Bss-Request: 1 required")
     if (request.method, request.url.path) in OPEN:
         return
+    path = request.url.path
+    if path == SIGNUP or path.startswith(SIGNUP + "/"):
+        return  # online signup (#377): no session yet, the signup's id and emailed code
     token = request.cookies.get(COOKIE, "")
     if not token or len(token) > 128:
         raise TmfError(401, "sign in required")

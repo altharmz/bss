@@ -128,7 +128,7 @@ def record_sent(
     event_type: str,
     receiver_name: str | None,
     receiver_email: str,
-    customer_id: UUID,
+    customer_id: UUID | None,
     subject: str,
     content: str,
     ref: str | None,

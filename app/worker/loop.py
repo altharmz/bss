@@ -11,7 +11,8 @@ was down (the 03:00 reboot, a deploy):
    once (D-W17) - the operator's retry is for immediacy;
 4. those dates, in order, with the scheduled trigger;
 5. the UI's queued requests, then prepaid work: due renewals are produced, retained
-   commands dispatched and entitlement transitions observed (app/worker/prepaid.py);
+   commands dispatched and entitlement transitions observed (app/worker/prepaid.py), then
+   the online signups' steps (app/worker/signup.py);
 6. the customer notifications (app/worker/notify.py): events found, messages sent;
 7. the due event deliveries to hub callbacks (app/events/deliver.py);
 8. from 04:00 to 05:30, the housekeeping (app/worker/housekeeping.py): usage_record
@@ -50,6 +51,7 @@ from app.worker.process import (
 )
 from app.worker.queue import process_requests
 from app.worker.runs import RunInProgress, ensure_ownership
+from app.worker.signup import process_signups
 
 log = logging.getLogger("app.worker")
 
@@ -65,6 +67,7 @@ class Tick:
     requests: list[UUID] = field(default_factory=list)
     prepaid_renewals: list[UUID] = field(default_factory=list)
     prepaid_commands: list[UUID] = field(default_factory=list)
+    signups: list[UUID] = field(default_factory=list)  # online signups acted on (#377)
     deliveries: int = 0  # event POSTs tried (step 6)
     reviewed: int | None = None  # accounts the per-account passes looked at; None: all
     housekeeping: Housekeeping | None = None  # step 8; None when a stop came before it
@@ -146,6 +149,10 @@ def tick(
             accounts=review.accounts,
         )
         result.prepaid_commands = process_commands(
+            conn, clock=clock, tz=tz, checkpoint=checkpoint, heartbeat=heartbeat
+        )
+        # after the payments and the network: a confirmed top-up or activation is seen at once
+        result.signups = process_signups(
             conn, clock=clock, tz=tz, checkpoint=checkpoint, heartbeat=heartbeat
         )
         observe_entitlements(

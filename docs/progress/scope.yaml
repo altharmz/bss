@@ -162,6 +162,16 @@ items:
   - {id: api.internal.careLogin.get, area: api, stage: 5, method: GET, path: "/internal/v1/customer/{customer_id}/careLogin", title: "A customer's self-care login (operator)"}
   - {id: api.internal.careLogin.invite, area: api, stage: 5, method: POST, path: "/internal/v1/customer/{customer_id}/careLogin", title: "Invite a customer to self-care (operator)"}
   - {id: api.internal.careLogin.disable, area: api, stage: 5, method: DELETE, path: "/internal/v1/customer/{customer_id}/careLogin", title: "Disable a customer's self-care login (operator)"}
+  - {id: db.care_signup, area: db, stage: 5, table: care_signup, title: "Online signups: email code, person, identity check, first payment and the ids created (#377)"}
+  - {id: db.identity_check, area: db, stage: 5, table: identity_check, title: "Durable identity checks of signups, sent by the worker (#377)"}
+  - {id: api.selfCare.signup.create, area: api, stage: 5, method: POST, path: /self-care/v1/signup, title: "Online signup step 1: email and plan, code emailed (#377)"}
+  - {id: api.selfCare.signup.get, area: api, stage: 5, method: GET, path: "/self-care/v1/signup/{signup_id}", title: "Online signup: the state, the eSIM activation code once (#377)"}
+  - {id: api.selfCare.signup.verify, area: api, stage: 5, method: POST, path: "/self-care/v1/signup/{signup_id}/verify", title: "Online signup step 2: the emailed code (#377)"}
+  - {id: api.selfCare.signup.details, area: api, stage: 5, method: PUT, path: "/self-care/v1/signup/{signup_id}/details", title: "Online signup step 3: person and service address, identity check queued (#377)"}
+  - {id: api.selfCare.signup.payment, area: api, stage: 5, method: POST, path: "/self-care/v1/signup/{signup_id}/payment", title: "Online signup step 4: password and first payment; creates customer, account, login and card (#377)"}
+  - {id: api.internal.careSignup.list, area: api, stage: 5, method: GET, path: /internal/v1/careSignup, title: "Online signups with state and failure reason (operator, #377)"}
+  - {id: api.internal.careSignup.get, area: api, stage: 5, method: GET, path: "/internal/v1/careSignup/{signup_id}", title: "One online signup (operator, #377)"}
+  - {id: api.internal.careSignup.decision, area: api, stage: 5, method: POST, path: "/internal/v1/careSignup/{signup_id}/decision", title: "Approve or reject a signup in identity review (operator, #377)"}
   - {id: db.wholesale_invoice, area: db, stage: 5, table: wholesale_invoice, title: "Imported wholesale invoices of the network partner (#197)"}
   - {id: db.wholesale_invoice_line, area: db, stage: 5, table: wholesale_invoice_line, title: "Wholesale invoice lines matched to products (#197)"}
   - {id: db.wholesale_discrepancy, area: db, stage: 5, table: wholesale_discrepancy, title: "Wholesale reconciliation discrepancies (#197)"}
@@ -743,6 +753,7 @@ items:
   - {id: worker.numberPorting, area: worker, stage: 5, title: "Port-in requests are submitted and followed with the carrier and hold the line's activation until completed; a reported port-out is validated against the Number Transfer PIN, ends the product through an order and locks the number"}
   - {id: worker.prepaidLifecycle, area: worker, stage: 5, title: "An unfunded prepaid line follows grace, suspension and deactivation by business date through internal orders; a top-up brings it back; the deactivated number is aged"}
   - {id: worker.simInventory, area: worker, stage: 5, title: "Activation picks a SIM or eSIM from stock; a SIM swap moves the line to another SIM when the network confirms"}
+  - {id: worker.careSignup, area: worker, stage: 5, title: "Online signup: the identity check is sent and followed, the confirmed first top-up places the eSIM order, the completed order activates the signup and emails the activation code (#377)"}
   - {id: worker.networkProvisioning, area: worker, stage: 5, title: "Prepaid order items send their network command and complete only when the network confirms"}
   - {id: worker.e911Address, area: worker, stage: 5, title: "A Wi-Fi calling line has a validated E911 address (sent, else the service address), sent to the network; a change is an order, sent as update_e911 and taken on confirmation"}
   - {id: worker.taxEngine, area: worker, stage: 5, title: "Prepaid charges are taxed by the tax engine for the account's service address; an unavailable engine retries and books nothing"}

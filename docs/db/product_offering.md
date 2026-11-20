@@ -56,4 +56,4 @@ SID ProductOffering (TMF620 productOffering): a sellable offer built on one spec
 
 ## Referenced by
 
-[`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`offering_category`](offering_category.md), [`product`](product.md), [`product_offering_change`](product_offering_change.md), [`product_offering_price`](product_offering_price.md), [`product_order_item`](product_order_item.md)
+[`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`care_signup`](care_signup.md), [`offering_category`](offering_category.md), [`product`](product.md), [`product_offering_change`](product_offering_change.md), [`product_offering_price`](product_offering_price.md), [`product_order_item`](product_order_item.md)

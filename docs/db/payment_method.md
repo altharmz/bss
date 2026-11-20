@@ -51,4 +51,4 @@ A saved card as a gateway token (TMF670 tokenizedCard). The BSS never receives o
 
 ## Referenced by
 
-[`payment_command`](payment_command.md)
+[`care_signup`](care_signup.md), [`payment_command`](payment_command.md)

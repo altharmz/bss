@@ -64,3 +64,7 @@ list_wholesale_invoices: the wholesale reconciliation screens come with issue 38
 get_wholesale_invoice: the wholesale reconciliation screens come with issue 381
 list_wholesale_discrepancies: the wholesale reconciliation screens come with issue 381
 list_wholesale_lines: the wholesale reconciliation screens come with issue 381
+# Online signups (#377): the operator signup list comes with #378's operator screen.
+list_care_signups: the operator signup screen comes with issue 378
+get_care_signup: the operator signup screen comes with issue 378
+decide_care_signup: the operator signup screen comes with issue 378
