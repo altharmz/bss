@@ -213,6 +213,12 @@ HANDLERS = {
     "/internal/v1/wholesale": "app/internal/wholesale.py",
     "/internal/v1/customer": "app/internal/care_logins.py",
     "/self-care/v1": "app/care/routes.py",
+    **{
+        f"/self-care/v1/{name}": "app/care/api.py"
+        for name in ("account", "line", "history", "offering", "paymentMethod", "topUp")
+    },
+    "/self-care/v1/autoTopUp": "app/care/api.py",
+    "/self-care/v1/addOn": "app/care/api.py",
     "/tmf-api/schema": "app/api/account.py",
     "/billing-status": "app/status.py",
     "/healthz": "app/main.py",

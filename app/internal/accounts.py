@@ -127,87 +127,98 @@ def first_charge(account_id: str, request: Request, tx: Tx, clock: ClockDep) -> 
     offering_id = _uuid_param("productOffering.id", params["productOffering.id"])
     changed = _uuid_param("product.id", params["product.id"]) if "product.id" in params else None
     start = _date_param("startDate", params["startDate"])
-    tz = ZoneInfo(settings.billing_tz)
-    today = clock.today()
     with tx() as conn:
         row = _account(conn, account_id)
         offering = catalog.get_product_offering(conn, offering_id)
         if offering is None:
             raise unprocessable(f"productOffering {offering_id} does not exist")
-        if start < today:
-            raise unprocessable(f"startDate {start} is in the past")
-        account = _core_account(row)
-        product = Product(
-            id=NO_PRODUCT,
-            offering_id=offering_id,
-            status="created",
-            start_date=start,
-            termination_date=None,
-        )
-        state = BillingState(
-            account=account,
-            products=(product,),
-            prices=billing.load_recurring_prices(conn, [offering_id]),
-            abrs=(),
-            bills=(),
-        )
-        if row["rating_type"] == "prepaid":
-            try:
-                price = price_at(product, start, state.prices, account.currency, tz)
-            except MissingPrice:
-                if offering_kind.kind_of(offering["details"]) != offering_kind.PLAN:
-                    return _fees_first_charge(conn, row, offering, start, account, today)
-                raise unprocessable(
-                    f"productOffering {offering['name']} has no recurring price in"
-                    f" {account.currency} valid on {start}"
-                ) from None
-            return _prepaid_first_charge(conn, row, offering, start, price, account, today, changed)
+        return TmfJSONResponse(quote(conn, row, offering, start, clock.today(), changed))
+
+
+def quote(
+    conn: psycopg.Connection,
+    row: Row,
+    offering: Row,
+    start: date,
+    today: date,
+    changed: UUID | None = None,
+) -> dict[str, Any]:
+    """The first-charge preview of `offering` on the account `row` from `start` (the body of
+    GET firstCharge; self-care quotes its offerings with it too)."""
+    offering_id = offering["id"]
+    tz = ZoneInfo(settings.billing_tz)
+    if start < today:
+        raise unprocessable(f"startDate {start} is in the past")
+    account = _core_account(row)
+    product = Product(
+        id=NO_PRODUCT,
+        offering_id=offering_id,
+        status="created",
+        start_date=start,
+        termination_date=None,
+    )
+    state = BillingState(
+        account=account,
+        products=(product,),
+        prices=billing.load_recurring_prices(conn, [offering_id]),
+        abrs=(),
+        bills=(),
+    )
+    if row["rating_type"] == "prepaid":
         try:
-            [charge] = compute(state, start, tz).abrs
             price = price_at(product, start, state.prices, account.currency, tz)
         except MissingPrice:
+            if offering_kind.kind_of(offering["details"]) != offering_kind.PLAN:
+                return _fees_first_charge(conn, row, offering, start, account, today)
             raise unprocessable(
                 f"productOffering {offering['name']} has no recurring price in"
                 f" {account.currency} valid on {start}"
             ) from None
-        try:
-            following = compute(state, charge.period.end, tz).abrs[1]
-        except MissingPrice:  # the price ends with this period and nothing follows it
-            following = None
-        balance = billing.account_balance(conn, row["id"])
+        return _prepaid_first_charge(conn, row, offering, start, price, account, today, changed)
+    try:
+        [charge] = compute(state, start, tz).abrs
+        price = price_at(product, start, state.prices, account.currency, tz)
+    except MissingPrice:
+        raise unprocessable(
+            f"productOffering {offering['name']} has no recurring price in"
+            f" {account.currency} valid on {start}"
+        ) from None
+    try:
+        following = compute(state, charge.period.end, tz).abrs[1]
+    except MissingPrice:  # the price ends with this period and nothing follows it
+        following = None
+    balance = billing.account_balance(conn, row["id"])
     cycle = product_charge_period(
         product, start, state.prices, account.currency, account.bill_cycle_day, tz
     )
     run_date = max(start, today + timedelta(days=1))
     after = balance - charge.total
     limit = row["credit_limit"]
-    return TmfJSONResponse(
-        {
-            "billingAccount": {"id": str(row["id"])},
-            "productOffering": {"id": str(offering_id), "name": offering["name"]},
-            "startDate": start,
-            "period": _range(charge.period),
-            "cyclePeriod": _range(cycle),
-            "billableDays": charge.period.days,
-            "periodDays": cycle.days,
-            "prorated": charge.period.days < cycle.days,
-            "price": money(price.amount, price.currency),
-            **_cadence(price),
-            "amount": money(charge.total, charge.currency),
-            "chargeRunDate": run_date,
-            "billDate": _first_cycle_day_from(run_date, account.bill_cycle_day),
-            "next": None
-            if following is None
-            else {
-                "start": following.period.start,
-                "amount": money(following.total, following.currency),
-            },
-            "balance": money(balance, account.currency),
-            "balanceAfter": money(after, account.currency),
-            "creditLimit": None if limit is None else money(limit, account.currency),
-            "exceedsCreditLimit": limit is not None and after < -limit,
-        }
-    )
+    return {
+        "billingAccount": {"id": str(row["id"])},
+        "productOffering": {"id": str(offering_id), "name": offering["name"]},
+        "startDate": start,
+        "period": _range(charge.period),
+        "cyclePeriod": _range(cycle),
+        "billableDays": charge.period.days,
+        "periodDays": cycle.days,
+        "prorated": charge.period.days < cycle.days,
+        "price": money(price.amount, price.currency),
+        **_cadence(price),
+        "amount": money(charge.total, charge.currency),
+        "chargeRunDate": run_date,
+        "billDate": _first_cycle_day_from(run_date, account.bill_cycle_day),
+        "next": None
+        if following is None
+        else {
+            "start": following.period.start,
+            "amount": money(following.total, following.currency),
+        },
+        "balance": money(balance, account.currency),
+        "balanceAfter": money(after, account.currency),
+        "creditLimit": None if limit is None else money(limit, account.currency),
+        "exceedsCreditLimit": limit is not None and after < -limit,
+    }
 
 
 def _prepaid_first_charge(
@@ -219,7 +230,7 @@ def _prepaid_first_charge(
     account: Account,
     today: date,
     changed: UUID | None = None,
-) -> TmfJSONResponse:
+) -> dict[str, Any]:
     """A prepaid purchase pays its first interval in full, tax included, from the funds
     left after holds, and the interval starts on the start date (anniversary periods:
     nothing is prorated). `required`, `available` and `shortfall` are the extra
@@ -260,43 +271,41 @@ def _prepaid_first_charge(
     fees = _quote_fees(conn, account, offering["id"], start, tz) if changed is None else []
     required += sum((f.gross for f in fees), Decimal(0))
     shortfall = max(Decimal(0), required - available)
-    return TmfJSONResponse(
-        {
-            "billingAccount": {"id": str(row["id"])},
-            "productOffering": {"id": str(offering["id"]), "name": offering["name"]},
-            "startDate": start,
-            "period": _range(period),
-            "cyclePeriod": _range(period),
-            "billableDays": period.days,
-            "periodDays": period.days,
-            "prorated": False,
-            "price": money(price.amount, price.currency),
-            **_cadence(price),
-            "amount": money(required, currency),
-            "chargeRunDate": run_date,
-            "billDate": run_date,
-            "next": None,
-            "balance": money(snapshot.ledger, currency),
-            "balanceAfter": money(snapshot.ledger - required + (unused or 0), currency),
-            "creditLimit": None,
-            "exceedsCreditLimit": shortfall > 0,
-            "required": money(required, currency),
-            "available": money(available, currency),
-            "shortfall": money(shortfall, currency),
-            **({} if unused is None else {"credit": money(unused, currency)}),
-            **({"fees": _fee_lines(fees, currency)} if fees else {}),
-            **(
-                {}
-                if discount is None
-                else {
-                    "discount": {
-                        "amount": money(discount.amount, currency),
-                        "productOfferingPrice": {"id": str(discount.price_id)},
-                    }
+    return {
+        "billingAccount": {"id": str(row["id"])},
+        "productOffering": {"id": str(offering["id"]), "name": offering["name"]},
+        "startDate": start,
+        "period": _range(period),
+        "cyclePeriod": _range(period),
+        "billableDays": period.days,
+        "periodDays": period.days,
+        "prorated": False,
+        "price": money(price.amount, price.currency),
+        **_cadence(price),
+        "amount": money(required, currency),
+        "chargeRunDate": run_date,
+        "billDate": run_date,
+        "next": None,
+        "balance": money(snapshot.ledger, currency),
+        "balanceAfter": money(snapshot.ledger - required + (unused or 0), currency),
+        "creditLimit": None,
+        "exceedsCreditLimit": shortfall > 0,
+        "required": money(required, currency),
+        "available": money(available, currency),
+        "shortfall": money(shortfall, currency),
+        **({} if unused is None else {"credit": money(unused, currency)}),
+        **({"fees": _fee_lines(fees, currency)} if fees else {}),
+        **(
+            {}
+            if discount is None
+            else {
+                "discount": {
+                    "amount": money(discount.amount, currency),
+                    "productOfferingPrice": {"id": str(discount.price_id)},
                 }
-            ),
-        }
-    )
+            }
+        ),
+    }
 
 
 def _quote_fees(conn, account: Account, offering_id: UUID, start: date, tz: ZoneInfo):
@@ -320,7 +329,7 @@ def _fee_lines(fees, currency: str) -> list[dict[str, Any]]:
 
 def _fees_first_charge(
     conn, row: Row, offering: Row, start: date, account: Account, today: date
-) -> TmfJSONResponse:
+) -> dict[str, Any]:
     """An add-on or pay-as-you-go offering has no recurring price: its purchase charges its
     one-time fees, held now (they start today). The one-day period is the fee's own."""
     tz = ZoneInfo(settings.billing_tz)
@@ -337,31 +346,29 @@ def _fees_first_charge(
     currency = account.currency
     period = DateRange(start, start + timedelta(days=1))
     run_date = max(start, today)
-    return TmfJSONResponse(
-        {
-            "billingAccount": {"id": str(row["id"])},
-            "productOffering": {"id": str(offering["id"]), "name": offering["name"]},
-            "startDate": start,
-            "period": _range(period),
-            "cyclePeriod": _range(period),
-            "billableDays": 1,
-            "periodDays": 1,
-            "prorated": False,
-            "price": money(Decimal(0), currency),
-            "amount": money(required, currency),
-            "chargeRunDate": run_date,
-            "billDate": run_date,
-            "next": None,
-            "balance": money(snapshot.ledger, currency),
-            "balanceAfter": money(snapshot.ledger - required, currency),
-            "creditLimit": None,
-            "exceedsCreditLimit": shortfall > 0,
-            "required": money(required, currency),
-            "available": money(available, currency),
-            "shortfall": money(shortfall, currency),
-            "fees": _fee_lines(fees, currency),
-        }
-    )
+    return {
+        "billingAccount": {"id": str(row["id"])},
+        "productOffering": {"id": str(offering["id"]), "name": offering["name"]},
+        "startDate": start,
+        "period": _range(period),
+        "cyclePeriod": _range(period),
+        "billableDays": 1,
+        "periodDays": 1,
+        "prorated": False,
+        "price": money(Decimal(0), currency),
+        "amount": money(required, currency),
+        "chargeRunDate": run_date,
+        "billDate": run_date,
+        "next": None,
+        "balance": money(snapshot.ledger, currency),
+        "balanceAfter": money(snapshot.ledger - required, currency),
+        "creditLimit": None,
+        "exceedsCreditLimit": shortfall > 0,
+        "required": money(required, currency),
+        "available": money(available, currency),
+        "shortfall": money(shortfall, currency),
+        "fees": _fee_lines(fees, currency),
+    }
 
 
 def _unused_credit(conn, account_id, product_id, start: date) -> Decimal:
@@ -691,20 +698,22 @@ def transactions(account_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
         rows, more = billing.page_account_transactions(
             conn, row["id"], tz=settings.billing_tz, offset=offset, limit=limit
         )
-    currency = row["currency"]
     items = [
-        {
-            "id": str(t["id"]),
-            "href": _transaction_href(t),
-            "type": t["kind"],
-            "date": t["day"],
-            "note": t["note"],
-            "period": None
-            if t["period"] is None
-            else {"start": t["period"].lower, "end": t["period"].upper},
-            "amount": money(t["amount"], currency),
-            "balanceAfter": money(t["balance_after"], currency),
-        }
+        {"id": str(t["id"]), "href": _transaction_href(t), **transaction_body(t, row["currency"])}
         for t in rows
     ]
     return _page(request, items, more, offset, limit)
+
+
+def transaction_body(t: Row, currency: str) -> dict[str, Any]:
+    """A ledger line of billing.page_account_transactions (self-care's history too)."""
+    return {
+        "type": t["kind"],
+        "date": t["day"],
+        "note": t["note"],
+        "period": None
+        if t["period"] is None
+        else {"start": t["period"].lower, "end": t["period"].upper},
+        "amount": money(t["amount"], currency),
+        "balanceAfter": money(t["balance_after"], currency),
+    }

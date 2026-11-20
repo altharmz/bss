@@ -162,7 +162,305 @@ paths:
               schema: {$ref: '#/components/schemas/CareCustomer'}
         '401': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
+  /account:
+    get:
+      summary: The customer's billing accounts.
+      description: >-
+        Balance (spendable = ledger less holds, which may be negative; held = outstanding holds)
+        and the auto top-up rule of each prepaid account; both null on a postpaid one.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/CareAccount'}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /line:
+    get:
+      summary: The customer's prepaid lines that are not ended.
+      description: >-
+        Plans and pay-as-you-go lines (an add-on pack is listed under its line, while live).
+        `renewalMode` is `balanceThenCard` when auto top-up is on with a default card, else
+        `balance`.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/CareLine'}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /line/{id}/usage:
+    get:
+      summary: The line's usage against its plan allowance, in the period covering today.
+      description: >-
+        The usage summary the operator reads (GET /internal/v1/usage/summary) without the
+        network command details. Another customer's line is a 404.
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CareUsage'}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /history:
+    get:
+      summary: The account's transaction ledger, newest first.
+      description: >-
+        Top-ups, renewals and other charges, refunds, payments, adjustments and transfers, each
+        with the balance after it (positive = credit to the customer). `billingAccountId` may be
+        left out when the customer has exactly one prepaid account (else 422). Paged with
+        offset and limit (X-Total-Count is not sent; X-Result-Count and a Link to the next page).
+      parameters:
+        - {name: billingAccountId, in: query, schema: {type: string, format: uuid}}
+        - {name: offset, in: query, schema: {type: integer, minimum: 0}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1}}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/CareTransaction'}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /offering:
+    get:
+      summary: The plans or add-on packs on sale today, with their first charge.
+      description: >-
+        `firstCharge` is the operator's first-charge quote for buying it today on the account:
+        the amount with tax and fees, what the balance has available and the shortfall. An
+        offering without a price in the account's currency today is not listed. A postpaid
+        account is a 409.
+      parameters:
+        - {name: kind, in: query, required: true, schema: {type: string, enum: [addOn, plan]}}
+        - {name: billingAccountId, in: query, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/CareOffering'}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  /paymentMethod:
+    get:
+      summary: The saved cards of the customer's accounts.
+      description: Never a token or a card number.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/CareCard'}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+    post:
+      summary: Save a card from the gateway's token.
+      description: >-
+        The token comes from the gateway's client-side form; the gateway says which card it is
+        (brand, last four digits, expiry). The BSS never receives a card number: `cardNumber`,
+        `number`, `pan`, `cvv`, `cvc`, `cvv2`, `securityCode` and `nameOnCard` and a token that
+        looks like a card number are a 400. A token the gateway does not accept is a 422
+        `cardRejected`; the same card twice on the account is a 409. The first card of an
+        account is its default. Takes an Idempotency-Key.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [token]
+              properties:
+                token: {type: string, minLength: 1, maxLength: 255}
+                billingAccountId:
+                  type: string
+                  format: uuid
+                  description: Required when the customer has more than one prepaid account.
+                name: {type: string, minLength: 1, maxLength: 100}
+      responses:
+        '201':
+          description: Saved
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CareCard'}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+  /paymentMethod/{id}:
+    delete:
+      summary: Remove a saved card.
+      description: 409 while a charge with the card is in progress. Removing the default card promotes none.
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '204': {description: Removed}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+  /topUp:
+    post:
+      summary: Top up the balance with a saved card.
+      description: >-
+        Queues one charge of the card (202): the balance rises only when the gateway confirms
+        it, which GET /topUp/{id} shows. Prepaid accounts only (409); an expired card or a
+        closed account is a 409. Takes an Idempotency-Key: a repeated key answers the first
+        top-up and charges nothing more.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [amount, paymentMethodId]
+              properties:
+                amount: {$ref: '#/components/schemas/Money'}
+                paymentMethodId: {type: string, format: uuid}
+      responses:
+        '202':
+          description: Queued
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CareTopUp'}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+  /topUp/{id}:
+    get:
+      summary: A card top-up and the gateway's answer.
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CareTopUp'}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /autoTopUp:
+    put:
+      summary: Turn auto top-up on or off.
+      description: >-
+        On: below the threshold, the account's default card is charged for the amount (both
+        required, the amount at least the threshold, 422 otherwise). Off: the figures are kept.
+        Prepaid accounts only (409).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [enabled]
+              properties:
+                enabled: {type: boolean}
+                threshold: {$ref: '#/components/schemas/Money'}
+                amount: {$ref: '#/components/schemas/Money'}
+                billingAccountId:
+                  type: string
+                  format: uuid
+                  description: Required when the customer has more than one prepaid account.
+      responses:
+        '200':
+          description: The rule as set
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CareAutoTopUp'}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+  /addOn:
+    post:
+      summary: Buy an add-on pack for a line.
+      description: >-
+        Placed as a TMF622 order with the operator's acceptance rules: accepted, the order is
+        inProgress until the network confirms the raised allowance (the fee is held now and
+        charged then). Refused, it is a 422 whose `code` is the order's first TMF622 error code
+        (insufficientFunds, addOnParentNotActive, noOneTimePrice, ...), every code and reason in
+        `message`. Another customer's line, or an offering that is not an add-on, is a 404.
+        Takes an Idempotency-Key (an accepted order is replayed; a refusal is not stored).
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [lineId, offeringId]
+              properties:
+                lineId: {type: string, format: uuid}
+                offeringId: {type: string, format: uuid}
+      responses:
+        '201':
+          description: Ordered
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CareAddOnOrder'}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
 components:
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      description: >-
+        1-255 visible ASCII characters. A repeated key with the same body answers the first
+        success; with another body it is a 409.
+      schema: {type: string, minLength: 1, maxLength: 255}
   securitySchemes:
     CareSession:
       type: apiKey
@@ -215,3 +513,226 @@ components:
         id: {type: string, format: uuid}
         name: {type: string}
         status: {type: string}
+    Money:
+      type: object
+      additionalProperties: false
+      required: [unit, value]
+      properties:
+        unit: {type: string, pattern: '^[A-Z]{3}$'}
+        value: {type: number}
+    NullableMoney:
+      type: object
+      nullable: true
+      additionalProperties: false
+      required: [unit, value]
+      properties:
+        unit: {type: string, pattern: '^[A-Z]{3}$'}
+        value: {type: number}
+    NullableRef:
+      type: object
+      nullable: true
+      additionalProperties: false
+      required: [id]
+      properties:
+        id: {type: string, format: uuid}
+    Ref:
+      type: object
+      additionalProperties: false
+      required: [id]
+      properties:
+        id: {type: string, format: uuid}
+    CareAutoTopUp:
+      type: object
+      additionalProperties: false
+      required: [enabled, threshold, amount, defaultPaymentMethod]
+      properties:
+        enabled: {type: boolean}
+        threshold: {$ref: '#/components/schemas/NullableMoney'}
+        amount: {$ref: '#/components/schemas/NullableMoney'}
+        defaultPaymentMethod: {$ref: '#/components/schemas/NullableRef'}
+    CareAccount:
+      type: object
+      additionalProperties: false
+      required: [id, name, state, ratingType, currency, balance, autoTopUp, serviceAddress]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        state: {type: string, enum: [Active, Suspended, Closed]}
+        ratingType: {type: string, enum: [prepaid, postpaid]}
+        currency: {type: string}
+        balance:
+          nullable: true
+          type: object
+          additionalProperties: false
+          required: [spendable, held]
+          properties:
+            spendable: {$ref: '#/components/schemas/Money'}
+            held: {$ref: '#/components/schemas/Money'}
+        autoTopUp:
+          nullable: true
+          type: object
+          additionalProperties: false
+          required: [enabled, threshold, amount, defaultPaymentMethod]
+          properties:
+            enabled: {type: boolean}
+            threshold: {$ref: '#/components/schemas/NullableMoney'}
+            amount: {$ref: '#/components/schemas/NullableMoney'}
+            defaultPaymentMethod: {$ref: '#/components/schemas/NullableRef'}
+        serviceAddress:
+          description: The place of primary use of the account's lines (street1, street2, city, stateOrProvince, postCode, country).
+          type: object
+          nullable: true
+    CareLine:
+      type: object
+      additionalProperties: false
+      required: [id, billingAccount, number, plan, offeringKind, status, startDate, paidThrough, renewalMode, addOns]
+      properties:
+        id: {type: string, format: uuid}
+        billingAccount: {$ref: '#/components/schemas/Ref'}
+        number: {type: string, nullable: true, description: The line's MSISDN today, or the one it will start with.}
+        plan:
+          type: object
+          additionalProperties: false
+          required: [id, name]
+          properties:
+            id: {type: string, format: uuid}
+            name: {type: string}
+        offeringKind: {type: string, enum: [plan, payAsYouGo]}
+        status: {type: string}
+        startDate: {type: string, format: date}
+        paidThrough:
+          type: string
+          format: date
+          nullable: true
+          description: Exclusive end of the paid period (half-open); null when nothing is paid.
+        renewalMode: {type: string, enum: [balance, balanceThenCard]}
+        addOns:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name, endDate]
+            properties:
+              id: {type: string, format: uuid}
+              name: {type: string}
+              endDate: {type: string, format: date, nullable: true}
+    CareUsage:
+      type: object
+      additionalProperties: false
+      required: [line, date, period, allowances, throttled, payAsYouGo]
+      properties:
+        line: {$ref: '#/components/schemas/Ref'}
+        date: {type: string, format: date}
+        period:
+          nullable: true
+          type: object
+          additionalProperties: false
+          required: [startDate, endDate]
+          properties:
+            startDate: {type: string, format: date}
+            endDate: {type: string, format: date, description: Exclusive (half-open).}
+        allowances:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [kind, zone, unit, used, included, remaining, percent, thresholds]
+            properties:
+              kind: {type: string, enum: [data, voice, sms]}
+              zone: {type: string, enum: [domestic, roaming, international]}
+              unit: {type: string, enum: [bytes, seconds, messages]}
+              used: {type: integer, minimum: 0}
+              included: {type: integer, minimum: 0}
+              remaining: {type: integer, minimum: 0}
+              percent: {type: integer, minimum: 0, nullable: true}
+              thresholds:
+                type: array
+                items: {type: integer, enum: [80, 100]}
+        throttled: {type: boolean}
+        payAsYouGo:
+          nullable: true
+          type: object
+          additionalProperties: false
+          required: [balance, barred, unratedRecords]
+          properties:
+            balance: {$ref: '#/components/schemas/Money'}
+            barred: {type: boolean}
+            unratedRecords: {type: integer, minimum: 0}
+    CareTransaction:
+      type: object
+      additionalProperties: false
+      required: [id, type, date, note, period, amount, balanceAfter]
+      properties:
+        id: {type: string, format: uuid}
+        type: {type: string}
+        date: {type: string, format: date}
+        note: {type: string, nullable: true}
+        period:
+          nullable: true
+          type: object
+          additionalProperties: false
+          required: [start, end]
+          properties:
+            start: {type: string, format: date}
+            end: {type: string, format: date, nullable: true}
+        amount: {$ref: '#/components/schemas/Money'}
+        balanceAfter: {$ref: '#/components/schemas/Money'}
+    CareOffering:
+      type: object
+      additionalProperties: false
+      required: [id, name, description, kind, billingAccount, firstCharge]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        description: {type: string, nullable: true}
+        kind: {type: string, enum: [addOn, plan]}
+        billingAccount: {$ref: '#/components/schemas/Ref'}
+        firstCharge:
+          type: object
+          additionalProperties: false
+          required: [amount, period, available, shortfall]
+          properties:
+            amount: {$ref: '#/components/schemas/Money'}
+            period:
+              type: object
+              additionalProperties: false
+              required: [start, end]
+              properties:
+                start: {type: string, format: date}
+                end: {type: string, format: date}
+            available: {$ref: '#/components/schemas/Money'}
+            shortfall: {$ref: '#/components/schemas/Money'}
+    CareCard:
+      type: object
+      additionalProperties: false
+      required: [id, billingAccount, name, brand, lastFourDigits, expirationDate, isDefault]
+      properties:
+        id: {type: string, format: uuid}
+        billingAccount: {$ref: '#/components/schemas/Ref'}
+        name: {type: string}
+        brand: {type: string, nullable: true}
+        lastFourDigits: {type: string, nullable: true}
+        expirationDate: {type: string, format: date-time, nullable: true}
+        isDefault: {type: boolean}
+    CareTopUp:
+      type: object
+      additionalProperties: false
+      required: [id, billingAccount, paymentMethod, amount, state, declineReason, createdAt, confirmedAt]
+      properties:
+        id: {type: string, format: uuid}
+        billingAccount: {$ref: '#/components/schemas/Ref'}
+        paymentMethod: {$ref: '#/components/schemas/Ref'}
+        amount: {$ref: '#/components/schemas/Money'}
+        state: {type: string, enum: [pending, sent, confirmed, declined, exhausted, cancelled]}
+        declineReason: {type: string, nullable: true}
+        createdAt: {type: string, format: date-time}
+        confirmedAt: {type: string, format: date-time, nullable: true}
+    CareAddOnOrder:
+      type: object
+      additionalProperties: false
+      required: [id, state, line, offering]
+      properties:
+        id: {type: string, format: uuid, description: The TMF622 productOrder.}
+        state: {type: string}
+        line: {$ref: '#/components/schemas/Ref'}
+        offering: {$ref: '#/components/schemas/Ref'}

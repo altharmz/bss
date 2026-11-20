@@ -182,16 +182,9 @@ def create_payment_method(
         account = parties.get_billing_account(conn, data.account[0].id, "update")
         if account is None:
             raise unprocessable(f"account {data.account[0].id} does not exist")
-        if fetch_one(
+        row = save_card(
             conn,
-            "SELECT 1 FROM payment_method WHERE billing_account_id = %s AND gateway_token = %s"
-            " AND status = 'active'",
-            (account["id"], data.token),
-        ):
-            raise conflict("this card (token) is already saved on the account")
-        row = repo.insert(
-            conn,
-            account_id=account["id"],
+            account,
             name=data.name,
             description=data.description,
             brand=data.brand,
@@ -203,8 +196,22 @@ def create_payment_method(
             now=now,
         )
         new = method_body(conn, row)
-        emit.created(conn, API, RESOURCE, new, at=now)
     return created(listing.select_fields(new, fields))
+
+
+def save_card(conn: psycopg.Connection, account: Row, *, token: str, now, **card: Any) -> Row:
+    """Save a card on the account (locked by the caller) and emit its Create event; self-care
+    saves cards with it too. The same token twice on the account is a 409."""
+    if fetch_one(
+        conn,
+        "SELECT 1 FROM payment_method WHERE billing_account_id = %s AND gateway_token = %s"
+        " AND status = 'active'",
+        (account["id"], token),
+    ):
+        raise conflict("this card (token) is already saved on the account")
+    row = repo.insert(conn, account_id=account["id"], token=token, now=now, **card)
+    emit.created(conn, API, RESOURCE, method_body(conn, row), at=now)
+    return row
 
 
 @router.patch(f"/{RESOURCE}/{{method_id}}")
@@ -255,14 +262,19 @@ def delete_payment_method(method_id: str, request: Request, tx: Tx, clock: Clock
         parties.get_billing_account(conn, found["billing_account_id"], "update")
         if repo.active(conn, uid, lock=True) is None:
             raise not_found(RESOURCE, method_id)
-        if fetch_one(
-            conn,
-            "SELECT 1 FROM payment_command WHERE payment_method_id = %s"
-            " AND state IN ('pending', 'sent')",
-            (uid,),
-        ):
-            raise conflict("a charge with this card is in progress: remove it afterwards")
-        now = clock.now()
-        emit.deleted(conn, API, RESOURCE, lambda: method_body(conn, found), at=now)
-        repo.remove(conn, uid, now=now)
+        remove_card(conn, found, clock.now())
     return Response(status_code=204)
+
+
+def remove_card(conn: psycopg.Connection, found: Row, now) -> None:
+    """Remove a card (locked with its account by the caller) and emit its Delete event; 409
+    while a charge with it is in progress. Self-care removes cards with it too."""
+    if fetch_one(
+        conn,
+        "SELECT 1 FROM payment_command WHERE payment_method_id = %s"
+        " AND state IN ('pending', 'sent')",
+        (found["id"],),
+    ):
+        raise conflict("a charge with this card is in progress: remove it afterwards")
+    emit.deleted(conn, API, RESOURCE, lambda: method_body(conn, found), at=now)
+    repo.remove(conn, found["id"], now=now)

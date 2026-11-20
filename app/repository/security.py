@@ -13,7 +13,17 @@ from app.repository._sql import Row, fetch_all, fetch_one, jsonb, returning
 CARE_ACTIONS = ("interaction_logged", "ticket_opened", "ticket_status_changed", "care_note_added")
 # a customer's own self-care sign-in (docs/decisions/self-care.md): logged, not alerted (the code
 # itself went to the login's email)
-SELF_CARE_ACTIONS = ("care_sign_in", "care_locked", "care_password_changed")
+SELF_CARE_ACTIONS = (
+    "care_sign_in",
+    "care_locked",
+    "care_password_changed",
+    # the customer's own writes in a self-care session (#376)
+    "care_top_up",
+    "care_card_saved",
+    "care_card_removed",
+    "care_auto_top_up",
+    "care_add_on",
+)
 ACTIONS = (
     "sim_swap",
     "number_change",

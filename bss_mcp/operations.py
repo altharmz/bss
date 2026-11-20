@@ -112,6 +112,19 @@ AUTH_OPERATIONS = {
     ("POST", "/self-care/v1/password"),
     ("POST", "/self-care/v1/password/reset"),
     ("GET", "/self-care/v1/customer/{customer_id}"),
+    # a customer's own reads and writes in a self-care session (#376): never a model's tools
+    ("GET", "/self-care/v1/account"),
+    ("GET", "/self-care/v1/line"),
+    ("GET", "/self-care/v1/line/{line_id}/usage"),
+    ("GET", "/self-care/v1/history"),
+    ("GET", "/self-care/v1/offering"),
+    ("GET", "/self-care/v1/paymentMethod"),
+    ("POST", "/self-care/v1/paymentMethod"),
+    ("DELETE", "/self-care/v1/paymentMethod/{method_id}"),
+    ("POST", "/self-care/v1/topUp"),
+    ("GET", "/self-care/v1/topUp/{command_id}"),
+    ("PUT", "/self-care/v1/autoTopUp"),
+    ("POST", "/self-care/v1/addOn"),
 }
 
 # Query shapes

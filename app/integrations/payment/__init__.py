@@ -6,13 +6,23 @@ unknown value fails startup (app/config.py) and `adapter()`. docs/decisions/paym
 
 from app.config import settings
 from app.integrations.payment.interface import (
+    Card,
+    CardRejected,
     ChargeResult,
     PaymentAdapter,
     PaymentDeclined,
     PaymentTemporary,
 )
 
-__all__ = ["ChargeResult", "PaymentAdapter", "PaymentDeclined", "PaymentTemporary", "adapter"]
+__all__ = [
+    "Card",
+    "CardRejected",
+    "ChargeResult",
+    "PaymentAdapter",
+    "PaymentDeclined",
+    "PaymentTemporary",
+    "adapter",
+]
 
 _ADAPTERS: dict[str, PaymentAdapter] = {}
 

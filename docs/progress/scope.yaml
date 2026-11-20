@@ -147,6 +147,18 @@ items:
   - {id: api.selfCare.password.set, area: api, stage: 5, method: POST, path: /self-care/v1/password, title: "Self-care: set the password with an emailed link code"}
   - {id: api.selfCare.password.reset, area: api, stage: 5, method: POST, path: /self-care/v1/password/reset, title: "Self-care: ask for a password reset code"}
   - {id: api.selfCare.customer.get, area: api, stage: 5, method: GET, path: "/self-care/v1/customer/{customer_id}", title: "Self-care: the signed-in customer's own record (others 404)"}
+  - {id: api.selfCare.account.list, area: api, stage: 5, method: GET, path: /self-care/v1/account, title: "Self-care: the customer's accounts with balance, auto top-up and service address (#376)"}
+  - {id: api.selfCare.line.list, area: api, stage: 5, method: GET, path: /self-care/v1/line, title: "Self-care: the customer's prepaid lines: number, plan, status, paid through, renewal mode (#376)"}
+  - {id: api.selfCare.line.usage, area: api, stage: 5, method: GET, path: "/self-care/v1/line/{line_id}/usage", title: "Self-care: a line's usage against its allowance (#376)"}
+  - {id: api.selfCare.history.list, area: api, stage: 5, method: GET, path: /self-care/v1/history, title: "Self-care: the account's transaction ledger, newest first (#376)"}
+  - {id: api.selfCare.offering.list, area: api, stage: 5, method: GET, path: /self-care/v1/offering, title: "Self-care: plans or add-ons on sale with the first-charge quote (#376)"}
+  - {id: api.selfCare.paymentMethod.list, area: api, stage: 5, method: GET, path: /self-care/v1/paymentMethod, title: "Self-care: the saved cards (#376)"}
+  - {id: api.selfCare.paymentMethod.create, area: api, stage: 5, method: POST, path: /self-care/v1/paymentMethod, title: "Self-care: save a card from a gateway token only (#376)"}
+  - {id: api.selfCare.paymentMethod.delete, area: api, stage: 5, method: DELETE, path: "/self-care/v1/paymentMethod/{method_id}", title: "Self-care: remove a saved card (#376)"}
+  - {id: api.selfCare.topUp.create, area: api, stage: 5, method: POST, path: /self-care/v1/topUp, title: "Self-care: top up with a saved card through the gateway (#376)"}
+  - {id: api.selfCare.topUp.get, area: api, stage: 5, method: GET, path: "/self-care/v1/topUp/{command_id}", title: "Self-care: a card top-up and the gateway's answer (#376)"}
+  - {id: api.selfCare.autoTopUp.set, area: api, stage: 5, method: PUT, path: /self-care/v1/autoTopUp, title: "Self-care: turn auto top-up on or off (#376)"}
+  - {id: api.selfCare.addOn.create, area: api, stage: 5, method: POST, path: /self-care/v1/addOn, title: "Self-care: buy an add-on pack, placed as a TMF622 order (#376)"}
   - {id: api.internal.careLogin.get, area: api, stage: 5, method: GET, path: "/internal/v1/customer/{customer_id}/careLogin", title: "A customer's self-care login (operator)"}
   - {id: api.internal.careLogin.invite, area: api, stage: 5, method: POST, path: "/internal/v1/customer/{customer_id}/careLogin", title: "Invite a customer to self-care (operator)"}
   - {id: api.internal.careLogin.disable, area: api, stage: 5, method: DELETE, path: "/internal/v1/customer/{customer_id}/careLogin", title: "Disable a customer's self-care login (operator)"}

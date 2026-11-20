@@ -9,6 +9,7 @@ when the answer is not known (the BSS submits again with the same key).
 """
 
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 from typing import Literal, Protocol
 
@@ -25,6 +26,23 @@ class PaymentTemporary(Exception):
     """A transport or temporary error: the same charge is submitted again later."""
 
 
+class CardRejected(Exception):
+    """The gateway does not know the token or will not keep the card: nothing is saved."""
+
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason
+
+
+@dataclass(frozen=True)
+class Card:
+    """What the gateway tells about a token from its client-side form: never the number."""
+
+    brand: str | None
+    last_four: str | None
+    expires: datetime | None = None
+
+
 @dataclass(frozen=True)
 class ChargeResult:
     status: Literal["succeeded", "declined"]
@@ -33,6 +51,11 @@ class ChargeResult:
 
 
 class PaymentAdapter(Protocol):
+    def card(self, token: str) -> Card:
+        """The card behind a token (self-care saves a card from the token alone); raises
+        CardRejected for a token the gateway does not accept."""
+        ...
+
     def charge(self, key: str, token: str, amount: Decimal, currency: str) -> None: ...
 
     def result(self, key: str) -> ChargeResult | None:

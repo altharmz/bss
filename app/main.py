@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 
 from app import api, db, internal, logsetup, metrics, overload, status
 from app.auth import authenticate
+from app.care import api as care_api
 from app.care import routes as care_routes
 from app.clock import SystemClock
 from app.config import settings
@@ -42,6 +43,7 @@ app = FastAPI(
 api.install(app)
 internal.install(app)
 app.include_router(care_routes.router)
+app.include_router(care_api.router)
 app.include_router(status.router)
 app.include_router(metrics.router)
 app.add_middleware(overload.InFlightLimitMiddleware)  # inside: rejections logged, counted

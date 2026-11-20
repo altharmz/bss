@@ -112,17 +112,92 @@ so tests can turn it on.
 reach: the session's `customer_id`. Every self-care repository function takes it
 (`app/repository/care_logins.py own_customer`). Another customer's object answers **404,
 never 403**, so ids are not confirmed. `GET /self-care/v1/customer/{id}` is the first such
-read and the proof; the self-care API (#376) adds the rest the same way.
+read and the proof; the self-care API (#376) adds the rest the same way
+(`app/repository/self_care.py`).
+
+## The self-care API (#376)
+
+Slice 2: what a signed-in customer reads and does, backend only (`app/care/api.py`, contract
+in the same spec file). Decided on the issue on 2026-11-15; built as below. It adds no money,
+ordering or network logic: the reads are the internal API's own views and the writes call the
+operator's services, refactored out of their routes for it (`app/internal/accounts.py quote`
+and `transaction_body`, `app/internal/usage.py summary`, `app/internal/payments.py
+queue_card_topup` and `set_auto_topup`, `app/api/payment_method.py save_card` and
+`remove_card`). Responses are our own JSON, never TMF bodies or internal hrefs.
+
+**Reads.** `GET /account` (every account of the customer; `balance` {spendable = ledger less
+holds, held} and `autoTopUp` on a prepaid one, null on a postpaid one; `serviceAddress`).
+`GET /line` (the prepaid products that are not ended and are not packs: number, plan, kind,
+status and paid-through date of the entitlement view, `renewalMode` = the internal
+`fundingSource`, the packs live today). `GET /line/{id}/usage` (the internal usage summary
+without the barring command's details). `GET /history` (the internal transaction ledger,
+paged, without hrefs). `GET /offering?kind=addOn|plan` (sellable, Active and valid offerings
+of that kind, each with the operator's firstCharge quote for today: amount, period, available,
+shortfall; one without a price in the account's currency is left out). Added beyond the
+issue's list because the web app needs them: `GET /paymentMethod` (the saved cards) and
+`GET /topUp/{id}` (the gateway's answer to a top-up: a card top-up only queues a command).
+
+**Which account.** A write or read that needs one takes `billingAccountId`; left out, it is
+the customer's only prepaid account, and a 422 when there are several or none. A top-up's
+account is its card's; an add-on's is its line's.
+
+**Writes**, each audited in `account_audit` with operator `customer:<login id>`, role
+`customer`, verification `session` (migration `0087`) and the login in `detail`:
+- `POST /topUp {amount, paymentMethodId}` (`care_top_up`): the operator's card top-up command
+  (202); the balance rises when the worker reads the gateway's confirmation.
+- `POST /paymentMethod {token, billingAccountId?, name?}` (`care_card_saved`): the token alone.
+  The adapter gained `card(token)`: the gateway says the brand, last four and expiry (a real
+  gateway looks the token up; the stub knows `tok_visa`, `tok_mastercard`, `tok_decline` and
+  `tok_fail` and rejects any other: 422 `cardRejected`). The card fields of TMF670 (`brand`,
+  `lastFourDigits`, ...) are unknown attributes here (400), so a customer cannot claim a card;
+  card numbers and security codes are refused by name on every write, as on TMF670. Prepaid
+  accounts only (409).
+- `DELETE /paymentMethod/{id}` (`care_card_removed`), `PUT /autoTopUp` (`care_auto_top_up`;
+  the internal PATCH's rules).
+- `POST /addOn {lineId, offeringId}` (`care_add_on`): a TMF622 order placed with
+  `place_order` (the order's actor is the customer, so no PIN rule applies: an add-on is no
+  protected action) and its Create event. Accepted: 201 with the order id and state
+  (inProgress until the network confirms `change_profile`; the fee is held, then charged).
+  Refused: the rejected order is kept, as on TMF622, the audit entry is `refused` with the
+  code as reason, and the answer is a 422 whose `code` is the order's first error code (all of
+  them in `message`). An offering that is not an add-on is a 404.
+
+**Idempotency.** The three POSTs take `Idempotency-Key` with the P4b journal, keyed by
+`customer:<login id>`, so customers' keys never meet. Only successes are kept: a refused add-on
+under a key can be bought later with the same key. The PUT and the DELETE are idempotent by
+nature and take no key. A top-up's own `client_key` is a fresh `care-<uuid>`: the journal is
+what answers a repeat.
+
+**Rate limit.** 30 writes a minute per session (`limit_rate` in `app/internal/users.py`: the
+sign-in throttle's table, key `care-write|<session token hash>`, counted in its own
+transaction so a refused write counts). Reads are not counted.
+
+**Alerts.** The write actions join `SELF_CARE_ACTIONS`: the customer did them, so no security
+alert. The operator's audit screen labels them.
+
+**Not here.** The stub gateway's test page that hands the web app a token belongs to the web
+app (#378), which builds the client-side card form. SIM swap, number change, port-out PIN,
+plan change, termination and contact or address changes stay operator-only (decided on the
+issue).
+
+**Tests.** `tests/test_self_care_api.py`: every read with the session's data; another
+customer's line, account, card and top-up ids are 404 on every read and write; a saved card
+and a card top-up confirmed by the stub (two wake-ups), its replayed key and a key reused for
+another amount (409); a declined card; card numbers, security codes and card fields refused
+(400) and an unknown token (422); a card removed; auto top-up set and the line's renewal mode;
+the limit of 30 writes a minute; an add-on through the order path (held, `change_profile`,
+charged once, listed on the line) with its replay; a refused add-on's code, audit and a later
+purchase under the same key.
 
 ## Alerts
 
 The security-alert detector (accounts.md) tells the customer about every `done` audit entry.
 Self-care entries are excluded (`SELF_CARE_ACTIONS`): the customer started them, and the
-code went to the login's email. A "your password was changed" alert can come with #376.
+code went to the login's email. The self-care writes of #376 are excluded the same way.
 
 ## Not in this slice
 
-The other self-care reads and writes (#376), signup (#377), the web app and the operator
+Signup (#377), the web app and the operator
 screen (#378), a housekeeping rule for old codes and revoked sessions (expired sessions go at the
 next sign-in; codes are small rows), audit rows for an operator's invite and disable.
 

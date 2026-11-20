@@ -35,6 +35,11 @@ export const AUDIT_ACTIONS: Record<AuditAction, string> = {
   care_sign_in: 'Self-care sign-in',
   care_locked: 'Self-care login locked',
   care_password_changed: 'Self-care password set',
+  care_top_up: 'Self-care card top-up',
+  care_card_saved: 'Self-care card saved',
+  care_card_removed: 'Self-care card removed',
+  care_auto_top_up: 'Self-care auto top-up set',
+  care_add_on: 'Self-care add-on bought',
 };
 
 export const VERIFICATION: Record<AuditEntry['verification'], string> = {
@@ -43,6 +48,7 @@ export const VERIFICATION: Record<AuditEntry['verification'], string> = {
   none: 'None',
   'password+code': 'Password and code',
   code: 'Emailed code',
+  session: 'Self-care session',
 };
 
 export function loadPin(customerId: string, signal: AbortSignal): Promise<PinStatus> {
