@@ -1,7 +1,9 @@
 """Deterministic stand-in for the payment gateway.
 
 Test values (the card token): `tok_decline` is declined, `tok_fail` fails temporarily
-until `recover()` is called for it; any other token succeeds. The answer to a key is
+until `recover()` is called for it; any other token succeeds. Saving a card from a token alone
+(`card`, self-care) knows only the documented test tokens of `CARDS`: `tok_visa`,
+`tok_mastercard`, `tok_decline` and `tok_fail`; any other token is rejected. The answer to a key is
 remembered, so a repeated key gets the first answer and counts as one charge in `charges`.
 The result of a charge is available from `result`; the BSS reads it on the worker's next
 wake-up after the charge was submitted.
@@ -9,10 +11,17 @@ wake-up after the charge was submitted.
 
 from decimal import Decimal
 
-from app.integrations.payment.interface import ChargeResult, PaymentTemporary
+from app.integrations.payment.interface import Card, CardRejected, ChargeResult, PaymentTemporary
 
 DECLINE_TOKEN = "tok_decline"  # noqa: S105
 FAIL_TOKEN = "tok_fail"  # noqa: S105
+# the test cards a token stands for (no expiry: the stub's cards never expire)
+CARDS = {
+    "tok_visa": Card("visa", "4242"),
+    "tok_mastercard": Card("mastercard", "4444"),
+    DECLINE_TOKEN: Card("visa", "0002"),
+    FAIL_TOKEN: Card("visa", "0341"),
+}
 
 
 class StubPayment:
@@ -30,6 +39,11 @@ class StubPayment:
 
     def recover(self, token: str) -> None:
         self.recovered.add(token)
+
+    def card(self, token: str) -> Card:
+        if token not in CARDS:
+            raise CardRejected("stub: unknown test token")
+        return CARDS[token]
 
     def charge(self, key: str, token: str, amount: Decimal, currency: str) -> None:
         self.attempts.append(key)

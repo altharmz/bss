@@ -149,7 +149,11 @@ def declared_statuses(api: str, path: str, method: str) -> set[str]:
 
 
 def response_schema(api: str, path: str, method: str, status: int) -> str | None:
-    """The schema name the spec gives a JSON response, e.g. 'CareSession'; None without one."""
+    """The schema name the spec gives a JSON response, e.g. 'CareSession' (of each item, for an
+    array); None without one."""
     response = spec(api)["paths"][path][method]["responses"].get(str(status), {})
-    ref = response.get("content", {}).get("application/json", {}).get("schema", {}).get("$ref")
+    schema = response.get("content", {}).get("application/json", {}).get("schema", {})
+    if schema.get("type") == "array":
+        schema = schema.get("items", {})
+    ref = schema.get("$ref")
     return None if ref is None else ref.rsplit("/", 1)[-1]

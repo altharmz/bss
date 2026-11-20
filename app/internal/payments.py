@@ -114,48 +114,57 @@ def card_topup(
 ) -> TmfJSONResponse:
     no_query(request)
     data = parse(CardTopup, body)
-    if data.amount.value <= 0:
-        raise unprocessable("amount.value must be positive")
     with tx() as conn:
         account = _account(conn, account_id, lock=True)
-        _prepaid(account)
-        if data.amount.unit != account["currency"]:
-            raise unprocessable(f"amount.unit must be the account's currency {account['currency']}")
-        method = (
-            methods.active(conn, data.payment_method.id)
-            if data.payment_method is not None
-            else methods.default_of(conn, account["id"])
+        method_id = None if data.payment_method is None else data.payment_method.id
+        row, created = queue_card_topup(
+            conn, account, data.amount, method_id, data.idempotency_key, clock.now()
         )
-        if data.payment_method is None and method is None:
-            raise conflict("the account has no default card: save one or name paymentMethod")
-        if method is None or method["billing_account_id"] != account["id"]:
-            raise unprocessable("paymentMethod is not an active card of this account")
-        existing = repo.by_client_key(conn, account["id"], data.idempotency_key)
-        if existing is not None:
-            if (
-                existing["amount"] != data.amount.value
-                or existing["payment_method_id"] != method["id"]
-            ):
-                raise conflict("this idempotencyKey was used for a different top-up")
-            return TmfJSONResponse(command_body(existing))
-        if account["state"] == "Closed":
-            raise conflict("the billing account is closed")
-        now = clock.now()
-        reason = usable(method, now)
-        if reason is not None:
-            raise conflict(reason)
-        row = repo.insert(
-            conn,
-            account_id=account["id"],
-            method_id=method["id"],
-            purpose="topup",
-            amount=data.amount.value,
-            currency=account["currency"],
-            client_key=data.idempotency_key,
-            request=charge_request(method, data.amount.value, account["currency"], "topup"),
-            now=now,
-        )
-    return TmfJSONResponse(command_body(row), status_code=202)
+    return TmfJSONResponse(command_body(row), status_code=202 if created else 200)
+
+
+def queue_card_topup(
+    conn, account: Row, amount: Money, method_id: UUID | None, client_key: str, now
+) -> tuple[Row, bool]:
+    """Store one charge of the card (the account's default when `method_id` is None) for the
+    account, locked by the caller: (the command, True), or (the command `client_key` already
+    made, False). Self-care tops up with it too."""
+    if amount.value <= 0:
+        raise unprocessable("amount.value must be positive")
+    _prepaid(account)
+    if amount.unit != account["currency"]:
+        raise unprocessable(f"amount.unit must be the account's currency {account['currency']}")
+    method = (
+        methods.active(conn, method_id)
+        if method_id is not None
+        else methods.default_of(conn, account["id"])
+    )
+    if method_id is None and method is None:
+        raise conflict("the account has no default card: save one or name paymentMethod")
+    if method is None or method["billing_account_id"] != account["id"]:
+        raise unprocessable("paymentMethod is not an active card of this account")
+    existing = repo.by_client_key(conn, account["id"], client_key)
+    if existing is not None:
+        if existing["amount"] != amount.value or existing["payment_method_id"] != method["id"]:
+            raise conflict("this idempotencyKey was used for a different top-up")
+        return existing, False
+    if account["state"] == "Closed":
+        raise conflict("the billing account is closed")
+    reason = usable(method, now)
+    if reason is not None:
+        raise conflict(reason)
+    row = repo.insert(
+        conn,
+        account_id=account["id"],
+        method_id=method["id"],
+        purpose="topup",
+        amount=amount.value,
+        currency=account["currency"],
+        client_key=client_key,
+        request=charge_request(method, amount.value, account["currency"], "topup"),
+        now=now,
+    )
+    return row, True
 
 
 @accounts.get("/{account_id}/cardTopup")
@@ -207,31 +216,34 @@ def patch_auto_topup(
     data = parse(AutoTopup, body)
     with tx() as conn:
         account = _account(conn, account_id, lock=True)
-        _prepaid(account)
-        threshold = account["auto_topup_threshold"]
-        amount = account["auto_topup_amount"]
-        for name, given in (("threshold", data.threshold), ("amount", data.amount)):
-            if given is not None and given.unit != account["currency"]:
-                raise unprocessable(
-                    f"{name}.unit must be the account's currency {account['currency']}"
-                )
-        threshold = data.threshold.value if data.threshold is not None else threshold
-        amount = data.amount.value if data.amount is not None else amount
-        if data.enabled:
-            if threshold is None or amount is None:
-                raise unprocessable("threshold and amount are required to turn auto top-up on")
-            if threshold <= 0:
-                raise unprocessable("threshold must be positive")
-            if amount < threshold:
-                raise unprocessable(
-                    "amount must be at least the threshold: one top-up must end the shortfall"
-                )
-        conn.execute(
-            "UPDATE billing_account SET auto_topup_enabled = %s, auto_topup_threshold = %s,"
-            " auto_topup_amount = %s, auto_topup_changed_at = %s WHERE id = %s",
-            (data.enabled, threshold, amount, clock.now(), account["id"]),
-        )
+        set_auto_topup(conn, account, data, clock.now())
         return TmfJSONResponse(auto_body(conn, _account(conn, account_id)))
+
+
+def set_auto_topup(conn, account: Row, data: AutoTopup, now) -> None:
+    """Turn the rule of the account (locked by the caller) on or off; self-care sets it too."""
+    _prepaid(account)
+    threshold = account["auto_topup_threshold"]
+    amount = account["auto_topup_amount"]
+    for name, given in (("threshold", data.threshold), ("amount", data.amount)):
+        if given is not None and given.unit != account["currency"]:
+            raise unprocessable(f"{name}.unit must be the account's currency {account['currency']}")
+    threshold = data.threshold.value if data.threshold is not None else threshold
+    amount = data.amount.value if data.amount is not None else amount
+    if data.enabled:
+        if threshold is None or amount is None:
+            raise unprocessable("threshold and amount are required to turn auto top-up on")
+        if threshold <= 0:
+            raise unprocessable("threshold must be positive")
+        if amount < threshold:
+            raise unprocessable(
+                "amount must be at least the threshold: one top-up must end the shortfall"
+            )
+    conn.execute(
+        "UPDATE billing_account SET auto_topup_enabled = %s, auto_topup_threshold = %s,"
+        " auto_topup_amount = %s, auto_topup_changed_at = %s WHERE id = %s",
+        (data.enabled, threshold, amount, now, account["id"]),
+    )
 
 
 def _one(conn, raw_id: str) -> Row:

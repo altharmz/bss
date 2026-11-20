@@ -119,6 +119,24 @@ def limit_login(tx, request, username, now):
         )
 
 
+def limit_rate(tx, key: str, now, maximum: int, what: str) -> None:
+    """At most `maximum` requests a minute under `key`, counted in `sign_in_attempt` like the
+    sign-in throttle (every app process shares the count) in a transaction of its own, so a
+    refused request still counts. Self-care writes use it per session (#376)."""
+    with tx() as conn:
+        conn.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (key,))
+        conn.execute(
+            "DELETE FROM sign_in_attempt WHERE key = %s AND at <= %s",
+            (key, now - timedelta(minutes=1)),
+        )
+        (count,) = conn.execute(
+            "SELECT count(*) FROM sign_in_attempt WHERE key = %s", (key,)
+        ).fetchone()
+        if count >= maximum:
+            raise TmfError(429, f"too many {what}", headers={"Retry-After": "60"})
+        conn.execute("INSERT INTO sign_in_attempt (key, at) VALUES (%s, %s)", (key, now))
+
+
 @router.post("/session")
 def create_session(request: Request, body: JsonBody, tx: Tx, clock: ClockDep):
     no_query(request)

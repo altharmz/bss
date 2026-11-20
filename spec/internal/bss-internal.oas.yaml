@@ -2735,10 +2735,10 @@ components:
         product: *optionalRef
         action:
           type: string
-          enum: [sim_swap, number_change, number_transfer_pin, contact_change, port_out, pin_set, pin_reset, lock_set, lock_cleared, pin_lockout, e911_changed, interaction_logged, ticket_opened, ticket_status_changed, care_note_added, care_sign_in, care_locked, care_password_changed]
+          enum: [sim_swap, number_change, number_transfer_pin, contact_change, port_out, pin_set, pin_reset, lock_set, lock_cleared, pin_lockout, e911_changed, interaction_logged, ticket_opened, ticket_status_changed, care_note_added, care_sign_in, care_locked, care_password_changed, care_top_up, care_card_saved, care_card_removed, care_auto_top_up, care_add_on]
         outcome: {type: string, enum: [done, refused]}
         reason: {type: string, nullable: true}
-        verification: {type: string, enum: [pin, notRequired, none, password+code, code]}
+        verification: {type: string, enum: [pin, notRequired, none, password+code, code, session]}
         detail: {type: object}
     KpiReport:
       type: object

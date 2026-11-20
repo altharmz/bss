@@ -4,20 +4,32 @@
 
 - Base path here: `/self-care/v1`
 - Contract: [`spec/self-care/bss-self-care.oas.yaml`](../../spec/self-care/bss-self-care.oas.yaml) - BSS self-care API (customers) version 1.0.0; the spec's server URL is `/self-care/v1`
-- Operations exposed: 7
+- Operations exposed: 19
 
 
 ## Operations
 
 | Method | Path | Parameters | Request schema | Success | Code |
 |---|---|---|---|---|---|
+| GET | `/self-care/v1/account` | - | - | 200 `array of CareAccount` | [`app/care/api.py`](../../app/care/api.py) |
+| POST | `/self-care/v1/addOn` | - | `object` | 201 `CareAddOnOrder` | [`app/care/api.py`](../../app/care/api.py) |
+| PUT | `/self-care/v1/autoTopUp` | - | `object` | 200 `CareAutoTopUp` | [`app/care/api.py`](../../app/care/api.py) |
 | GET | `/self-care/v1/customer/{customer_id}` | path: `customer_id` | - | 200 `CareCustomer` | [`app/care/routes.py`](../../app/care/routes.py) |
+| GET | `/self-care/v1/history` | query: `billingAccountId`, `offset`, `limit` | - | 200 `array of CareTransaction` | [`app/care/api.py`](../../app/care/api.py) |
+| GET | `/self-care/v1/line` | - | - | 200 `array of CareLine` | [`app/care/api.py`](../../app/care/api.py) |
+| GET | `/self-care/v1/line/{line_id}/usage` | path: `line_id` | - | 200 `CareUsage` | [`app/care/api.py`](../../app/care/api.py) |
+| GET | `/self-care/v1/offering` | query: `kind` (required), `billingAccountId` | - | 200 `array of CareOffering` | [`app/care/api.py`](../../app/care/api.py) |
 | POST | `/self-care/v1/password` | - | `object` | 204 (no body) | [`app/care/routes.py`](../../app/care/routes.py) |
 | POST | `/self-care/v1/password/reset` | - | `object` | 204 (no body) | [`app/care/routes.py`](../../app/care/routes.py) |
+| GET | `/self-care/v1/paymentMethod` | - | - | 200 `array of CareCard` | [`app/care/api.py`](../../app/care/api.py) |
+| POST | `/self-care/v1/paymentMethod` | - | `object` | 201 `CareCard` | [`app/care/api.py`](../../app/care/api.py) |
+| DELETE | `/self-care/v1/paymentMethod/{method_id}` | path: `method_id` | - | 204 (no body) | [`app/care/api.py`](../../app/care/api.py) |
 | DELETE | `/self-care/v1/session` | - | - | 204 (no body) | [`app/care/routes.py`](../../app/care/routes.py) |
 | GET | `/self-care/v1/session` | - | - | 200 `CareSession` | [`app/care/routes.py`](../../app/care/routes.py) |
 | POST | `/self-care/v1/session` | - | `object` | 202 `CodeSent` | [`app/care/routes.py`](../../app/care/routes.py) |
 | POST | `/self-care/v1/session/verify` | - | `object` | 200 `CareSession` | [`app/care/routes.py`](../../app/care/routes.py) |
+| POST | `/self-care/v1/topUp` | - | `object` | 202 `CareTopUp` | [`app/care/api.py`](../../app/care/api.py) |
+| GET | `/self-care/v1/topUp/{command_id}` | path: `command_id` | - | 200 `CareTopUp` | [`app/care/api.py`](../../app/care/api.py) |
 
 Schema names refer to `components/schemas` (or `definitions`) of [`spec/self-care/bss-self-care.oas.yaml`](../../spec/self-care/bss-self-care.oas.yaml). Every response in the test suite is validated against them by `tests/apiclient.py` (2xx: the resource schema; anything else: `Error`).
 

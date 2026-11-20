@@ -51,8 +51,15 @@ def usage_summary(request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
         product = products.get_product(conn, product_id)
         if product is None:
             raise not_found("product", raw)
-        body: dict[str, Any] = rules.summary(conn, product_id, day)
-        state = usage_bar.line_state(conn, product_id, day)
+        body = summary(conn, product_id, day)
+    return TmfJSONResponse({"product": {"id": raw, "href": product_href(raw)}, "date": day, **body})
+
+
+def summary(conn, product_id: UUID, day: date) -> dict[str, Any]:
+    """period, allowances, throttled and payAsYouGo of the line on `day` (self-care reads it
+    too)."""
+    body: dict[str, Any] = rules.summary(conn, product_id, day)
+    state = usage_bar.line_state(conn, product_id, day)
     body["payAsYouGo"] = None
     if state is not None:
         barring = state["barring"]
@@ -64,4 +71,4 @@ def usage_summary(request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
             else {**barring, "createdAt": utc(barring["createdAt"])},
             "unratedRecords": state["unratedRecords"],
         }
-    return TmfJSONResponse({"product": {"id": raw, "href": product_href(raw)}, "date": day, **body})
+    return body

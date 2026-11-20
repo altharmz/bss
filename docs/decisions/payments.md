@@ -49,7 +49,9 @@ result is awaited), `confirmed`, `declined` (final), `exhausted`, `cancelled` (r
 Kind `refund` exists in the table and the adapter has `refund(key, gateway_ref, amount)`,
 but nothing creates or sends a refund command in this slice (adapter only).
 
-The adapter contract: `charge(key, token, amount, currency)` only submits (raises
+The adapter contract: `card(token)` tells the card behind a token (brand, last four, expiry;
+`CardRejected` for a token the gateway does not accept), so self-care saves a card from the
+token alone (#376, [self-care.md](self-care.md#the-self-care-api-376)); `charge(key, token, amount, currency)` only submits (raises
 `PaymentDeclined` for an immediate refusal, `PaymentTemporary` when the answer is unknown);
 `result(key)` returns `succeeded`, `declined` (with a reason) or `None` while undecided. A
 real gateway also pushes the result to a webhook that records the same result.

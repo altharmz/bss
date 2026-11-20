@@ -157,6 +157,7 @@ INTERNAL: dict[str, str] = {
 # The customers' self-care API (spec/self-care/bss-self-care.oas.yaml): the response schema is
 # the one the spec names for the method and status.
 SELF_CARE_BASE = "/self-care/v1"
+SELF_CARE_LITERALS = {"/session/verify", "/password/reset"}  # two segments, no id
 # Our own JSON Schemas for TMF extensions, served outside the TMF resource paths.
 SCHEMA_PREFIX = "/tmf-api/schema/"
 # Statuses we return that the specs do not declare on any operation (decided in
@@ -287,8 +288,9 @@ class TmfClient:
     def _locate(path: str) -> tuple[str, str | None, str | None, str]:
         if path.startswith(SELF_CARE_BASE + "/"):
             spec_path = path[len(SELF_CARE_BASE) :]
-            if spec_path.startswith("/customer/"):
-                spec_path = "/customer/{id}"
+            parts = spec_path.split("/")  # "", collection, id, sub-resource...
+            if len(parts) > 2 and spec_path not in SELF_CARE_LITERALS:
+                spec_path = "/".join([*parts[:2], "{id}", *parts[3:]])
             return "SELF_CARE", "selfCare", "", spec_path
         if path.startswith(INTERNAL_BASE + "/"):
             parts = path[len(INTERNAL_BASE) + 1 :].split("/")
