@@ -231,6 +231,9 @@ and `data.json` (the ids k6 sampled; `loadtest/k6-data.sql`).
 | `billing-night` | 20 % of the mix, the feed at the night's 8 records/s, one catch-up run of the first unbilled date through `POST /internal/v1/billingRun/catchUp`; measures the run, the API latency while it runs, and a `pg_dump -Fc` started 105 min after the run start | 2 h |
 | `prod-shaped` | steady at today's production limits (app 0.5 CPU / 384m / 1 process / pool 10, worker 0.25 CPU, postgres 512m, `shared_buffers` 128MB); its numbers are the current ceiling, not a verdict | 30 min |
 
+`LOADTEST_MAX_IN_FLIGHT` in the environment of `make loadtest` sets the app's
+`BSS_MAX_IN_FLIGHT` (#341; empty = `DB_POOL_SIZE`).
+
 **The mix at 1x** (operations per second; `MULT` scales every rate and the UI VUs; open
 model, `constant-arrival-rate`):
 

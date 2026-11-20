@@ -49,6 +49,9 @@ services:
       # WEB_CONCURRENCY x DB_POOL_SIZE + 1 + BILLING_PROCESSES + 3 <= max_connections
       WEB_CONCURRENCY: ${WEB_CONCURRENCY:-1}
       DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
+      # requests in flight per process beyond which the app answers 503 at once (#341);
+      # empty = DB_POOL_SIZE (docs/decisions/infra.md, "Request bound")
+      BSS_MAX_IN_FLIGHT: ${BSS_MAX_IN_FLIGHT:-}
       BSS_METRICS_TOKEN: ${BSS_METRICS_TOKEN:-}
       BSS_BUILD: ${TAG:-dev}
       # Rollback drill only: scripts/deploy.sh sets it for the `up` of a release under

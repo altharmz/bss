@@ -80,6 +80,8 @@ services:
       # the load-test budget (#288): 4 x 15 + worker + tools <= max_connections 80
       WEB_CONCURRENCY: ${LOADTEST_WEB_CONCURRENCY:-4}
       DB_POOL_SIZE: ${LOADTEST_DB_POOL_SIZE:-15}
+      # requests in flight per process (#341); empty = DB_POOL_SIZE
+      BSS_MAX_IN_FLIGHT: ${LOADTEST_MAX_IN_FLIGHT:-}
     cpuset: ${LOADTEST_SUT_CPUS:-4-7}
     cpus: ${LOADTEST_APP_CPUS:-3.0}
     mem_limit: ${LOADTEST_APP_MEM:-1536m}

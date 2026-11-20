@@ -3,7 +3,7 @@
 How the runs are made: [loadtest.md](loadtest.md#the-k6-scenarios-281). Each scenario's
 full report is `loadtest/out/<scenario>-<time>/report.md` on the workstation (not
 committed); this page keeps the numbers. Run dates: 13 and 14 November 2026; the
-midnight retry on 19 November.
+midnight retry on 19 November; the request bound (#341) on 20 November.
 
 ## Summary
 
@@ -16,6 +16,7 @@ midnight retry on 19 November.
 | `billing-night` | pass | the daily run of 100,000 accounts in 22.4 min with 20 % of the mix; API p99 under 110 ms during it |
 | midnight retry (#340, 19 November) | pass | the retry of unfunded renewals in 72 s instead of 81 min; the midnight wake-up as a whole is still 26 to 30 min (the daily full review) |
 | `prod-shaped` | fails, as expected | at today's production limits the app serves about 16 requests/s of the 47 offered and is killed for memory after 103 s |
+| `prod-shaped` with the request bound (#341, 20 November) | thresholds fail; the app stays up | refuses the excess with 503 at once: memory flat at 228 MiB of 384, about 26 requests/s answered, read p95 499 ms; without the bound the same dump OOM-kills it after 85 s |
 
 The targets hold at the 1x peak with a factor of two to spare, on the load-test budget
 (4 logical CPUs of a laptop). Three things had to change first; the first steady run
@@ -501,6 +502,34 @@ process / pool 10, worker 0.25 CPU, postgres 512m with `shared_buffers` 128MB.
 
 </details>
 
+### prod-shaped with the request bound (#341)
+
+20 November, all three runs on one dump (`seed100k-settled-20261120`, restored before
+each, smoke first), the prod-shaped limits as above. The artifacts are in
+`~/projects/bss-agents/worker1/state/issue341-loadtest/` on the workstation.
+
+| Run | App | Requests | Errors | Refused (503) | App RAM | read p50 / p95 / p99 ms |
+|---|---|---|---|---|---|---|
+| `prod-shaped-20261120T004506`, before | **OOM-killed** 85 s after k6 started (exit 137) | 76,815 | 93.2 % | - | 308 MiB at the last sample, then killed | 0 / 0 / 18,583 (refused connections) |
+| `prod-shaped-20261120T012638`, bound 20 (`2 x DB_POOL_SIZE`) | up for the whole run | 87,031 | 49.4 % | 44,822 | 330 MiB (86 %) from minute 6, flat | 586 / 1,038 / 1,196 |
+| `prod-shaped-20261120T020853`, bound 10 (`DB_POOL_SIZE`, the default) | up for the whole run | 87,966 | 45.9 % | 42,320 | 228 MiB (59 %) from minute 3, flat | 256 / 499 / 609 |
+
+- With either bound the app no longer queues: it runs at its 0.5 CPU limit for the whole
+  run and refuses what it cannot serve, so its memory stops growing. The excess is still
+  an error for k6, so the thresholds fail; at these limits the app cannot serve the 1x
+  mix, it can only stay up.
+- The bound of 20 still put memory at 86 % of the limit. 10 is better on every count:
+  less memory, more answered requests, half the latency. Beyond the pool's 10
+  connections a request only waits, holding a thread and memory. The default became
+  `DB_POOL_SIZE` ([infra.md](decisions/infra.md#request-bound-2026-11-19-341)).
+- Answered requests per group at bound 10 (p95 ms): read 499, list 590, write 897, ui 497,
+  usage-post 496, mcp 401 (no errors: bss-mcp's own limit and retries).
+- The dump took long to settle: `seed100k-settled-20261114` restored on the 19th made
+  604,990 prepaid renewals and 39,207 commands in its first wake-up (65 min), then about
+  1,800 commands per wake-up for another 30 min. The midnight wake-up of the 20th made
+  125,808 renewals and 42,550 commands in about 25 min, and the next ones were empty
+  after 15 more.
+
 ### Thresholds proven
 
 `steady-20261114T111440`: `make loadtest SCENARIO=steady MULT=6 DURATION=3m`. k6 exited 99
@@ -520,9 +549,10 @@ and wrote no summary (the runner reports such a run as failed, with its groups m
   [midnight retry](#midnight-retry-340)); the once-a-date full review of every prepaid
   account by lifecycle, entitlements and notifications does, and the feed and the
   notifications wait for it. Issue #404.
-- **The app does not bound the requests it holds.** Under overload its memory grows with
+- **The app did not bound the requests it holds.** Under overload its memory grew with
   the queue until the limit: 1,421 of 1,536 MiB at 5x, and the kill at 384 MiB in
-  prod-shaped. Issue #341.
+  prod-shaped. Fixed by #341 ([results](#prod-shaped-with-the-request-bound-341)); stress
+  at 5x was not rerun.
 - The shake-out on a 10k dataset was skipped: the scripts were proven directly on the
   100k dataset (smoke, then the diagnostics of 12 November).
 - `APP_ENV=test` in the load-test stack: the inventory is in

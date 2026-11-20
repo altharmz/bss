@@ -80,7 +80,19 @@ IN_PROGRESS = Gauge(
     multiprocess_mode="livesum",
 )
 APP_METRICS = {"bss_build_info", "bss_http_requests", "bss_http_request_duration_seconds"}
-APP_METRICS |= {"bss_http_requests_in_progress"}
+REJECTED_OVERLOAD = Counter(
+    "bss_http_rejected_overload",
+    "HTTP requests refused with 503 at the per-process bound BSS_MAX_IN_FLIGHT.",
+    registry=None,
+)
+IN_FLIGHT = Gauge(
+    "bss_http_in_flight",
+    "HTTP requests admitted under the bound and being served (app/overload.py).",
+    registry=None,
+    multiprocess_mode="livesum",
+)
+APP_METRICS |= {"bss_http_requests_in_progress", "bss_http_rejected_overload"}
+APP_METRICS |= {"bss_http_in_flight"}
 
 
 class AppProcesses(Collector):
