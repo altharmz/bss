@@ -31,6 +31,7 @@ services:
       start_period: 180s
     environment:
       APP_ENV: staging
+      BSS_ACCOUNT_PIN_REQUIRED: "${BSS_ACCOUNT_PIN_REQUIRED:-false}"
       LOG_LEVEL: info
       # `postgres` is the service name in vps-infra; database and role are both
       # bss, created there with `make add-db NAME=bss`.

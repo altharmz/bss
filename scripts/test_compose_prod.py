@@ -1,4 +1,4 @@
-"""compose.prod.yaml keeps bss off vps-infra's `shared` network (stdlib only).
+"""Checks for production Compose configuration (stdlib only).
 
 The file is read as text: services are the two-space-indented keys under `services:`.
 """
@@ -61,6 +61,12 @@ class ComposeProd(unittest.TestCase):
         nets = networks_of("app")
         self.assertEqual(sorted(nets), ["bss-db", "bss-edge"])
         self.assertEqual(nets["bss-edge"], ["bss"])
+
+    def test_app_enables_account_pin_verification_only_by_opt_in(self):
+        self.assertIn(
+            '      BSS_ACCOUNT_PIN_REQUIRED: "${BSS_ACCOUNT_PIN_REQUIRED:-false}"',
+            block("app").splitlines(),
+        )
 
     def test_mcp(self):
         self.assertEqual(networks_of("mcp"), {"bss-edge": ["bss-mcp"]})
