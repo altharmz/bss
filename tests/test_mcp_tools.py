@@ -572,6 +572,19 @@ def world(api, db_conn) -> dict[str, Any]:
     return world
 
 
+def signup_in_review(db_conn, world: dict[str, Any]) -> UUID:
+    """An online signup waiting for an operator's decision (#377)."""
+    uid = uuid4()
+    db_conn.execute(
+        "INSERT INTO care_signup (id, email, state, product_offering_id, client_address,"
+        " email_code_hash, email_code_expires_at, email_verified_at, created_at, updated_at)"
+        " VALUES (%s, %s, 'identityReview', %s, 'test', 'x', now(), now(), now(), now())",
+        (uid, f"{uid}@example.org", world["offering"]["id"]),
+    )
+    db_conn.commit()
+    return uid
+
+
 def get_arguments(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
     acc, offering = world["account"]["id"], world["offering"]["id"]
     by_id = {
@@ -671,6 +684,7 @@ def test_every_get_tool_answers_against_the_app(api, mcp, world, db_conn):
     arguments = get_arguments(world)
     for name in ("get_wholesale_invoice", "list_wholesale_discrepancies", "list_wholesale_lines"):
         arguments[name] = {"invoice_id": invoice_id}
+    arguments["get_care_signup"] = {"signup_id": str(signup_in_review(db_conn, world))}
     called = set()
     for name, tool in generated().items():
         if not tool.read_only:
@@ -686,7 +700,7 @@ def test_every_get_tool_answers_against_the_app(api, mcp, world, db_conn):
     assert payments["body"][0]["id"] == world["payment"]["id"]
 
 
-def test_every_write_tool_reaches_the_app(api, mcp, world, monkeypatch):
+def test_every_write_tool_reaches_the_app(api, mcp, world, monkeypatch, db_conn):
     """At least one successful write per resource - in fact every write tool."""
     writer = mcp.token("writer", "write")
     called: set[str] = set()
@@ -1113,6 +1127,11 @@ def test_every_write_tool_reaches_the_app(api, mcp, world, monkeypatch):
     )
     assert invited["status"] == "invited"
     call("disable_care_login", {"customer_id": world["customer"]["id"]})
+    decided = call(
+        "decide_care_signup",
+        {"signup_id": str(signup_in_review(db_conn, world)), "body": {"decision": "approve"}},
+    )
+    assert decided["state"] == "identityPassed" and decided["decidedBy"] == "mcp-token:writer"
 
     assert called == {n for n, t in generated().items() if not t.read_only}
     history = api.get(f"/internal/v1/customerBill/{world['bill']['id']}").json()["history"]

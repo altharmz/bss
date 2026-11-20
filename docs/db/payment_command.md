@@ -71,3 +71,7 @@ Durable outbound charge to the payment gateway: sent and retried by the billing 
 | `payment_command_payment_method_id_idx` | `CREATE INDEX payment_command_payment_method_id_idx ON payment_command USING btree (payment_method_id)` | no |
 | `payment_command_pkey` | `CREATE UNIQUE INDEX payment_command_pkey ON payment_command USING btree (id)` | yes |
 | `payment_command_renewal_idx` | `CREATE INDEX payment_command_renewal_idx ON payment_command USING btree (renewal_command_id) WHERE (renewal_command_id IS NOT NULL)` | no |
+
+## Referenced by
+
+[`care_signup`](care_signup.md)

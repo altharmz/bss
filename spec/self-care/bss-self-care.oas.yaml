@@ -452,6 +452,171 @@ paths:
         '422': {$ref: '#/components/responses/Error'}
         '429': {$ref: '#/components/responses/Error'}
         '503': {$ref: '#/components/responses/Error'}
+  /signup:
+    post:
+      summary: Online signup, step 1 - the email and the plan (issue 377).
+      description: >-
+        Starts a signup for a plan on sale and emails a 6-digit code (30 minutes, 5 attempts)
+        to verify the address. No session: the client keeps the signup's id. 422
+        `offeringUnavailable` for an id that is not a plan on sale; 429 with Retry-After beyond
+        3 signups a day per email or 10 an hour per address; 503 `codeNotSent`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email, offeringId]
+              properties:
+                email: {type: string, maxLength: 254}
+                offeringId: {type: string, maxLength: 64}
+      responses:
+        '201':
+          description: Started, code sent
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CareSignup'}
+        '400': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  /signup/{id}:
+    get:
+      summary: The signup's state (poll it).
+      description: >-
+        Once the line is active, `esim` carries the activation code and its QR payload once
+        (later reads answer null; the customer's email has them too). A signup 24 hours without
+        progress before payment reads `expired`.
+      security: []
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CareSignup'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /signup/{id}/verify:
+    post:
+      summary: Online signup, step 2 - the emailed code.
+      description: >-
+        Verifies the email; a verified signup answers with its state again. 401 `codeInvalid`
+        for a wrong, spent or expired code (5 wrong codes spend it: start again); 409
+        `emailInUse` when the email already has a self-care login, `signupExpired` after 24
+        hours without progress.
+      security: []
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [code]
+              properties:
+                code: {type: string, maxLength: 16}
+      responses:
+        '200':
+          description: Verified
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CareSignup'}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /signup/{id}/details:
+    put:
+      summary: Online signup, step 3 - the person and the service address.
+      description: >-
+        Name, date of birth and the US service address (validated as a billing account's,
+        docs/decisions/taxes.md). The identity check is queued for the worker
+        (`identityPending`): poll GET for `identityPassed`, `identityFailed` or
+        `identityReview` (an operator decides). The same details again answer with the state;
+        other details after the check started are a 409.
+      security: []
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [givenName, familyName, birthDate, serviceAddress]
+              properties:
+                givenName: {type: string, minLength: 1, maxLength: 100}
+                familyName: {type: string, minLength: 1, maxLength: 100}
+                birthDate: {type: string, format: date}
+                serviceAddress:
+                  type: object
+                  additionalProperties: false
+                  required: [street1, city, stateOrProvince, postCode]
+                  properties:
+                    street1: {type: string, maxLength: 200}
+                    street2: {type: string, maxLength: 200}
+                    city: {type: string, maxLength: 100}
+                    stateOrProvince: {type: string, maxLength: 2}
+                    postCode: {type: string, maxLength: 10}
+      responses:
+        '200':
+          description: The identity check is queued
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CareSignup'}
+        '400': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /signup/{id}/payment:
+    post:
+      summary: Online signup, step 4 - the password and the first payment.
+      description: >-
+        After a passed identity check: the self-care password (the operator password policy)
+        and a card token from the gateway's form, never a card number (400). Creates the
+        customer, the prepaid billing account with the service address, the login and the saved
+        card, and charges the card for the plan's first charge. The worker places the order
+        when the gateway confirms (`paid`, then `activating`, then `active`). A declined card
+        leaves the signup `identityPassed` with `payment.declineReason`: pay again. A repeat
+        while a charge is in flight answers with the state. 422 `cardRejected` for a token the
+        gateway does not accept.
+      security: []
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [token, password]
+              properties:
+                token: {type: string, minLength: 1, maxLength: 255}
+                password: {type: string, maxLength: 1024}
+      responses:
+        '202':
+          description: Charging the card
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CareSignup'}
+        '400': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
 components:
   parameters:
     IdempotencyKey:
@@ -736,3 +901,88 @@ components:
         state: {type: string}
         line: {$ref: '#/components/schemas/Ref'}
         offering: {$ref: '#/components/schemas/Ref'}
+    CareSignup:
+      description: An online signup (issue 377), as the customer sees it.
+      type: object
+      additionalProperties: false
+      required: [id, email, state, emailVerified, offering, givenName, familyName, birthDate,
+        serviceAddress, identity, payment, customer, billingAccount, line, order, failure, esim,
+        expiresAt, createdAt, updatedAt]
+      properties:
+        id: {type: string, format: uuid}
+        email: {type: string}
+        state:
+          type: string
+          enum: [started, identityPending, identityPassed, identityFailed, identityReview, paid,
+            activating, active, failed, expired]
+        emailVerified: {type: boolean}
+        offering:
+          type: object
+          additionalProperties: false
+          required: [id, name]
+          properties:
+            id: {type: string, format: uuid}
+            name: {type: string}
+        givenName: {type: string, nullable: true}
+        familyName: {type: string, nullable: true}
+        birthDate: {type: string, format: date, nullable: true}
+        serviceAddress:
+          description: The normalized service address (street1, street2, city, stateOrProvince, postCode, country).
+          type: object
+          nullable: true
+        identity:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [state, reason]
+          properties:
+            state: {type: string, enum: [pending, sent, passed, failed, review, exhausted]}
+            reason: {type: string, nullable: true}
+        payment:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [state, amount, declineReason]
+          properties:
+            state: {type: string, enum: [pending, sent, confirmed, declined, exhausted, cancelled]}
+            amount: {$ref: '#/components/schemas/NullableMoney'}
+            declineReason: {type: string, nullable: true}
+        customer: {$ref: '#/components/schemas/NullableRef'}
+        billingAccount: {$ref: '#/components/schemas/NullableRef'}
+        line:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [id, number]
+          properties:
+            id: {type: string, format: uuid}
+            number: {type: string, nullable: true}
+        order:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [id, state]
+          properties:
+            id: {type: string, format: uuid, description: The TMF622 productOrder.}
+            state: {type: string}
+        failure:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [code, reason]
+          properties:
+            code: {type: string}
+            reason: {type: string, nullable: true}
+        esim:
+          description: Returned once, on the first read after the line is active.
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [iccid, activationCode, qrPayload]
+          properties:
+            iccid: {type: string, nullable: true}
+            activationCode: {type: string, description: 'LPA:1$<SM-DP+ address>$<matching ID>'}
+            qrPayload: {type: string}
+        expiresAt: {type: string, format: date-time, nullable: true}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}

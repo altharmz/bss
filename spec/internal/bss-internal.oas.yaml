@@ -1510,6 +1510,82 @@ paths:
               schema: {$ref: '#/components/schemas/CareLogin'}
         '400': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
+  /careSignup:
+    get:
+      summary: Online signups, newest first (issue 377).
+      description: >-
+        Every signup with its state and, for a failed one, the reason: identityReview waits for
+        a decision, failed names the order's error code (numberUnavailable, simUnavailable,
+        ...), and the first top-up of a failed signup stays on its account as balance. Paged
+        with Link rel=next, no count. email matches exactly (case-insensitive).
+      parameters:
+        - {$ref: '#/components/parameters/Offset'}
+        - {$ref: '#/components/parameters/Limit'}
+        - name: state
+          in: query
+          schema:
+            type: string
+            enum: [started, identityPending, identityPassed, identityFailed, identityReview, paid,
+              activating, active, failed, expired]
+        - name: email
+          in: query
+          schema: {type: string, maxLength: 200}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/CareSignup'}
+        '400': {$ref: '#/components/responses/Error'}
+  /careSignup/{id}:
+    get:
+      summary: One online signup (issue 377).
+      description: Never the email code or the eSIM activation code.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CareSignup'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /careSignup/{id}/decision:
+    post:
+      summary: Decide a signup in identityReview (issue 377).
+      description: >-
+        approve: the identity is accepted and the customer may pay (identityPassed). reject: the
+        signup ends (identityFailed); nothing beyond the signup was created. The reason, when
+        given, replaces the identity service's. 409 `signupState` in any other state.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [decision]
+              properties:
+                '@type': {type: string}
+                '@baseType': {type: string}
+                '@schemaLocation': {type: string}
+                decision: {type: string, enum: [approve, reject]}
+                reason: {type: string, minLength: 1, maxLength: 500}
+      responses:
+        '200':
+          description: Decided
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CareSignup'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
   /wholesale/invoice:
     post:
       summary: Import and reconcile a wholesale invoice of the network partner (issue 197).
@@ -2641,6 +2717,107 @@ components:
         createdBy: {type: string}
         createdAt: {type: string, format: date-time}
         updatedAt: {type: string, format: date-time}
+    CareSignup:
+      description: An online signup (issue 377) as an operator sees it.
+      type: object
+      additionalProperties: false
+      required: [id, email, state, emailVerified, offering, givenName, familyName, birthDate,
+        serviceAddress, identity, payment, customer, billingAccount, line, order, failure, esim,
+        expiresAt, createdAt, updatedAt, clientAddress, identityCheck, decidedBy, decidedAt,
+        activationShown]
+      properties:
+        id: {type: string, format: uuid}
+        email: {type: string}
+        state:
+          type: string
+          enum: [started, identityPending, identityPassed, identityFailed, identityReview, paid,
+            activating, active, failed, expired]
+        emailVerified: {type: boolean}
+        offering:
+          type: object
+          additionalProperties: false
+          required: [id, name]
+          properties:
+            id: {type: string, format: uuid}
+            name: {type: string}
+        givenName: {type: string, nullable: true}
+        familyName: {type: string, nullable: true}
+        birthDate: {type: string, format: date, nullable: true}
+        serviceAddress: {type: object, nullable: true}
+        identity:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [state, reason]
+          properties:
+            state: {type: string, enum: [pending, sent, passed, failed, review, exhausted]}
+            reason: {type: string, nullable: true}
+        payment:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [state, amount, declineReason]
+          properties:
+            state: {type: string, enum: [pending, sent, confirmed, declined, exhausted, cancelled]}
+            amount:
+              type: object
+              nullable: true
+              additionalProperties: false
+              required: [unit, value]
+              properties:
+                unit: {type: string, pattern: '^[A-Z]{3}$'}
+                value: {type: number}
+            declineReason: {type: string, nullable: true}
+        customer: &signupRef
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [id]
+          properties:
+            id: {type: string, format: uuid}
+        billingAccount: *signupRef
+        line:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [id, number]
+          properties:
+            id: {type: string, format: uuid}
+            number: {type: string, nullable: true}
+        order:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [id, state]
+          properties:
+            id: {type: string, format: uuid}
+            state: {type: string}
+        failure:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [code, reason]
+          properties:
+            code: {type: string}
+            reason: {type: string, nullable: true}
+        esim: {type: object, nullable: true, description: Always null for an operator.}
+        expiresAt: {type: string, format: date-time, nullable: true}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+        clientAddress: {type: string}
+        identityCheck:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [id, state, attempts, lastError]
+          properties:
+            id: {type: string, format: uuid}
+            state: {type: string, enum: [pending, sent, passed, failed, review, exhausted]}
+            attempts: {type: integer, minimum: 0}
+            lastError: {type: string, nullable: true}
+        decidedBy: {type: string, nullable: true}
+        decidedAt: {type: string, format: date-time, nullable: true}
+        activationShown: {type: boolean}
     WholesaleInvoice:
       type: object
       additionalProperties: false

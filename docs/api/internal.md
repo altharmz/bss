@@ -4,7 +4,7 @@
 
 - Base path here: `/internal/v1`
 - Contract: [`spec/internal/bss-internal.oas.yaml`](../../spec/internal/bss-internal.oas.yaml) - BSS internal API (admin UI) version 1.0.0; the spec's server URL is `/internal/v1`
-- Operations exposed: 74
+- Operations exposed: 77
 
 
 ## Operations
@@ -25,6 +25,9 @@
 | GET | `/internal/v1/billingRun/{run_id}` | path: `run_id` | - | 200 `BillingRun` | [`app/internal/billing_runs.py`](../../app/internal/billing_runs.py) |
 | GET | `/internal/v1/billingRun/{run_id}/accounts` | path: `run_id`; query: `offset`, `limit`, `status` | - | 200 `array of RunAccount` | [`app/internal/billing_runs.py`](../../app/internal/billing_runs.py) |
 | POST | `/internal/v1/billingRun/{run_id}/retry` | path: `run_id`; body: `application/json` | - | 202 `RetryQueued` | [`app/internal/billing_runs.py`](../../app/internal/billing_runs.py) |
+| GET | `/internal/v1/careSignup` | query: `offset`, `limit`, `state`, `email` | - | 200 `array of CareSignup` | [`app/internal/care_signups.py`](../../app/internal/care_signups.py) |
+| GET | `/internal/v1/careSignup/{signup_id}` | path: `signup_id` | - | 200 `CareSignup` | [`app/internal/care_signups.py`](../../app/internal/care_signups.py) |
+| POST | `/internal/v1/careSignup/{signup_id}/decision` | path: `signup_id`; body: `application/json` | `object` | 200 `CareSignup` | [`app/internal/care_signups.py`](../../app/internal/care_signups.py) |
 | GET | `/internal/v1/context` | - | - | 200 `Context` | [`app/internal/context.py`](../../app/internal/context.py) |
 | DELETE | `/internal/v1/customer/{customer_id}/careLogin` | path: `customer_id` | - | 200 `CareLogin` | [`app/internal/care_logins.py`](../../app/internal/care_logins.py) |
 | GET | `/internal/v1/customer/{customer_id}/careLogin` | path: `customer_id` | - | 200 `CareLogin` | [`app/internal/care_logins.py`](../../app/internal/care_logins.py) |

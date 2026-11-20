@@ -104,7 +104,7 @@ so tests can turn it on.
   `active`, `locked`, `disabled`; live sessions) and disabling it, which ends its sessions and
   codes at once. GET was added for the operator screen of #378. All three are MCP tools; UI
   parity is #378's operator part.
-- Online signup (#377) will create logins itself.
+- Online signup (#377) creates logins itself, with the email verified by its code.
 
 ## The scope rule
 
@@ -189,6 +189,93 @@ the limit of 30 writes a minute; an add-on through the order path (held, `change
 charged once, listed on the line) with its replay; a refused add-on's code, audit and a later
 purchase under the same key.
 
+## Online signup (#377)
+
+Slice 3: a new customer signs up on the web (backend only), from an email to a live prepaid
+eSIM line. Decided on the issue on 2026-11-15; built as below. Migration `0088`. Code:
+`app/care/signup.py` (the steps), `app/worker/signup.py` (what the worker drives),
+`app/internal/care_signups.py` (operators), `app/integrations/identity/` (the adapter).
+
+**Identity check adapter.** A placeholder following epic #182: `verify(key, person, address,
+document?)` answers None until the service decides, then `pass`, `fail` with a reason or
+`review`; `IdentityTemporary` is retried with the network backoff, the same key each time.
+`BSS_IDENTITY_ADAPTER=stub` (an unknown value fails startup), `identity_max_attempts` 5. The stub
+records a check on its first call and decides on the next wake-up: family name `Declined`
+fails, `Review` stays in review, `Unavailable` fails temporarily until `recover()`, anything
+else passes. A real vendor joins #203's list.
+
+**Data.** `care_signup` (the resumable record: email, state, offering, the person, the
+normalized service address, the identity check, the card and first top-up, and the ids it
+created: party, customer, account, login, order, product; the failure code and reason; when
+the activation code was shown) and `identity_check` (the durable outbound command, following
+`network_command`: `pending` → `sent` → `passed` | `failed` | `review`, or `exhausted`).
+States: `started` → `identityPending` → `identityPassed` | `identityFailed` |
+`identityReview` → `paid` → `activating` → `active` | `failed`, plus **`expired`** (not in the
+issue's list: a signup 24 hours without progress before payment needs a state of its own). A
+declined card keeps `identityPassed`; a top-up in flight keeps it from expiring.
+
+**Flow** (`/self-care/v1/signup`, no session: the client keeps the signup's random id, and every
+step after the first needs the email verified):
+1. `POST {email, offeringId}`: a plan on sale now (422 `offeringUnavailable` otherwise); a
+   6-digit `verify_email` code, 30 minutes, 5 attempts, scrypt-hashed on the signup itself
+   (`customer_login_code` needs a login, which does not exist yet). Sent by the request and
+   logged masked (`care_signup_code`), as the sign-in codes are; 503 `codeNotSent`.
+2. `POST /{id}/verify {code}`: 401 `codeInvalid`; 409 `emailInUse` when a self-care login has
+   the email. The check is here and not at step 1, so only the owner of the email learns that
+   it has a login.
+3. `PUT /{id}/details {givenName, familyName, birthDate, serviceAddress}`: the address is
+   validated and normalized as a billing account's (taxes.md); the identity check is inserted
+   and the signup is `identityPending`. The same details again answer 200; others are a 409.
+4. The worker sends the check and asks again on later wake-ups; the client polls `GET /{id}`.
+5. `POST /{id}/payment {token, password}`: the operator password policy, the gateway's
+   `card(token)` (422 `cardRejected`), card numbers refused (400). In one transaction: the
+   individual (birth date and the email as a contact medium), the customer (Active), the
+   prepaid billing account (UI currency, the service address) and its bucket, the login (email
+   verified, password set), the saved card (the default), with their Create events; then a
+   card top-up command for the plan's firstCharge shortfall (the operator's quote, taxes
+   included). A repeat while the charge is in flight answers 202 with the state. After a
+   decline the same endpoint takes another card: the parties are found, not made again.
+6. The worker: confirmed → `paid` and, in the same pass, the TMF622 order (worker actor, no
+   PIN): the plan with `simType: esim` (sim.md picks the profile) and the oldest free **pool**
+   number (`origin = 'pool'`, unlocked, no claim from today, out of quarantine, `SKIP LOCKED`),
+   only for what the offering's specification requires → `activating`.
+7. The order completed (the network confirmed `activate`) → `active`. The worker emails the
+   activation code once (`care_esim_ready`, logged masked), and the first `GET /{id}` after it
+   returns `esim {iccid, activationCode, qrPayload}` (the LPA string of sim.md is the QR
+   payload); later reads answer null.
+
+**Who creates what.** The signup creates the parties, the account, the login and the card; the
+order alone creates the product; only the worker moves a signup after payment. Each worker step
+locks the signup and re-reads its state, so a second tick or worker never repeats a step.
+
+**Failures.** Identity failed: nothing beyond the signup exists. Review (the service said so,
+or the check was exhausted): `POST /internal/v1/careSignup/{id}/decision {decision: approve |
+reject, reason?}` (MCP `decide_care_signup`; 409 `signupState` in another state) records the
+operator in `decided_by`. Card declined: `payment.declineReason`, pay again. No free pool
+number: `failed` with `numberUnavailable` and no order; an order refused (`simUnavailable`, ...)
+or failed later: `failed` with its first error code. The top-up stays on the new account as
+balance. A signup that expires after a declined card keeps the customer, account and login
+it created (no product: the customer can sign in and buy a plan). `GET /internal/v1/careSignup` (filters `state`, `email`; MCP `list_care_signups`) and
+`GET /careSignup/{id}` (`get_care_signup`) show every signup; never a code or the activation
+code. UI parity of the three tools is #378's operator screen (allowlisted).
+
+**Abuse limits.** 3 signups a day per email and 10 an hour per address (`client_address`, the
+sign-in throttle's rule), counted on `care_signup` itself under advisory locks: the throttle's
+table keeps a minute only. 429 with Retry-After.
+
+**Not here.** Resending the code (start again, within the limit), document upload (the
+interface takes one; the stub ignores it), the web pages (#378) and an audit entry for an
+operator's decision (`account_audit` needs a customer, which a signup in review does not have:
+`decided_by`/`decided_at` keep it).
+
+**Tests.** `tests/test_care_signup.py`: the happy path under the injected clock (masked code,
+identity sent then passed, top-up, order with an eSIM and a pool number, activation code once
+and by email, sign-in, the operator list); the worker running again creating nothing twice;
+code, detail and payment replays and refusals; five wrong codes; `emailInUse`; feature off and
+CSRF; identity failed, in review with both decisions, and exhausted; a declined card paid
+again; a rejected token; an empty pool and no eSIM; expiry by request and by the worker; both
+abuse limits. MCP tools in `tests/test_mcp_tools.py`.
+
 ## Alerts
 
 The security-alert detector (accounts.md) tells the customer about every `done` audit entry.
@@ -197,7 +284,7 @@ code went to the login's email. The self-care writes of #376 are excluded the sa
 
 ## Not in this slice
 
-Signup (#377), the web app and the operator
+The web app and the operator
 screen (#378), a housekeeping rule for old codes and revoked sessions (expired sessions go at the
 next sign-in; codes are small rows), audit rows for an operator's invite and disable.
 

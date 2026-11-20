@@ -4,7 +4,7 @@
 
 - Base path here: `/self-care/v1`
 - Contract: [`spec/self-care/bss-self-care.oas.yaml`](../../spec/self-care/bss-self-care.oas.yaml) - BSS self-care API (customers) version 1.0.0; the spec's server URL is `/self-care/v1`
-- Operations exposed: 19
+- Operations exposed: 24
 
 
 ## Operations
@@ -28,6 +28,11 @@
 | GET | `/self-care/v1/session` | - | - | 200 `CareSession` | [`app/care/routes.py`](../../app/care/routes.py) |
 | POST | `/self-care/v1/session` | - | `object` | 202 `CodeSent` | [`app/care/routes.py`](../../app/care/routes.py) |
 | POST | `/self-care/v1/session/verify` | - | `object` | 200 `CareSession` | [`app/care/routes.py`](../../app/care/routes.py) |
+| POST | `/self-care/v1/signup` | - | `object` | 201 `CareSignup` | [`app/care/signup.py`](../../app/care/signup.py) |
+| GET | `/self-care/v1/signup/{signup_id}` | path: `signup_id` | - | 200 `CareSignup` | [`app/care/signup.py`](../../app/care/signup.py) |
+| PUT | `/self-care/v1/signup/{signup_id}/details` | path: `signup_id` | `object` | 200 `CareSignup` | [`app/care/signup.py`](../../app/care/signup.py) |
+| POST | `/self-care/v1/signup/{signup_id}/payment` | path: `signup_id` | `object` | 202 `CareSignup` | [`app/care/signup.py`](../../app/care/signup.py) |
+| POST | `/self-care/v1/signup/{signup_id}/verify` | path: `signup_id` | `object` | 200 `CareSignup` | [`app/care/signup.py`](../../app/care/signup.py) |
 | POST | `/self-care/v1/topUp` | - | `object` | 202 `CareTopUp` | [`app/care/api.py`](../../app/care/api.py) |
 | GET | `/self-care/v1/topUp/{command_id}` | path: `command_id` | - | 200 `CareTopUp` | [`app/care/api.py`](../../app/care/api.py) |
 

@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0087**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0088**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -93,6 +93,8 @@ PostgreSQL schema at Alembic head **0087**, read from `pg_catalog` of a throwawa
 | [`customer_login`](customer_login.md) | selfcare | The self-care login of a customer (at most one): email, password and the lockout. Never an app_user: it reaches only /self-care/v1 and only its own customer. |
 | [`customer_session`](customer_session.md) | selfcare | A signed-in self-care session (cookie bss_care_session). Only the SHA-256 of the random token is stored. |
 | [`customer_login_code`](customer_login_code.md) | selfcare | One-time codes sent by email: a 6-digit sign-in code (10 minutes, 5 attempts) or a link code that sets a password (verify_email 24 hours, reset_password 1 hour). Only hashes are stored; a new code of a purpose ends the older ones. |
+| [`care_signup`](care_signup.md) | selfcare | One online signup (self-care, issue 377): email verified with a code, the person and service address, the identity check, the first payment and the eSIM line; resumable, it keeps the ids of what it created. |
+| [`identity_check`](identity_check.md) | selfcare | Durable outbound identity check of a signup; sent and polled by the billing worker through the identity adapter, never inside a request. |
 | [`wholesale_invoice`](wholesale_invoice.md) | wholesale | A wholesale invoice of the network partner (not a TMF678 customer bill), imported by an operator and reconciled against the lines and usage the BSS knows. Immutable once reconciled; a corrected invoice is a new import under another number. |
 | [`wholesale_invoice_line`](wholesale_invoice_line.md) | wholesale | One charge of a wholesale invoice, as imported, with the product it was matched to. |
 | [`wholesale_discrepancy`](wholesale_discrepancy.md) | wholesale | What the reconciliation of a wholesale invoice found: billedNotActive (a line charge for a number no product held in its period), activeNotBilled (a prepaid line live in the period without a line charge), usageMismatch (invoiced usage off the BSS total by more than 2 percent and the absolute tolerance), duplicateCharge (two line charges of one number in overlapping periods). |
@@ -217,6 +219,8 @@ flowchart LR
     customer_login[customer_login]
     customer_session[customer_session]
     customer_login_code[customer_login_code]
+    care_signup[care_signup]
+    identity_check[identity_check]
   end
   subgraph area_wholesale["Wholesale reconciliation with the partner's invoices (ours)"]
     wholesale_invoice[wholesale_invoice]
@@ -266,6 +270,16 @@ flowchart LR
   billing_run_account -->|"run_id"| billing_run
   billing_run_account -->|"waits_for_run_id"| billing_run
   cancel_product_order -->|"product_order_id"| product_order
+  care_signup -->|"billing_account_id"| billing_account
+  care_signup -->|"customer_id"| customer
+  care_signup -->|"customer_login_id"| customer_login
+  care_signup -->|"identity_check_id"| identity_check
+  care_signup -->|"party_id"| party
+  care_signup -->|"payment_command_id"| payment_command
+  care_signup -->|"payment_method_id"| payment_method
+  care_signup -->|"product_id"| product
+  care_signup -->|"product_offering_id"| product_offering
+  care_signup -->|"product_order_id"| product_order
   catalog_category -->|"catalog_id"| product_catalog
   catalog_category -->|"category_id"| category
   category -->|"parent_id"| category
@@ -312,6 +326,7 @@ flowchart LR
   funding_source -->|"action_id"| balance_action
   funding_source -->|"billing_account_id"| billing_account
   funding_source -->|"consumption_id, billing_account_id"| funding_consumption
+  identity_check -->|"care_signup_id"| care_signup
   line_lock -->|"product_id"| product
   network_command -->|"product_id"| product
   network_command -->|"product_order_id"| product_order
@@ -1865,15 +1880,93 @@ erDiagram
     timestamptz used_at
     integer attempts
   }
+  care_signup {
+    uuid id PK
+    text email
+    text state
+    uuid product_offering_id FK
+    text client_address
+    text email_code_hash
+    timestamptz email_code_expires_at
+    integer email_code_attempts
+    timestamptz email_verified_at
+    text given_name
+    text family_name
+    date birth_date
+    jsonb service_address
+    uuid identity_check_id FK
+    text identity_reason
+    text decided_by
+    timestamptz decided_at
+    uuid payment_method_id FK
+    uuid payment_command_id FK
+    text payment_error
+    uuid party_id FK
+    uuid customer_id FK
+    uuid billing_account_id FK
+    uuid customer_login_id FK
+    uuid product_order_id FK
+    uuid product_id FK
+    text failure_code
+    text failure_reason
+    timestamptz activation_shown_at
+    timestamptz created_at
+    timestamptz updated_at
+  }
+  identity_check {
+    uuid id PK
+    uuid care_signup_id FK
+    text state
+    jsonb request
+    integer attempts
+    timestamptz next_attempt_at
+    text last_error
+    text reason
+    timestamptz created_at
+    timestamptz attempted_at
+    timestamptz decided_at
+  }
   customer {
     uuid id PK
   }
+  billing_account {
+    uuid id PK
+  }
+  party {
+    uuid id PK
+  }
+  payment_command {
+    uuid id PK
+  }
+  payment_method {
+    uuid id PK
+  }
+  product {
+    uuid id PK
+  }
+  product_offering {
+    uuid id PK
+  }
+  product_order {
+    uuid id PK
+  }
+  billing_account |o--o{ care_signup : "billing_account_id"
+  care_signup ||--o{ identity_check : "care_signup_id"
+  customer |o--o{ care_signup : "customer_id"
   customer ||--o{ customer_login : "customer_id"
+  customer_login |o--o{ care_signup : "customer_login_id"
   customer_login ||--o{ customer_login_code : "customer_login_id"
   customer_login ||--o{ customer_session : "customer_login_id"
+  identity_check |o--o{ care_signup : "identity_check_id"
+  party |o--o{ care_signup : "party_id"
+  payment_command |o--o{ care_signup : "payment_command_id"
+  payment_method |o--o{ care_signup : "payment_method_id"
+  product |o--o{ care_signup : "product_id"
+  product_offering ||--o{ care_signup : "product_offering_id"
+  product_order |o--o{ care_signup : "product_order_id"
 ```
 
-Tables from other areas are shown with their key only: [`customer`](customer.md).
+Tables from other areas are shown with their key only: [`customer`](customer.md), [`billing_account`](billing_account.md), [`party`](party.md), [`payment_command`](payment_command.md), [`payment_method`](payment_method.md), [`product`](product.md), [`product_offering`](product_offering.md), [`product_order`](product_order.md).
 
 ## Wholesale reconciliation with the partner's invoices (ours)
 

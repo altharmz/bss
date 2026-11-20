@@ -57,6 +57,8 @@ from app.api.usage import UsageCreate
 from app.events.types import BASES
 from app.internal.billing_runs import OUTCOMES, CatchUp
 from app.internal.care_logins import CareLoginInvite
+from app.internal.care_signups import STATES as SIGNUP_STATES
+from app.internal.care_signups import Decision as SignupDecision
 from app.internal.catalog import PriceChange
 from app.internal.network_commands import STATES as NETWORK_STATES
 from app.internal.payments import STATES as PAYMENT_STATES
@@ -125,6 +127,12 @@ AUTH_OPERATIONS = {
     ("GET", "/self-care/v1/topUp/{command_id}"),
     ("PUT", "/self-care/v1/autoTopUp"),
     ("POST", "/self-care/v1/addOn"),
+    # online signup (#377): a new customer's own steps, before any session
+    ("POST", "/self-care/v1/signup"),
+    ("GET", "/self-care/v1/signup/{signup_id}"),
+    ("POST", "/self-care/v1/signup/{signup_id}/verify"),
+    ("PUT", "/self-care/v1/signup/{signup_id}/details"),
+    ("POST", "/self-care/v1/signup/{signup_id}/payment"),
 }
 
 # Query shapes
@@ -754,6 +762,24 @@ OPERATIONS: dict[str, Op] = {
     ),
     "disable_care_login": Op(
         "Disable a customer's self-care login: no more sign-ins, its sessions end at once."
+    ),
+    "list_care_signups": Op(
+        "Online signups, newest first: state (started, identityPending, identityPassed,"
+        " identityFailed, identityReview, paid, activating, active, failed, expired), the"
+        " identity check, the first payment, what was created and, when failed, the reason"
+        " (the first top-up of a failed signup stays on its account as balance).",
+        query=PAGE,
+        extra={
+            "state": {"type": "string", "enum": list(SIGNUP_STATES)},
+            "email": {"type": "string", "maxLength": 200},
+        },
+    ),
+    "get_care_signup": Op("One online signup (never a code or the eSIM activation code)."),
+    "decide_care_signup": Op(
+        "Decide a signup in identityReview: approve (the customer may pay) or reject (the"
+        " signup ends; nothing beyond it was created), with an optional reason. 409 in any"
+        " other state.",
+        body=SignupDecision,
     ),
     "get_context": Op(
         "Business date, time zone, currency, billing run time, payment term, and the"

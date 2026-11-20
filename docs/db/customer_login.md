@@ -51,4 +51,4 @@ The self-care login of a customer (at most one): email, password and the lockout
 
 ## Referenced by
 
-[`customer_login_code`](customer_login_code.md), [`customer_session`](customer_session.md)
+[`care_signup`](care_signup.md), [`customer_login_code`](customer_login_code.md), [`customer_session`](customer_session.md)
