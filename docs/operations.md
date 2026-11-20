@@ -67,6 +67,10 @@ anything fails. `make check` (`lint`, `test` with hypothesis `ci`, `docs-check`,
 `web-lint`, `web-test`, `web-e2e`) runs on demand - for a change that needs stronger
 testing.
 
+VPS releases disable account PIN verification for protected prepaid actions by default.
+To require verification, set `BSS_ACCOUNT_PIN_REQUIRED=true` in the workstation's
+`.env.prod`. Production Compose passes the setting to the app on each release.
+
 What `deploy.sh` does, in order:
 
 1. **Refuses a dirty tree** (`git status --porcelain`): the image tag is the commit hash.
