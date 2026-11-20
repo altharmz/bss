@@ -77,6 +77,11 @@ describe('routes', () => {
     expect(within(trigger).getByText('admin')).toBeTruthy();
     expect(within(trigger).getByText('I.')).toBeTruthy();
     expect(screen.getByText('BSS Admin')).toBeTruthy();
+    // the title names the item's TMF API
+    expect(active.getAttribute('title')).toBe('TMF666 billingAccount');
+    expect(within(nav).getByRole('link', { name: 'Billing runs' }).getAttribute('title')).toBe(
+      'internal',
+    );
   });
   it.each([
     ['/subscribers', { name: 'subscribers' }],
@@ -92,6 +97,8 @@ describe('routes', () => {
     ['/payments', { name: 'payments' }],
     ['/balances', { name: 'balances' }],
     ['/reports', { name: 'reports' }],
+    ['/prepaid-lifecycle', { name: 'prepaidLifecycle' }],
+    ['/prepaid-lifecycle/', { name: 'prepaidLifecycle' }],
     ['/orders', { name: 'orders' }],
     ['/products', { name: 'products' }],
     ['/billing', { name: 'notFound', path: '/billing' }], // not /billing: /billing-status
@@ -155,25 +162,26 @@ describe('shell', () => {
     expect(links.map((a) => a.getAttribute('href'))).toEqual([
       '/subscribers',
       '/parties',
+      '/financial-accounts',
       '/catalog',
-      '/products',
       '/orders',
+      '/products',
       '/numbers',
       '/sims',
       '/ports',
       '/billing-runs',
-      '/prepaid-commands',
-      '/financial-accounts',
       '/bills',
       '/payments',
-      '/balances',
       '/billing-settings',
+      '/balances',
+      '/prepaid-commands',
+      '/prepaid-lifecycle',
       '/reports',
       '/integrations',
       '/users',
       '/settings/logging',
     ]);
-    // five labelled sections (TMF order, then Reports and System), each item under its label
+    // seven labelled sections in TMF / ODA domain order (#414), each item under its label
     const labels = Array.from(nav.children).map((el) =>
       el.classList.contains('section') ? `# ${el.textContent}` : (el.getAttribute('href') ?? ''),
     );
@@ -181,21 +189,24 @@ describe('shell', () => {
       '# Customers',
       '/subscribers',
       '/parties',
+      '/financial-accounts',
       '# Products',
       '/catalog',
-      '/products',
       '/orders',
+      '/products',
+      '# Resources',
       '/numbers',
       '/sims',
       '/ports',
       '# Billing',
       '/billing-runs',
-      '/prepaid-commands',
-      '/financial-accounts',
       '/bills',
       '/payments',
-      '/balances',
       '/billing-settings',
+      '# Prepaid',
+      '/balances',
+      '/prepaid-commands',
+      '/prepaid-lifecycle',
       '# Reports',
       '/reports',
       '# System',
@@ -203,7 +214,15 @@ describe('shell', () => {
       '/users',
       '/settings/logging',
     ]);
-    for (const section of ['customers', 'products', 'billing', 'reports', 'system']) {
+    for (const section of [
+      'customers',
+      'products',
+      'resources',
+      'billing',
+      'prepaid',
+      'reports',
+      'system',
+    ]) {
       expect(nav.contains(expectUi(`ui.shell.section.${section}`))).toBe(true);
     }
     expectUi('ui.shell.theme');

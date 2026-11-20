@@ -52,7 +52,7 @@ const writes = (fetchMock: ReturnType<typeof stubFetch>['fetchMock']) =>
     .filter(([, init]) => init?.method && init.method !== 'GET')
     .map(([url, init]) => [init?.method, String(url), init?.body ?? null]);
 
-type Tab = 'Cycle specifications' | 'Bill formats' | 'Presentation media' | 'Prepaid lifecycle';
+type Tab = 'Cycle specifications' | 'Bill formats' | 'Presentation media';
 
 async function open(tab: Tab = 'Cycle specifications') {
   window.history.replaceState(null, '', '/billing-settings');
@@ -71,86 +71,18 @@ const rowOf = (name: string) =>
 const shown = async (name: string) => waitFor(() => expect(rowOf(name)).toBeTruthy());
 
 describe('billing settings', () => {
-  const lifecyclePath = '/internal/v1/lifecycle/settings';
-  const lifecycle = {
-    graceDays: 3,
-    suspensionDays: 30,
-    numberAgingDays: 90,
-    paygZeroBalanceDays: 7,
-    updatedAt: null,
-  };
-
-  it('loads lifecycle durations, validates bounds and saves only changed fields including zero', async () => {
-    const { fetchMock } = backend({
-      [`GET ${lifecyclePath}`]: () => json(lifecycle),
-      [`PUT ${lifecyclePath}`]: () => json({ ...lifecycle, graceDays: 0, suspensionDays: 3650 }),
-    });
-    await open('Prepaid lifecycle');
-    await screen.findByText('90 days');
-    expectUi('ui.billingSettings.lifecycle');
-    fireEvent.click(screen.getByRole('button', { name: 'Edit lifecycle settings' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Edit lifecycle settings' });
-    expectUi('ui.billingSettings.lifecycle.form');
-    const save = within(dialog).getByRole('button', { name: 'Save' });
-    expect((save as HTMLButtonElement).disabled).toBe(true);
-    const grace = within(dialog).getByLabelText('Grace days');
-    for (const value of ['', '-1', '1.5', '366']) {
-      fireEvent.change(grace, { target: { value } });
-      expect((save as HTMLButtonElement).disabled).toBe(true);
-    }
-    fireEvent.change(grace, { target: { value: '0' } });
-    fireEvent.change(within(dialog).getByLabelText('Suspension days'), {
-      target: { value: '3651' },
-    });
-    expect((save as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.change(within(dialog).getByLabelText('Suspension days'), {
-      target: { value: '3650' },
-    });
-    fireEvent.click(save);
-    await screen.findByText('Lifecycle settings saved');
-    expect(writes(fetchMock)).toEqual([
-      ['PUT', lifecyclePath, JSON.stringify({ graceDays: 0, suspensionDays: 3650 })],
+  // TEST-CHANGE (#414): the prepaid lifecycle moved to its own screen under Prepaid
+  // (LifecycleSettings.test.tsx); Billing settings keeps the three TMF678 tabs
+  it('has the three billing configuration tabs and no lifecycle tab', async () => {
+    backend();
+    await open();
+    const tabs = within(screen.getByRole('group', { name: 'Billing settings sections' }));
+    expect(tabs.getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'Cycle specifications',
+      'Bill formats',
+      'Presentation media',
     ]);
   });
-
-  it('retries a failed lifecycle read', async () => {
-    let reads = 0;
-    backend({
-      [`GET ${lifecyclePath}`]: () =>
-        ++reads === 1 ? tmfError(503, 'Unavailable') : json(lifecycle),
-    });
-    await open('Prepaid lifecycle');
-    await screen.findByText('Failed to load lifecycle settings');
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
-    await screen.findByText('90 days');
-  });
-
-  it.each([422, 503])(
-    'keeps lifecycle values after %s and requires refresh for uncertainty',
-    async (status) => {
-      const { fetchMock } = backend({
-        [`GET ${lifecyclePath}`]: () => json(lifecycle),
-        [`PUT ${lifecyclePath}`]: () => tmfError(status, 'Policy could not be saved'),
-      });
-      await open('Prepaid lifecycle');
-      await screen.findByText('90 days');
-      fireEvent.click(screen.getByRole('button', { name: 'Edit lifecycle settings' }));
-      const dialog = await screen.findByRole('dialog', { name: 'Edit lifecycle settings' });
-      fireEvent.change(within(dialog).getByLabelText('Grace days'), { target: { value: '4' } });
-      fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
-      await within(dialog).findByText(status === 503 ? 'Unsure whether it was saved.' : 'Refused.');
-      expect((within(dialog).getByLabelText('Grace days') as HTMLInputElement).value).toBe('4');
-      if (status === 503) {
-        expect(within(dialog).queryByRole('button', { name: 'Save' })).toBeNull();
-        fireEvent.click(within(dialog).getByRole('button', { name: 'Refresh' }));
-        await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-      } else
-        expect(within(dialog).getByRole('alert').textContent).toContain(
-          'Policy could not be saved',
-        );
-      expect(writes(fetchMock)).toHaveLength(1);
-    },
-  );
 
   it('lists the cycle specifications; the built-in one is read-only', async () => {
     backend();

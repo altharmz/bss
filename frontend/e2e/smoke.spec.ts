@@ -128,6 +128,16 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
   await page.goto('/catalog');
   await expect(page.getByRole('heading', { name: 'Product catalog' })).toBeVisible();
 
+  // #414: the prepaid lifecycle is its own screen under Prepaid (read-only here)
+  const lifecycleLink = page
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Prepaid lifecycle', exact: true });
+  await expect(lifecycleLink).toHaveAttribute('title', 'internal');
+  await lifecycleLink.click();
+  await expect(page).toHaveURL(/\/prepaid-lifecycle$/);
+  await expect(page.getByRole('heading', { name: 'Prepaid lifecycle' })).toBeVisible();
+  await expect(page.getByText('Grace days')).toBeVisible();
+
   // billing runs: the seed billed every day, so there is a latest run and a history.
   // Read-only: nothing is caught up or retried here.
   await page

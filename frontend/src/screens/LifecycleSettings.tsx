@@ -1,10 +1,11 @@
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import {
   loadLifecycleSettings,
   saveLifecycleSettings,
   type LifecycleSettings,
 } from '../api/lifecycle';
 import { useResource } from '../api/useResource';
+import { useSetCrumbs } from '../app/context';
 import {
   Button,
   Dialog,
@@ -19,6 +20,7 @@ import { Note } from '../ui/Note';
 import { ErrorBlock, SkeletonRows } from '../ui/states';
 import { Footer, useWrite } from './FinancialForms';
 import { Field } from './SubscriberForms';
+import './screens.css';
 
 const DURATIONS = [
   { key: 'graceDays', label: 'Grace days', max: 365 },
@@ -27,7 +29,12 @@ const DURATIONS = [
   { key: 'paygZeroBalanceDays', label: 'Pay-as-you-go zero-balance days', max: 365 },
 ] as const;
 
-export function LifecycleSettingsTab({ tabs }: { tabs: ReactNode }) {
+// Prepaid lifecycle (docs/ui.md): the grace, suspension, number aging and pay-as-you-go
+// durations. Its own screen under Prepaid since #414 (was a Billing settings tab); the
+// data-ui marker keeps its old name.
+
+export function LifecycleSettingsScreen() {
+  useSetCrumbs([{ label: 'Prepaid lifecycle' }], 'prepaidLifecycle');
   const settings = useResource('lifecycle-settings', loadLifecycleSettings);
   const [editing, setEditing] = useState(false);
   const toast = useToast();
@@ -39,7 +46,7 @@ export function LifecycleSettingsTab({ tabs }: { tabs: ReactNode }) {
   return (
     <div className="bss-screen" data-ui="ui.billingSettings.lifecycle">
       <div className="bss-title-row">
-        <PageHeader title="Billing settings" />
+        <PageHeader title="Prepaid lifecycle" />
         <Button
           variant="primary"
           disabled={settings.status !== 'ok'}
@@ -48,9 +55,7 @@ export function LifecycleSettingsTab({ tabs }: { tabs: ReactNode }) {
           Edit lifecycle settings
         </Button>
       </div>
-      {tabs}
       <Panel>
-        <h2>Prepaid lifecycle</h2>
         <Note tone="info">
           Unfunded lines enter grace, then network suspension, then deactivation. Changes apply to
           transitions not yet taken; completed transitions are kept. Number aging is fixed when a
