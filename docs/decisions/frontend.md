@@ -920,3 +920,37 @@ with its reason, so a new one must be justified there.
   number dialog reads its own numbers. Billing settings drop the "Used by" count, which
   read every billing account: Delete is offered and the server's 409 refuses a setting in
   use.
+
+## Reads under the request bound (2026-11-20, issue #412)
+
+The VPS app process admits `BSS_MAX_IN_FLIGHT` requests (10 there, [infra.md](infra.md),
+"Request bound") and answers the rest at once with `503`, `code: "overloaded"` and
+`Retry-After: 1`. Opening a prepaid subscriber card starts more than 10 distinct reads
+(its panels and the shell's own). On 2026-11-20 the bucket and products reads were
+refused, and the card showed both as final panel errors.
+
+- **Per-tab read slots** (`request` in `src/api/client.ts`): a tab sends at most
+  `READ_SLOTS` (4) GET/HEAD requests at a time. The rest wait in order. A free slot is taken
+  without an await, so the fetch starts in the caller's tick, as it did before. Four leaves
+  room in the process's 10 for another tab or operator. The card's reads come from about
+  ten independent hooks, so the cap goes in the client and not in each screen.
+- **Overloaded reads are resent:** only `503` with `code: "overloaded"`. The client waits
+  Retry-After (at least 1 s), doubled per retry, plus up to half again at random, and stops
+  after `OVERLOAD_RETRIES` (4) retries, about 15 s in all. The panel stays in loading while
+  it waits. After the last retry the error shows as before, with its Retry (the prepaid
+  balance note gained one), and nothing more is sent until the operator clicks Retry.
+  Any other 503, a 5xx or a network error is shown at once, as before.
+- **Abandoned reads stop:** a read waiting for a slot or backing off holds no slot.
+  Its `AbortSignal` (aborted by `useResource` when its key changes or it unmounts) ends
+  the wait without sending. A refused read in its backoff wait never reaches another
+  account's view.
+- **Writes are untouched:** they are never queued behind reads or resent. Their
+  uncertain-outcome rules (same Idempotency-Key, Refresh) stay as they were.
+- **Tests:** `client.test.ts` ("reads under the request bound"): slots, the abort while
+  waiting, the backoff, giving up, the abort in backoff, a non-overload 503, writes.
+  `SubscriberCard.overload.test.tsx`: the prepaid card against a simulated process
+  with a limit of 10 (more than 10 distinct reads, at most 4 in flight, none refused),
+  recovery with no click, persistent overload with Retry and the unchanged service-address
+  warning, and leaving during backoff. The fetch stub now rejects on abort as `fetch`
+  does, and `setup.ts` resets the slots after each test, because a `pending` stub holds
+  its slot.

@@ -45,6 +45,21 @@ export function tmfError(status: number, reason: string): Response {
   );
 }
 
+/** The app's answer beyond BSS_MAX_IN_FLIGHT (app/overload.py): 503 `overloaded` with
+ * Retry-After. */
+export function overloadedError(): Response {
+  return json(
+    {
+      '@type': 'Error',
+      code: 'overloaded',
+      reason: 'Service Unavailable',
+      message: 'the server is at capacity; retry shortly',
+      status: '503',
+    },
+    { status: 503, headers: { 'Retry-After': '1' } },
+  );
+}
+
 /** A TMF Error with a business code, as the server sends a refusal like `pinRequired`. */
 export function tmfCodeError(status: number, code: string, message: string): Response {
   return json(
@@ -101,7 +116,17 @@ export function stubFetch(routes: Record<string, Handler>) {
       unexpected.push(key);
       throw new Error(`unexpected request in test: ${key}`);
     }
-    return handler(url);
+    // like a real fetch, an aborted request rejects (and frees what it held)
+    const signal = init?.signal;
+    if (!signal) return handler(url);
+    if (signal.aborted) throw new DOMException('aborted', 'AbortError');
+    const answer = handler(url);
+    return new Promise<Response>((resolve, reject) => {
+      signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), {
+        once: true,
+      });
+      Promise.resolve(answer).then(resolve, reject);
+    });
   });
   vi.stubGlobal('fetch', fetchMock);
   return { calls, fetchMock };

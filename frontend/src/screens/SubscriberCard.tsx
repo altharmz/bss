@@ -1243,7 +1243,12 @@ function SubscriberMoneyStrip({
         }
       />
       {account.ratingType === 'prepaid' && balance.status === 'error' && (
-        <Note tone="negative">Failed to load the prepaid balance ({balance.error.message})</Note>
+        <Note tone="negative">
+          Failed to load the prepaid balance ({balance.error.message}).{' '}
+          <button type="button" className="bss-link" onClick={balance.retry}>
+            Retry
+          </button>
+        </Note>
       )}
     </div>
   );

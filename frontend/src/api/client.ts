@@ -12,6 +12,7 @@ export class ApiError extends Error {
   readonly reason: string;
   readonly detail: string; // the TMF Error's `message`: what exactly was wrong ('' if none)
   readonly code: string | undefined; // the TMF Error's business `code` (not a bare status)
+  retryAfter: number | undefined; // Retry-After in seconds, when the response sent one
 
   constructor(
     method: string,
@@ -29,6 +30,7 @@ export class ApiError extends Error {
     this.reason = reason;
     this.detail = detail;
     this.code = code;
+    this.retryAfter = undefined;
   }
 }
 
@@ -77,7 +79,120 @@ async function failure(method: string, path: string, response: Response): Promis
     // not JSON (a proxy's HTML page, an empty body): fall through
   }
   reason ||= response.statusText || PHRASES[response.status] || 'Error';
-  return new ApiError(method, path, response.status, reason, detail === reason ? '' : detail, code);
+  const error = new ApiError(
+    method,
+    path,
+    response.status,
+    reason,
+    detail === reason ? '' : detail,
+    code,
+  );
+  const retryAfter = Number(response.headers.get('Retry-After') ?? '');
+  if (response.headers.has('Retry-After') && Number.isFinite(retryAfter))
+    error.retryAfter = retryAfter;
+  return error;
+}
+
+// Reads under the app's request bound (issue #412; docs/decisions/frontend.md, "Reads
+// under the request bound"). One app process admits BSS_MAX_IN_FLIGHT requests (10 on the
+// VPS) and answers the rest at once with 503 `overloaded` and Retry-After. A screen like
+// the subscriber card starts a dozen reads together, so a tab sends at most READ_SLOTS
+// reads at a time (the rest wait their turn, in order), and a read refused as overloaded
+// is sent again after Retry-After, backing off, up to OVERLOAD_RETRIES times; after that
+// the error shows with its Retry. A waiting or backing-off read holds no slot and stops
+// as soon as its signal aborts. Writes are neither queued nor resent: they keep their own
+// uncertain-outcome rules.
+export const READ_SLOTS = 4;
+export const OVERLOAD_RETRIES = 4;
+
+function abortError(signal?: AbortSignal | null): unknown {
+  return signal?.reason instanceof DOMException
+    ? signal.reason
+    : new DOMException('The operation was aborted.', 'AbortError');
+}
+
+class ReadGate {
+  private active = 0;
+  private readonly waiting: (() => void)[] = [];
+
+  constructor(private readonly slots: number) {}
+
+  private grant(): () => void {
+    this.active++;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.active--;
+      this.waiting.shift()?.();
+    };
+  }
+
+  /** A release function at once when a slot is free (no await: the fetch starts in the
+   * caller's tick, as without the gate), else null. */
+  take(): (() => void) | null {
+    return this.active < this.slots ? this.grant() : null;
+  }
+
+  /** Waits in line for a slot; rejects if `signal` aborts first. */
+  wait(signal?: AbortSignal | null): Promise<() => void> {
+    return new Promise((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(abortError(signal));
+        return;
+      }
+      const cancel = () => {
+        const index = this.waiting.indexOf(turn);
+        if (index >= 0) this.waiting.splice(index, 1);
+        reject(abortError(signal));
+      };
+      const turn = () => {
+        signal?.removeEventListener('abort', cancel);
+        resolve(this.grant());
+      };
+      this.waiting.push(turn);
+      signal?.addEventListener('abort', cancel, { once: true });
+    });
+  }
+
+  /** Tests only: forget every slot and waiter (a stub that never answers holds its slot). */
+  reset(): void {
+    this.active = 0;
+    this.waiting.length = 0;
+  }
+}
+
+const readGate = new ReadGate(READ_SLOTS);
+
+/** Tests only (src/test/setup.ts): a fresh gate for every test. */
+export function resetReadGate(): void {
+  readGate.reset();
+}
+
+/** Waits `ms`, or rejects with an AbortError as soon as `signal` aborts. */
+function pause(ms: number, signal?: AbortSignal | null): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(abortError(signal));
+      return;
+    }
+    const stop = () => {
+      clearTimeout(timer);
+      reject(abortError(signal));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', stop);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', stop, { once: true });
+  });
+}
+
+/** The wait before resending an overloaded read: Retry-After (at least 1 s), doubled per
+ * retry, plus up to half again at random so a tab's refused reads do not return together. */
+function overloadDelay(retryAfter: number | undefined, retry: number): number {
+  const base = Math.max(retryAfter ?? 1, 1) * 1000 * 2 ** retry;
+  return base + Math.random() * base * 0.5;
 }
 
 export async function request(
@@ -85,6 +200,26 @@ export async function request(
   path: string,
   init: RequestInit = {},
 ): Promise<Response> {
+  if (!['GET', 'HEAD'].includes(method)) return send(method, path, init);
+  for (let retry = 0; ; retry++) {
+    if (init.signal?.aborted) throw abortError(init.signal);
+    const release = readGate.take() ?? (await readGate.wait(init.signal));
+    let refused: ApiError;
+    try {
+      return await send(method, path, init);
+    } catch (error) {
+      const transient =
+        error instanceof ApiError && error.status === 503 && error.code === 'overloaded';
+      if (!transient || retry >= OVERLOAD_RETRIES) throw error;
+      refused = error;
+    } finally {
+      release();
+    }
+    await pause(overloadDelay(refused.retryAfter, retry), init.signal);
+  }
+}
+
+async function send(method: string, path: string, init: RequestInit): Promise<Response> {
   const writing = !['GET', 'HEAD'].includes(method);
   const release = writing ? writeLock.begin() : () => {};
   if (writing) writeLock.requested();
@@ -97,7 +232,7 @@ export async function request(
         credentials: 'same-origin',
         headers: {
           Accept: 'application/json',
-          ...(!['GET', 'HEAD'].includes(method) ? { 'X-Bss-Request': '1' } : {}),
+          ...(writing ? { 'X-Bss-Request': '1' } : {}),
           ...(init.headers as Record<string, string>),
         },
       });
