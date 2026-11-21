@@ -2367,7 +2367,8 @@ components:
           items:
             type: object
             additionalProperties: false
-            required: [authorizedAt, period, kind, amount, tax, appliedTax, fundedBy, bill]
+            required: [authorizedAt, period, kind, amount, tax, appliedTax, discount, fundedBy,
+                       bill]
             properties:
               authorizedAt: {type: string, format: date-time}
               period:
@@ -2394,6 +2395,22 @@ components:
                     taxRate: {type: number}
                     taxAmount: {$ref: '#/components/schemas/Money'}
                     jurisdiction: {type: string}
+              discount:
+                description: >-
+                  The multi-line discount taken off the interval (issue 196), null without one:
+                  `amount` and `tax` are already net of it (issue 380).
+                nullable: true
+                type: object
+                additionalProperties: false
+                required: [amount, productOfferingPrice]
+                properties:
+                  amount: {$ref: '#/components/schemas/Money'}
+                  productOfferingPrice:
+                    type: object
+                    additionalProperties: false
+                    required: [id]
+                    properties:
+                      id: {type: string, format: uuid}
               fundedBy: {type: string, enum: [balance, card]}
               bill: {$ref: '#/components/schemas/NullableLink'}
     Charge:

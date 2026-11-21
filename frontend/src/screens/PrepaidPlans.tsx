@@ -1,3 +1,4 @@
+import { MultiLineDiscount, multiLineLabel } from './MultiLine';
 import { useRef, useState } from 'react';
 import {
   KIND_LABEL,
@@ -106,6 +107,12 @@ export function RenewalHistory({ product }: { product: AccountProduct }) {
                 <td>{HISTORY_KIND[h.kind] ?? h.kind}</td>
                 <td className="num">
                   {formatCents(toCents(h.amount.value))} {h.amount.unit}
+                  {h.discount != null && (
+                    <>
+                      {' '}
+                      <MultiLineDiscount text={multiLineLabel(h.discount.amount)} />
+                    </>
+                  )}
                 </td>
                 <td className="num">{formatCents(toCents(h.tax.value))}</td>
                 <td>{h.fundedBy === 'card' ? 'Card' : 'Balance'}</td>

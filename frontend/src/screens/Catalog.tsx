@@ -10,6 +10,7 @@ import {
   loadCategories,
   KIND_LABEL,
   loadOfferingDetail,
+  loadMultiLineTiers,
   loadOneTimePrices,
   loadUsagePrices,
   hasOpenPrice,
@@ -445,7 +446,8 @@ export function OfferingModal({
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [price, setPrice] = useState<string | null>(null);
-  const [addingPrice, setAddingPrice] = useState(false);
+  // 'discount' = New tier: the dialog opens on a multi-line discount
+  const [addingPrice, setAddingPrice] = useState<null | 'price' | 'discount'>(null);
   const detail = useResource(`offering:${offering.id}`, (signal) =>
     loadOfferingDetail(offering.id, signal),
   );
@@ -716,8 +718,15 @@ export function OfferingModal({
           {detail.status === 'ok' && detail.data.kind === 'payAsYouGo' && (
             <UsagePrices detail={detail.data} onOpen={setPrice} />
           )}
+          {detail.status === 'ok' && detail.data.kind === 'plan' && (
+            <MultiLineTiers
+              detail={detail.data}
+              onOpen={setPrice}
+              onNew={() => setAddingPrice('discount')}
+            />
+          )}
           {detail.status === 'ok' && (
-            <Button small onClick={() => setAddingPrice(true)}>
+            <Button small onClick={() => setAddingPrice('price')}>
               Add price…
             </Button>
           )}
@@ -734,10 +743,12 @@ export function OfferingModal({
           onSaved={onChanged}
         />
       )}
-      {addingPrice && detail.status === 'ok' && (
+      {addingPrice !== null && detail.status === 'ok' && (
         <AddPriceModal
           detail={detail.data}
-          onClose={() => setAddingPrice(false)}
+          planPeriod={planPeriod(offering, context.currency)}
+          initialType={addingPrice === 'discount' ? 'discount' : 'oneTime'}
+          onClose={() => setAddingPrice(null)}
           onChanged={onChanged}
         />
       )}
@@ -767,6 +778,69 @@ function OneTimePrices({ detail }: { detail: OfferingDetail }) {
             {p.to === null ? '' : ` to ${lastValidDay(p.to, context.timeZone)}`}
           </div>
         ))}
+      </dd>
+    </dl>
+  );
+}
+
+/** The plan's recurringChargePeriodType, which a multi-line tier must take: its open (or
+ * latest) recurring price in the UI currency; monthly when it has none. */
+function planPeriod(offering: CatalogOffering, currency: string): string {
+  const own = offering.prices.filter((p) => p.currency === currency);
+  const open = own.find((p) => p.to === null) ?? own[own.length - 1];
+  return open?.periodType ?? 'monthly';
+}
+
+/** The plan's multi-line discount tiers (docs/decisions/prepaid.md, "Multi-line discounts"):
+ * N or more live plan lines on the account take the amount off each line's period. A tier
+ * opens in the price dialog; New tier opens Add price on a multi-line discount. */
+function MultiLineTiers({
+  detail,
+  onOpen,
+  onNew,
+}: {
+  detail: OfferingDetail;
+  onOpen: (id: string) => void;
+  onNew: () => void;
+}) {
+  const context = useSystemContext();
+  const ids = detail.priceRefs.map((p) => p.id);
+  const tiers = useResource(`tiers:${detail.id}:${ids.join(',')}`, (signal) =>
+    loadMultiLineTiers(ids, signal),
+  );
+  return (
+    <dl className="bss-details" data-ui="ui.catalog.multiLineTiers">
+      <dt>Multi-line discounts</dt>
+      <dd>
+        {tiers.status === 'loading' && <span className="bss-secondary">Loading…</span>}
+        {tiers.status === 'error' && <Note tone="negative">{tiers.error.message}</Note>}
+        {tiers.status === 'ok' && tiers.data.length === 0 && (
+          <span className="bss-dash">no tiers</span>
+        )}
+        {tiers.status === 'ok' &&
+          tiers.data.map((p) => {
+            const lines = p.unitOfMeasure?.amount ?? 0;
+            return (
+              <div key={p.id} className="num">
+                <button
+                  type="button"
+                  className="bss-link"
+                  aria-label={`Open tier ${lines}+ lines`}
+                  onClick={() => onOpen(p.id)}
+                >
+                  {lines}+ lines
+                </button>{' '}
+                · −{formatCents(p.cents)} {p.currency} per line / {p.interval ?? 'month'} · from{' '}
+                {businessDate(p.from, context.timeZone)}
+                {p.to === null ? '' : ` to ${lastValidDay(p.to, context.timeZone)}`}
+              </div>
+            );
+          })}
+        <div>
+          <Button small data-ui="ui.catalog.multiLineTiers.new" onClick={onNew}>
+            New tier…
+          </Button>
+        </div>
       </dd>
     </dl>
   );
@@ -803,18 +877,26 @@ function UsagePrices({ detail, onOpen }: { detail: OfferingDetail; onOpen: (id: 
   );
 }
 
+type AddedPriceType = 'oneTime' | 'recurring' | 'usage' | 'discount';
+
 function AddPriceModal({
   detail,
+  planPeriod,
+  initialType,
   onClose,
   onChanged,
 }: {
   detail: OfferingDetail;
+  /** the plan's recurringChargePeriodType, which a multi-line tier takes */
+  planPeriod: string;
+  initialType: AddedPriceType;
   onClose: () => void;
   onChanged: (message: string) => void;
 }) {
   const context = useSystemContext();
   const today = context.businessDate;
-  const [priceType, setPriceType] = useState<'oneTime' | 'recurring' | 'usage'>('oneTime');
+  const [priceType, setPriceType] = useState<AddedPriceType>(initialType);
+  const [minLines, setMinLines] = useState('2');
   const [amount, setAmount] = useState('');
   const [usageUnit, setUsageUnit] = useState<(typeof USAGE_UNITS)[number]>('MB');
   const [blockAmount, setBlockAmount] = useState('1');
@@ -849,6 +931,10 @@ function AddPriceModal({
     error = 'Block amount must be positive and a whole number of bytes, seconds or messages';
   else if (conflict !== undefined)
     error = `A ${USAGE_UNIT_KIND[usageUnit]} price in ${context.currency} already covers ${validFrom}`;
+  else if (priceType === 'discount' && !/^\d+$/.test(minLines.trim()))
+    error = 'Minimum lines must be a whole number';
+  else if (priceType === 'discount' && Number(minLines) < 2)
+    error = 'Minimum lines must be 2 or more';
   const ready =
     error === null &&
     canonical !== null &&
@@ -870,6 +956,9 @@ function AddPriceModal({
           validFrom,
           existingPriceIds: ids,
           ...(priceType === 'usage' ? { unitOfMeasure: { amount: block, units: usageUnit } } : {}),
+          ...(priceType === 'discount'
+            ? { tier: { lines: Number(minLines), periodType: planPeriod } }
+            : {}),
         },
         context.timeZone,
       );
@@ -910,12 +999,11 @@ function AddPriceModal({
         <SelectField
           id="add-price-type"
           value={priceType}
-          onChange={(event) =>
-            setPriceType(event.target.value as 'oneTime' | 'recurring' | 'usage')
-          }
+          onChange={(event) => setPriceType(event.target.value as AddedPriceType)}
         >
           <option value="oneTime">One time</option>
           {detail.kind === 'plan' && <option value="recurring">Monthly recurring</option>}
+          {detail.kind === 'plan' && <option value="discount">Multi-line discount</option>}
           {detail.kind === 'payAsYouGo' && <option value="usage">Usage</option>}
         </SelectField>
         {priceType === 'usage' && (
@@ -949,8 +1037,31 @@ function AddPriceModal({
             )}
           </>
         )}
+        {priceType === 'discount' && (
+          <>
+            <label htmlFor="add-price-lines">Minimum lines</label>
+            <TextInput
+              id="add-price-lines"
+              type="number"
+              min="2"
+              step="1"
+              value={minLines}
+              onChange={(event) => setMinLines(event.target.value)}
+            />
+            <span className="bss-secondary">
+              An account with this many live plan lines or more gets the amount off each line&apos;s{' '}
+              {planPeriod} charge, from each line&apos;s next period. The largest matching tier
+              applies.
+            </span>
+          </>
+        )}
         <label htmlFor="add-price-amount">
-          {priceType === 'usage' ? 'Price per block' : 'Amount'}, {context.currency}
+          {priceType === 'usage'
+            ? 'Price per block'
+            : priceType === 'discount'
+              ? 'Amount off per line'
+              : 'Amount'}
+          , {context.currency}
         </label>
         <TextInput
           id="add-price-amount"

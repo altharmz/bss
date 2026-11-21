@@ -9,6 +9,7 @@ import { formatAmount } from '../format/money';
 import { Button, Dialog } from '../ui/kit';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
+import { MultiLineDiscount, rateDiscount } from './MultiLine';
 import { TaxLines, taxLinesOf } from './TaxLines';
 
 // What a bill links to (docs/ui.md): its bill cycle (the daily
@@ -40,6 +41,16 @@ function Fields({ body }: { body: Record<string, unknown> }) {
   );
 }
 
+/** A rate's multi-line discount, from its description (TMF678 has no price alteration). */
+function RateDiscount({ body }: { body: Record<string, unknown> }) {
+  const text = rateDiscount(typeof body.description === 'string' ? body.description : null);
+  return text === null ? null : (
+    <p>
+      Discount: <MultiLineDiscount text={text} ui="ui.bills.rateDetail.multiLineDiscount" />
+    </p>
+  );
+}
+
 function DetailDialog({
   title,
   ui,
@@ -68,6 +79,7 @@ function DetailDialog({
         {detail.status === 'error' && (
           <ErrorBlock title="Failed to load" error={detail.error} onRetry={detail.retry} />
         )}
+        {detail.status === 'ok' && taxes && <RateDiscount body={detail.data} />}
         {detail.status === 'ok' && taxes && <TaxLines lines={taxLinesOf(detail.data.appliedTax)} />}
         {detail.status === 'ok' && <Fields body={detail.data} />}
       </div>
@@ -130,7 +142,17 @@ function Rates({ billId }: { billId: string }) {
                 period: `${day(rate.periodCoverage?.startDateTime)} – ${day(
                   rate.periodCoverage?.endDateTime,
                 )}`,
-                product: rate.product?.name ?? rate.name ?? '—',
+                product: (() => {
+                  const discount = rateDiscount(rate.description);
+                  const name = rate.product?.name ?? rate.name ?? '—';
+                  return discount === null ? (
+                    name
+                  ) : (
+                    <>
+                      {name} <MultiLineDiscount text={discount} ui="ui.bills.multiLineDiscount" />
+                    </>
+                  );
+                })(),
                 amount: rate.taxExcludedAmount ? formatAmount(rate.taxExcludedAmount.value) : '—',
                 tax: formatAmount(taxOf(rate)),
               }}

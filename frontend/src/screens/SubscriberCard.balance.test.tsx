@@ -671,6 +671,7 @@ describe('prepaid plans (#212)', () => {
             jurisdiction: 'CA state',
           },
         ],
+        discount: null,
         fundedBy: 'card',
         bill: { id: 'b0000001-0000-4000-8000-000000000001' },
       },
@@ -775,6 +776,31 @@ describe('prepaid plans (#212)', () => {
       ['Federal USF', 'US federal', '3%', '0.30'],
       ['Prepaid wireless E911', 'CA state', '—', '0.98'],
     ]);
+  });
+
+  it('shows the multi-line discount of an interval in the renewal history (#380)', async () => {
+    const [first] = (plan as unknown as { renewalHistory: Record<string, unknown>[] })
+      .renewalHistory;
+    const tiered = {
+      ...plan,
+      renewalHistory: [
+        {
+          ...first,
+          amount: usd(30),
+          discount: { amount: usd(5), productOfferingPrice: { id: 'tier-2' } },
+        },
+        { ...first, kind: 'purchase', authorizedAt: '2026-08-20T09:00:00Z' },
+      ],
+    };
+    routes({ [`GET ${INTERNAL}/products`]: () => json([tiered, pack], { total: 2 }) });
+    await open();
+    const row = await waitFor(() => productRow('Mobile L'));
+    fireEvent.click(within(row).getByRole('button', { name: /renewal history \(2\)/ }));
+    const table = within(row).getByRole('table', { name: 'Renewal history' });
+    const discounts = within(table).getAllByText('Multi-line −$5.00');
+    expect(discounts).toHaveLength(1);
+    expect(discounts[0]).toBe(expectUi('ui.subscriber.multiLineDiscount'));
+    expect(discounts[0]?.closest('td')?.textContent).toBe('30.00 USD Multi-line −$5.00');
   });
 
   it('offers Buy add-on on a plan only, quotes the fee and orders the add item', async () => {

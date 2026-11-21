@@ -53,8 +53,9 @@ export function usageLines(products: AccountProduct[]): AccountProduct[] {
 }
 
 function AllowanceBar({ allowance }: { allowance: Allowance }) {
-  const { kind, unit, used, included, remaining, percent, thresholds } = allowance;
-  const label = KIND[kind] ?? kind;
+  const { kind, unit, used, included, remaining, percent, thresholds, pool } = allowance;
+  // a pooled line's domestic data is the account pool's (issue 379): say so on the bar
+  const label = allowance.pooled ? `${KIND[kind] ?? kind} · shared pool` : (KIND[kind] ?? kind);
   const none = included <= 0;
   const fill = none ? 0 : Math.min(percent ?? 0, 100);
   return (
@@ -82,6 +83,12 @@ function AllowanceBar({ allowance }: { allowance: Allowance }) {
             style={{ '--usage-fill': `${fill}%` } as CSSProperties}
           />
           <span className="usage-mark usage-mark-80" aria-hidden="true" />
+        </div>
+      )}
+      {allowance.pooled && pool !== null && (
+        <div className="bss-secondary" data-ui="ui.subscriber.usage.pooled">
+          The account&apos;s data pool of {formatInt(pool.members)}{' '}
+          {pool.members === 1 ? 'line' : 'lines'}, {pool.startDate} – {pool.endDate} (end excluded)
         </div>
       )}
       {!none && (
@@ -215,6 +222,67 @@ function Records({ product, timeZone }: { product: string; timeZone: string }) {
   );
 }
 
+/** The account's data pool (issue 379), from the usage summary of its first pooled line:
+ * the summaries are read line by line until one has a pooled entry, so an account without
+ * a pool shows nothing. */
+async function loadPool(lines: AccountProduct[], signal: AbortSignal): Promise<Allowance | null> {
+  for (const line of lines) {
+    const summary = await loadUsageSummary(line.id, signal);
+    const pooled = summary.allowances.find((a) => a.pooled && a.pool !== null);
+    if (pooled !== undefined) return pooled;
+  }
+  return null;
+}
+
+export function DataPoolPanel({
+  products,
+  version,
+}: {
+  products: AccountProduct[];
+  version: number;
+}) {
+  const plans = products.filter((p) => p.offeringKind === 'plan');
+  const pool = useResource(
+    `data-pool:${plans.map((p) => p.id).join(',')}:${version}`,
+    (signal) => loadPool(plans, signal),
+    true,
+  );
+  if (pool.status === 'loading' || (pool.status === 'ok' && pool.data === null)) return null;
+  if (pool.status === 'error') {
+    // the same summary request also fails in the Allowance panel below, which has the Retry
+    return (
+      <Note tone="negative" data-ui="ui.subscriber.dataPool">
+        Data pool unavailable: {pool.error.message}
+      </Note>
+    );
+  }
+  const a = pool.data;
+  if (a === null || a.pool === null) return null;
+  return (
+    <section data-ui="ui.subscriber.dataPool">
+      <Panel title="Data pool" subtitle="Shared by the account's pooled lines">
+        <KeyValue
+          items={[
+            [
+              'Used',
+              a.included <= 0
+                ? `${formatQuantity(a.used, a.unit)} · nothing included`
+                : `${formatQuantity(a.used, a.unit)} of ${formatQuantity(a.included, a.unit)} (${a.percent ?? 0}%)`,
+            ],
+            ['Left', formatQuantity(a.remaining, a.unit)],
+            ['Members', `${formatInt(a.pool.members)} ${a.pool.members === 1 ? 'line' : 'lines'}`],
+            ['Period', `${a.pool.startDate} – ${a.pool.endDate} (end excluded)`],
+          ]}
+        />
+        <p className="bss-secondary">
+          Every pooled line&apos;s domestic data counts against one allowance per billing month;
+          voice, SMS and roaming stay per line.
+        </p>
+      </Panel>
+    </section>
+  );
+}
+
 /** The tab body: pick a line, then its period summary and records. Loaded only while the
  * tab is shown, so the card makes no usage request for a subscriber who never opens it. */
 export function UsageTab({ products, version }: { products: AccountProduct[]; version: number }) {
@@ -235,6 +303,7 @@ export function UsageTab({ products, version }: { products: AccountProduct[]; ve
   }
   return (
     <section data-ui="ui.subscriber.usage">
+      <DataPoolPanel products={products} version={version} />
       <Panel
         title="Allowance"
         subtitle={
