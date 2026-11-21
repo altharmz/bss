@@ -94,6 +94,7 @@ export const NAV: NavSection[] = [
         badge: 'runs',
       },
       { label: 'Bills', href: '/bills', routes: ['bills'], tmf: 'TMF678 customerBill' },
+      { label: 'Wholesale', href: '/wholesale', routes: ['wholesale'], tmf: 'internal' },
       {
         label: 'Payments',
         href: '/payments',

@@ -30,6 +30,22 @@ OFFSET = "+03:00"
 RUNS = "/internal/v1/billingRun"
 
 
+def test_ui_wholesale_invoice_upload(api):
+    """Replay the bytes, URL and media type pinned by Wholesale.test.tsx."""
+    path = "/internal/v1/wholesale/invoice?invoiceNumber=Partner%2F2026-09"
+    csv = (
+        b"msisdn,iccid,period_start,period_end,charge_type,quantity,unit,amount,currency\r\n"
+        b"12025550199,,2026-09-01,2026-10-01,line,,,1.20,USD\r\n"
+    )
+    response = api.request("POST", path, content=csv, headers={"Content-Type": "text/csv"})
+    assert response.status_code == 201, response.text
+    invoice = decimals(response)
+    assert invoice["invoiceNumber"] == "Partner/2026-09"
+    assert invoice["lineCount"] == 1
+    assert invoice["total"] == {"unit": "USD", "value": Decimal("1.20")}
+    assert invoice["margin"]["value"] == Decimal("-1.20")
+
+
 def test_ui_lifecycle_settings(api):
     """Exact partial PUT pinned by BillingSettings.test.tsx, including zero and max."""
     path = "/internal/v1/lifecycle/settings"

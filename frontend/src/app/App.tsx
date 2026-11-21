@@ -36,6 +36,7 @@ import { SimsScreen } from '../screens/Sims';
 import { PortRequestsScreen } from '../screens/PortRequests';
 import { ReportsScreen } from '../screens/Reports';
 import { LifecycleSettingsScreen } from '../screens/LifecycleSettings';
+import { WholesaleInvoiceScreen, WholesaleScreen } from '../screens/Wholesale';
 
 const CONTEXT = '/internal/v1/context';
 
@@ -83,6 +84,12 @@ function Screen() {
       return <PaymentsScreen />;
     case 'bills':
       return <BillsScreen />;
+    case 'wholesale':
+      return route.invoiceId === undefined ? (
+        <WholesaleScreen />
+      ) : (
+        <WholesaleInvoiceScreen key={route.invoiceId} id={route.invoiceId} />
+      );
     case 'balances':
       return <BalancesScreen />;
     case 'reports':
