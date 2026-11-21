@@ -1009,7 +1009,8 @@ and nothing checked that a screen was in the menu exactly once.
   Subscribers active.
 - **The Integrations title is "TMF630 hub, event subscriptions".** The hub pattern comes from
   the TMF630 design guidelines and each API carries it, so no single API number fits.
-- **Not in scope:** TMF621, TMF683, TMF681, TMF635, network commands and wholesale (#381)
-  have no global screen. Each one is a separate screen issue, with no placeholder item.
+- Billing includes Wholesale for partner invoice reconciliation. See
+  [the wholesale UI](wholesale.md#operator-ui-381).
+- TMF621, TMF683, TMF681, TMF635 and network commands have separate screen issues.
 - The nav already scrolls (`.bss-nav { overflow-y: auto }`), so seven sections fit at
   1366×768 and the operator footer stays visible.

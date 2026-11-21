@@ -596,6 +596,13 @@ items:
   - {id: ui.addProduct.serviceAddress, area: ui, stage: 5, title: "Set service address from Add product after a serviceAddressRequired refusal: opens the card's service address dialog"}
   - {id: ui.addProduct.topUpShortfall, area: ui, stage: 5, title: "Top up the shortfall from Add product: opens the Top-up form with the amount typed in"}
   - {id: ui.bills, area: ui, stage: 5, title: "Bills screen: bills and bill cycles tabs with state, account and billing date filters"}
+  - {id: ui.wholesale, area: ui, stage: 5, title: "Wholesale invoice list with totals, discrepancies and margin"}
+  - {id: ui.wholesale.import, area: ui, stage: 5, title: "Import a partner invoice from CSV"}
+  - {id: ui.wholesale.detail, area: ui, stage: 5, title: "Wholesale invoice summary"}
+  - {id: ui.wholesale.discrepancies, area: ui, stage: 5, title: "Filter reconciliation discrepancies and open matched subscriber cards"}
+  - {id: ui.wholesale.lines, area: ui, stage: 5, title: "Review wholesale line margins"}
+  - {id: ui.wholesale.page.previous, area: ui, stage: 5, title: "Previous page of wholesale rows"}
+  - {id: ui.wholesale.page.next, area: ui, stage: 5, title: "Next page of wholesale rows"}
   - {id: ui.bills.previous, area: ui, stage: 5, title: "Bills: previous page of newer bills"}
   - {id: ui.bills.next, area: ui, stage: 5, title: "Bills: next page of older bills"}
   - {id: ui.bills.accountChip, area: ui, stage: 5, title: "Bills screen account filter chip"}

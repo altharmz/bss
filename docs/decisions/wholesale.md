@@ -6,8 +6,9 @@ placeholder pattern for the partner's systems).
 
 An operator imports a wholesale invoice of the network partner (T-Mobile). The BSS compares it
 with the lines and usage it knows for the invoice period, stores the discrepancies, and reports
-cost, revenue and margin per line. Backend only; the UI is #381. Design approved on the issue
-(2026-11-15, the human's delegation to decide when preparing issues). Migration `0083`.
+cost, revenue and margin per line. The API is #197 and the operator UI is #381.
+Design approved on the issue (2026-11-15, the human's delegation to decide when preparing
+issues). Migration `0083`.
 
 ## Ours, not TMF
 
@@ -87,11 +88,20 @@ to even, in Python. The invoice summary has the totals of the same figures.
 
 - `POST /invoice?invoiceNumber=` (the file): 201 with the summary. Not an MCP tool (a file is the
   UI's; scope `excluded`).
-- `GET /invoice` (newest first, paged), `GET /invoice/{id}` (summary: totals, count per
+- `GET /invoice` (newest first, paged), `GET /invoice/{id}` (summary with totals, the count per
   discrepancy kind, cost, revenue, margin, matched products, unmatched numbers),
   `GET /invoice/{id}/discrepancies?kind=` (by kind, then line), `GET /invoice/{id}/lines?sort=`
-  (`msisdn` default, `margin` lowest first, `-margin`). All four are MCP tools; their UI is #381
-  (allowlisted in the parity check until then).
+  (`msisdn` default, `margin` lowest first, `-margin`). The four read operations are MCP tools
+  and power the Wholesale screen under Billing.
+
+## Operator UI (#381)
+
+`/wholesale` lists partner invoices by import order and opens a shareable invoice detail URL.
+Import sends the original CSV bytes and opens the reconciled invoice. Server validation and
+duplicate errors stay in the dialog with the inputs intact. The Discrepancies tab can filter by
+kind. For matched products it resolves the billing account through product inventory and links
+to the subscriber card. The Lines tab asks the server for lowest margin first and can reverse
+the order. All three lists use server paging.
 
 ## Size and cost
 
@@ -101,7 +111,7 @@ the matching), one statement per discrepancy kind (a test counts them for 10 and
 
 ## Not in this slice
 
-The partner's real format and transfer (#203), the UI (#381), roaming and other charge types in
+The partner's real format and transfer (#203), roaming and other charge types in
 the margin's detail, a currency other than the lines' own for revenue.
 
 ## Tests

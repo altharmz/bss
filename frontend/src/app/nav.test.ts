@@ -27,6 +27,7 @@ const ALL_ROUTES: Record<RouteName, true> = {
   billingSettings: true,
   payments: true,
   bills: true,
+  wholesale: true,
   balances: true,
   prepaidLifecycle: true,
   reports: true,

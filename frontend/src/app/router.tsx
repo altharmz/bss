@@ -36,6 +36,7 @@ export type Route =
   | { name: 'billingSettings' }
   | { name: 'payments' }
   | { name: 'bills' }
+  | { name: 'wholesale'; invoiceId?: string }
   | { name: 'balances' }
   | { name: 'prepaidLifecycle' }
   | { name: 'reports' }
@@ -73,6 +74,9 @@ export function parseRoute(path: string): Route {
   if (path === '/settings/logging' || path === '/settings/logging/') return { name: 'logging' };
   if (path === '/payments' || path === '/payments/') return { name: 'payments' };
   if (path === '/bills' || path === '/bills/') return { name: 'bills' };
+  if (path === '/wholesale' || path === '/wholesale/') return { name: 'wholesale' };
+  const invoice = /^\/wholesale\/([0-9a-fA-F-]{36})\/?$/.exec(path);
+  if (invoice?.[1]) return { name: 'wholesale', invoiceId: invoice[1].toLowerCase() };
   if (path === '/balances' || path === '/balances/') return { name: 'balances' };
   if (path === '/reports' || path === '/reports/') return { name: 'reports' };
   if (path === '/prepaid-lifecycle' || path === '/prepaid-lifecycle/') {
@@ -125,6 +129,8 @@ export function hrefOf(route: Exclude<Route, { name: 'notFound' }>): string {
       return '/payments';
     case 'bills':
       return '/bills';
+    case 'wholesale':
+      return route.invoiceId === undefined ? '/wholesale' : `/wholesale/${route.invoiceId}`;
     case 'balances':
       return '/balances';
     case 'reports':
