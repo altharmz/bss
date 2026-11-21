@@ -240,6 +240,33 @@ def test_bill_document_tmf678_and_first_charge_show_the_discount(api, db_conn, w
         assert same.json()["discount"]["amount"]["value"] == D("5.00")
 
 
+def test_renewal_history_carries_the_discount(api, db_conn, world):
+    """The card's renewal history (issue 380): each funded interval with its tier, null
+    without one; `amount` is the net with tax."""
+    first, second = buy_lines(api, db_conn, world, 2)
+    views = {p["id"]: p for p in api.get(f"{ACCOUNTS}/{world.acc['id']}/products").json()}
+    (alone,) = views[first["id"]]["renewalHistory"]
+    assert alone["discount"] is None
+    assert alone["amount"]["value"] == D("36.00")
+    (paired,) = views[second["id"]]["renewalHistory"]
+    tier_id = recurring_tier(db_conn, second["id"])
+    assert paired["discount"] == {
+        "amount": {"unit": "USD", "value": D("5.00")},
+        "productOfferingPrice": {"id": str(tier_id)},
+    }
+    assert paired["amount"]["value"] == D("30.00")
+
+
+def recurring_tier(db_conn, product_id):
+    tier_id = db_conn.execute(
+        "SELECT discount_price_id FROM applied_customer_billing_rate"
+        " WHERE product_id = %s AND charge_type = 'recurring'",
+        (product_id,),
+    ).fetchone()[0]
+    db_conn.commit()
+    return tier_id
+
+
 # --- catalog ---
 
 

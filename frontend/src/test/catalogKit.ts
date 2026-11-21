@@ -84,6 +84,9 @@ export function backend(routes: Record<string, Handler> = {}, offerings: unknown
       json(PRICES, { total: PRICES.length }),
     [`GET ${CAT}/productOfferingPrice?priceType=oneTime&offset=0&limit=100`]: () =>
       json([], { total: 0 }),
+    // a plan's detail lists its multi-line tiers (discount prices with unit lines)
+    [`GET ${CAT}/productOfferingPrice?priceType=discount&offset=0&limit=100`]: () =>
+      json([], { total: 0 }),
     // the detail dialog loads the offering itself
     ...Object.fromEntries(
       (offerings as { id: string }[]).map((o) => [

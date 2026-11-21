@@ -491,6 +491,38 @@ bodies against the real API.
 
 Issue #205 ([decisions](decisions/network.md)). A *Network* section in the order and product dialogs lists the network commands of that order or product (kind, state pill, due, attempts, last attempt, next attempt, last error, refusal code); it is absent when there are none. **Retry** only on an `exhausted` command; a refused one shows that it is final. The specification dialog's *Network profile* section edits the eight profile characteristics; the offering edit dialog narrows each declared value.
 
+### Multi-line prepaid (`ui.catalog.multiLineTiers`, `ui.subscriber.multiLineDiscount`, `ui.subscriber.dataPool`) - `screens/Catalog.tsx`, `screens/MultiLine.tsx`, `screens/UsageTab.tsx`
+
+Issue #380, the UI of multi-line discounts (#196) and pooled data (#379). Decision:
+[frontend.md](decisions/frontend.md#multi-line-prepaid-ui-2026-11-21-issue-380).
+
+- **Catalog:** a plan's offering detail has a **Multi-line discounts** group
+  (`ui.catalog.multiLineTiers`): its `discount` prices with `unitOfMeasure.units = lines`, by
+  minimum lines ("3+ lines · −10.00 USD per line / month · from …"). A plain discount (no
+  unit) is not a tier and is not listed. A tier opens in the price dialog, which shows its
+  minimum lines (`ui.catalog.multiLineTiers.lines`) and edits name, description and amount like
+  any price. **New tier…** (`ui.catalog.multiLineTiers.new`) opens Add price on **Multi-line
+  discount** (also offered in its Charge type on a plan), with **Minimum lines** (a whole number,
+  2 or more, checked before sending) and **Amount off per line**. The POST carries
+  `recurringChargePeriodType` = the plan's (its open recurring price in the UI currency) and
+  `unitOfMeasure {amount: N, units: "lines"}`; the reference PATCH keeps every attached price.
+- **Specification:** the `dataPool` flag is a row of the network profile section, 0 or 1 like
+  the other flags; the server refuses it (422) for an offering without a monthly price.
+- **Subscriber card:** "Multi-line −$5.00" (`ui.subscriber.multiLineDiscount`) next to a
+  renewal history row's amount (`renewalHistory[].discount`) and as **Discount** on the
+  prepaid first-charge quote (`firstCharge.discount`), both from the server. The Usage tab opens
+  with a **Data pool** panel (`ui.subscriber.dataPool`) when a plan line is pooled: used of
+  included with the percent, left, members and the pool period, from the first plan line whose
+  usage summary has a `pooled` entry (read line by line). A pooled line's data bar is titled
+  "Data · shared pool" and says whose pool it is (`ui.subscriber.usage.pooled`). A failed pool
+  read shows a note; Retry is the Allowance panel's.
+- **Rates and bills:** the bill document's line already reads "Plan X (multi-line discount
+  −$5.00)". A rate whose TMF678 `description` names the tier shows "Multi-line −$5.00" on its
+  row (`ui.bills.multiLineDiscount`) and in its detail (`ui.bills.rateDetail.multiLineDiscount`).
+- No new MCP tool: catalog price writes and the usage summary already have one. Bodies are
+  pinned in `Catalog.test.tsx` and `Catalog.specifications.test.tsx` and replayed by
+  `tests/test_ui_requests.py::test_multi_line_tier_and_data_pool_as_the_ui_sends_them`.
+
 ### Products (`ui.products`, `ui.products.status`, `ui.products.accountChip`, `ui.products.detail`, `ui.products.orderItems`, `ui.products.resource`) - `screens/Products.tsx`
 
 Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.

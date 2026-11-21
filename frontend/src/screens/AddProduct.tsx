@@ -1,3 +1,4 @@
+import { MultiLineDiscount, multiLineLabel } from './MultiLine';
 import { Footer } from './FinancialForms';
 import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
@@ -612,6 +613,14 @@ function AddProductPreview({
   const price = `${formatAmount(p.price.value)} ${p.price.unit} / ${p.recurringChargePeriod ?? 'mo'}`;
   const details: Parameters<typeof KeyValue>[0]['items'] = [
     ['Price', price],
+    ...(p.discount === undefined
+      ? []
+      : ([
+          [
+            'Discount',
+            <MultiLineDiscount key="discount" text={multiLineLabel(p.discount.amount)} />,
+          ],
+        ] as Parameters<typeof KeyValue>[0]['items'])),
     [
       'Period',
       <>
@@ -847,6 +856,14 @@ function PrepaidPreview({
           <dd>
             {formatAmount(p.price.value)} {p.price.unit} / {p.recurringChargePeriod ?? 'mo'}
           </dd>
+          {p.discount !== undefined && (
+            <>
+              <dt>Discount</dt>
+              <dd>
+                <MultiLineDiscount text={multiLineLabel(p.discount.amount)} />
+              </dd>
+            </>
+          )}
           <dt>Charging</dt>
           <dd>paid in full in advance, no proration</dd>
         </dl>

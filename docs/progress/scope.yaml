@@ -547,6 +547,8 @@ items:
   - {id: ui.subscriber.changeOffering, area: ui, stage: 5, title: "Change offering menu item"}
   - {id: ui.subscriber.planFacts, area: ui, stage: 5, title: "Prepaid product row: offering kind, how it renews, an add-on's plan and end date"}
   - {id: ui.subscriber.renewalHistory, area: ui, stage: 5, title: "Renewal history of a prepaid product: period, amount, tax, funding and bill"}
+  - {id: ui.subscriber.multiLineDiscount, area: ui, stage: 5, title: "Multi-line discount of a plan line on its renewal history and first-charge quote (issue 380)"}
+  - {id: ui.subscriber.dataPool, area: ui, stage: 5, title: "Data pool panel of a pooled account: pool used and included, left, members and period (issue 380)"}
   - {id: ui.subscriber.usage, area: ui, stage: 5, title: "Usage tab of a prepaid subscriber: period allowance bars per kind (used, included, remaining, 80% and 100% marks), throttled and barred badges, pay-as-you-go balance and unrated count, paged TMF635 records with rating status, applied usage price, roaming and throttled flags"}
   - {id: ui.subscriber.messages, area: ui, stage: 5, title: "Messages tab of a subscriber: the customer's TMF681 messages paged newest first (time, channel, event, receiver, state with its reason, last error), loaded only when opened"}
   - {id: ui.subscriber.consent, area: ui, stage: 5, title: "Marketing consent of the customer on the Messages tab: current opt-in per channel (SMS, email) with its source and operator, and the history"}
@@ -610,6 +612,8 @@ items:
   - {id: ui.bills.cycleDetail, area: ui, stage: 5, title: "Bill cycle detail dialog"}
   - {id: ui.bills.rateDetail, area: ui, stage: 5, title: "Applied billing rate detail dialog"}
   - {id: ui.bills.rateDetail.taxLines, area: ui, stage: 5, title: "Tax lines of a charge (category, jurisdiction, rate, amount) in the rate detail and the prepaid renewal history"}
+  - {id: ui.bills.multiLineDiscount, area: ui, stage: 5, title: "Multi-line discount on a rate line of a bill (issue 380)"}
+  - {id: ui.bills.rateDetail.multiLineDiscount, area: ui, stage: 5, title: "Multi-line discount in the rate detail dialog (issue 380)"}
   - {id: ui.payments, area: ui, stage: 5, title: "Payments screen: payments and refunds tabs with status, account and date filters"}
   - {id: ui.payments.previous, area: ui, stage: 5, title: "Payments: previous page of newer rows"}
   - {id: ui.payments.next, area: ui, stage: 5, title: "Payments: next page of older rows"}
@@ -643,6 +647,9 @@ items:
   - {id: ui.catalog.lifecycle, area: ui, stage: 5, title: "Offering lifecycle step (Activate / Retire)"}
   - {id: ui.catalog.addPrice, area: ui, stage: 5, title: "Add a one-time, monthly recurring or pay-as-you-go usage price with its rounding block"}
   - {id: ui.catalog.usagePrices, area: ui, stage: 5, title: "Usage prices in a pay-as-you-go offering detail"}
+  - {id: ui.catalog.multiLineTiers, area: ui, stage: 5, title: "Multi-line discounts group of a plan offering: tiers by minimum lines, amount off per line and validity (issue 380)"}
+  - {id: ui.catalog.multiLineTiers.new, area: ui, stage: 5, title: "New multi-line tier: Add price on a discount with Minimum lines and the plan period (issue 380)"}
+  - {id: ui.catalog.multiLineTiers.lines, area: ui, stage: 5, title: "Minimum lines of a multi-line tier in the price dialog (issue 380)"}
   - {id: ui.catalog.usageUnit, area: ui, stage: 5, title: "Fixed rounding unit in a usage-price detail"}
   - {id: ui.catalog.offeringKind, area: ui, stage: 5, title: "Set the offering kind: plan, add-on or pay as you go"}
   - {id: ui.catalog.kind, area: ui, stage: 5, title: "Offering kind in the offering detail"}
@@ -818,6 +825,7 @@ items:
   - {id: ui.prepaidCommands.previous, area: ui, stage: 5, title: "Prepaid commands: previous page"}
   - {id: ui.subscriber.usage.barred, area: ui, stage: 5, title: "Usage allowance: service barred"}
   - {id: ui.subscriber.usage.throttled, area: ui, stage: 5, title: "Usage allowance: service throttled"}
+  - {id: ui.subscriber.usage.pooled, area: ui, stage: 5, title: "Usage allowance: a pooled line's data bar reads from the account pool, with its members and period (issue 380)"}
   - {id: ui.subscriber.usage.status, area: ui, stage: 5, title: "Subscriber usage record: rating status"}
   - {id: ui.subscriber.usage.appliedPrice, area: ui, stage: 5, title: "Subscriber usage record: applied usage price and rounding unit"}
   - {id: ui.subscriber.usage.next, area: ui, stage: 5, title: "Subscriber usage: next page"}

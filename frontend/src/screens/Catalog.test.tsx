@@ -560,6 +560,194 @@ describe('add price', () => {
   });
 });
 
+describe('multi-line discounts (#380)', () => {
+  const TIER = {
+    id: 'tier3',
+    name: 'Mobile L 3+ lines',
+    priceType: 'discount',
+    recurringChargePeriodType: 'monthly',
+    unitOfMeasure: { amount: 3, units: 'lines' },
+    price: usd(10),
+    validFor: { startDateTime: '2026-06-01T21:00:00Z' },
+  };
+  const TIER2 = {
+    ...TIER,
+    id: 'tier2',
+    name: 'Mobile L 2+ lines',
+    price: usd(5),
+    unitOfMeasure: { amount: 2, units: 'lines' },
+  };
+  // a plain discount (no unit) on the same plan stays a record: not a tier
+  const PLAIN = { ...TIER, id: 'plain', name: 'Promo', unitOfMeasure: undefined };
+  const MOBILE_L = {
+    ...OFFERINGS[0],
+    productOfferingPrice: [{ id: 'pr1' }, { id: 'tier3' }, { id: 'tier2' }, { id: 'plain' }],
+  };
+  const tiered = (routes: Record<string, Handler> = {}, tiers: unknown[] = [TIER, TIER2, PLAIN]) =>
+    backend(
+      {
+        [`GET ${CAT}/productOfferingPrice?priceType=discount&offset=0&limit=100`]: () =>
+          json(tiers, { total: tiers.length }),
+        ...routes,
+      },
+      [MOBILE_L, ...OFFERINGS.slice(1)],
+    );
+  async function plan() {
+    await open();
+    await waitFor(() => row('Mobile L'));
+    fireEvent.click(row('Mobile L'));
+    return screen.getByRole('dialog', { name: 'Mobile L' });
+  }
+
+  it('lists the tiers of a plan by minimum lines, without a plain discount', async () => {
+    tiered();
+    const detail = await plan();
+    const group = await waitFor(() => {
+      const found = expectUi('ui.catalog.multiLineTiers');
+      expect(found.textContent).toContain('3+ lines');
+      return found;
+    });
+    expect(detail.contains(group)).toBe(true);
+    expect(within(group).getByText('Multi-line discounts')).toBeTruthy();
+    const lines = Array.from(group.querySelectorAll('dd > div.num')).map((d) => d.textContent);
+    expect(lines).toEqual([
+      '2+ lines · −5.00 USD per line / month · from 2026-06-02',
+      '3+ lines · −10.00 USD per line / month · from 2026-06-02',
+    ]);
+    expect(group.textContent).not.toContain('Promo');
+  });
+
+  it('offers no tiers on an add-on or pay-as-you-go offering', async () => {
+    const ADDON = {
+      ...OFFERINGS[0],
+      productOfferingCharacteristic: [
+        { name: 'offeringKind', characteristicValueSpecification: [{ value: 'addOn' }] },
+      ],
+    };
+    backend({}, [ADDON, ...OFFERINGS.slice(1)]);
+    const detail = await plan();
+    await within(detail).findByRole('button', { name: 'Add price…' });
+    expect(document.querySelector('[data-ui="ui.catalog.multiLineTiers"]')).toBeNull();
+    fireEvent.click(within(detail).getByRole('button', { name: 'Add price…' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add price · Mobile L' });
+    expect(within(dialog).queryByRole('option', { name: 'Multi-line discount' })).toBeNull();
+  });
+
+  it('creates a tier from New tier with the plan period and the exact amount', async () => {
+    const { fetchMock } = tiered(
+      {
+        [`POST ${CAT}/productOfferingPrice`]: () => json({ id: 'new-tier' }, { status: 201 }),
+        [`PATCH ${CAT}/productOffering/${ids(1)}`]: () => json({ id: ids(1) }),
+      },
+      [],
+    );
+    const detail = await plan();
+    expect(await within(detail).findByText('no tiers')).toBeTruthy();
+    fireEvent.click(expectUi('ui.catalog.multiLineTiers.new'));
+    const dialog = screen.getByRole('dialog', { name: 'Add price · Mobile L' });
+    expect((within(dialog).getByLabelText('Charge type') as HTMLSelectElement).value).toBe(
+      'discount',
+    );
+    const lines = within(dialog).getByLabelText('Minimum lines') as HTMLInputElement;
+    expect(lines.value).toBe('2');
+    const add = within(dialog).getByRole('button', { name: 'Add price' }) as HTMLButtonElement;
+    fireEvent.change(lines, { target: { value: '1' } });
+    fireEvent.change(within(dialog).getByLabelText('Amount off per line, USD'), {
+      target: { value: '7.5' },
+    });
+    expect(await within(dialog).findByRole('alert')).toHaveProperty(
+      'textContent',
+      'Minimum lines must be 2 or more',
+    );
+    expect(add.disabled).toBe(true);
+    fireEvent.change(lines, { target: { value: '2.5' } });
+    expect(within(dialog).getByRole('alert').textContent).toBe(
+      'Minimum lines must be a whole number',
+    );
+    fireEvent.change(lines, { target: { value: '4' } });
+    await waitFor(() => expect(add.disabled).toBe(false));
+    fireEvent.click(add);
+    expect(await screen.findByRole('status')).toHaveProperty(
+      'textContent',
+      'Price added to Mobile L',
+    );
+    const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(String(post?.[1]?.body)).toBe(
+      '{"@type":"ProductOfferingPrice","name":"Mobile L 4+ lines","lifecycleStatus":"Active",' +
+        '"priceType":"discount","recurringChargePeriodType":"monthly",' +
+        '"unitOfMeasure":{"amount":4,"units":"lines"},"price":{"unit":"USD","value":7.50},' +
+        '"validFor":{"startDateTime":"2026-10-01T00:00:00+03:00"}}',
+    );
+    const patch = fetchMock.mock.calls.find(([, init]) => init?.method === 'PATCH');
+    expect(JSON.parse(String(patch?.[1]?.body))).toEqual({
+      productOfferingPrice: [
+        { id: 'pr1', '@type': 'ProductOfferingPriceRef' },
+        { id: 'tier3', '@type': 'ProductOfferingPriceRef' },
+        { id: 'tier2', '@type': 'ProductOfferingPriceRef' },
+        { id: 'plain', '@type': 'ProductOfferingPriceRef' },
+        { id: 'new-tier', '@type': 'ProductOfferingPriceRef' },
+      ],
+    });
+  });
+
+  it('takes the plan period for a tier of a weekly plan', async () => {
+    const WEEKLY = { ...MOBILE_L, productOfferingPrice: [{ id: 'pr1w' }] };
+    const { fetchMock } = backend(
+      {
+        [`GET ${CAT}/productOfferingPrice?priceType=recurring&offset=0&limit=100`]: () =>
+          json(
+            [
+              {
+                id: 'pr1w',
+                price: usd(9),
+                recurringChargePeriodType: 'weekly',
+                validFor: { startDateTime: '2026-06-01T21:00:00Z' },
+              },
+            ],
+            { total: 1 },
+          ),
+        [`GET ${CAT}/productOfferingPrice?priceType=discount&offset=0&limit=100`]: () =>
+          json([], { total: 0 }),
+        [`POST ${CAT}/productOfferingPrice`]: () => json({ id: 'new-tier' }, { status: 201 }),
+        [`PATCH ${CAT}/productOffering/${ids(1)}`]: () => json({ id: ids(1) }),
+      },
+      [WEEKLY],
+    );
+    const detail = await plan();
+    fireEvent.click(await within(detail).findByRole('button', { name: 'New tier…' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add price · Mobile L' });
+    fireEvent.change(within(dialog).getByLabelText('Amount off per line, USD'), {
+      target: { value: '1' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add price' }));
+    await screen.findByRole('status');
+    const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(JSON.parse(String(post?.[1]?.body))).toMatchObject({
+      recurringChargePeriodType: 'weekly',
+      unitOfMeasure: { amount: 2, units: 'lines' },
+    });
+  });
+
+  it('opens a tier in the price dialog with its minimum lines and edits the amount', async () => {
+    const { fetchMock } = tiered({
+      [`GET ${CAT}/productOfferingPrice/tier3`]: () => json(TIER),
+      [`PATCH ${CAT}/productOfferingPrice/tier3`]: () => json(TIER),
+    });
+    const detail = await plan();
+    fireEvent.click(await within(detail).findByRole('button', { name: 'Open tier 3+ lines' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Mobile L 3+ lines' });
+    expect(expectUi('ui.catalog.multiLineTiers.lines').textContent).toBe('3 live plan lines');
+    expect(within(dialog).getByText('−10.00 USD per line / month')).toBeTruthy();
+    fireEvent.change(within(dialog).getByLabelText(/^Price \(amount off per line\),/), {
+      target: { value: '12' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await screen.findByRole('status');
+    const patch = fetchMock.mock.calls.find(([, init]) => init?.method === 'PATCH');
+    expect(String(patch?.[1]?.body)).toBe('{"price":{"unit":"USD","value":12.00}}');
+  });
+});
+
 describe('lifecycle', () => {
   async function details(name: string) {
     await open();

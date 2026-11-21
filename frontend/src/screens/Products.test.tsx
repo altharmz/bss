@@ -89,9 +89,11 @@ describe('products screen', () => {
     fireEvent.change(screen.getByLabelText('Filter by number'), {
       target: { value: '+1 202 555 0123' },
     });
-    await waitFor(() => expect(screen.queryByText('Plus 20')).toBeNull());
-    expect(calls).toContain(`GET ${NUMBERS}?value=12025550123&limit=1`);
-    expect(calls).toContain(`GET ${PRODUCTS}?realizingResource.id=${N1}&${PAGE}`);
+    await waitFor(() => {
+      expect(calls).toContain(`GET ${NUMBERS}?value=12025550123&limit=1`);
+      expect(calls).toContain(`GET ${PRODUCTS}?realizingResource.id=${N1}&${PAGE}`);
+      expect(screen.queryByText('Plus 20')).toBeNull();
+    });
     fireEvent.change(screen.getByLabelText('Filter by number'), { target: { value: '1999' } });
     expect(await screen.findByText('No matches')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Filter by number'), { target: { value: '' } });
