@@ -2,6 +2,7 @@
 by prefix on the server (#314; no counts, #312)."""
 
 import re
+from contextlib import nullcontext
 from typing import Any
 from uuid import UUID
 
@@ -33,7 +34,7 @@ def matching(
     *,
     alias: str,
     conds: list[str],
-    matches: list[tuple[str, str]],
+    matches: list[tuple[str, str] | tuple[str, str, str]],
     params: dict[str, Any],
     offset: int,
     limit: int,
@@ -47,19 +48,39 @@ def matching(
     from the probe, oldest first, and read by id. More: the page walks the
     `(created_at, id)` index and tests each row, which finds a page of a broad match
     early. A set of every match (`id IN (... UNION ...)`) cost a hash of the whole table:
-    20-60 ms for a narrow search on 100k rows, 1-1.6 s for a broad one."""
+    20-60 ms for a narrow search on 100k rows, 1-1.6 s for a broad one.
+
+    A match may add a third element, its page condition (#365): the probe reads from the
+    matched side (subscriber numbers), the walking page tests each row on its own (a
+    correlated EXISTS), which a set of every match would cost a hash of. The probe is read
+    through a server-side cursor and stops once it has seen more than MATCH_CAP distinct
+    rows: a broad match reads about MATCH_CAP rows, not the MATCH_CAP per match the limit
+    allows."""
     where = " AND ".join(conds)  # fixed fragments; every value is a parameter
     probe = " UNION ALL ".join(
-        f"(SELECT {alias}.id, {alias}.created_at FROM {source} WHERE {where} AND {match})"  # noqa: S608
-        for source, match in matches
+        f"(SELECT {alias}.id, {alias}.created_at FROM {m[0]} WHERE {where} AND {m[1]})"  # noqa: S608
+        for m in matches
     )
     # A row can match several ways (an account and its customer by the same name), so
     # every way may bring MATCH_CAP rows: a probe within its limit has every match.
     most = MATCH_CAP * len(matches)
-    rows = conn.execute(f"{probe} LIMIT {most + 1}", params).fetchall()
-    found = {(created_at, id_) for id_, created_at in rows}
-    if len(rows) > most or len(found) > MATCH_CAP:
-        return "(" + " OR ".join(match for _, match in matches) + ")", offset
+    found: set[tuple[Any, Any]] = set()
+    read = 0
+    # A server-side cursor needs a transaction: a request's connection opens its own.
+    scope = conn.transaction() if conn.autocommit else nullcontext()
+    with scope, conn.cursor(name="match_probe") as cur:
+        cur.execute(f"{probe} LIMIT {most + 1}", params)
+        while len(found) <= MATCH_CAP:
+            # No more than could still prove the match broad: each read row costs 50-100 µs
+            # on the number side.
+            want = MATCH_CAP + 1 - len(found)
+            batch = cur.fetchmany(want)
+            read += len(batch)
+            found.update((created_at, id_) for id_, created_at in batch)
+            if len(batch) < want:
+                break
+    if read > most or len(found) > MATCH_CAP:
+        return "(" + " OR ".join(m[-1] for m in matches) + ")", offset
     # PostgreSQL orders uuids bytewise, Python by their integer value: the same order.
     ordered = sorted(found)
     params["matched"] = [id_ for _, id_ in ordered[offset : offset + limit + 1]]
@@ -134,14 +155,24 @@ def search(
         )
     if DIGITS.fullmatch(term):
         params["number"] = like_prefix(term.lstrip("+"))
+        # `IS TRUE`: the partial GiST exclusion indexes (cancelled_at IS NULL) took 40-55 µs
+        # a lookup, the btree indexes led by subscriber_number_id and product_id 13-16 µs.
+        live = "(na.cancelled_at IS NULL) IS TRUE AND upper_inf(na.valid_for)"
+        number = "n.resource_specification_id = 'msisdn' AND n.value LIKE %(number)s"
+        # The probe walks the matching numbers to their accounts, a nested loop from the
+        # first number (OFFSET 0 keeps the lateral from being flattened into a hash join
+        # of every match); the page tests each account (#365).
         matches.append(
             (
-                "billing_account a",
-                "a.id IN (SELECT p.billing_account_id FROM subscriber_number n"
-                " JOIN number_assignment na ON na.subscriber_number_id = n.id"
+                "subscriber_number n CROSS JOIN LATERAL (SELECT a.* FROM number_assignment na"  # noqa: S608
                 " JOIN product p ON p.id = na.product_id"
-                " WHERE n.resource_specification_id = 'msisdn' AND n.value LIKE %(number)s"
-                " AND na.cancelled_at IS NULL AND upper_inf(na.valid_for))",
+                " JOIN billing_account a ON a.id = p.billing_account_id"
+                f" WHERE na.subscriber_number_id = n.id AND {live} OFFSET 0) a",
+                number,
+                "EXISTS (SELECT FROM product p JOIN number_assignment na"
+                f" ON na.product_id = p.id AND {live}"
+                " JOIN subscriber_number n ON n.id = na.subscriber_number_id"
+                f" WHERE p.billing_account_id = a.id AND {number})",
             )
         )
     match, params["offset"] = matching(
