@@ -1,12 +1,15 @@
 """GET /internal/v1/subscriber (#314): the Subscribers list, paged on the server with no
 count, searched by prefix (name, subscriber number, short id), with per-page figures."""
 
-from datetime import timedelta
+from datetime import date, timedelta
 
 import pytest
 
-from tests import apidata, timeline
+from app.repository import subscribers
+from tests import apidata, factories, timeline
 from tests.test_api_resource_inventory import number
+from tests.test_number_persistence import assignment
+from tests.test_number_persistence import number as number_row
 from tests.test_prepaid_orders import shop
 from tests.test_settlement_db import make_payment
 from tests.test_tax_engine import CA, set_address
@@ -169,3 +172,82 @@ def test_service_address_missing_lists_prepaid_accounts_with_live_lines_and_no_a
     assert names(api.get(f"{url}&q=no%20address%202")) == ["No address 2"]
     assert api.get(f"{URL}?serviceAddress=present").status_code == 400
     assert api.get(f"{url}&serviceAddress=missing").status_code == 400
+
+
+def numbered_accounts(conn):
+    """Six accounts with a live line numbered 1202555010<i>, one each with a cancelled and
+    an ended claim on a number of the same prefix, and one with no number (#365)."""
+    off = factories.offering(conn)
+    live = []
+    for i in range(9):
+        acc = factories.account(conn, name=f"Holder {i}")
+        if i == 8:
+            break
+        prod = factories.product(conn, acc["id"], off["id"], date(2026, 1, 1))
+        claim = {"cancelled": i == 6, "end": date(2026, 1, 10) if i == 7 else None}
+        assignment(conn, number_row(conn, f"1202555010{i}"), prod, **claim)
+        if i < 6:
+            live.append(acc["id"])
+    return live
+
+
+def brute_force(conn, ids):
+    """`ids` in the list order, read without the search."""
+    rows = conn.execute(
+        "SELECT id FROM billing_account WHERE id = ANY(%s) ORDER BY created_at, id", (ids,)
+    )
+    return [r[0] for r in rows]
+
+
+@pytest.mark.parametrize("cap", [0, 2, 1000])
+def test_number_search_pages_match_a_brute_force_query(db_conn, monkeypatch, cap):
+    """#365: a broad number prefix walks the order index with a correlated test per
+    account, a narrow one is cut from the probe; both give the same pages in the same
+    order, and a cancelled or ended claim is found by neither. Cap 0 walks every search,
+    1000 probes every one, 2 walks the broad prefix and probes the full number."""
+    monkeypatch.setattr(subscribers, "MATCH_CAP", cap)
+    live = numbered_accounts(db_conn)
+    expected = brute_force(db_conn, live)
+
+    def pages(q, limit):
+        found, offset, more = [], 0, True
+        while more:
+            rows, more = subscribers.search(
+                db_conn, q=q, state=None, rating_type=None, offset=offset, limit=limit
+            )
+            assert len(rows) == limit or not more
+            found += [r["id"] for r in rows]
+            offset += limit
+        return found
+
+    for q in ("12025", "1202555", "+1202555010"):
+        assert pages(q, 2) == expected
+        assert pages(q, 50) == expected
+    assert pages("12025550103", 2) == [live[3]]
+    assert pages("12025550106", 2) == []  # cancelled
+    assert pages("12025550107", 2) == []  # ended
+    assert pages("1999", 2) == []
+
+
+def test_a_walking_page_uses_the_page_form_of_a_match(db_conn, monkeypatch):
+    """#365: over the cap the page tests each row with a match's page form (the correlated
+    number test), not its probe form (the set of every matching number)."""
+    monkeypatch.setattr(subscribers, "MATCH_CAP", 0)
+    factories.account(db_conn, name="Walker")
+    params = {"name": "walker%"}
+    probe = "lower(a.name) LIKE %(name)s"
+    page = "lower(a.name) LIKE %(name)s AND true"
+    for matches, want in (
+        ([("billing_account a", probe, page)], f"({page})"),
+        ([("billing_account a", probe)], f"({probe})"),
+    ):
+        match, offset = subscribers.matching(
+            db_conn,
+            alias="a",
+            conds=["true"],
+            matches=matches,
+            params=params,
+            offset=0,
+            limit=10,
+        )
+        assert (match, offset) == (want, 0)

@@ -241,9 +241,66 @@ Dispositions of what remains:
   append, and worker start-up is most of it; the page itself takes 0.2 ms.
 - **Number prefixes - unchanged, follow-up.** A 6-digit number prefix (`130200`, about
   100k numbers) takes ~1 s before and after: the subscriber-number condition itself.
-  Not in the #327 shapes: #365.
+  Not in the #327 shapes: fixed by [#365](#subscriber-number-prefixes-365).
 - **Estimate-only.** The 500x bitmap estimates of 32/46/50/51 are on the binder's value
   without a wildcard (`LIKE 'lt-86402'`), and the 1,001-1,501x errors were on the union
   aggregate that is gone. The 160-200x errors of 7, 8 and 29 were the `::text` casts.
 - **Cold-only.** None: every figure here is warm, and both before runs had the same
   plans.
+
+## Subscriber-number prefixes (#365)
+
+Measured on 2026-11-21 on `seed100k-0078` restored and migrated to head (0089), warm,
+with the billing worker stopped and other tasks' stacks on the host (load average
+16-19; the same old code took 1.2-3.4 s where #330 measured ~1 s, so absolute figures
+are about twice the #330 ones). Old and new `subscribers.search` ran alternately on one
+connection, nine timed calls each after a warm-up, median in ms; every page and its
+"more" flag were identical. The plans, the scripts and the old module are kept in
+`/home/petrg/projects/bss-agents/worker1/state/issue365-plans/` (`365-before.txt`,
+`365-after.txt`, `365-after-probe.txt`, `365-after-page.txt`).
+
+| Search (`q`) | Offset | Old | New |
+| --- | ---: | ---: | ---: |
+| `130` (every number) | 0 / 50 | 1,879 / 1,790 | 76 / 72 |
+| `130200` (~57k live numbers) | 0 / 50 | 1,287 / 1,255 | 76 / 76 |
+| `13020087893` (one number) | 0 / 50 | 11.1 / 10.5 | 12.1 / 10.7 |
+| names `lt-2790`, `lt-27`, `lt-1`, `l` | 0 | 9 / 99 / 46 / 38 | 10 / 50 / 34 / 26 |
+| names `lt-2790`, `lt-27`, `lt-1`, `l` | 50 | 7 / 286 / 46 / 36 | 8 / 245 / 36 / 25 |
+
+Before, `130200` at offset 0, from `365-before.txt`:
+
+- **Probe, 531 ms** for 5,001 rows. The number branch (`a.id IN (SELECT ... FROM
+  subscriber_number JOIN number_assignment JOIN product)`) is a parallel hash semi join:
+  seq scans of `subscriber_number` (57k matches) and `number_assignment` (114k live
+  claims) are hashed before the first row.
+- **Page, 1,508 ms.** The same set as a hashed SubPlan (56,897 rows), then a hash join of
+  every account with every customer, the OR-ed conditions as a join filter, and a top-N
+  sort of the 49,626 matches.
+
+After:
+
+- **Probe, 17-20 ms** for the 1,001 rows it reads (`365-after-probe.txt`). The number
+  branch is a lateral: `subscriber_number` in heap order, each number to its live claim
+  (`number_assignment_subscriber_number_id_audit_sequence_idx`), product and account by
+  primary key, a nested loop that returns its first row at once (`OFFSET 0` keeps the
+  lateral from being flattened back into the hash join). The probe is read through a
+  server-side cursor and stops at the 1,001st distinct account; it used to read up to
+  `MATCH_CAP` x 5 matches = 5,001 rows, ~375 ms on this branch alone.
+- **Page, 7 ms** (plus ~15 ms planning of the five OR-ed conditions): the
+  `(created_at, id)` index walk with a customer lookup and a correlated EXISTS per
+  account: `product_billing_account_id_idx`, then
+  `number_assignment_product_id_audit_sequence_idx`, then the `subscriber_number` primary
+  key. It stops at the 101st match.
+- **No new index.** No step reads a whole table. The claim filter is written
+  `(cancelled_at IS NULL) IS TRUE`: as `cancelled_at IS NULL` the planner chose the
+  partial GiST exclusion indexes, 40-55 us a lookup, where the btree indexes take
+  13-16 us (probe 85 ms against 64 ms under the same load).
+
+Dispositions:
+
+- **Narrow searches - about 1 ms slower, accepted.** The cursor costs a DECLARE, a FETCH
+  and a CLOSE where the probe was one statement: the full number 10.5-11.1 ms became
+  10.7-12.1, and the party and customer searches with few matches gained 0.4-1.4 ms
+  (`ab365p.py`). Their broad searches got faster (parties by `l` 21-26 ms to 15-18).
+- **An account holding more than 5,000 matching numbers - unchanged.** The probe still
+  stops at 5,001 rows, so such an account walks the whole index. As before #365.
