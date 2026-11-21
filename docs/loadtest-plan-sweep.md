@@ -250,7 +250,7 @@ Dispositions of what remains:
 
 ## Subscriber-number prefixes (#365)
 
-Measured on 2026-11-21 on `seed100k-0078` restored and migrated to head (0079), warm,
+Measured on 2026-11-21 on `seed100k-0078` restored and migrated to head (0089), warm,
 with the billing worker stopped and other tasks' stacks on the host (load average
 16-19; the same old code took 1.2-3.4 s where #330 measured ~1 s, so absolute figures
 are about twice the #330 ones). Old and new `subscribers.search` ran alternately on one
