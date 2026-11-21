@@ -229,6 +229,31 @@ describe('bills screen', () => {
     expect(calls).toContain(`GET ${CYCLE}/${K1}`);
   });
 
+  it('shows the multi-line discount of a rate on its line and in its detail (#380)', async () => {
+    const tiered = {
+      ...RATE1,
+      description:
+        'Mobile L, 2026-09-01 - 2026-09-30; multi-line discount −$5.00' +
+        ' (productOfferingPrice 0d000000-0000-4000-8000-000000000001)',
+    };
+    backend({
+      [`GET ${BILL}?${LIST}`]: () => json([BILL1], { total: 1 }),
+      [`GET /internal/v1/customerBill/${B1}`]: () => json(DETAIL),
+      [`GET ${RATE}?bill.id=${B1}&${PAGE}`]: () => json([tiered], { total: 1 }),
+      [`GET ${RATE}/${R1}`]: () => json(tiered),
+    });
+    open('/bills');
+    fireEvent.click(await screen.findByText('BL-B1000001'));
+    const dialog = await screen.findByRole('dialog', { name: 'Bill BL-B1000001' });
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Rates' }));
+    const tag = await waitFor(() => expectUi('ui.bills.multiLineDiscount'));
+    expect(tag.textContent).toBe('Multi-line −$5.00');
+    fireEvent.click(tag.closest('[role=row]') as HTMLElement);
+    await screen.findByRole('dialog', { name: 'Rate D1000001' });
+    const detail = await waitFor(() => expectUi('ui.bills.rateDetail.multiLineDiscount'));
+    expect(detail.textContent).toBe('Multi-line −$5.00');
+  });
+
   it('has no cycle link for a bill without a bill cycle', async () => {
     backend({
       [`GET ${BILL}?${LIST}`]: () => json([BILL2], { total: 1 }),

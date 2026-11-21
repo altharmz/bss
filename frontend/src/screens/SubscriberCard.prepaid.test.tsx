@@ -363,6 +363,93 @@ describe('usage tab', () => {
     expect(screen.getByText('-2.5 USD')).toBeTruthy();
     expect(await screen.findByText('No usage')).toBeTruthy();
   });
+
+  // the account data pool (issue 379): the domestic data entry of a pooled line is the pool's
+  const POOL = { id: A, startDate: '2026-09-15', endDate: '2026-10-15', members: 3 };
+  const pooled = (over: Record<string, unknown> = {}) => {
+    const base = summary({ throttled: false });
+    return {
+      ...base,
+      allowances: base.allowances.map((a) =>
+        a.kind === 'data'
+          ? {
+              ...a,
+              used: 2500 * MIB,
+              included: 3000 * MIB,
+              remaining: 500 * MIB,
+              percent: 83,
+              pooled: true,
+              pool: POOL,
+            }
+          : { ...a, pooled: false, pool: null },
+      ),
+      ...over,
+    };
+  };
+
+  it('shows the Data pool panel and reads the pooled bar from the pool', async () => {
+    lazy({
+      [SUMMARY]: () => json(pooled()),
+      [RECORDS]: () => json([], { total: 0 }),
+    });
+    await open('#usage');
+    const panel = await waitFor(() => expectUi('ui.subscriber.dataPool'));
+    expect(expectUi('ui.subscriber.usage').contains(panel)).toBe(true);
+    expect(within(panel).getByText('Data pool')).toBeTruthy();
+    expect(panel.textContent).toContain('2.44 GB of 2.93 GB (83%)');
+    expect(panel.textContent).toContain('500.0 MB');
+    expect(panel.textContent).toContain('3 lines');
+    expect(panel.textContent).toContain('2026-09-15 – 2026-10-15 (end excluded)');
+    const data = expectUi('ui.subscriber.usage.data');
+    expect(data.textContent).toContain('Data · shared pool');
+    expect(data.textContent).toContain('2.44 GB of 2.93 GB');
+    expect(expectUi('ui.subscriber.usage.pooled').textContent).toContain(
+      'data pool of 3 lines, 2026-09-15 – 2026-10-15',
+    );
+    expect(expectUi('ui.subscriber.usage.voice').textContent).not.toContain('pool');
+  });
+
+  it('finds the pool on a later line, the shown line keeping its own bar', async () => {
+    // two lines show a select with PRD-<short id>, which needs real UUIDs
+    const L1 = 'a0000001-0000-4000-8000-000000000001';
+    const L2 = 'a0000002-0000-4000-8000-000000000002';
+    const line = (id: string) =>
+      product(id, {
+        offeringKind: 'plan',
+        paidThrough: '2026-10-20',
+        suspensionCause: null,
+        needs_topup: null,
+      });
+    const plain = summary({ throttled: false, product: { id: L1, href: '' } });
+    const unpooled = {
+      ...plain,
+      allowances: plain.allowances.map((a) => ({ ...a, pooled: false, pool: null })),
+    };
+    lazy({
+      [`GET ${INTERNAL}/products`]: () => json([line(L1), line(L2)], { total: 2 }),
+      [`GET /internal/v1/usage/summary?product.id=${L1}`]: () => json(unpooled),
+      [`GET /internal/v1/usage/summary?product.id=${L2}`]: () =>
+        json({ ...pooled(), product: { id: L2, href: '' } }),
+      [`GET /tmf-api/productUsageManagement/v5/productUsage?product.id=${L1}&offset=0&limit=25`]:
+        () => json([], { total: 0 }),
+    });
+    await open('#usage');
+    const panel = await waitFor(() => expectUi('ui.subscriber.dataPool'));
+    expect(panel.textContent).toContain('3 lines');
+    // the shown line (the first) is not pooled: its own bar
+    expect(expectUi('ui.subscriber.usage.data').textContent).toContain('850.0 MB of 1000.0 MB');
+    expect(document.querySelector('[data-ui="ui.subscriber.usage.pooled"]')).toBeNull();
+  });
+
+  it('shows no Data pool panel for an account without a pool', async () => {
+    lazy({
+      [SUMMARY]: () => json(summary()),
+      [RECORDS]: () => json([], { total: 0 }),
+    });
+    await open('#usage');
+    await waitFor(() => expectUi('ui.subscriber.usage.data'));
+    expect(document.querySelector('[data-ui="ui.subscriber.dataPool"]')).toBeNull();
+  });
 });
 
 describe('prepaid money forms', () => {
@@ -1195,6 +1282,31 @@ describe('prepaid first-charge preview in Add product', () => {
     fireEvent.click((await within(dialog).findAllByRole('radio'))[0] as HTMLElement);
     return dialog;
   }
+
+  it('shows the multi-line discount of the quote (#380)', async () => {
+    stubbed({
+      [urlOf('2026-10-01')]: () =>
+        json(
+          firstCharge({
+            discount: { amount: usd(5), productOfferingPrice: { id: 'tier-2' } },
+          }),
+        ),
+    });
+    const dialog = await chooseOffering();
+    await within(dialog).findByTestId('prepaid-required');
+    const box = expectUi('ui.addProduct.prepaidPreview');
+    expect(within(box).getByText('Multi-line −$5.00')).toBe(
+      expectUi('ui.subscriber.multiLineDiscount'),
+    );
+    expect(box.textContent).toContain('Discount');
+  });
+
+  it('shows no discount on a quote without a tier', async () => {
+    stubbed({ [urlOf('2026-10-01')]: () => json(firstCharge()) });
+    const dialog = await chooseOffering();
+    await within(dialog).findByTestId('prepaid-required');
+    expect(document.querySelector('[data-ui="ui.subscriber.multiLineDiscount"]')).toBeNull();
+  });
 
   it('shows the server preview and makes Top up primary for an immediate shortfall', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });

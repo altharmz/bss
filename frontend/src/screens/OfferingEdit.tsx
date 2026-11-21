@@ -352,6 +352,8 @@ function PriceBody({
     });
 
   const message = problem ?? error ?? (ending ? endError : null);
+  // a multi-line tier: its N is fixed, so a new N is a new tier (docs/decisions/prepaid.md)
+  const tier = price.priceType === 'discount' && price.unitOfMeasure?.units === 'lines';
   return (
     <Dialog
       onSubmit={ending || deleting ? undefined : submitDialogPrimary}
@@ -404,11 +406,21 @@ function PriceBody({
         <dl className="bss-details">
           <dt>Charge</dt>
           <dd className="num">
-            {price.cents === null ? '—' : formatCents(price.cents)} {price.currency ?? ''} /{' '}
+            {tier ? '−' : ''}
+            {price.cents === null ? '—' : formatCents(price.cents)} {price.currency ?? ''}
+            {tier ? ' per line' : ''} /{' '}
             {price.priceType === 'usage'
               ? `${price.unitOfMeasure?.amount ?? 1} ${price.unitOfMeasure?.units ?? ''}`
               : price.interval}
           </dd>
+          {tier && (
+            <>
+              <dt>Minimum lines</dt>
+              <dd className="num" data-ui="ui.catalog.multiLineTiers.lines">
+                {price.unitOfMeasure?.amount ?? '—'} live plan lines
+              </dd>
+            </>
+          )}
           {price.priceType === 'usage' && (
             <>
               <dt>Rounding unit</dt>
@@ -440,7 +452,12 @@ function PriceBody({
           />
         </label>
         <label>
-          {price.priceType === 'usage' ? 'Price per block' : 'Price'}, {price.currency ?? ''}
+          {price.priceType === 'usage'
+            ? 'Price per block'
+            : tier
+              ? 'Price (amount off per line)'
+              : 'Price'}
+          , {price.currency ?? ''}
           <TextInput
             mono
             inputMode="decimal"

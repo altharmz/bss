@@ -916,6 +916,7 @@ function toCatalogPrice(price: PriceBody): CatalogPrice {
     cents: toCents(need(price.price?.value, 'price value')),
     currency: need(price.price?.unit, 'price unit'),
     interval: chargeInterval(price.recurringChargePeriodType, price.recurringChargePeriodLength),
+    periodType: price.recurringChargePeriodType ?? null,
     unitOfMeasure: price.unitOfMeasure ?? null,
     from: need(price.validFor?.startDateTime, 'price validFor.startDateTime'),
     to: price.validFor?.endDateTime ?? null,
@@ -987,6 +988,8 @@ export interface CatalogPrice {
   cents: number;
   currency: string;
   interval?: string;
+  /** recurringChargePeriodType as stored ('monthly', ...); a tier takes its plan's */
+  periodType?: string | null;
   unitOfMeasure: PriceBody['unitOfMeasure'] | null;
   from: string; // instant
   to: string | null; // instant, exclusive; null = open-ended
@@ -1157,22 +1160,28 @@ export async function createOffering(form: NewOffering, timeZone: string): Promi
 export interface NewPrice {
   offeringId: string;
   offeringName: string;
-  priceType: 'oneTime' | 'recurring' | 'usage';
+  priceType: 'oneTime' | 'recurring' | 'usage' | 'discount';
   amount: string;
   currency: string;
   validFrom: string;
   existingPriceIds: string[];
   unitOfMeasure?: { amount: number; units: UsageUnit };
+  /** A multi-line tier (priceType discount): the minimum number of live plan lines and the
+   * plan's recurringChargePeriodType (docs/decisions/prepaid.md, "Multi-line discounts"). */
+  tier?: { lines: number; periodType: string };
 }
 
 export async function addPrice(form: NewPrice, timeZone: string): Promise<void> {
   const usage = form.priceType === 'usage' ? need(form.unitOfMeasure, 'usage unit') : undefined;
+  const tier = form.priceType === 'discount' ? need(form.tier, 'tier') : undefined;
   const suffix =
     form.priceType === 'recurring'
       ? 'monthly'
-      : usage === undefined
-        ? 'oneTime'
-        : `${USAGE_UNIT_KIND[usage.units]} usage`;
+      : tier !== undefined
+        ? `${tier.lines}+ lines`
+        : usage === undefined
+          ? 'oneTime'
+          : `${USAGE_UNIT_KIND[usage.units]} usage`;
   const price = await postJson<PriceBody>(
     PATHS.prices,
     jsonWithAmount(
@@ -1183,6 +1192,12 @@ export async function addPrice(form: NewPrice, timeZone: string): Promise<void> 
         priceType: form.priceType,
         ...(form.priceType === 'recurring' ? { recurringChargePeriodType: 'monthly' } : {}),
         ...(usage === undefined ? {} : { unitOfMeasure: usage }),
+        ...(tier === undefined
+          ? {}
+          : {
+              recurringChargePeriodType: tier.periodType,
+              unitOfMeasure: { amount: tier.lines, units: 'lines' },
+            }),
         price: { unit: form.currency, value: AMOUNT },
         validFor: { startDateTime: midnightOf(form.validFrom, timeZone) },
       },
@@ -1305,7 +1320,7 @@ export function declaredProfile(spec: Specification | undefined): Record<string,
 
 async function loadAttachedPrices(
   priceIds: string[],
-  priceType: 'oneTime' | 'usage',
+  priceType: 'oneTime' | 'usage' | 'discount',
   signal: AbortSignal,
 ): Promise<CatalogPrice[]> {
   if (priceIds.length === 0) return [];
@@ -1321,6 +1336,26 @@ export function loadOneTimePrices(priceIds: string[], signal: AbortSignal) {
 /** The usage prices among a pay-as-you-go offering's attached prices. */
 export function loadUsagePrices(priceIds: string[], signal: AbortSignal) {
   return loadAttachedPrices(priceIds, 'usage', signal);
+}
+
+/** A multi-line tier: a discount price with unitOfMeasure {amount: N, units: 'lines'}. */
+export function isMultiLineTier(price: Pick<CatalogPrice, 'unitOfMeasure'>): boolean {
+  return price.unitOfMeasure?.units === 'lines';
+}
+
+/** The multi-line tiers among a plan's attached prices, by minimum lines then start. */
+export async function loadMultiLineTiers(
+  priceIds: string[],
+  signal: AbortSignal,
+): Promise<CatalogPrice[]> {
+  const prices = await loadAttachedPrices(priceIds, 'discount', signal);
+  return prices
+    .filter(isMultiLineTier)
+    .sort(
+      (a, b) =>
+        (a.unitOfMeasure?.amount ?? 0) - (b.unitOfMeasure?.amount ?? 0) ||
+        a.from.localeCompare(b.from),
+    );
 }
 
 export interface CategoryChoice {
@@ -1575,6 +1610,7 @@ export const NETWORK_PROFILE: { name: string; label: string; flag: boolean }[] =
   { name: 'hotspot', label: 'Hotspot (0 or 1)', flag: true },
   { name: 'international', label: 'International (0 or 1)', flag: true },
   { name: 'voicemail', label: 'Voicemail (0 or 1)', flag: true },
+  { name: 'dataPool', label: 'Data pool (0 or 1)', flag: true },
 ];
 const PROFILE_NAMES = NETWORK_PROFILE.map((p) => p.name);
 

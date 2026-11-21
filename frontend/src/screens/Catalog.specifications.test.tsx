@@ -206,6 +206,30 @@ describe('specifications', () => {
     );
   });
 
+  it('shows and edits the dataPool flag with the other profile flags (#380)', async () => {
+    const pool = profileEntry('dataPool', [0]);
+    const { fetchMock } = specBackend({
+      [SPECS_URL]: () =>
+        json([{ ...SPEC_ROWS[0], productSpecCharacteristic: [pool] }], { total: 1 }),
+      [`PATCH ${CAT}/productSpecification/s1`]: () => json({ id: 's1', name: 'Mobile' }),
+    });
+    await openTab();
+    fireEvent.click(specRow('Mobile Voice & Data'));
+    const dialog = screen.getByRole('dialog', { name: 'Mobile Voice & Data' });
+    const flag = field(dialog, /^Network dataPool/) as HTMLInputElement;
+    expect(flag.value).toBe('0');
+    expect(expectUi('ui.catalog.networkProfile').textContent).toContain('Data pool (0 or 1)');
+    fireEvent.change(flag, { target: { value: '2' } });
+    expect(within(dialog).getByRole('button', { name: 'Save' })).toHaveProperty('disabled', true);
+    fireEvent.change(flag, { target: { value: '1' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await screen.findByRole('status');
+    const call = fetchMock.mock.calls.find(([, init]) => init?.method === 'PATCH');
+    expect(JSON.parse(String(call?.[1]?.body)).productSpecCharacteristic).toEqual([
+      JSON.parse(JSON.stringify({ ...profileEntry('dataPool', [1]), description: undefined })),
+    ]);
+  });
+
   it.each(['string', 'integer', 'boolean'])(
     'creates numbered specifications with %s characteristics',
     async (valueType) => {

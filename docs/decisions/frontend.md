@@ -1013,3 +1013,25 @@ and nothing checked that a screen was in the menu exactly once.
   have no global screen. Each one is a separate screen issue, with no placeholder item.
 - The nav already scrolls (`.bss-nav { overflow-y: auto }`), so seven sections fit at
   1366×768 and the operator footer stays visible.
+
+## Multi-line prepaid UI (2026-11-21, issue #380)
+
+The UI of multi-line discounts (#196) and pooled data (#379); screens in
+[ui.md](../ui.md#multi-line-prepaid-uicatalogmultilinetiers-uisubscribermultilinediscount-uisubscriberdatapool---screenscatalogtsx-screensmultilinetsx-screensusagetabtsx).
+
+- **A tier is created through Add price**, not a dialog of its own: Charge type **Multi-line
+  discount** adds Minimum lines; New tier only opens it preset. The tier's period is the
+  plan's open recurring price's `recurringChargePeriodType` (monthly without one), so the
+  server's "must be the plan's period" 422 is not reachable from the form.
+- **Renewal history carries the discount:** `renewalHistory[].discount` (`{amount,
+  productOfferingPrice}` or null) is added to the internal products view from the ABR's
+  `discount_price_id` / `discount_amount`; `amount` stays the net with tax. The quote already
+  had `firstCharge.discount`.
+- **Rates parse the description:** TMF678 has no price alteration on a rate, so the UI reads
+  the tier from the rate's `description` ("… multi-line discount −$5.00 (productOfferingPrice
+  …)", `app/api/bill.py`) and shows it as "Multi-line −$5.00", the bill document's wording.
+- **The Data pool panel reads usage summaries line by line** until one has a pooled entry
+  (there is no account-level pool read): one request for a pooled first line, at most one per
+  plan line otherwise, only while the Usage tab is open. It sits at the top of the Usage tab;
+  its read failure is a note, because the Allowance panel below fails on the same request and
+  offers the Retry.

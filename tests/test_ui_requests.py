@@ -1684,6 +1684,52 @@ def test_network_profile_and_narrowing_as_the_ui_sends_them(api):
     assert refused.status_code == 400  # not one of the specification's values
 
 
+def test_multi_line_tier_and_data_pool_as_the_ui_sends_them(api):
+    """Catalog.test.tsx "multi-line discounts (#380)": New tier's exact POST, the complete
+    reference PATCH, the tier list read and an amount edit; Catalog.specifications.test.tsx:
+    the dataPool flag as a profile document (docs/decisions/prepaid.md, usage.md)."""
+    offering = create_offering(api)
+    plan_price = offering["productOfferingPrice"][0]
+    tier = api.post_raw(
+        f"{CATALOG}/productOfferingPrice",
+        '{"@type":"ProductOfferingPrice","name":"Mobile XL 4+ lines","lifecycleStatus":"Active",'
+        '"priceType":"discount","recurringChargePeriodType":"monthly",'
+        '"unitOfMeasure":{"amount":4,"units":"lines"},"price":{"unit":"USD","value":7.50},'
+        '"validFor":{"startDateTime":"2026-10-02T00:00:00+03:00"}}',
+    )
+    assert tier.status_code == 201, tier.text
+    refs = [
+        {"id": plan_price["id"], "@type": "ProductOfferingPriceRef"},
+        {"id": tier.json()["id"], "@type": "ProductOfferingPriceRef"},
+    ]
+    attached = api.patch(offering["href"], {"productOfferingPrice": refs})
+    assert attached.status_code == 200, attached.text
+    listed = api.get(f"{CATALOG}/productOfferingPrice?priceType=discount&offset=0&limit=100")
+    assert listed.status_code == 200
+    (stored,) = [p for p in decimals(listed) if p["id"] == tier.json()["id"]]
+    assert stored["unitOfMeasure"] == {"amount": 4, "units": "lines"}
+    assert stored["recurringChargePeriodType"] == "monthly"
+    assert stored["price"] == {"unit": "USD", "value": Decimal("7.50")}
+    edited = api.patch_raw(tier.json()["href"], '{"price":{"unit":"USD","value":12.00}}')
+    assert edited.status_code == 200, edited.text
+    assert decimals(api.get(tier.json()["href"]))["price"]["value"] == Decimal("12.00")
+    # the dialog's guard: one line is not a tier
+    one = api.post_raw(
+        f"{CATALOG}/productOfferingPrice",
+        '{"@type":"ProductOfferingPrice","name":"Mobile XL 1+ lines","lifecycleStatus":"Active",'
+        '"priceType":"discount","recurringChargePeriodType":"monthly",'
+        '"unitOfMeasure":{"amount":1,"units":"lines"},"price":{"unit":"USD","value":1.00},'
+        '"validFor":{"startDateTime":"2026-10-02T00:00:00+03:00"}}',
+    )
+    assert one.status_code in (400, 422), one.text
+
+    spec_url = offering["productSpecification"]["href"]
+    flag = [_profile_document("dataPool", [1])]
+    pooled = api.patch(spec_url, {"productSpecCharacteristic": flag})
+    assert pooled.status_code == 200, pooled.text
+    assert [c["name"] for c in pooled.json()["productSpecCharacteristic"]] == ["dataPool"]
+
+
 def test_network_command_reads_and_retry_as_the_ui_makes_them(api, db_conn):
     """NetworkCommands (api/network.ts): the list per order and per product with the
     query it sends, and Retry as a POST without a body (409 unless exhausted)."""
