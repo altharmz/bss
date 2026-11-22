@@ -334,20 +334,29 @@ def pending_changes(
     conn: psycopg.Connection, product_ids: list[UUID], today: date
 ) -> dict[UUID, list[Row]]:
     """The products' changes not yet in effect, by day: status changes after `today` (not
-    applied) and offering changes - postpaid after `today`, prepaid not yet announced (a
-    change waiting for a funded renewal can be dated in the past). Each row has `kind`,
-    `product_id`, `date`, `status`, `offering_id`, `offering_name` and `order_id`."""
+    applied), offering changes - postpaid after `today`, prepaid not yet announced (a
+    change waiting for a funded renewal can be dated in the past) - and E911 address changes
+    the network has not confirmed (an update_e911 command pending or exhausted, #384). Each
+    row has `kind`, `product_id`, `date`, `status`, `offering_id`, `offering_name`,
+    `order_id` and `details` (the order item's, for an E911 change; else None)."""
     rows = fetch_all(
         conn,
         """
         SELECT 'status' AS kind, c.product_id, c.change_date AS date, c.status::text AS status,
                NULL::uuid AS offering_id, NULL::text AS offering_name,
-               i.product_order_id AS order_id
+               i.product_order_id AS order_id, NULL::jsonb AS details
         FROM product_status_change c
         JOIN product_order_item i ON i.id = c.changed_by_item_id
         WHERE c.product_id = ANY(%(ids)s) AND c.applied_at IS NULL AND c.change_date > %(day)s
         UNION ALL
-        SELECT 'offering', c.product_id, c.change_date, NULL, o.id, o.name, i.product_order_id
+        SELECT 'e911', c.product_id, c.due_date, NULL, NULL, NULL, c.product_order_id, i.details
+        FROM network_command c
+        JOIN product_order_item i ON i.id = c.product_order_item_id
+        WHERE c.product_id = ANY(%(ids)s) AND c.kind = 'update_e911'
+          AND c.state IN ('pending', 'exhausted')
+        UNION ALL
+        SELECT 'offering', c.product_id, c.change_date, NULL, o.id, o.name, i.product_order_id,
+               NULL
         FROM product_offering_change c
         JOIN product_order_item i ON i.id = c.changed_by_item_id
         JOIN product p ON p.id = c.product_id

@@ -1674,6 +1674,7 @@ def test_network_profile_and_narrowing_as_the_ui_sends_them(api):
     profile = [
         _profile_document("dataAllowanceMb", [5000, 10000]),
         _profile_document("hotspot", [1, 0]),
+        _profile_document("wifiCalling", [1, 0]),  # #384, Catalog.specifications.test.tsx
     ]
     changed = api.patch(spec_url, {"productSpecCharacteristic": profile})
     assert changed.status_code == 200, changed.text

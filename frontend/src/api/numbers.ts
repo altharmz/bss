@@ -24,13 +24,28 @@ export function iccidOf(n: NumberBody): string | undefined {
   )?.value as string | undefined;
 }
 
-export async function requirements(specificationId: string, signal: AbortSignal) {
-  const spec = await getJson<{ resourceSpecification?: { id?: string }[] }>(
-    `/tmf-api/productCatalogManagement/v5/productSpecification/${specificationId}`,
-    signal,
-  );
+/** What a specification asks of a new line: the resources it needs and the default of its
+ * wifiCalling profile flag (the first declared value; undefined = not a profile name of it),
+ * which an offering may narrow (issue 384). */
+export async function requirements(
+  specificationId: string,
+  signal: AbortSignal,
+): Promise<{ msisdn: boolean; imsi: boolean; wifiCalling?: number | undefined }> {
+  const spec = await getJson<{
+    resourceSpecification?: { id?: string }[];
+    productSpecCharacteristic?: {
+      name?: string;
+      characteristicValueSpecification?: { value?: unknown }[];
+    }[];
+  }>(`/tmf-api/productCatalogManagement/v5/productSpecification/${specificationId}`, signal);
   const ids = (spec.resourceSpecification ?? []).map((ref) => ref.id);
-  return { msisdn: ids.includes('msisdn'), imsi: ids.includes('imsi') };
+  const wifi = (spec.productSpecCharacteristic ?? []).find((c) => c.name === 'wifiCalling')
+    ?.characteristicValueSpecification?.[0]?.value;
+  return {
+    msisdn: ids.includes('msisdn'),
+    imsi: ids.includes('imsi'),
+    ...(typeof wifi === 'number' ? { wifiCalling: wifi } : {}),
+  };
 }
 
 export async function requiresNumber(specificationId: string, signal: AbortSignal) {

@@ -1937,6 +1937,25 @@ components:
       properties:
         id: {type: string, format: uuid}
         name: {type: string}
+    E911Address:
+      description: >-
+        An E911 address (TMF637 place of role e911Address, a US GeographicAddress without
+        @type), as stored (issue 201). AccountProduct.e911Address spells out its nullable
+        variant.
+      type: object
+      additionalProperties: false
+      required: [streetName, city, stateOrProvince, postcode, country]
+      properties:
+        streetNr: {type: string}
+        streetName: {type: string}
+        streetSuffix: {type: string}
+        city: {type: string}
+        stateOrProvince: {type: string}
+        postcode: {type: string}
+        country: {type: string, enum: [US]}
+        geographicSubAddress:
+          type: array
+          items: {type: object, additionalProperties: true}
     NullableNamed:
       description: Named or null (an offering's specification, when it has one).
       type: object
@@ -2316,18 +2335,21 @@ components:
                 id: {type: string, format: uuid}
         pendingChanges:
           description: >-
-            Status and offering changes not yet in effect, by date; [] when there is none.
-            Undo one by cancelling its productOrder.
+            Status and offering changes not yet in effect, by date, and E911 address changes
+            the network has not confirmed (kind e911, dated by their command's due date, with
+            the new address; issue 384); [] when there is none. Undo one by cancelling its
+            productOrder.
           type: array
           items:
             type: object
             additionalProperties: false
             required: [kind, date, productOrder]
             properties:
-              kind: {type: string, enum: [status, offering]}
+              kind: {type: string, enum: [status, offering, e911]}
               date: {$ref: '#/components/schemas/BusinessDate'}
               status: {type: string, enum: [suspended, active], nullable: true}
               productOffering: {$ref: '#/components/schemas/NullableNamed'}
+              e911Address: {$ref: '#/components/schemas/E911Address'}
               productOrder: {$ref: '#/components/schemas/Link'}
         e911Address:
           description: >-

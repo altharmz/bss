@@ -555,6 +555,38 @@ Issue #383, the UI of roaming and international passes (#200). Decision:
   `Catalog.specifications.test.tsx` and replayed by
   `tests/test_ui_requests.py::test_roaming_passes_as_the_ui_sends_them`.
 
+### E911 address (`ui.addProduct.e911`, `ui.subscriber.e911`, `ui.subscriber.e911.edit`, `ui.subscriber.e911.form`) - `screens/E911Address.tsx`, `screens/AddProduct.tsx`, `screens/SubscriberCard.tsx`
+
+Issue #384, the UI of the E911 address of Wi-Fi calling lines (#201). Decision:
+[frontend.md](decisions/frontend.md#e911-address-ui-2026-11-22-issue-384).
+
+- **Catalog:** the specification's network profile has a **Wi-Fi calling** (0 or 1) row, written
+  like the other profile flags; an offering narrows it with the other profile selects.
+- **Add product:** on a prepaid account, an offering whose `wifiCalling` is 1 (the offering's
+  narrowed value, else the specification's default) shows an **E911 address** group
+  (`ui.addProduct.e911`). **Same as service address** is checked when the account has one, with
+  the fields shown read-only: the item then sends no place and the server copies the service
+  address. Unchecked, the fields (prefilled from the service address) are sent as
+  `product.place` (one `RelatedPlaceRefOrValue` of role `e911Address`, a US
+  `GeographicAddress`). Without a service address the box is off and disabled and the address
+  is required. A 422 shows at its input; `e911AddressRequired` has its refusal copy.
+- **Product row:** a prepaid line (not an add-on pack, whose plan line keeps the address) with
+  Wi-Fi calling or an address shows **E911:** and the address in one line, or "no address
+  registered" (`ui.subscriber.e911`).
+- **Edit E911 address…** (`ui.subscriber.e911.edit`) on a started prepaid line with Wi-Fi
+  calling or an address, unless a change already waits, opens a dialog
+  (`ui.subscriber.e911.form`) with the address fields and the **Account PIN**: a modify item
+  whose only content is `product.place`, the PIN as `X-Account-Pin` when typed. On a Wi-Fi line
+  the order waits for the network (followed like other accepted prepaid orders); elsewhere it
+  completes at once.
+- **Pending change:** until the network confirms, the row's pending-change line reads "E911
+  address changes to … when the network confirms", with **Undo** (cancels the order), from
+  `pendingChanges` kind `e911`.
+- No new MCP tool: the order tools already carry `product.place`. Bodies are pinned in
+  `SubscriberCard.e911.test.tsx` and `Catalog.specifications.test.tsx` and replayed by
+  `tests/test_e911.py::test_e911_address_orders_as_the_ui_sends_them` and
+  `tests/test_ui_requests.py::test_network_profile_and_narrowing_as_the_ui_sends_them`.
+
 ### Products (`ui.products`, `ui.products.status`, `ui.products.accountChip`, `ui.products.detail`, `ui.products.orderItems`, `ui.products.resource`) - `screens/Products.tsx`
 
 Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.

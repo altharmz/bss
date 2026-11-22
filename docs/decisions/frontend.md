@@ -1060,3 +1060,26 @@ The UI of roaming and international passes (#200); screens in
   add-on drops it, because the server refuses `passDays` on any other kind.
 - **Usage zones:** the tab groups the summary's entries by `zone` and does not decide when a
   zone is shown: the server lists roaming and international only with an allowance or usage.
+
+## E911 address UI (2026-11-22, issue #384)
+
+The UI of the E911 address of Wi-Fi calling lines (#201); screens in
+[ui.md](../ui.md#e911-address-uiaddproducte911-uisubscribere911-uisubscribere911edit-uisubscribere911form---screense911addresstsx-screensaddproducttsx-screenssubscribercardtsx).
+
+- **The pending change comes from the server:** `pendingChanges` gains kind `e911` (an
+  `update_e911` command still `pending` or `exhausted`), dated by its due date and carrying the
+  new address, so the row reuses the pending-change line and its Undo (cancelling the order,
+  which the backend already supports) instead of following commands itself. A change already
+  waiting hides Edit E911 address.
+- **Same as service address sends nothing:** with the box checked the add item carries no
+  place and the server copies the service address, the same result as sending it, so the UI
+  never copies the address itself and a later service-address rule stays the server's.
+- **Wi-Fi calling in Add product** is the offering's narrowed `wifiCalling`, else the first
+  value its specification declares (the default), read from the specification the dialog
+  already loads for the number requirement: no extra request. Postpaid accounts never show the
+  group (the server refuses a place there).
+- **Address fields map one to one** to the TMF `GeographicAddress` (street number, street,
+  suffix, city, state, ZIP), and the apartment line to the first `geographicSubAddress` name,
+  the same place the server puts a copied `street2`. Country is always US.
+- **Markers:** `ui.subscriber.e911.edit` is the menu item and `ui.subscriber.e911.form` the
+  dialog, as the issue names them.
