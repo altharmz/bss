@@ -184,7 +184,9 @@ shape), `app/ordering/e911.py` (order rules), `app/worker/network.py` (send, con
   of `place` on a network line is a 409: the address changes only through an order.
 - **Read.** TMF637 `product.place` returns the role and the address.
   `GET /internal/v1/billingAccount/{id}/products` adds `e911Address` (the stored address or null)
-  and `wifiCalling` (the offering's flag).
+  and `wifiCalling` (the offering's flag); a change the network has not confirmed is a
+  `pendingChanges` entry of kind `e911` with the new address (#384,
+  [frontend.md](frontend.md#e911-address-ui-2026-11-22-issue-384)).
 
 ## Data pool commands (2026-11-20, issue #379)
 

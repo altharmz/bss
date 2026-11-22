@@ -956,6 +956,18 @@ export interface Offering {
   specification: string;
   kind: OfferingKind;
   prices: CatalogPrice[]; // display only; the charge itself comes from the preview
+  /** the offering's narrowed wifiCalling profile value (0 or 1); undefined = the
+   * specification's default (issue 384) */
+  wifiCalling?: number | undefined;
+}
+
+/** The value an offering body narrows a network profile name to, or undefined. */
+function narrowedValue(body: { prodSpecCharValueUse?: unknown }, name: string): unknown {
+  const uses = (body.prodSpecCharValueUse ?? []) as {
+    name?: string;
+    productSpecCharacteristicValue?: { value?: unknown }[];
+  }[];
+  return uses.find((u) => u.name === name)?.productSpecCharacteristicValue?.[0]?.value;
 }
 
 export function chargeInterval(type = 'monthly', length = 1): string {
@@ -1031,6 +1043,7 @@ export async function loadSellableOfferings(
     specification: offering.productSpecification?.name ?? '',
     specificationId: offering.productSpecification?.id,
     kind: kindOf(offering),
+    wifiCalling: (narrowedValue(offering, 'wifiCalling') as number | undefined) ?? undefined,
     prices: (offering.productOfferingPrice ?? []).flatMap((ref) => {
       const price = ref.id === undefined ? undefined : byId.get(ref.id);
       return price === undefined || price.price?.unit !== currency ? [] : [toCatalogPrice(price)];
@@ -1714,6 +1727,8 @@ export const NETWORK_PROFILE: { name: string; label: string; flag: boolean }[] =
   { name: 'international', label: 'International (0 or 1)', flag: true },
   { name: 'voicemail', label: 'Voicemail (0 or 1)', flag: true },
   { name: 'dataPool', label: 'Data pool (0 or 1)', flag: true },
+  // the line can make Wi-Fi calls and needs an E911 address (issues 201 and 384)
+  { name: 'wifiCalling', label: 'Wi-Fi calling (0 or 1)', flag: true },
   // roaming and international passes (issue 200, docs/decisions/network.md)
   { name: 'roaming', label: 'Roaming (0 or 1)', flag: true },
   { name: 'roamingDataMb', label: 'Roaming data (MB)', flag: false },
@@ -1955,14 +1970,16 @@ export function requestedDate(day: string, timeZone: string): string {
 export type { SimType };
 
 /** What an add item may carry besides its resources: the SIM kind (instead of an IMSI, the
- * server picks a SIM of that type from stock) and the device IMEI. */
+ * server picks a SIM of that type from stock), the device IMEI and the line's E911 address
+ * (`product.place`, built by api/e911.ts placeOf; issue 384). */
 export interface AddCharacteristics {
   simType?: SimType;
   imei?: string;
+  place?: unknown[];
 }
 
-/** The product part of an add item: the chosen resources and the `simType` and `imei`
- * characteristics. */
+/** The product part of an add item: the chosen resources, the `simType` and `imei`
+ * characteristics and the E911 `place`. */
 function addProduct(numberId: string | string[] | undefined, chosen: AddCharacteristics) {
   const characteristics = [
     ...(chosen.simType
@@ -1977,11 +1994,12 @@ function addProduct(numberId: string | string[] | undefined, chosen: AddCharacte
       : []),
     ...(chosen.imei ? [imeiCharacteristic(chosen.imei)] : []),
   ];
-  if (!numberId && characteristics.length === 0) return {};
+  if (!numberId && characteristics.length === 0 && !chosen.place) return {};
   return {
     product: {
       ...(numberId ? numberProduct(numberId) : { '@type': 'ProductRefOrValue' }),
       ...(characteristics.length ? { productCharacteristic: characteristics } : {}),
+      ...(chosen.place ? { place: chosen.place } : {}),
     },
   };
 }

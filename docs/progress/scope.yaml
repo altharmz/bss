@@ -558,6 +558,9 @@ items:
   - {id: ui.subscriber.buyAddOn.topUp, area: ui, stage: 5, title: "Top up the add-on shortfall"}
   - {id: ui.subscriber.buyAddOn.passEnd, area: ui, stage: 5, title: "Pass length and end date of an add-on in the Buy add-on quote (issue 383)"}
   - {id: ui.subscriber.passes, area: ui, stage: 5, title: "Live passes of a plan line with their end dates (issue 383)"}
+  - {id: ui.subscriber.e911, area: ui, stage: 5, title: "E911 address of a Wi-Fi calling line on its product row, or that none is registered (issue 384)"}
+  - {id: ui.subscriber.e911.edit, area: ui, stage: 5, title: "Edit E911 address menu item of a prepaid line with Wi-Fi calling or an address, no change waiting (issue 384)"}
+  - {id: ui.subscriber.e911.form, area: ui, stage: 5, title: "Edit E911 address dialog: a modify order with only product.place and the account PIN; a Wi-Fi line waits for the network (issue 384)"}
   - {id: ui.subscriber.offeringChange, area: ui, stage: 5, title: "Change offering dialog (both modes)"}
   - {id: ui.subscriber.undoChange, area: ui, stage: 5, title: "Undo a pending change (cancel its order)"}
   - {id: ui.subscriber.topUpProduct, area: ui, stage: 5, title: "Top up from a funding-suspended product"}
@@ -598,6 +601,7 @@ items:
   - {id: ui.subscriber.prepaid.editNoteForm, area: ui, stage: 5, title: "Note form of the Balance action dialog"}
   - {id: ui.addProduct.prepaidPreview, area: ui, stage: 5, title: "Prepaid first-charge preview in Add product: to pay, available, shortfall, ledger after"}
   - {id: ui.addProduct.serviceAddress, area: ui, stage: 5, title: "Set service address from Add product after a serviceAddressRequired refusal: opens the card's service address dialog"}
+  - {id: ui.addProduct.e911, area: ui, stage: 5, title: "E911 address group of a Wi-Fi calling offering in Add product: Same as service address by default, or a typed address sent as product.place (issue 384)"}
   - {id: ui.addProduct.topUpShortfall, area: ui, stage: 5, title: "Top up the shortfall from Add product: opens the Top-up form with the amount typed in"}
   - {id: ui.bills, area: ui, stage: 5, title: "Bills screen: bills and bill cycles tabs with state, account and billing date filters"}
   - {id: ui.wholesale, area: ui, stage: 5, title: "Wholesale invoice list with totals, discrepancies and margin"}

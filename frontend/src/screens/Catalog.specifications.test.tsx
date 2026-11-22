@@ -271,6 +271,29 @@ describe('specifications', () => {
     );
   });
 
+  it('edits the Wi-Fi calling flag of the network profile (#384)', async () => {
+    const { fetchMock } = specBackend({
+      [SPECS_URL]: () => json([SPEC_ROWS[0]], { total: 1 }),
+      [`PATCH ${CAT}/productSpecification/s1`]: () => json({ id: 's1', name: 'Mobile' }),
+    });
+    await openTab();
+    fireEvent.click(specRow('Mobile Voice & Data'));
+    const dialog = screen.getByRole('dialog', { name: 'Mobile Voice & Data' });
+    expect(expectUi('ui.catalog.networkProfile').textContent).toContain('Wi-Fi calling (0 or 1)');
+    // a flag: 0 or 1 only
+    fireEvent.change(field(dialog, /^Network wifiCalling$/), { target: { value: '2' } });
+    expect(within(dialog).getByRole('button', { name: 'Save' })).toHaveProperty('disabled', true);
+    fireEvent.change(field(dialog, /^Network wifiCalling$/), { target: { value: '1, 0' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await screen.findByRole('status');
+    const call = fetchMock.mock.calls.find(([, init]) => init?.method === 'PATCH');
+    expect(JSON.parse(String(call?.[1]?.body)).productSpecCharacteristic).toEqual(
+      [profileEntry('wifiCalling', [1, 0])].map((entry) =>
+        JSON.parse(JSON.stringify({ ...entry, description: undefined })),
+      ),
+    );
+  });
+
   it.each(['string', 'integer', 'boolean'])(
     'creates numbered specifications with %s characteristics',
     async (valueType) => {

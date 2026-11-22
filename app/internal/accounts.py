@@ -506,7 +506,8 @@ def _renewal_history(conn: psycopg.Connection, product_ids: list[UUID]) -> dict[
 
 
 def _pending_change(c: Row) -> dict[str, Any]:
-    """One `pendingChanges` entry: a status or offering change not yet in effect."""
+    """One `pendingChanges` entry: a status or offering change not yet in effect, or an E911
+    address change the network has not confirmed (the new address)."""
     out: dict[str, Any] = {
         "kind": c["kind"],
         "date": c["date"],
@@ -514,6 +515,8 @@ def _pending_change(c: Row) -> dict[str, Any]:
     }
     if c["kind"] == "status":
         out["status"] = c["status"]
+    elif c["kind"] == "e911":
+        out["e911Address"] = e911.requested(c["details"])
     else:
         out["productOffering"] = {"id": str(c["offering_id"]), "name": c["offering_name"]}
     return out
