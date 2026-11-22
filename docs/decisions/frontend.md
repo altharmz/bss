@@ -1036,3 +1036,27 @@ The UI of multi-line discounts (#196) and pooled data (#379); screens in
   plan line otherwise, only while the Usage tab is open. It sits at the top of the Usage tab;
   its read failure is a note, because the Allowance panel below fails on the same request and
   offers the Retry.
+
+## Roaming and international passes UI (2026-11-22, issue #383)
+
+The UI of roaming and international passes (#200); screens in
+[ui.md](../ui.md#roaming-and-international-passes-uicatalogpassdays-uicatalogusagezone-uisubscriberbuyaddonpassend-uisubscriberusagezone-uisubscriberpasses---screenscatalogtsx-screensofferingedittsx-screensprepaidplanstsx-screensusagetabtsx).
+
+- **The quote gives the pass end:** `GET firstCharge` takes an optional `parentProduct.id` (an
+  add-on offering for a plan of the account whose paid period covers the start) and adds
+  `addOn {parentProduct, passDays, endDate}`. The order and the quote share
+  `app/ordering/prepaid.py::add_on_end`, so the dialog never computes min(start + passDays,
+  paid-through, plan termination) itself; the Buy add-on dialog keeps its rule that the server
+  quotes every figure.
+- **The products view says which add-on is a pass:** `AccountProduct.passDays` (prepaid only,
+  the offering's `passDays`, null otherwise). A plan's live passes are its add-ons with a pass
+  length, started and not yet ended on the business date; a plain pack is not listed (its row
+  already says when it ends).
+- **Zone prices:** the zone is a select on a new usage price only; domestic is sent as nothing,
+  the server's default, so the existing usage price bodies are unchanged. The zone of an
+  existing price is shown, never edited (the server answers 409).
+- **Pass length lives in the offering edit**, not in New offering, as the issue decided; it is
+  written with the kind in one `productOfferingCharacteristic` PATCH, and a kind other than
+  add-on drops it, because the server refuses `passDays` on any other kind.
+- **Usage zones:** the tab groups the summary's entries by `zone` and does not decide when a
+  zone is shown: the server lists roaming and international only with an allowance or usage.

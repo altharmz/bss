@@ -24,6 +24,19 @@ import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 // The server gives every figure (used, included, remaining, percent, marks, throttled).
 
 const KIND: Record<string, string> = { data: 'Data', voice: 'Voice', sms: 'SMS' };
+// the zones besides domestic, each counted only against its own allowance (usage.md)
+const ZONES: { zone: Allowance['zone']; title: string; note: string }[] = [
+  {
+    zone: 'roaming',
+    title: 'Roaming',
+    note: 'Usage while roaming outside the US, against the roaming allowance of the plan and its passes.',
+  },
+  {
+    zone: 'international',
+    title: 'International',
+    note: 'Calls and messages from the US to non-US numbers; only calls have an allowance.',
+  },
+];
 const RECORD_COLUMNS: Column[] = [
   { key: 'time', label: 'Time', width: '172px', mono: true },
   { key: 'kind', label: 'Kind', width: '90px' },
@@ -121,7 +134,27 @@ function Summary({ summary }: { summary: UsageSummary }) {
       {summary.period === null ? (
         <Note tone="info">No plan period covers today, so there is no allowance to show.</Note>
       ) : (
-        summary.allowances.map((a) => <AllowanceBar key={`${a.zone}-${a.kind}`} allowance={a} />)
+        <>
+          {summary.allowances
+            .filter((a) => a.zone === 'domestic')
+            .map((a) => (
+              <AllowanceBar key={`${a.zone}-${a.kind}`} allowance={a} />
+            ))}
+          {ZONES.map(({ zone, title, note }) => {
+            const pools = summary.allowances.filter((a) => a.zone === zone);
+            // the server lists a zone only when it has an allowance or usage (issue 200)
+            if (pools.length === 0) return null;
+            return (
+              <section key={zone} className="usage-zone" data-ui="ui.subscriber.usage.zone">
+                <h4>{title}</h4>
+                <p className="bss-secondary">{note}</p>
+                {pools.map((a) => (
+                  <AllowanceBar key={`${a.zone}-${a.kind}`} allowance={a} />
+                ))}
+              </section>
+            );
+          })}
+        </>
       )}
       {pay !== null && (
         <KeyValue
@@ -183,6 +216,7 @@ function Records({ product, timeZone }: { product: string; timeZone: string }) {
                   flags: (
                     <span className="usage-record-flags">
                       {r.roaming && <Tag>Roaming</Tag>}
+                      {r.international && <Tag>International</Tag>}
                       {r.throttled && <Tag>Throttled</Tag>}
                       {r.status === 'rejected' && <Tag>No line</Tag>}
                     </span>

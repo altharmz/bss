@@ -160,6 +160,14 @@ paths:
             answer adds credit (the unused dates of its paid interval, tax included) and
             balanceAfter counts it.
           schema: {type: string, format: uuid}
+        - name: parentProduct.id
+          in: query
+          required: false
+          description: >-
+            Prepaid add-on offerings only. The plan product the add-on would be bought for (its
+            paid period must cover startDate): the answer adds addOn, the pass length and the
+            end date the order would set (issue 383).
+          schema: {type: string, format: uuid}
       responses:
         '200':
           description: OK
@@ -2202,6 +2210,23 @@ components:
               amount: {allOf: [{$ref: '#/components/schemas/Money'}], description: Before tax.}
               tax: {$ref: '#/components/schemas/Money'}
               gross: {allOf: [{$ref: '#/components/schemas/Money'}], description: Tax included.}
+        addOn:
+          description: >-
+            Only with parentProduct.id (issue 383). How long the add-on lasts as the order sets
+            it: the plan's paid period, or passDays from startDate when that ends first.
+          type: object
+          additionalProperties: false
+          required: [parentProduct, passDays, endDate]
+          properties:
+            parentProduct: {$ref: '#/components/schemas/Link'}
+            passDays:
+              type: integer
+              nullable: true
+              minimum: 1
+              description: The pass length in days; null for an add-on that lasts the plan period.
+            endDate:
+              description: Exclusive - the first day the add-on no longer applies.
+              allOf: [{$ref: '#/components/schemas/BusinessDate'}]
     LifecycleSettings:
       type: object
       additionalProperties: false
@@ -2335,6 +2360,13 @@ components:
         parentProduct:
           description: Prepaid accounts only. An add-on's plan product; null otherwise.
           allOf: [{$ref: '#/components/schemas/NullableLink'}]
+        passDays:
+          description: >-
+            Prepaid accounts only. An add-on pass's length in days (its offering's passDays,
+            issue 200); null for any other product (issue 383).
+          type: integer
+          nullable: true
+          minimum: 1
         fundingSource:
           description: >-
             Prepaid accounts only. How a renewal is paid: the balance, or the balance and then

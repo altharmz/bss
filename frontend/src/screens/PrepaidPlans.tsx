@@ -2,6 +2,7 @@ import { MultiLineDiscount, multiLineLabel } from './MultiLine';
 import { useRef, useState } from 'react';
 import {
   KIND_LABEL,
+  passLength,
   loadAddOnOfferings,
   loadFirstCharge,
   orderAddOn,
@@ -68,10 +69,46 @@ export function PlanFacts({ product }: { product: AccountProduct }) {
       )}
       {product.offeringKind === 'addOn' && (
         <>
+          {product.passDays != null && ` · ${passLength(product.passDays)} pass`}
           {product.parentProduct != null && ` · plan PRD-${shortId(product.parentProduct.id)}`}
           {product.terminationDate !== null && ` · ends ${product.terminationDate}`}
         </>
       )}
+    </div>
+  );
+}
+
+/** A plan's live passes (issue 383): its add-ons with a pass length that have not ended,
+ * each with its end date (exclusive, as the server stores it). Nothing without one. */
+export function LivePasses({
+  plan,
+  products,
+  today,
+}: {
+  plan: AccountProduct;
+  products: AccountProduct[];
+  today: string;
+}) {
+  const passes = products.filter(
+    (p) =>
+      p.offeringKind === 'addOn' &&
+      p.passDays != null &&
+      p.parentProduct?.id === plan.id &&
+      p.startDate <= today &&
+      (p.terminationDate === null || p.terminationDate > today) &&
+      p.status !== 'terminated',
+  );
+  if (!isPlan(plan) || passes.length === 0) return null;
+  return (
+    <div className="bss-secondary" data-ui="ui.subscriber.passes">
+      Live passes:{' '}
+      {passes.map((p, index) => (
+        <span key={p.id}>
+          {index > 0 && ', '}
+          {p.productOffering.name} ({passLength(p.passDays ?? 0)})
+          {p.terminationDate !== null && ` ends ${p.terminationDate}`}
+        </span>
+      ))}
     </div>
   );
 }
@@ -166,11 +203,13 @@ export function BuyAddOnDialog({
   const name = product.productOffering.name;
   const offerings = useResource('addOnOfferings', loadAddOnOfferings);
   const preview = useResource<FirstCharge | null>(
-    offeringId === null ? 'addOnQuote:none' : `addOnQuote:${account.id}:${offeringId}:${today}`,
+    offeringId === null
+      ? 'addOnQuote:none'
+      : `addOnQuote:${account.id}:${product.id}:${offeringId}:${today}`,
     (signal) =>
       offeringId === null
         ? Promise.resolve(null)
-        : loadFirstCharge(account.id, offeringId, today, signal),
+        : loadFirstCharge(account.id, offeringId, today, signal, undefined, product.id),
   );
   const chosen = offerings.status === 'ok' ? offerings.data.find((o) => o.id === offeringId) : null;
   const short =
@@ -306,7 +345,8 @@ export function BuyAddOnDialog({
           </div>
           <p className="bss-secondary">
             The pack starts today and ends with the plan's paid period
-            {product.paidThrough != null ? ` (${product.paidThrough})` : ''}; it is never renewed.
+            {product.paidThrough != null ? ` (${product.paidThrough})` : ''}, a pass after its
+            number of days if that comes first; it is never renewed.
           </p>
         </section>
       </fieldset>
@@ -316,8 +356,18 @@ export function BuyAddOnDialog({
 
 function AddOnQuote({ quote }: { quote: FirstCharge }) {
   const fees = quote.fees ?? [];
+  const addOn = quote.addOn;
   return (
     <dl className="bss-preview-grid">
+      {addOn !== undefined && (
+        <div data-ui="ui.subscriber.buyAddOn.passEnd">
+          <dt>{addOn.passDays === null ? 'Lasts' : 'Pass length'}</dt>
+          <dd>
+            {addOn.passDays === null ? 'the plan period' : passLength(addOn.passDays)} · ends{' '}
+            {addOn.endDate}
+          </dd>
+        </div>
+      )}
       {fees.map((f) => (
         <div key={f.name}>
           <dt>{f.name}</dt>

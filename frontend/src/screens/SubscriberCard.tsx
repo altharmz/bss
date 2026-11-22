@@ -65,7 +65,7 @@ import {
   type ProductAction,
 } from './ProductActions';
 import { PaymentMethodsPanel } from './PaymentMethods';
-import { BuyAddOnDialog, canBuyAddOn, PlanFacts, RenewalHistory } from './PrepaidPlans';
+import { BuyAddOnDialog, canBuyAddOn, LivePasses, PlanFacts, RenewalHistory } from './PrepaidPlans';
 import { PrepaidMoneyModal, type MoneyForm } from './PrepaidMoney';
 import { FailedCommands, OrderWatch } from './PrepaidOrderWatch';
 import { PrepaidTransferModal, TransferWatch } from './PrepaidTransfer';
@@ -589,6 +589,7 @@ function Card({
                       key={product.id}
                       account={account}
                       product={product}
+                      siblings={rows}
                       onNumber={() => setNumberProduct(product.id)}
                       onTransferPin={() => setPinProduct(product.id)}
                       onDevice={() => setDeviceProduct(product)}
@@ -1271,6 +1272,7 @@ function statusNote(product: AccountProduct): { status: string; label: string } 
 function ProductRow({
   account,
   product,
+  siblings,
   onDone,
   onTopUp,
   onPick,
@@ -1281,6 +1283,8 @@ function ProductRow({
 }: {
   account: Account;
   product: AccountProduct;
+  /** the account's products, for a plan's live passes */
+  siblings: AccountProduct[];
   onDone: (message: string, accepted?: PendingOrder) => void;
   onTopUp: (amount: string) => void;
   onPick: (change: ProductAction, immediate: boolean) => void;
@@ -1345,6 +1349,7 @@ function ProductRow({
               <span className="bss-name">{name}</span>
               <div className="bss-code">{code}</div>
               <PlanFacts product={product} />
+              <LivePasses plan={product} products={siblings} today={context.businessDate} />
               {product.lifecycle && (
                 <div className="bss-secondary" data-ui="ui.subscriber.productLifecycle">
                   Lifecycle: {product.lifecycle.state}

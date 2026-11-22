@@ -21,6 +21,10 @@ import {
   shownPrice,
   USAGE_UNIT_KIND,
   USAGE_UNITS,
+  USAGE_ZONES,
+  ZONE_LABEL,
+  passLength,
+  type UsageZone,
   validUsageBlock,
   type Catalog,
   type CatalogOffering,
@@ -650,7 +654,15 @@ export function OfferingModal({
                 <dt>Description</dt>
                 <dd>{detail.data.description ?? <span className="bss-dash">—</span>}</dd>
                 <dt>Offering kind</dt>
-                <dd data-ui="ui.catalog.kind">{KIND_LABEL[detail.data.kind]}</dd>
+                <dd data-ui="ui.catalog.kind">
+                  {KIND_LABEL[detail.data.kind]}
+                  {detail.data.kind === 'addOn' && detail.data.passDays !== null && (
+                    <span data-ui="ui.catalog.passDays">
+                      {' '}
+                      · {passLength(detail.data.passDays)} pass
+                    </span>
+                  )}
+                </dd>
                 <dt>Sellable</dt>
                 <dd>{detail.data.isSellable ? 'yes' : 'no'}</dd>
                 <dt>Categories</dt>
@@ -868,7 +880,7 @@ function UsagePrices({ detail, onOpen }: { detail: OfferingDetail; onOpen: (id: 
               {formatCents(p.cents)} {p.currency} / {p.unitOfMeasure?.amount ?? 1}{' '}
               {p.unitOfMeasure?.units ?? ''}
             </button>{' '}
-            · from {businessDate(p.from, context.timeZone)}
+            · {ZONE_LABEL[p.zone ?? 'domestic']} · from {businessDate(p.from, context.timeZone)}
             {p.to === null ? '' : ` to ${lastValidDay(p.to, context.timeZone)}`}
           </div>
         ))}
@@ -900,6 +912,7 @@ function AddPriceModal({
   const [amount, setAmount] = useState('');
   const [usageUnit, setUsageUnit] = useState<(typeof USAGE_UNITS)[number]>('MB');
   const [blockAmount, setBlockAmount] = useState('1');
+  const [zone, setZone] = useState<UsageZone>('domestic');
   const [validFrom, setValidFrom] = useState(today);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -920,6 +933,7 @@ function AddPriceModal({
             units !== undefined &&
             USAGE_UNITS.some((unit) => unit === units) &&
             USAGE_UNIT_KIND[units as (typeof USAGE_UNITS)[number]] === USAGE_UNIT_KIND[usageUnit] &&
+            (price.zone ?? 'domestic') === zone &&
             (price.to === null || Date.parse(price.to) > Date.parse(startsAt))
           );
         })
@@ -930,7 +944,7 @@ function AddPriceModal({
   else if (priceType === 'usage' && !validUsageBlock(block, usageUnit))
     error = 'Block amount must be positive and a whole number of bytes, seconds or messages';
   else if (conflict !== undefined)
-    error = `A ${USAGE_UNIT_KIND[usageUnit]} price in ${context.currency} already covers ${validFrom}`;
+    error = `A ${zone === 'domestic' ? '' : `${zone} `}${USAGE_UNIT_KIND[usageUnit]} price in ${context.currency} already covers ${validFrom}`;
   else if (priceType === 'discount' && !/^\d+$/.test(minLines.trim()))
     error = 'Minimum lines must be a whole number';
   else if (priceType === 'discount' && Number(minLines) < 2)
@@ -955,7 +969,9 @@ function AddPriceModal({
           currency: context.currency,
           validFrom,
           existingPriceIds: ids,
-          ...(priceType === 'usage' ? { unitOfMeasure: { amount: block, units: usageUnit } } : {}),
+          ...(priceType === 'usage'
+            ? { unitOfMeasure: { amount: block, units: usageUnit }, zone }
+            : {}),
           ...(priceType === 'discount'
             ? { tier: { lines: Number(minLines), periodType: planPeriod } }
             : {}),
@@ -1029,8 +1045,22 @@ function AddPriceModal({
               value={blockAmount}
               onChange={(event) => setBlockAmount(event.target.value)}
             />
+            <label htmlFor="add-price-zone">Zone</label>
+            <SelectField
+              id="add-price-zone"
+              data-ui="ui.catalog.usageZone"
+              value={zone}
+              onChange={(event) => setZone(event.target.value as UsageZone)}
+            >
+              {USAGE_ZONES.map((z) => (
+                <option key={z} value={z}>
+                  {ZONE_LABEL[z]}
+                </option>
+              ))}
+            </SelectField>
             <span className="bss-secondary">
-              Usage is rounded up to whole blocks. One price per kind and currency.
+              Usage is rounded up to whole blocks. One price per kind, zone and currency: roaming
+              and international usage is charged only by a price of its own zone.
             </span>
             {existingUsage.status === 'error' && (
               <Note tone="negative">{existingUsage.error.message}</Note>
