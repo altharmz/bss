@@ -11,7 +11,7 @@ import pytest
 from app.api import customer, party, specschema
 from tests import apidata, contract
 from tests.apidata import CUSTOMER, PARTY
-from tests.test_events import stored, subscribe
+from tests.builders.events import stored, subscribe
 
 INDIVIDUAL = f"{PARTY}/individual"
 ORGANIZATION = f"{PARTY}/organization"

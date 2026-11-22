@@ -7,18 +7,10 @@ from psycopg import errors
 from tests import apidata
 from tests.apiclient import total
 from tests.apidata import NIL
-from tests.test_api_financial_account import FINANCIAL, financial, link, owner
+from tests.builders.api_financial_account import FINANCIAL, financial, link, owner
+from tests.builders.api_party_account import BASE, create
 
-BASE = "/tmf-api/accountManagement/v5"
 KINDS = [("partyAccount", "PartyAccount"), ("settlementAccount", "SettlementAccount")]
-
-
-def create(api, resource, party, **over):
-    body = {"name": "Partner payouts", "relatedParty": [owner(party)], **over}
-    response = api.post(f"{BASE}/{resource}", body)
-    assert response.status_code == 201, response.text
-    assert response.headers["location"] == response.json()["href"]
-    return response.json()
 
 
 @pytest.mark.parametrize("resource,typ", KINDS)

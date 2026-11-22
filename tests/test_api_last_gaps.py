@@ -9,7 +9,7 @@ from datetime import date, timedelta
 from app.config import settings
 from tests import apidata
 from tests.apidata import BILL, CATALOG, RATE
-from tests.test_billing_db import add, at, bill
+from tests.builders.billing_db import add, at, bill
 from tests.timeline import NOW, z
 
 REFUND = "/tmf-api/payment/v4/refund"

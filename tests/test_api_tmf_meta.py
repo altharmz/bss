@@ -12,7 +12,7 @@ import pytest
 
 from tests import apidata
 from tests.apidata import CATALOG, CUSTOMER, NIL, ORDER, PARTY, PAYMENT, PRODUCT
-from tests.test_billing_db import at
+from tests.builders.billing_db import at
 
 ACCOUNTS = "/tmf-api/accountManagement/v5"
 META = {"@baseType": "Party", "@schemaLocation": "https://example.org/x.schema.json"}

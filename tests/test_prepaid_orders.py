@@ -14,50 +14,15 @@ from app.ordering.process import ItemRequest, OrderRequest, place_order
 from app.repository import funding, payments
 from app.repository import prepaid_commands as commands
 from app.worker import db as worker_db
-from tests import apidata, timeline
+from tests import apidata
 from tests.apidata import ORDER
-from tests.test_api_resource_inventory import number
-from tests.test_events import stored, subscribe
-from tests.test_number_orders import refs
-from tests.test_prepaid_dispatch import dispatch
-from tests.test_prepaid_posting import TZ
-from tests.test_settlement_db import make_payment
-
-
-def shop(api, conn, funds="24", *, amount=10, numbers=True):
-    off = apidata.sellable_offering(
-        api, value=amount, tax=[{"@type": "TaxItem", "taxCategory": "VAT", "taxRate": 20}]
-    )
-    if numbers:
-        response = api.patch(
-            off["productSpecification"]["href"],
-            {"resourceSpecification": [{"id": "msisdn", "@type": "ResourceSpecificationRef"}]},
-        )
-        assert response.status_code == 200, response.text
-    acc = apidata.account(api)
-    conn.execute("UPDATE billing_account SET rating_type = 'prepaid' WHERE id = %s", (acc["id"],))
-    if D(funds):
-        make_payment(conn, dict(acc, currency="USD"), funds)
-    conn.commit()
-    api.clock.set(timeline.START + timedelta(hours=9))
-    return off, acc
-
-
-def purchase(api, off, acc, *, nested=False, numbers=True, status=201):
-    items = []
-    for i in range(2):
-        item = apidata.add_item(off, str(i + 1))
-        if numbers:
-            item["product"] = {
-                "@type": "ProductRefOrValue",
-                "realizingResource": refs(number(api, value=f"7999123400{i}")["id"]),
-            }
-        items.append(item)
-    if nested:
-        items[0]["productOrderItem"] = [items.pop()]
-    response = api.post(ORDER, apidata.order_body(acc, *items))
-    assert response.status_code == status, response.text
-    return response.json()
+from tests.builders.api_resource_inventory import number
+from tests.builders.events import stored, subscribe
+from tests.builders.number_orders import refs
+from tests.builders.prepaid_dispatch import dispatch
+from tests.builders.prepaid_orders import purchase, shop
+from tests.builders.prepaid_posting import TZ
+from tests.builders.settlement_db import make_payment
 
 
 @pytest.mark.parametrize("nested", [False, True])
@@ -185,7 +150,10 @@ def test_future_start_claims_without_funds_then_authorizes_after_shortfall(api, 
 
 @pytest.mark.parametrize("future", [False, True])
 def test_cancel_before_first_grant_releases_funds_and_number(api, db_conn, future):
-    from tests.test_api_order_cancel import CANCEL, cancel_body
+    from tests.builders.api_order_cancel import (
+        CANCEL,
+        cancel_body,
+    )
 
     off, acc = shop(api, db_conn, funds="12")
     item = apidata.add_item(off)
@@ -208,7 +176,10 @@ def test_cancel_before_first_grant_releases_funds_and_number(api, db_conn, futur
 
 
 def test_cancel_after_first_grant_refused(api, db_conn):
-    from tests.test_api_order_cancel import CANCEL, cancel_body
+    from tests.builders.api_order_cancel import (
+        CANCEL,
+        cancel_body,
+    )
 
     off, acc = shop(api, db_conn, numbers=False)
     order = purchase(api, off, acc, numbers=False)
@@ -382,7 +353,10 @@ def test_future_start_selects_authorization_price_and_tax(api, db_conn):
 
 @pytest.mark.parametrize("future", [False, True])
 def test_cancel_failure_rolls_back_claim_product_and_hold(api, db_conn, monkeypatch, future):
-    from tests.test_api_order_cancel import CANCEL, cancel_body
+    from tests.builders.api_order_cancel import (
+        CANCEL,
+        cancel_body,
+    )
 
     off, acc = shop(api, db_conn, funds="12")
     item = apidata.add_item(off)

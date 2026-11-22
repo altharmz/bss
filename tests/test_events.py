@@ -4,54 +4,19 @@ Every stored event is checked against its listener's request schema in the vendo
 spec (tests/contract.py), so a subscriber receives exactly what the spec says.
 """
 
-import json
 from datetime import date
-from typing import Any
 
-import psycopg
 import pytest
 
 from app.events.types import BASES
 from app.worker import db as worker_db
 from app.worker.on_demand import process_demands
 from app.worker.process import bill_date
-from tests import apidata, contract
-from tests.test_api_financial_account import financial, owner
-from tests.test_billing_db import add, at
+from tests import apidata
+from tests.builders.api_financial_account import financial, owner
+from tests.builders.billing_db import add, at
+from tests.builders.events import stored, subscribe, types
 from tests.timeline import TZ
-
-CALLBACK = "http://listener.test/events"
-
-
-def subscribe(api, name: str, *types: str) -> dict:
-    body: dict[str, Any] = {"callback": CALLBACK}
-    if types:
-        body["query"] = "eventType=" + ",".join(types)
-    response = api.post(f"{BASES[name]}/hub", body)
-    assert response.status_code == 201, response.text
-    return response.json()
-
-
-def stored(conn: psycopg.Connection, name: str | None = None) -> list[tuple[str, dict]]:
-    """(event type, payload) of the stored events, oldest first; each payload checked
-    against the spec."""
-    rows = conn.execute(
-        "SELECT api, event_type, payload::text FROM event"
-        " WHERE %(api)s::text IS NULL OR api = %(api)s"
-        " ORDER BY seq",
-        {"api": name},
-    ).fetchall()
-    out = []
-    for api_name, event_type, text in rows:
-        payload = json.loads(text)
-        contract.assert_valid(api_name, event_type, payload)
-        assert payload["eventType"] == event_type
-        out.append((event_type, payload))
-    return out
-
-
-def types(conn: psycopg.Connection, name: str | None = None) -> list[str]:
-    return [event_type for event_type, _ in stored(conn, name)]
 
 
 @pytest.fixture

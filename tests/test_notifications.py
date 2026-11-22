@@ -4,8 +4,7 @@ Every TMF681 response is checked against the vendored schema by the `api` client
 is the `log` adapter, which records what it was given."""
 # ruff: noqa: F811
 
-import json
-from datetime import datetime, time, timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal as D
 from uuid import UUID
 
@@ -15,18 +14,27 @@ from pydantic import ValidationError
 from app.config import Settings, settings
 from app.integrations import notify as notify_module
 from app.integrations.notify import adapter as sender
-from app.notify import events as notify_events
 from app.notify import service as notify_service
 from app.notify import templates
-from tests import timeline
 from tests.apiclient import total
-from tests.test_api_topup import prepaid
-from tests.test_network_provisioning import stub, world  # noqa: F401 - fixtures
-from tests.test_number_orders import refs  # noqa: F401
-from tests.test_payment_gateway import run, save, topup
-from tests.test_prepaid_lifecycle import at, go, numbered, top_up  # noqa: F401 - fixtures
-from tests.test_prepaid_renewal_producer import tick
-from tests.test_sim_inventory import (  # noqa: F401 - fixtures
+from tests.builders.api_topup import prepaid
+from tests.builders.network_provisioning import stub, world  # noqa: F401 - fixtures
+from tests.builders.notifications import (
+    MSG,
+    PHONE,
+    contact,
+    customer_of,
+    fetched,
+    messages,
+    of_event,
+    quiet,
+    trait,
+)
+from tests.builders.number_orders import refs  # noqa: F401
+from tests.builders.payment_gateway import run, save, topup
+from tests.builders.prepaid_lifecycle import at, go, numbered, top_up  # noqa: F401 - fixtures
+from tests.builders.prepaid_renewal_producer import tick
+from tests.builders.sim_inventory import (  # noqa: F401 - fixtures
     activate_line,
     by_imsi,
     line_world,
@@ -38,10 +46,8 @@ from tests.test_sim_inventory import (  # noqa: F401 - fixtures
 
 pytestmark = pytest.mark.capability("worker.notifications")
 
-MSG = "/tmf-api/communicationManagement/v4/communicationMessage"
 CONSENT = "/internal/v1/notification/consent"
 MIB = 1024 * 1024
-PHONE = "12125550123"
 LINE = "12125550177"  # the number of the `numbered` line
 
 
@@ -52,59 +58,11 @@ def log_sender():
     sender().reset()
 
 
-def customer_of(db_conn, acc):
-    row = db_conn.execute(
-        "SELECT customer_id FROM billing_account WHERE id = %s", (acc["id"],)
-    ).fetchone()
-    db_conn.commit()
-    return row[0]
-
-
-def contact(db_conn, acc, *, phone=PHONE, email="ada@example.org"):
-    media = []
-    if email:
-        media.append({"@type": "EmailContactMedium", "emailAddress": email})
-    if phone:
-        media.append({"@type": "PhoneContactMedium", "phoneNumber": phone})
-    db_conn.execute(
-        "UPDATE customer SET details = details || %s::jsonb WHERE id = %s",
-        (json.dumps({"contactMedium": media}), customer_of(db_conn, acc)),
-    )
-    db_conn.commit()
-
-
-def messages(api, **filters):
-    query = "&".join(f"{k}={v}" for k, v in filters.items())
-    response = api.get(f"{MSG}?limit=100" + (f"&{query}" if query else ""))
-    assert response.status_code == 200, response.text
-    return response.json()
-
-
-def trait(message, name):
-    return next((c["value"] for c in message["characteristic"] if c["name"] == name), None)
-
-
-def of_event(api, event, **filters):
-    return [m for m in messages(api, **filters) if trait(m, "event") == event]
-
-
 def counts(api):
     found: dict[str, int] = {}
     for message in messages(api):
         found[trait(message, "event")] = found.get(trait(message, "event"), 0) + 1
     return found
-
-
-def fetched(db_conn, now, name):
-    """The keys detector `name` fetches at `now`: none of a told event (#340)."""
-    run = dict(notify_events.detectors(now, timeline.TZ))[name]
-    keys = [event.key for event in run(db_conn)]
-    db_conn.commit()
-    return keys
-
-
-def quiet(day, hour):
-    return datetime.combine(day, time(hour), timeline.TZ)
 
 
 # --- triggers: one message per event ---
@@ -234,7 +192,11 @@ def test_a_declined_card_tells_the_customer_with_the_reason(api, db_conn):
 
 
 def test_port_in_status_is_told_when_the_line_claims_the_number(api, db_conn, world):
-    from tests.test_number_porting import BODY, buy_number, port_in
+    from tests.builders.number_porting import (
+        BODY,
+        buy_number,
+        port_in,
+    )
 
     contact(db_conn, world.acc, email=None)
     number = "12125550001"  # stays pending until the carrier completes it
@@ -258,7 +220,10 @@ def test_port_in_status_is_told_when_the_line_claims_the_number(api, db_conn, wo
 
 
 def test_a_rejected_port_in_tells_the_reason(api, db_conn, world):
-    from tests.test_number_porting import buy_number, port_in
+    from tests.builders.number_porting import (
+        buy_number,
+        port_in,
+    )
 
     contact(db_conn, world.acc, email=None)
     port = port_in(api, number="12125550142", transferPin="000000")  # pinMismatch

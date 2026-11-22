@@ -13,8 +13,8 @@ from psycopg.rows import dict_row
 from alembic import command
 from app.repository import prepaid_commands as commands
 from app.repository._sql import jsonb
+from tests.builders.prepaid_commands import enqueue
 from tests.factories import NOW, World, account, charge, days, offering, product, rejected
-from tests.test_prepaid_commands import enqueue
 
 START, END = date(2026, 1, 15), date(2026, 2, 15)
 

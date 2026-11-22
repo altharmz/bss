@@ -9,13 +9,14 @@ from psycopg import errors
 
 from tests import apidata, timeline
 from tests.apidata import ORDER, PRODUCT
+from tests.builders.api_resource_inventory import URL, number
+from tests.builders.events import stored, subscribe
+from tests.builders.imsi import all_refs
+from tests.builders.number_orders import cancel
+from tests.builders.prepaid_orders import shop as prepaid_shop
+from tests.builders.prepaid_renewal_producer import tick
+from tests.builders.prepaid_status_orders import errors as order_errors
 from tests.factories import NOW, product, rejected, world
-from tests.test_api_resource_inventory import URL, number
-from tests.test_events import stored, subscribe
-from tests.test_number_orders import cancel
-from tests.test_prepaid_orders import shop as prepaid_shop
-from tests.test_prepaid_renewal_producer import tick
-from tests.test_prepaid_status_orders import errors as order_errors
 
 IMSI = "001010123456789"
 ICCID = "8900000000000000001"
@@ -45,10 +46,6 @@ def made(api, value=IMSI, iccid=None):
     response = imsi(api, value, iccid)
     assert response.status_code == 201, response.text
     return response.json()
-
-
-def all_refs(*uids):
-    return [{"id": u, "@type": "ResourceRef", "@referredType": "LogicalResource"} for u in uids]
 
 
 @pytest.fixture

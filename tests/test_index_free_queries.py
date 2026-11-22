@@ -12,7 +12,7 @@ from app.notify import events
 from app.repository import _sql, balance_actions, numbers, prepaid_command_views
 from app.worker import prepaid
 from tests import apidata
-from tests.test_hot_path_indexes import plan
+from tests.builders.hot_path_indexes import plan
 
 NIL = UUID(apidata.NIL)
 TODAY = date(2026, 11, 4)

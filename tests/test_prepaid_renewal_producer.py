@@ -9,34 +9,17 @@ import pytest
 from psycopg.types.range import Range
 
 from app.clock import FixedClock
-from app.repository import catalog, payments
+from app.repository import catalog
 from app.repository import prepaid_commands as commands
 from app.worker import db as worker_db
 from app.worker import loop
 from app.worker import prepaid as worker
+from tests.builders.events import stored, subscribe
+from tests.builders.prepaid_dispatch import dispatch
+from tests.builders.prepaid_orders import purchase, shop
+from tests.builders.prepaid_posting import TZ, post, prepared
+from tests.builders.prepaid_renewal_producer import pay, tick
 from tests.factories import NOW, T0
-from tests.test_events import stored, subscribe
-from tests.test_prepaid_dispatch import dispatch
-from tests.test_prepaid_orders import purchase, shop
-from tests.test_prepaid_posting import TZ, post, prepared
-
-
-def tick(conn, now):
-    result = loop.tick(conn, clock=FixedClock(now), tz=TZ, run_at=time(0, 30))
-    conn.commit()
-    return result
-
-
-def pay(conn, account_id, amount, at):
-    payments.insert_payment(
-        conn,
-        billing_account_id=account_id,
-        amount=D(amount),
-        currency="USD",
-        received_at=at,
-        payment_method="cash",
-    )
-    conn.commit()
 
 
 def granted(conn):

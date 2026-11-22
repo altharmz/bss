@@ -12,8 +12,8 @@ from psycopg import errors
 from alembic import command
 from app.billing.funding import InsufficientFunds
 from app.repository import funding
+from tests.builders.settlement_db import make_payment
 from tests.factories import NOW, account, rejected
-from tests.test_settlement_db import make_payment
 
 
 def test_command_retry_after_commit_and_release(db_conn):

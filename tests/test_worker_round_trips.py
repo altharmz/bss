@@ -24,16 +24,16 @@ from app.worker.prepaid import observe_entitlements
 from app.worker.process import DateRun
 from app.worker.runs import start_run
 from tests import apidata
+from tests.builders.balance_actions import action, check, credit, prepaid, topup
+from tests.builders.network_provisioning import buy as buy_line
+from tests.builders.network_provisioning import make_line, stub  # noqa: F401 - fixtures
+from tests.builders.prepaid_lifecycle import SimpleNamespaceWorld
+from tests.builders.prepaid_orders import shop
+from tests.builders.prepaid_renewal_producer import tick
+from tests.builders.settlement_db import make_payment
+from tests.builders.worker_process import at, outcome, scenario
+from tests.builders.worker_run_cost import DEC4
 from tests.querycount import counting
-from tests.test_balance_actions import action, check, credit, prepaid, topup
-from tests.test_network_provisioning import buy as buy_line
-from tests.test_network_provisioning import make_line, stub  # noqa: F401 - fixture
-from tests.test_prepaid_lifecycle import SimpleNamespaceWorld
-from tests.test_prepaid_orders import shop
-from tests.test_prepaid_renewal_producer import tick
-from tests.test_settlement_db import make_payment
-from tests.test_worker_process import at, outcome, scenario
-from tests.test_worker_run_cost import DEC4
 from tests.timeline import TZ
 
 SCHEMA_CHECK = "to_regclass('funding_consumption')"

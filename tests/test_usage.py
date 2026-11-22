@@ -12,15 +12,12 @@ from app.worker import usage as usage_feed
 from tests import apidata, contract, timeline
 from tests.apiclient import total
 from tests.apidata import ORDER
-from tests.test_api_resource_inventory import number
-from tests.test_network_provisioning import (  # noqa: F401 - fixtures
-    state,
-    stub,
-    world,
-)
-from tests.test_number_orders import refs
-from tests.test_prepaid_offering_changes import switch
-from tests.test_prepaid_renewal_producer import tick
+from tests.builders.api_resource_inventory import number
+from tests.builders.network_provisioning import state, stub, world  # noqa: F401 - fixtures
+from tests.builders.number_orders import refs
+from tests.builders.prepaid_offering_changes import switch
+from tests.builders.prepaid_renewal_producer import tick
+from tests.builders.usage import MSISDN, SUMMARY, line_on, summary
 
 USAGE = "/tmf-api/productUsageManagement/v5/productUsage"
 
@@ -37,31 +34,11 @@ def rejected_records(api, db_conn):
     return [api.get(f"{USAGE}?id={i}").json()[0] for i in ids]
 
 
-SUMMARY = "/internal/v1/usage/summary"
 MIB = 1024 * 1024
-MSISDN = "79991234500"
 
 
 def when(api, days=0, hour=12):
     return timeline.midnight(api.clock.today() + timedelta(days=days)) + timedelta(hours=hour)
-
-
-def line_on(api, db_conn, offering, acc, value=MSISDN):
-    item = apidata.add_item(offering, "1")
-    item["product"] = {
-        "@type": "ProductRefOrValue",
-        "realizingResource": refs(number(api, value=value)["id"]),
-    }
-    response = api.post(ORDER, apidata.order_body(acc, item))
-    assert response.status_code == 201, response.text
-    tick(db_conn, api.clock.now())
-    assert state(api, response.json()) == "completed"
-    product = db_conn.execute(
-        "SELECT a.product_id FROM number_assignment a JOIN subscriber_number n"
-        " ON n.id = a.subscriber_number_id WHERE n.value = %s",
-        (value,),
-    ).fetchone()
-    return {"id": str(product[0])}
 
 
 def record_id(kind, quantity, index, event_at, extra):
@@ -80,13 +57,6 @@ def feed(stub, db_conn, api, *records):
 
 def records(api, product):
     return api.get(f"{USAGE}?product.id={product['id']}&limit=100").json()
-
-
-def summary(api, product, **query):
-    url = f"{SUMMARY}?product.id={product['id']}" + "".join(f"&{k}={v}" for k, v in query.items())
-    response = api.get(url)
-    assert response.status_code == 200, response.text
-    return response.json()
 
 
 def allowance(body, kind):

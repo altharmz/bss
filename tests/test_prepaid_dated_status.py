@@ -10,17 +10,17 @@ import pytest
 from app.repository import prepaid_commands as commands
 from tests import apidata, timeline
 from tests.apidata import ORDER
-from tests.test_api_order_cancel import CANCEL, cancel_body
-from tests.test_api_resource_inventory import number
-from tests.test_api_suspension import status_item
-from tests.test_events import stored, subscribe
-from tests.test_number_orders import refs
-from tests.test_prepaid_orders import purchase, shop
-from tests.test_prepaid_posting import TZ
-from tests.test_prepaid_renewal_producer import pay, tick
-from tests.test_prepaid_status_orders import count, errors, view
-from tests.test_prepaid_status_orders import granted as granted_two  # noqa: F401
-from tests.test_prepaid_terminations import terminate
+from tests.builders.api_order_cancel import CANCEL, cancel_body
+from tests.builders.api_resource_inventory import number
+from tests.builders.api_suspension import status_item
+from tests.builders.events import stored, subscribe
+from tests.builders.number_orders import refs
+from tests.builders.prepaid_orders import purchase, shop
+from tests.builders.prepaid_posting import TZ
+from tests.builders.prepaid_renewal_producer import pay, tick
+from tests.builders.prepaid_status_orders import count, errors, view
+from tests.builders.prepaid_status_orders import granted as granted_two  # noqa: F401
+from tests.builders.prepaid_terminations import terminate
 
 granted = granted_two
 

@@ -7,21 +7,10 @@ import pytest
 
 from app.repository import _sql, parties
 from tests import apidata
+from tests.builders.hot_path_indexes import plan
 
 NIL = apidata.NIL
 SINCE = "2026-01-01T00:00:00Z"
-
-
-def plan(conn, query, params=()) -> str:
-    # an index that can serve it must be chosen, and read in order (the test tables are
-    # empty, so a bitmap scan and a sort of nothing would otherwise look as cheap)
-    conn.execute("SET enable_seqscan = off")
-    conn.execute("SET enable_bitmapscan = off")
-    try:
-        return "\n".join(r[0] for r in conn.execute("EXPLAIN " + query, params))
-    finally:
-        conn.execute("RESET enable_seqscan")
-        conn.execute("RESET enable_bitmapscan")
 
 
 def sorts(text: str) -> bool:

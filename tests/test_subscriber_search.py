@@ -7,12 +7,12 @@ import pytest
 
 from app.repository import subscribers
 from tests import apidata, factories, timeline
-from tests.test_api_resource_inventory import number
-from tests.test_number_persistence import assignment
-from tests.test_number_persistence import number as number_row
-from tests.test_prepaid_orders import shop
-from tests.test_settlement_db import make_payment
-from tests.test_tax_engine import CA, set_address
+from tests.builders.api_resource_inventory import number
+from tests.builders.number_persistence import assignment
+from tests.builders.number_persistence import number as number_row
+from tests.builders.prepaid_orders import shop
+from tests.builders.settlement_db import make_payment
+from tests.builders.tax_engine import CA, set_address
 
 URL = "/internal/v1/subscriber"
 

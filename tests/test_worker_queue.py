@@ -18,8 +18,8 @@ from app.worker.process import RunAborted, bill_date
 from app.worker.queue import process_requests
 from app.worker.runs import RunInProgress
 from tests.apiclient import total
-from tests.test_worker_failures import accounts_with_products, fail_for
-from tests.test_worker_process import DEC1, DEC2, DEC3, at, scenario, set_currency
+from tests.builders.worker_failures import accounts_with_products, fail_for
+from tests.builders.worker_process import DEC1, DEC2, DEC3, at, scenario, set_currency
 from tests.timeline import TZ
 
 RUNS = "/internal/v1/billingRun"

@@ -7,12 +7,12 @@ from uuid import UUID
 from app.repository import billing
 from tests import apidata
 from tests.apiclient import decimals, total
-from tests.test_api_adjust import ADJUST
-from tests.test_api_adjust import post as adjust
-from tests.test_api_transfer import pair
-from tests.test_api_transfer import post as transfer
-from tests.test_prepaid_renewal_producer import tick
-from tests.test_settlement_db import make_payment
+from tests.builders.api_adjust import ADJUST
+from tests.builders.api_adjust import post as adjust
+from tests.builders.api_transfer import pair
+from tests.builders.api_transfer import post as transfer
+from tests.builders.prepaid_renewal_producer import tick
+from tests.builders.settlement_db import make_payment
 
 BASE = "/internal/v1/billingAccount"
 

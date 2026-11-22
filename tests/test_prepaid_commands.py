@@ -14,14 +14,9 @@ from app.repository import funding
 from app.repository import prepaid_commands as commands
 from app.repository._sql import count_references
 from app.repository.parties import ACCOUNT_HISTORY
+from tests.builders.prepaid_commands import enqueue
+from tests.builders.settlement_db import make_payment
 from tests.factories import NOW, account, rejected
-from tests.test_settlement_db import make_payment
-
-
-def enqueue(conn, acc, key=None, **changes):
-    values = dict(kind="order", due_date=NOW.date(), request={"amount": D("12.34")}, now=NOW)
-    values.update(changes)
-    return commands.enqueue(conn, key or uuid4(), acc["id"], **values)
 
 
 def test_committed_request_replay_and_mismatch(db_conn):
@@ -53,7 +48,10 @@ def test_rollback_consumes_no_command_identity(db_conn):
 
 
 def test_atomic_result_and_hold_conversion_recover_before_and_after_commit(db_conn):
-    from tests.test_funding_conversion import convert, prepared
+    from tests.builders.funding_conversion import (
+        convert,
+        prepared,
+    )
 
     w, key, hold, bill = prepared(db_conn)
     enqueue(db_conn, w.account, key)

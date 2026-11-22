@@ -9,9 +9,9 @@ import pytest
 from app.repository import funding
 from bss_mcp.tools import IDEMPOTENCY_ARG
 from tests import factories
-from tests.test_idempotency import body
-from tests.test_mcp_tools import generated
-from tests.test_prepaid_orders import shop
+from tests.builders.idempotency import body
+from tests.builders.mcp_tools import generated
+from tests.builders.prepaid_orders import shop
 
 KEYED = {
     "create_topup_balance",

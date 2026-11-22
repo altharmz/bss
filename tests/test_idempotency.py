@@ -10,21 +10,11 @@ import pytest
 from app.repository import idempotency
 from tests import apidata
 from tests.apidata import ORDER
-from tests.test_api_resource_inventory import number
-from tests.test_number_orders import refs
-from tests.test_prepaid_orders import shop
+from tests.builders.idempotency import body
+from tests.builders.prepaid_orders import shop
 
 NOW = datetime(2026, 10, 23, 9, tzinfo=UTC)
 HASH = "a" * 64
-
-
-def body(api, off, acc, serial="1"):
-    item = apidata.add_item(off, "1")
-    item["product"] = {
-        "@type": "ProductRefOrValue",
-        "realizingResource": refs(number(api, value=f"7999555{serial}")["id"]),
-    }
-    return apidata.order_body(acc, item)
 
 
 def keyed(api, order, key, **kwargs):

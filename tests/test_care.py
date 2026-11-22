@@ -12,7 +12,7 @@ import pytest
 from app.notify import events as notify_events
 from tests import apidata, timeline
 from tests.apiclient import total
-from tests.test_events import stored, subscribe, types
+from tests.builders.events import stored, subscribe, types
 
 pytestmark = pytest.mark.capability("api.tmf683.partyInteraction.create")
 

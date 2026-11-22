@@ -12,26 +12,10 @@ from psycopg import errors
 from alembic import command
 from app.billing.model import InconsistentState
 from app.repository import funding
+from tests.builders.funding_conversion import convert, prepared
+from tests.builders.funding_db import billed_charge
+from tests.builders.settlement_db import allocate, make_bill, make_payment
 from tests.factories import NOW, account, rejected, world
-from tests.test_funding_db import billed_charge
-from tests.test_settlement_db import allocate, make_bill, make_payment
-
-
-def prepared(conn, amount="15"):
-    w = world(conn)
-    make_payment(conn, w.account, "20")
-    key = uuid4()
-    hold = funding.reserve_for_command(
-        conn, w.account["id"], D(amount), command_id=key, held_at=NOW
-    )
-    bill = billed_charge(conn, w, date(2026, 1, 1), amount)
-    return w, key, hold, bill
-
-
-def convert(conn, w, key, bill, at=NOW):
-    return funding.convert_for_command(
-        conn, w.account["id"], bill["id"], command_id=key, converted_at=at
-    )
 
 
 def test_conversion_commit_retry_and_conflicting_target(db_conn):

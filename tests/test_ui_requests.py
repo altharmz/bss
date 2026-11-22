@@ -18,12 +18,12 @@ from app.worker.queue import process_requests
 from tests import apidata
 from tests.apiclient import decimals, total
 from tests.apidata import CATALOG, ORDER
-from tests.test_api_transfer import pair
-from tests.test_network_provisioning import make_line
-from tests.test_prepaid_command_api import failed
-from tests.test_prepaid_orders import purchase, shop
-from tests.test_prepaid_renewal_producer import tick
-from tests.test_worker_process import DEC1, DEC3, at, scenario, set_currency
+from tests.builders.api_transfer import pair
+from tests.builders.network_provisioning import make_line
+from tests.builders.prepaid_command_api import failed
+from tests.builders.prepaid_orders import purchase, shop
+from tests.builders.prepaid_renewal_producer import tick
+from tests.builders.worker_process import DEC1, DEC3, at, scenario, set_currency
 from tests.timeline import TZ
 
 OFFSET = "+03:00"
@@ -1064,8 +1064,13 @@ def two_open_bills(api, db_conn) -> tuple[dict, list[dict]]:
     """An account with the 300.00 bills of Dec 1 and Jan 1, both unpaid."""
     from datetime import date
 
-    from tests.test_billing_db import add, bill
-    from tests.test_billing_db import at as at_day
+    from tests.builders.billing_db import (
+        add,
+        bill,
+    )
+    from tests.builders.billing_db import (
+        at as at_day,
+    )
 
     offering = apidata.sellable_offering(api, value=300)
     account = apidata.account(api)
@@ -2876,7 +2881,9 @@ def test_subscriber_overview_unfinished_order_reads_as_the_ui_makes_them(api):
 
 def test_ui_card_requests(api, db_conn):
     """Exact saved-card, card top-up and auto top-up bodies pinned in PaymentMethods.test.tsx."""
-    from tests.test_api_topup import prepaid
+    from tests.builders.api_topup import (
+        prepaid,
+    )
 
     methods = "/tmf-api/paymentMethod/v4/paymentMethod"
     _, account = prepaid(api, db_conn)
@@ -2921,8 +2928,13 @@ def test_messages_and_consent_as_the_ui_sends_them(api, db_conn):
     """The Messages tab (issue 192b, frontend/src/api/messages.ts): the list and detail reads,
     the New message, Cancel, Resend and consent bodies pinned in
     SubscriberCard.messages.test.tsx, replayed against the real TMF681 and internal API."""
-    from tests.test_api_topup import prepaid
-    from tests.test_notifications import contact, customer_of
+    from tests.builders.api_topup import (
+        prepaid,
+    )
+    from tests.builders.notifications import (
+        contact,
+        customer_of,
+    )
 
     msg = "/tmf-api/communicationManagement/v4/communicationMessage"
     consent = "/internal/v1/notification/consent"

@@ -13,7 +13,7 @@ from psycopg import sql
 from tests import apidata
 from tests.apiclient import decimals, total
 from tests.apidata import ACCOUNT, CATALOG, CUSTOMER, NIL, ORDER, PARTY, PAYMENT, PRODUCT
-from tests.test_api_bill_settlement import account_with_bills, bills
+from tests.builders.api_bill_settlement import account_with_bills, bills
 from tests.timeline import START, iso, midnight, z
 
 CYCLE = "/tmf-api/customerBillManagement/v5/billCycle"

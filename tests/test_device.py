@@ -8,11 +8,11 @@ from app.integrations.network import adapter
 from app.network import device
 from tests import apidata
 from tests.apidata import ORDER
-from tests.test_api_resource_inventory import number
-from tests.test_network_provisioning import line, stub, world  # noqa: F401 - fixtures
-from tests.test_number_orders import refs
-from tests.test_prepaid_renewal_producer import tick
-from tests.test_prepaid_status_orders import errors
+from tests.builders.api_resource_inventory import number
+from tests.builders.network_provisioning import line, stub, world  # noqa: F401 - fixtures
+from tests.builders.number_orders import refs
+from tests.builders.prepaid_renewal_producer import tick
+from tests.builders.prepaid_status_orders import errors
 
 DEVICE = "/internal/v1/device"
 CHECK = "/internal/v1/device/check"
@@ -190,7 +190,9 @@ def test_activation_without_an_imei_still_works(api, db_conn, world, stub):
 
 
 def test_a_device_on_a_product_without_a_network_profile_is_refused(api, db_conn, stub):
-    from tests.test_prepaid_orders import shop
+    from tests.builders.prepaid_orders import (
+        shop,
+    )
 
     off, acc = shop(api, db_conn, numbers=False)  # no network profile: not a line
     item = apidata.add_item(off)
@@ -260,7 +262,9 @@ def test_a_device_change_is_an_item_of_its_own(api, db_conn, world, stub):
 
 
 def test_a_device_change_on_an_ended_product_is_refused(api, db_conn, world, stub):
-    from tests.test_prepaid_terminations import terminate
+    from tests.builders.prepaid_terminations import (
+        terminate,
+    )
 
     _, pid = activated(api, db_conn, world, "79991234500", COMPATIBLE)
     terminate(api, world.acc, {"id": pid})

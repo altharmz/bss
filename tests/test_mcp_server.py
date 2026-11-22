@@ -20,8 +20,8 @@ from bss_mcp.store import Store
 from tests import apidata
 from tests.apiclient import total
 from tests.apidata import PARTY, PAYMENT
-from tests.test_api_bill_settlement import account_with_bills, bills
-from tests.test_billing_db import at
+from tests.builders.api_bill_settlement import account_with_bills, bills
+from tests.builders.billing_db import at
 
 INDIVIDUALS = f"{PARTY}/individual"
 GIVEN = {"givenName": "Zoya", "familyName": "Kosmodemyanskaya"}

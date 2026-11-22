@@ -5,7 +5,7 @@ pages from the start, so the start must be the newest."""
 from datetime import timedelta
 
 from tests import apidata
-from tests.test_api_topup import TOPUP, post, prepaid
+from tests.builders.api_topup import TOPUP, post, prepaid
 
 
 def test_top_ups_are_listed_newest_requested_first(api, db_conn):

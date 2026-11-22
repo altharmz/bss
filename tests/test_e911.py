@@ -7,17 +7,17 @@ from app.config import settings
 from app.network import e911
 from tests import apidata
 from tests.apidata import ORDER
-from tests.test_account_security import PIN, audit, head, set_pin
-from tests.test_api_order_cancel import CANCEL, cancel_body
-from tests.test_api_resource_inventory import number
-from tests.test_network_provisioning import make_line, stub, world  # noqa: F401 - fixtures
-from tests.test_notifications import customer_of
-from tests.test_number_orders import refs
-from tests.test_prepaid_offering_changes import switch
-from tests.test_prepaid_orders import shop
-from tests.test_prepaid_renewal_producer import tick
-from tests.test_prepaid_status_orders import errors
-from tests.test_tax_engine import CA, set_address
+from tests.builders.account_security import PIN, audit, head, set_pin
+from tests.builders.api_order_cancel import CANCEL, cancel_body
+from tests.builders.api_resource_inventory import number
+from tests.builders.network_provisioning import make_line, stub, world  # noqa: F401 - fixtures
+from tests.builders.notifications import customer_of
+from tests.builders.number_orders import refs
+from tests.builders.prepaid_offering_changes import switch
+from tests.builders.prepaid_orders import shop
+from tests.builders.prepaid_renewal_producer import tick
+from tests.builders.prepaid_status_orders import errors
+from tests.builders.tax_engine import CA, set_address
 
 pytestmark = pytest.mark.capability("worker.e911Address")
 

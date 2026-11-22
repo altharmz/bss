@@ -22,8 +22,8 @@ from app.worker import db as worker_db
 from app.worker.process import bill_date
 from tests import apidata, timeline
 from tests.apiclient import decimals
+from tests.builders.worker_process import DEC1, DEC2, DEC3, NOV20, add, at, scenario
 from tests.factories import MSK, NOW, account, add_order, offering
-from tests.test_worker_process import DEC1, DEC2, DEC3, NOV20, add, at, scenario
 from tests.timeline import TZ, iso, midnight
 
 D = date(2026, 2, 1)

@@ -12,7 +12,7 @@ import pytest
 
 from app.integrations.network import adapter as network
 from tests import apidata
-from tests.test_prepaid_plans import (  # noqa: F401 - fixtures
+from tests.builders.prepaid_plans import (  # noqa: F401 - fixtures
     add_on_item,
     balance,
     build,
@@ -20,8 +20,8 @@ from tests.test_prepaid_plans import (  # noqa: F401 - fixtures
     line,
     stubs,
 )
-from tests.test_prepaid_renewal_producer import tick
-from tests.test_self_care import (  # noqa: F401 - fixtures
+from tests.builders.prepaid_renewal_producer import tick
+from tests.builders.self_care import (  # noqa: F401 - fixtures
     BASE,
     PASSWORD,
     care,
@@ -31,7 +31,7 @@ from tests.test_self_care import (  # noqa: F401 - fixtures
     new_care,
     sign_in,
 )
-from tests.test_settlement_db import make_payment
+from tests.builders.settlement_db import make_payment
 
 EMAIL = "ada@example.org"
 

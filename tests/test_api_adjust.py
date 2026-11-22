@@ -7,31 +7,10 @@ from decimal import Decimal as D
 import pytest
 
 from tests import apidata
-from tests.test_api_topup import (
-    BASE,
-    TOPUP,
-    current_balance,
-    prepaid,
-    remaining,
-)
-from tests.test_api_topup import post as topup
-from tests.test_events import subscribe, types
-
-ADJUST = f"{BASE}/adjustBalance"
-
-
-def body(acc, value, **over):
-    return {
-        "@type": "AdjustBalance",
-        "amount": {"amount": value, "units": "USD"},
-        "usageType": "monetary",
-        "bucket": {"id": acc.bucket},
-        **over,
-    }
-
-
-def post(api, acc, value, headers=None, **over):
-    return api.post(ADJUST, body(acc, value, **over), headers=headers)
+from tests.builders.api_adjust import ADJUST, body, post
+from tests.builders.api_topup import TOPUP, current_balance, prepaid, remaining
+from tests.builders.api_topup import post as topup
+from tests.builders.events import subscribe, types
 
 
 def counts(conn):
