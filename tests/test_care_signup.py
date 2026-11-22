@@ -15,15 +15,10 @@ from app.integrations.identity import adapter as identity
 from app.integrations.network import adapter as network
 from app.integrations.notify import adapter as sender
 from tests import timeline
-from tests.test_prepaid_plans import (  # noqa: F401 - fixtures
-    PROFILE,
-    balance,
-    offering,
-    price,
-    stubs,
-)
-from tests.test_prepaid_renewal_producer import tick
-from tests.test_self_care import (  # noqa: F401 - fixtures
+from tests.builders.network_provisioning import PROFILE  # noqa: F401 - fixtures
+from tests.builders.prepaid_plans import balance, offering, price, stubs  # noqa: F401 - fixtures
+from tests.builders.prepaid_renewal_producer import tick
+from tests.builders.self_care import (  # noqa: F401 - fixtures
     BASE,
     PASSWORD,
     care,

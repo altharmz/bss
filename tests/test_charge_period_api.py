@@ -6,10 +6,10 @@ from decimal import Decimal
 import pytest
 
 from tests import apidata
-from tests.test_api_catalog import make_offering, make_price, price_refs
-from tests.test_api_order_cancel import CANCEL, cancel_body, order_of
-from tests.test_api_order_modify import errors_of, modify
-from tests.test_billing_db import add, at, bill, delete
+from tests.builders.api_catalog import make_offering, make_price, price_refs
+from tests.builders.api_order_cancel import CANCEL, cancel_body, order_of
+from tests.builders.api_order_modify import errors_of, modify
+from tests.builders.billing_db import add, at, bill, delete
 from tests.timeline import iso, midnight
 
 INTERNAL = "/internal/v1/billingAccount"

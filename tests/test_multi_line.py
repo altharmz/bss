@@ -11,7 +11,7 @@ from uuid import UUID
 import pytest
 
 from tests import apidata, timeline
-from tests.test_prepaid_plans import (  # noqa: F401 - fixtures
+from tests.builders.prepaid_plans import (  # noqa: F401 - fixtures
     ACCOUNTS,
     RATES,
     at,
@@ -21,9 +21,9 @@ from tests.test_prepaid_plans import (  # noqa: F401 - fixtures
     price,
     stubs,
 )
-from tests.test_prepaid_renewal_producer import tick
-from tests.test_prepaid_terminations import credits, terminate
-from tests.test_tax_engine import CA, set_address
+from tests.builders.prepaid_renewal_producer import tick
+from tests.builders.prepaid_terminations import credits, terminate
+from tests.builders.tax_engine import CA, set_address
 
 pytestmark = pytest.mark.capability("worker.multiLineDiscounts")
 

@@ -13,19 +13,19 @@ from app.billing.model import DateRange
 from app.notify import events
 from app.worker import prepaid
 from tests import apidata
-from tests.test_api_order_cancel import CANCEL, cancel_body
-from tests.test_api_resource_inventory import number
-from tests.test_events import stored, subscribe
-from tests.test_prepaid_offering_changes import (  # noqa: F401  (granted is a fixture)
+from tests.builders.api_order_cancel import CANCEL, cancel_body
+from tests.builders.api_resource_inventory import number
+from tests.builders.events import stored, subscribe
+from tests.builders.prepaid_offering_changes import (  # noqa: F401 - fixtures
     at,
     granted,
     offering_of,
     switch,
 )
-from tests.test_prepaid_orders import purchase, shop
-from tests.test_prepaid_renewal_producer import pay, tick
-from tests.test_prepaid_status_orders import errors
-from tests.test_prepaid_terminations import terminate
+from tests.builders.prepaid_orders import purchase, shop
+from tests.builders.prepaid_renewal_producer import pay, tick
+from tests.builders.prepaid_status_orders import errors
+from tests.builders.prepaid_terminations import terminate
 
 
 def held(conn):

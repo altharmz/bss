@@ -4,12 +4,12 @@ from datetime import date, timedelta
 from uuid import UUID
 
 from tests import apidata
-from tests.test_api_order_cancel import CANCEL, cancel_body
-from tests.test_api_order_modify import modify
-from tests.test_api_suspension import OCT2, change
-from tests.test_billing_db import add, at
-from tests.test_prepaid_offering_changes import granted, switch  # noqa: F401  (fixture)
-from tests.test_prepaid_renewal_producer import pay, tick
+from tests.builders.api_order_cancel import CANCEL, cancel_body
+from tests.builders.api_order_modify import modify
+from tests.builders.api_suspension import OCT2, change
+from tests.builders.billing_db import add, at
+from tests.builders.prepaid_offering_changes import granted, switch  # noqa: F401 - fixtures
+from tests.builders.prepaid_renewal_producer import pay, tick
 
 BASE = "/internal/v1/billingAccount"
 NOV3, NOV11 = date(2026, 11, 3), date(2026, 11, 11)

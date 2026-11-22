@@ -8,7 +8,7 @@ import logging
 import pytest
 
 from bss_mcp.tokens import SMOKE_CLIENT_NAME, run
-from tests import test_mcp_oauth as flow
+from tests.builders import mcp_oauth as flow
 
 
 def tool(mcp, *argv: str) -> tuple[int, str, str]:

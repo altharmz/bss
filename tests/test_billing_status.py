@@ -13,8 +13,8 @@ from app.status import expected_date, freshness
 from app.worker import db as worker_db
 from app.worker.process import bill_date
 from app.worker.runs import start_run
-from tests.test_worker_failures import accounts_with_products
-from tests.test_worker_process import DEC1, DEC2, scenario
+from tests.builders.worker_failures import accounts_with_products
+from tests.builders.worker_process import DEC1, DEC2, scenario
 from tests.timeline import TZ
 
 RUN_AT = time(0, 30)

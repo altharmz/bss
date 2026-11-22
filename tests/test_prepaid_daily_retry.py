@@ -7,12 +7,12 @@ from uuid import uuid4
 
 from app.repository import balance_actions, funding
 from app.repository import prepaid_commands as commands
+from tests.builders.prepaid_dispatch import dispatch
+from tests.builders.prepaid_posting import TZ, prepared
+from tests.builders.prepaid_renewal import renewal
+from tests.builders.settlement_db import make_payment
 from tests.factories import account, prepaid_bucket
 from tests.querycount import counting
-from tests.test_prepaid_dispatch import dispatch
-from tests.test_prepaid_posting import TZ, prepared
-from tests.test_prepaid_renewal import renewal
-from tests.test_settlement_db import make_payment
 
 
 def short_renewals(conn, count):

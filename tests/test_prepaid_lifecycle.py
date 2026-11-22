@@ -2,7 +2,7 @@
 driven by the worker on the business date through internal orders."""
 # ruff: noqa: F811
 
-from datetime import date, datetime, time, timedelta
+from datetime import date, timedelta
 from decimal import Decimal as D
 from uuid import UUID
 
@@ -13,41 +13,20 @@ from app.integrations.network import adapter as network
 from app.integrations.payment import adapter as gateway
 from tests import apidata, timeline
 from tests.apidata import ORDER
-from tests.test_api_suspension import status_item
-from tests.test_network_provisioning import buy as buy_line
-from tests.test_network_provisioning import make_line, stub  # noqa: F401 - fixture
-from tests.test_payment_gateway import commands_of as card_commands
-from tests.test_payment_gateway import rule, save
-from tests.test_prepaid_orders import shop
-from tests.test_prepaid_plans import balance, build, buy, offering, price  # noqa: F401
-from tests.test_prepaid_renewal_producer import pay, tick
-from tests.test_settlement_db import make_payment
+from tests.builders.api_suspension import status_item
+from tests.builders.network_provisioning import make_line, stub  # noqa: F401 - fixtures
+from tests.builders.payment_gateway import commands_of as card_commands
+from tests.builders.payment_gateway import rule, save
+from tests.builders.prepaid_lifecycle import at, go, numbered, top_up  # noqa: F401 - fixtures
+from tests.builders.prepaid_plans import balance, build, buy, offering, price  # noqa: F401
+from tests.builders.prepaid_renewal_producer import pay, tick
+from tests.builders.settlement_db import make_payment
 
 pytestmark = pytest.mark.capability("worker.prepaidLifecycle")
 
 ACCOUNTS = "/internal/v1/billingAccount"
 SETTINGS = "/internal/v1/lifecycle/settings"
 RESOURCE = "/tmf-api/resourceInventory/v5/resource"
-
-
-def at(day, hour=9):
-    return datetime.combine(day, time(hour), timeline.TZ)
-
-
-def go(api, db_conn, day, ticks=3):
-    """The business clock is `day`; the worker wakes up a few times (commands are sent on
-    one tick and posted on the next)."""
-    api.clock.set(at(day))
-    for _ in range(ticks):
-        tick(db_conn, api.clock.now())
-
-
-def top_up(api, db_conn, acc, amount, day, ticks=3):
-    """A payment received after the worker last looked at the account, then a few wake-ups."""
-    pay(db_conn, UUID(acc["id"]), amount, at(day) + timedelta(minutes=1))
-    api.clock.set(at(day) + timedelta(minutes=2))
-    for _ in range(ticks):
-        tick(db_conn, at(day) + timedelta(minutes=2))
 
 
 def kinds():
@@ -66,27 +45,6 @@ def row(db_conn, product_id):
         " FROM product WHERE id = %s",
         (product_id,),
     ).fetchone()
-
-
-@pytest.fixture
-def numbered(api, db_conn, stub):
-    """A prepaid line with a number, paid for one month (12) and nothing left."""
-    off, acc = shop(api, db_conn, funds="12", amount=10, numbers=True)
-    make_line(api, off)
-    order = buy_line(api, SimpleNamespaceWorld(off, acc), "12125550177")
-    tick(db_conn, api.clock.now())
-    assert api.get(order["href"]).json()["state"] == "completed"
-    product_id, due = db_conn.execute(
-        "SELECT f.product_id, upper(f.period) FROM funded_interval f"
-    ).fetchone()
-    stub.received.clear()
-    return SimpleNamespaceWorld(off, acc, product=product_id, due=due, order=order)
-
-
-class SimpleNamespaceWorld:
-    def __init__(self, off, acc, **rest):
-        self.off, self.acc = off, acc
-        self.__dict__.update(rest)
 
 
 # --- the dates ---

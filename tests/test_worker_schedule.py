@@ -11,16 +11,12 @@ from app.worker import db as worker_db
 from app.worker.loop import tick
 from app.worker.plan import scheduled
 from app.worker.runtime import StartRefused, check_run_at
-from tests.test_worker_failures import accounts_with_products, fail_for
-from tests.test_worker_process import DEC1, DEC2, DEC3, scenario, set_currency
+from tests.builders.worker_failures import accounts_with_products, fail_for
+from tests.builders.worker_process import DEC1, DEC2, DEC3, scenario, set_currency
+from tests.builders.worker_schedule import RUN_AT, msk
 from tests.timeline import TZ
 
 NOV29, NOV30, DEC4 = date(2026, 11, 29), date(2026, 11, 30), date(2026, 12, 4)
-RUN_AT = time(0, 30)
-
-
-def msk(day: date, hour: int, minute: int = 0, second: int = 0) -> datetime:
-    return datetime.combine(day, time(hour, minute, second), tzinfo=TZ)
 
 
 @pytest.fixture

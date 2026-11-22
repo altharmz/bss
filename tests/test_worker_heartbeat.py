@@ -23,9 +23,9 @@ from app.worker import process
 from app.worker.loop import tick
 from app.worker.process import RunAborted, bill_date
 from app.worker.queue import process_requests
-from tests.test_worker_failures import accounts_with_products, fail_for
-from tests.test_worker_process import DEC1, DEC2, DEC3, at, scenario, set_currency
-from tests.test_worker_schedule import RUN_AT, msk
+from tests.builders.worker_failures import accounts_with_products, fail_for
+from tests.builders.worker_process import DEC1, DEC2, DEC3, at, scenario, set_currency
+from tests.builders.worker_schedule import RUN_AT, msk
 from tests.timeline import TZ
 
 THRESHOLD = 1.0  # stands for the healthcheck's 180 s

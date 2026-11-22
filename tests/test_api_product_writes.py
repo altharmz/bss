@@ -5,6 +5,7 @@ DELETE = a delete order effective today. Orders alone create or end products - t
 are orders too, visible in TMF622. An order that would be rejected is a 409 with its
 reasons and nothing is stored.
 """
+# ruff: noqa: F811
 
 from datetime import date, timedelta
 from decimal import Decimal
@@ -12,34 +13,19 @@ from decimal import Decimal
 import pytest
 
 from tests import apidata
-from tests.test_api_order_cancel import CANCEL, cancel_body, rates, run, worker
-from tests.test_billing_db import at
-from tests.timeline import iso, midnight, z
+from tests.builders.api_order_cancel import CANCEL, cancel_body, rates, run, worker
+from tests.builders.api_product_writes import (  # noqa: F401 - fixtures
+    NOV1,
+    OCT20,
+    orders_of,
+    product_body,
+    shop,
+    timeline_z,
+)
+from tests.timeline import iso, midnight
 
 PRODUCT = apidata.PRODUCT
 __all__ = ["worker"]
-OCT20, NOV1 = date(2026, 10, 20), date(2026, 11, 1)
-
-
-@pytest.fixture
-def shop(api):
-    offering = apidata.sellable_offering(api, value=300)
-    account = apidata.account(api)
-    api.clock.set(at(OCT20))
-    return offering, account
-
-
-def product_body(account, offering, **over):
-    return {
-        "@type": "Product",
-        "billingAccount": {"id": account["id"]},
-        "productOffering": {"id": offering["id"]},
-        **over,
-    }
-
-
-def orders_of(api, account) -> list[dict]:
-    return api.get(f"{apidata.ORDER}?billingAccount.id={account['id']}").json()
 
 
 def test_post_places_an_add_order(api, shop):
@@ -113,10 +99,6 @@ def test_post_future_product_with_end_and_cancel(api, shop, worker, catch_up):
         assert restored["status"] == "created" and "terminationDate" not in restored
         run(worker, api, NOV1)
         assert api.get(product["href"]).json()["status"] == "active"
-
-
-def timeline_z(day: date) -> str:
-    return z(midnight(day))
 
 
 def test_a_post_the_order_would_reject_is_a_409_and_stores_nothing(api, shop):

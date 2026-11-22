@@ -8,20 +8,18 @@ the next worker takes the run over without touching the accounts already ok.
 """
 
 from datetime import datetime, timedelta
-from uuid import UUID
 
 import psycopg
 import pytest
 
 from app.repository import billing
 from app.worker import db as worker_db
-from app.worker import process
 from app.worker.plan import BACKOFF, retry_time
 from app.worker.process import DateRun, HeldBack, NotYet, RunAborted, bill_date
 from app.worker.runs import RunInProgress, start_run
-from tests import apidata, timeline
+from tests.builders.worker_failures import accounts_with_products, advisory_locks, fail_for
+from tests.builders.worker_process import DEC1, DEC2, at
 from tests.factories import MSK
-from tests.test_worker_process import DEC1, DEC2, NOV20, add, at
 from tests.timeline import TZ
 
 
@@ -33,17 +31,6 @@ def worker(migrated_db_url):
     finally:
         if not conn.closed:
             conn.close()
-
-
-def accounts_with_products(api, n: int = 3) -> list[UUID]:
-    """n accounts with a 300/month product from Dec 1; their ids in billing order (by id)."""
-    api.clock.set(timeline.NOW)
-    offering = apidata.sellable_offering(api, value=300)
-    api.clock.set(at(NOV20, 9))
-    accounts = [apidata.account(api) for _ in range(n)]
-    for acc in accounts:
-        add(api, acc, offering, DEC1, on=at(NOV20))
-    return sorted(UUID(acc["id"]) for acc in accounts)
 
 
 def charges(conn, account_id) -> int:
@@ -61,29 +48,6 @@ def terminate(admin, pid: int) -> bool:
     """Kill a session and wait (up to 5 s) until it has exited - pg_terminate_backend
     without a timeout returns before the backend is gone."""
     return admin.execute("SELECT pg_terminate_backend(%s, 5000)", (pid,)).fetchone()[0]
-
-
-def advisory_locks(admin) -> int:
-    """Advisory locks in this database only: pg_locks is cluster-wide, and tests running
-    in parallel hold their own in their own databases."""
-    return admin.execute(
-        "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory'"
-        " AND database = (SELECT oid FROM pg_database WHERE datname = current_database())"
-    ).fetchone()[0]
-
-
-def fail_for(monkeypatch, account_id):
-    """bill_account raises a RuntimeError (a bug, not a BillingError) for one account;
-    returns a function that removes the fault."""
-    real = process.bill_account
-
-    def failing(conn, acc, run, **kw):
-        if acc == account_id:
-            raise RuntimeError("injected bug")
-        return real(conn, acc, run, **kw)
-
-    monkeypatch.setattr(process, "bill_account", failing)
-    return lambda: monkeypatch.setattr(process, "bill_account", real)
 
 
 # --- the backoff ---

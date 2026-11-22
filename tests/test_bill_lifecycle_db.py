@@ -17,7 +17,7 @@ from app.billing.core import compute
 from app.billing.model import InconsistentState
 from app.repository import billing
 from tests import apidata
-from tests.test_billing_db import add, at, bill, delete, run_row
+from tests.builders.billing_db import add, at, bill, delete, run_row
 from tests.timeline import TZ
 
 D = Decimal

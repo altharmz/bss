@@ -22,8 +22,8 @@ from app.integrations.notify import adapter as sender
 from app.main import app
 from app.worker.notify import process_notifications
 from tests import apidata
-from tests.test_billing_completion import FORMAT, MEDIA, demand, run, worker  # noqa: F401
-from tests.test_billing_db import add, at
+from tests.builders.billing_completion import FORMAT, MEDIA, demand, run, worker  # noqa: F401
+from tests.builders.billing_db import add, at
 from tests.timeline import NOW, TZ
 
 DEC1, JAN1 = date(2026, 12, 1), date(2027, 1, 1)

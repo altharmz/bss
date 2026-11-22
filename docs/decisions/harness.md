@@ -585,6 +585,26 @@ moves less and not every time: twelve workers keep the host saturated either way
 the tail is set by whichever long test is left last (`test_seed`'s production-gates run
 and the bill PDF timing test now, 70 to 80 s under load), so pair 1 ended level.
 
+## Test layout (2026-11-22, #423)
+
+**No test module imports another.** Until #423 the backend tests had 380 imports from
+other test files (`tests.test_prepaid_renewal_producer` alone 34 times). Editing one test
+file made testmon re-run every importer, and renaming or deleting a test broke unrelated
+files. A helper, constant or fixture that more than one module uses now lives in
+`tests/builders/`, not in a test module. `tests/test_test_imports.py` (smoke) fails on any
+`tests.test_*`, `from tests import test_*` or relative import of a test module, in
+subpackages too.
+
+- The first step moved the shared names mechanically: one `tests/builders/<module>.py` per
+  former source module, holding the imported names and the definitions they depend on.
+  The source module imports them back. Builder modules do not import fixtures: pytest
+  resolves a fixture from the requesting test's module, so the test module imports every
+  fixture it needs (with `# noqa: F401`, and `# ruff: noqa: F811` at the top where a test
+  parameter shadows the import).
+- Collected tests before and after: 3,037 in 185 files.
+- The domain subpackages, the prepaid docstrings and one helper for the performance guards
+  are #440 (one PR closes one issue, so #423 was split).
+
 ## Test speed (2026-11-11, #319)
 
 Measured on the 12-CPU workstation. The host is shared with other agents' test runs, so

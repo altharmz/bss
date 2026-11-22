@@ -12,7 +12,7 @@ import pytest
 
 from app.api import catalog_jobs
 from tests import apidata, timeline
-from tests.test_api_catalog import (
+from tests.builders.api_catalog import (
     BASE,
     NIL,
     OFFERING,

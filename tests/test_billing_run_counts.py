@@ -17,10 +17,10 @@ from app.worker import process
 from app.worker.process import DateRun, bill_date, retry_run
 from app.worker.runs import start_run
 from tests import apidata, timeline
+from tests.builders.worker_process import DEC1, DEC2, DEC3, NOV20, add, at, scenario, set_currency
 from tests.factories import account, run
 from tests.querycount import counting
 from tests.run_counts import assert_consistent
-from tests.test_worker_process import DEC1, DEC2, DEC3, NOV20, add, at, scenario, set_currency
 from tests.timeline import TZ
 
 DEC4 = date(2026, 12, 4)

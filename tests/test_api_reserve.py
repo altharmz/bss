@@ -9,32 +9,16 @@ from uuid import UUID, uuid4
 from app.repository import funding
 from tests import apidata
 from tests.apidata import ORDER
-from tests.test_api_adjust import post as adjust
-from tests.test_api_resource_inventory import URL as NUMBERS
-from tests.test_api_resource_inventory import number
-from tests.test_api_topup import BASE, prepaid, remaining
-from tests.test_api_topup import post as topup
-from tests.test_events import subscribe, types
-from tests.test_number_orders import refs
-from tests.test_prepaid_orders import purchase
-from tests.test_prepaid_renewal_producer import tick
-
-RESERVE = f"{BASE}/reserveBalance"
-
-
-def body(acc, value, **over):
-    return {
-        "@type": "ReserveBalance",
-        "amount": {"amount": value, "units": "USD"},
-        "usageType": "monetary",
-        "bucket": {"id": acc.bucket},
-        "partyAccount": {"id": acc.id, "@referredType": "BillingAccount"},
-        **over,
-    }
-
-
-def post(api, acc, value, headers=None, **over):
-    return api.post(RESERVE, body(acc, value, **over), headers=headers)
+from tests.builders.api_adjust import post as adjust
+from tests.builders.api_reserve import RESERVE, post
+from tests.builders.api_resource_inventory import URL as NUMBERS
+from tests.builders.api_resource_inventory import number
+from tests.builders.api_topup import BASE, prepaid, remaining
+from tests.builders.api_topup import post as topup
+from tests.builders.events import subscribe, types
+from tests.builders.number_orders import refs
+from tests.builders.prepaid_orders import purchase
+from tests.builders.prepaid_renewal_producer import tick
 
 
 def ends_in(api, **delta):

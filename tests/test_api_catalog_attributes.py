@@ -12,7 +12,7 @@ import pytest
 from app.api import catalog, classification, specschema
 from tests import apidata, contract, timeline
 from tests.apidata import CATALOG
-from tests.test_api_catalog import (
+from tests.builders.api_catalog import (
     NIL,
     OFFERING,
     PRICE,
@@ -25,7 +25,7 @@ from tests.test_api_catalog import (
     price_body,
     price_refs,
 )
-from tests.test_events import stored, subscribe
+from tests.builders.events import stored, subscribe
 from tests.timeline import NOW, z
 
 CATEGORY = f"{CATALOG}/category"

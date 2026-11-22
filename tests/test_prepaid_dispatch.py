@@ -8,15 +8,12 @@ from uuid import uuid4
 from app.clock import FixedClock
 from app.repository import funding
 from app.repository import prepaid_commands as commands
-from app.worker import loop, prepaid
+from app.worker import loop
+from tests.builders.prepaid_dispatch import dispatch
+from tests.builders.prepaid_posting import TZ, prepared
+from tests.builders.prepaid_renewal import renewal
+from tests.builders.settlement_db import make_payment
 from tests.factories import NOW, product
-from tests.test_prepaid_posting import TZ, prepared
-from tests.test_prepaid_renewal import renewal
-from tests.test_settlement_db import make_payment
-
-
-def dispatch(conn, now=NOW, **kwargs):
-    return prepaid.process_commands(conn, clock=FixedClock(now), tz=TZ, **kwargs)
 
 
 def test_dispatch_posts_once_and_heartbeats(db_conn):

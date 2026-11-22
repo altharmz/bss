@@ -9,7 +9,7 @@ import pytest
 
 from tests import apidata
 from tests.apidata import RATE
-from tests.test_billing_db import add, at, bill, delete, run_row
+from tests.builders.billing_db import add, at, bill, delete, run_row
 from tests.timeline import midnight, z
 
 pytestmark = pytest.mark.smoke

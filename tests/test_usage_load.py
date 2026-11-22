@@ -22,12 +22,9 @@ from app.integrations.network.usage_load import (
     factor,
 )
 from app.worker.__main__ import main as worker_main
-from tests.test_network_provisioning import (  # noqa: F401 - fixtures
-    stub,
-    world,
-)
-from tests.test_prepaid_renewal_producer import tick
-from tests.test_usage import MSISDN, line_on
+from tests.builders.network_provisioning import stub, world  # noqa: F401 - fixtures
+from tests.builders.prepaid_renewal_producer import tick
+from tests.builders.usage import MSISDN, line_on
 
 MSK = ZoneInfo("Europe/Moscow")
 

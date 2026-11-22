@@ -8,25 +8,20 @@ import pytest
 from app.config import settings
 from app.repository import billing
 from tests import apidata
+from tests.builders.api_adjust import post as adjust
+from tests.builders.api_bill_settlement import account_with_bills
+from tests.builders.api_financial_account import financial, link
+from tests.builders.api_party_account import create as create_party_account
+from tests.builders.api_reserve import post as reserve
+from tests.builders.api_topup import BASE as BALANCE
+from tests.builders.api_topup import post as topup
+from tests.builders.api_transfer import pair
+from tests.builders.api_transfer import post as transfer
+from tests.builders.billing_db import add, at, bill
+from tests.builders.payg_rating import next_day, payg, report  # noqa: F401 - fixtures
+from tests.builders.payment_gateway import METHODS, save
+from tests.builders.prepaid_plans import build, stubs  # noqa: F401 - fixtures
 from tests.querycount import counting, statements
-from tests.test_api_adjust import post as adjust
-from tests.test_api_bill_settlement import account_with_bills
-from tests.test_api_financial_account import financial, link
-from tests.test_api_party_account import create as create_party_account
-from tests.test_api_reserve import post as reserve
-from tests.test_api_topup import BASE as BALANCE
-from tests.test_api_topup import post as topup
-from tests.test_api_transfer import pair
-from tests.test_api_transfer import post as transfer
-from tests.test_billing_db import add, at, bill
-from tests.test_payg_rating import (  # noqa: F401 - fixtures
-    build,
-    next_day,
-    payg,
-    report,
-    stubs,
-)
-from tests.test_payment_gateway import METHODS, save
 
 
 @pytest.fixture

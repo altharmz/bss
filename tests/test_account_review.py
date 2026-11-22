@@ -9,8 +9,8 @@ import pytest
 
 from app.worker import loop
 from tests import apidata, timeline
-from tests.test_prepaid_orders import shop
-from tests.test_prepaid_renewal_producer import pay, tick
+from tests.builders.prepaid_orders import shop
+from tests.builders.prepaid_renewal_producer import pay, tick
 
 DAY = date(2026, 6, 10)
 

@@ -15,7 +15,7 @@ import pytest
 from tests import apidata
 from tests.apiclient import decimals
 from tests.apidata import ACCOUNT, BILL, CATALOG, ORDER, PAYMENT, PRODUCT, RATE, tax_item
-from tests.test_billing_db import add, at, bill, delete
+from tests.builders.billing_db import add, at, bill, delete
 
 D = Decimal
 PRICE = f"{CATALOG}/productOfferingPrice"

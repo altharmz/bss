@@ -8,7 +8,7 @@ import pytest
 
 from app.api.classification import CategoryPatch, save
 from tests.apiclient import total
-from tests.test_api_catalog import BASE, NIL, make_offering
+from tests.builders.api_catalog import BASE, NIL, make_offering
 from tests.timeline import START, iso
 
 CATEGORY = f"{BASE}/category"

@@ -10,7 +10,7 @@ from app.ordering.states import (
     item_transition,
     order_transition,
 )
-from tests.test_enum_lock import _spec_enum
+from tests.builders.enum_lock import _spec_enum
 
 pytestmark = pytest.mark.smoke
 

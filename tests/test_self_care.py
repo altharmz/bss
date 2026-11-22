@@ -1,7 +1,7 @@
 """Customer self-care sign-in (issue #195): logins, codes, sessions and the scope rule.
 docs/decisions/self-care.md."""
+# ruff: noqa: F811
 
-import re
 from datetime import timedelta
 
 import pytest
@@ -11,76 +11,25 @@ from app.config import settings
 from app.integrations.notify import adapter as sender
 from app.main import app
 from tests import apidata
-from tests.apiclient import TmfClient
-
-BASE = "/self-care/v1"
-PASSWORD = "a-long-customer-password"
-EMAIL = "ada@example.org"
-
-
-class CareClient(TmfClient):
-    """A customer's browser: no operator cookie, no re-sign-in on a 401; every response is
-    still checked against the self-care contract."""
-
-    def request(self, method, url, **kwargs):
-        response = self.client.request(method, url, **kwargs)
-        self._check(method, url.split("?")[0], response)
-        return response
-
-
-@pytest.fixture(autouse=True)
-def enabled(monkeypatch):
-    monkeypatch.setattr(settings, "self_care_enabled", True)
-
-
-@pytest.fixture(autouse=True)
-def log_sender():
-    sender().reset()
-    yield sender()
-    sender().reset()
-
-
-@pytest.fixture
-def care(api):
-    with TestClient(app, headers={"X-Bss-Request": "1"}, raise_server_exceptions=False) as raw:
-        yield CareClient(raw)
-
-
-def new_care(api):
-    return CareClient(
-        TestClient(app, headers={"X-Bss-Request": "1"}, raise_server_exceptions=False)
-    )
-
-
-def login_url(customer_id):
-    return f"/internal/v1/customer/{customer_id}/careLogin"
-
-
-def last_code(kind):
-    """The code in the last email of the kind ('sign-in' or a link code)."""
-    body = sender().sent[-1].body
-    if kind == "sign-in":
-        return re.search(r"code is (\d{6})\.", body).group(1)
-    return re.search(r": ([A-Za-z0-9_-]{20,})", body).group(1)
-
-
-def invite(api, email=EMAIL, customer=None):
-    customer = customer or apidata.customer(api)
-    response = api.post(login_url(customer["id"]), {"email": email})
-    assert response.status_code == 201, response.text
-    return customer, response.json(), last_code("link")
+from tests.builders.self_care import (  # noqa: F401 - fixtures
+    BASE,
+    EMAIL,
+    PASSWORD,
+    care,
+    enabled,
+    invite,
+    last_code,
+    log_sender,
+    login_url,
+    new_care,
+    sign_in,
+)
 
 
 def active_customer(api, care, email=EMAIL):
     customer, _, code = invite(api, email)
     assert care.post(BASE + "/password", {"code": code, "newPassword": PASSWORD}).status_code == 204
     return customer
-
-
-def sign_in(care, email=EMAIL, password=PASSWORD):
-    first = care.post(BASE + "/session", {"email": email, "password": password})
-    assert first.status_code == 202, first.text
-    return care.post(BASE + "/session/verify", {"email": email, "code": last_code("sign-in")})
 
 
 def audit(db_conn, action):

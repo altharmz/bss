@@ -14,15 +14,15 @@ from app.network.usage import Incoming, ingest, ingest_batch
 from app.notify import events
 from tests import timeline
 from tests.apidata import CATALOG
-from tests.test_network_provisioning import (  # noqa: F401 - fixtures
+from tests.builders.network_provisioning import (  # noqa: F401 - fixtures
     make_line,
     state,
     stub,
     world,
 )
-from tests.test_prepaid_renewal_producer import tick
-from tests.test_prepaid_terminations import terminate
-from tests.test_usage import line_on, summary
+from tests.builders.prepaid_renewal_producer import tick
+from tests.builders.prepaid_terminations import terminate
+from tests.builders.usage import line_on, summary
 
 pytestmark = pytest.mark.capability("worker.dataPool")
 

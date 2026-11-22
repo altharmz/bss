@@ -12,11 +12,11 @@ from app.repository import billing
 from app.worker import db as worker_db
 from app.worker.process import DateRun
 from app.worker.runs import start_run
+from tests.builders.worker_process import DEC1, at, outcome, scenario
+from tests.builders.worker_run_cost import DEC4
 from tests.querycount import counting
-from tests.test_worker_process import DEC1, at, outcome, scenario
 from tests.timeline import TZ
 
-DEC4 = date(2026, 12, 4)
 # a plain statement, or a sql.Composed one (select_by_id), as tests/querycount records it
 ACCOUNT_LOCK = re.compile(
     r"FROM (billing_account|.*Identifier\('billing_account'\)).*WHERE id = .*FOR UPDATE", re.S

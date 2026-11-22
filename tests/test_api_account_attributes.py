@@ -14,32 +14,14 @@ from app.config import settings
 from tests import apidata
 from tests.apiclient import total
 from tests.apidata import ACCOUNT, NIL, ORDER
-from tests.test_api_financial_account import FINANCIAL, financial, link, owner
-from tests.test_events import stored, subscribe
+from tests.builders.api_account_attributes import CONTACT
+from tests.builders.api_financial_account import FINANCIAL, financial, link, owner
+from tests.builders.events import stored, subscribe
 
 BASE = "/tmf-api/accountManagement/v5"
 CYCLE = f"{BASE}/billingCycleSpecification"
 JSON_PATCH = "application/json-patch+json"
 
-CONTACT = [
-    {
-        "@type": "Contact",
-        "contactName": "Anna Cristal",
-        "contactType": "primary",
-        "partyRoleType": "Publisher",
-        "validFor": {"startDateTime": "2018-06-11T03:00:00+03:00"},
-        "contactMedium": [
-            {
-                "@type": "GeographicAddressContactMedium",
-                "contactType": "postal",
-                "city": "Paris",
-                "country": "France",
-                "postCode": "75014",
-                "street1": "15 Rue des Canards",
-            }
-        ],
-    }
-]
 TAX_EXEMPTION = [
     {
         "@type": "TaxExemptionCertificate",

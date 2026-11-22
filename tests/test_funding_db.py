@@ -1,43 +1,15 @@
 """Shared funding reconciles actual legacy ledger/source history without writes."""
 
 from datetime import date
-from decimal import Decimal
 
 import pytest
 
 from app.billing.funding import InsufficientFunds
 from app.billing.model import InconsistentState
-from app.repository import billing, funding
+from app.repository import funding
+from tests.builders.funding_db import D, billed_charge
+from tests.builders.settlement_db import allocate, make_bill, make_payment, settle_account
 from tests.factories import NOW, account, charge, days, world
-from tests.test_settlement_db import allocate, make_bill, make_payment, settle_account
-
-D = Decimal
-
-
-def billed_charge(conn, w, start, amount, state="sent"):
-    bill = make_bill(conn, w, start, amount, state=state)
-    if D(amount) < 0:
-        original = conn.execute(
-            "SELECT id, period FROM applied_customer_billing_rate"
-            " WHERE product_id = %s AND charge_type = 'recurring' ORDER BY period LIMIT 1",
-            (w.product["id"],),
-        ).fetchone()
-        abr = billing.insert_abr(
-            conn,
-            product_id=w.product["id"],
-            billing_account_id=w.account["id"],
-            charge_type="refund",
-            amount=D(amount),
-            currency="USD",
-            period=original[1],
-            billing_run_id=w.run["id"],
-            applied_at=NOW,
-            refunds_rate_id=original[0],
-        )
-    else:
-        abr = charge(conn, w, bill["bill_period"], amount)
-    billing.attach_abrs_to_bill(conn, bill["id"], w.account["id"], [abr["id"]])
-    return bill
 
 
 def test_empty_and_other_account_funds(db_conn):
@@ -177,7 +149,9 @@ def test_plan_keeps_reconciliation_failure_technical(db_conn):
 
 def test_spendable_many_equals_each_accounts_loaded_spendable(db_conn):
     # #340: one statement for many accounts, the same figure as the locked snapshot
-    from tests.test_prepaid_posting import prepared
+    from tests.builders.prepaid_posting import (
+        prepared,
+    )
 
     settled = world(db_conn)
     billed_charge(db_conn, settled, date(2026, 1, 1), "40")

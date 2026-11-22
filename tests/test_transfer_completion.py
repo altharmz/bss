@@ -22,12 +22,12 @@ from app.repository import funding
 from app.repository import prepaid_commands as commands
 from app.worker import db as worker_db
 from app.worker import prepaid
-from tests.test_api_topup import remaining
-from tests.test_api_transfer import TRANSFER, pair, post, reserved
-from tests.test_events import subscribe, types
-from tests.test_prepaid_posting import TZ
-from tests.test_prepaid_renewal_producer import tick
-from tests.test_settlement_db import make_payment
+from tests.builders.api_topup import remaining
+from tests.builders.api_transfer import TRANSFER, pair, post, reserved
+from tests.builders.events import subscribe, types
+from tests.builders.prepaid_posting import TZ
+from tests.builders.prepaid_renewal_producer import tick
+from tests.builders.settlement_db import make_payment
 
 BILL = "/tmf-api/customerBillManagement/v5"
 

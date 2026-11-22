@@ -7,22 +7,11 @@ import pytest
 
 from app.config import settings
 from tests.apiclient import total
+from tests.builders.api_resource_inventory import URL, number
+from tests.builders.events import stored, subscribe
+from tests.builders.number_persistence import assignment
 from tests.factories import world
-from tests.test_events import stored, subscribe
-from tests.test_number_persistence import assignment
 from tests.timeline import TODAY, midnight
-
-BASE = "/tmf-api/resourceInventory/v5"
-URL = BASE + "/resource"
-
-
-def number(api, value="12025550123", **extra):
-    response = api.post(
-        URL, {"@type": "LogicalResource", "name": "Number", "value": value, **extra}
-    )
-    assert response.status_code == 201, response.text
-    assert response.headers["location"] == response.json()["href"]
-    return response.json()
 
 
 def test_number_crud_and_immutable_identity(api):

@@ -12,9 +12,18 @@ import pytest
 
 from app.worker.process import bill_date
 from tests import apidata
-from tests.test_api_order_cancel import CANCEL, cancel_body, order_of, rates, refused, run, worker
-from tests.test_billing_db import add, at, delete
-from tests.test_events import subscribe, types
+from tests.builders.api_order_cancel import (
+    CANCEL,
+    cancel_body,
+    order_of,
+    rates,
+    refused,
+    run,
+    worker,
+)
+from tests.builders.api_order_modify import errors_of, modify, modify_item
+from tests.builders.billing_db import add, at, delete
+from tests.builders.events import subscribe, types
 from tests.timeline import TZ, iso, midnight, z
 
 __all__ = ["worker"]  # the fixture, imported for these tests
@@ -35,27 +44,6 @@ def shop(api):
     a = apidata.sellable_offering(api, value=300, name="Fiber 100")
     b = apidata.sellable_offering(api, value=600, name="Fiber 500")
     return a, b, apidata.account(api)
-
-
-def modify_item(product: dict, offering: dict, item_id: str = "1", **over) -> dict:
-    return {
-        "@type": "ProductOrderItem",
-        "id": item_id,
-        "action": "modify",
-        "product": {"id": product["id"], "@type": "ProductRef"},
-        "productOffering": {"id": offering["id"], "@type": "ProductOfferingRef"},
-        **over,
-    }
-
-
-def modify(api, acc, product, offering, day: date | None, *, on) -> dict:
-    api.clock.set(on)
-    over = {} if day is None else {"requestedStartDate": iso(midnight(day))}
-    return apidata.order(api, acc, modify_item(product, offering), **over)
-
-
-def errors_of(order: dict) -> list[str]:
-    return [e["code"] for e in order.get("productOrderErrorMessage", [])]
 
 
 def started(api, shop) -> dict:

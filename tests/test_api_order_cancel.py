@@ -5,6 +5,7 @@ it takes effect: new products that have not started are cancelled, terminations 
 have not happened are taken back - unless billing already charged the period involved.
 Anything else is a 409 and nothing is stored. Only a rejected order can be deleted.
 """
+# ruff: noqa: F811
 
 from datetime import date
 from decimal import Decimal
@@ -15,16 +16,22 @@ import pytest
 
 from app.billing.adapter import bill_account
 from app.repository import billing
-from app.worker import db as worker_db
-from app.worker.process import bill_date
 from app.worker.runs import start_run
 from tests import apidata, timeline
-from tests.test_api_catalog_delete import _finish, _waits
-from tests.test_billing_db import add, at, delete
+from tests.builders.api_catalog_delete import _finish, _waits
+from tests.builders.api_order_cancel import (  # noqa: F401 - fixtures
+    BASE,
+    CANCEL,
+    cancel_body,
+    order_of,
+    rates,
+    refused,
+    run,
+    worker,
+)
+from tests.builders.billing_db import add, at, delete
 from tests.timeline import TZ, iso, midnight
 
-BASE = "/tmf-api/productOrderingManagement/v5"
-CANCEL = f"{BASE}/cancelProductOrder"
 OCT2, OCT20, NOV1, NOV5 = (
     date(2026, 10, 2),
     date(2026, 10, 20),
@@ -35,50 +42,8 @@ DEC1 = date(2026, 12, 1)
 
 
 @pytest.fixture
-def worker(migrated_db_url):
-    conn = worker_db.connect(migrated_db_url)
-    try:
-        yield conn
-    finally:
-        conn.close()
-
-
-@pytest.fixture
 def shop(api):
     return apidata.sellable_offering(api, value=300), apidata.account(api)
-
-
-def run(worker, api, day: date) -> None:
-    api.clock.set(at(day, 0))
-    bill_date(worker, day, clock=api.clock, tz=TZ, trigger="scheduled")
-
-
-def cancel_body(order: dict, **over) -> dict:
-    return {"@type": "CancelProductOrder", "productOrder": {"id": order["id"]}, **over}
-
-
-def order_of(api, product: dict, role: str) -> dict:
-    (related,) = [r for r in product["productOrderItem"] if r["role"] == role]
-    return api.get(related["orderHref"]).json()
-
-
-def refused(api, order: dict, *expected: str, stored: int = 0) -> None:
-    """A 409 naming `expected`; the order unchanged and no (further) cancellation stored."""
-    before = api.get(order["href"]).json()
-    response = api.post(CANCEL, cancel_body(order))
-    assert response.status_code == 409, response.text
-    for text in expected:
-        assert text in response.json()["message"], response.json()["message"]
-    assert api.get(order["href"]).json() == before
-    assert len(api.get(f"{CANCEL}?productOrder.id={order['id']}").json()) == stored
-
-
-def rates(api, product: dict) -> list[tuple[str, Decimal]]:
-    listed = api.get(f"{apidata.RATE}?product.id={product['id']}").json()
-    return [
-        (r["periodCoverage"]["startDateTime"], Decimal(str(r["taxExcludedAmount"]["value"])))
-        for r in listed
-    ]
 
 
 def test_cancelling_an_order_for_a_future_product(api, shop, worker):

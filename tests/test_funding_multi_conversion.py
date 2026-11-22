@@ -11,10 +11,10 @@ from psycopg import errors, sql
 
 from alembic import command
 from app.repository import funding
+from tests.builders.funding_conversion import prepared as single_prepared
+from tests.builders.funding_db import billed_charge
+from tests.builders.settlement_db import allocate, make_bill, make_payment
 from tests.factories import NOW, World, account, offering, product, rejected, world
-from tests.test_funding_conversion import prepared as single_prepared
-from tests.test_funding_db import billed_charge
-from tests.test_settlement_db import allocate, make_bill, make_payment
 
 
 def prepared(conn, *, zero=False, existing_run=None):

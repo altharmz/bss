@@ -17,41 +17,28 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
-import anyio
 import pytest
 import yaml
 
 import app.api
 import app.internal
 from app.api.hub import HUB_APIS
-from app.main import app as bss_app
 from app.repository import network_commands, payment_commands, payment_methods
 from app.repository import notifications as notification_repo
 from app.repository import prepaid_commands as commands
 from app.repository import usage as usage_repo
 from bss_mcp import tools
 from bss_mcp.operations import AUTH_OPERATIONS, EXCLUDED, OPERATIONS, Op
-from bss_mcp.tools import DriftError, generate
+from bss_mcp.tools import DriftError
 from tests import apidata, docs_collect, factories
 from tests.apidata import CATALOG
-from tests.test_api_bill_settlement import account_with_bills, bills, pay
-from tests.test_billing_db import at, run_row
+from tests.builders.api_bill_settlement import account_with_bills, bills, pay
+from tests.builders.billing_db import at, run_row
+from tests.builders.mcp_tools import api_operations, generated
 from tests.timeline import iso, midnight
 
 BALANCE = "/tmf-api/prepayBalanceManagement/v4"
 SCOPE = Path("docs/progress/scope.yaml")
-
-
-def generated() -> dict[str, tools.Tool]:
-    return anyio.run(generate, bss_app)
-
-
-def api_operations() -> dict[str, tuple[str, str]]:
-    return {
-        op["operationId"]: (method.upper(), path)
-        for path, ops in bss_app.openapi()["paths"].items()
-        for method, op in ops.items()
-    }
 
 
 def scope_exclusions() -> set[tuple[str, str]]:

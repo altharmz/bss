@@ -15,10 +15,11 @@ from app.network.usage import Incoming, ingest, ingest_batch
 from app.notify import events
 from tests import apidata, timeline
 from tests.apidata import CATALOG
-from tests.test_network_provisioning import PROFILE, characteristics
-from tests.test_payg_rating import RATES, usage_price
-from tests.test_prepaid_plans import (  # noqa: F401 - fixtures and helpers
+from tests.builders.network_provisioning import PROFILE, characteristics
+from tests.builders.payg_rating import usage_price
+from tests.builders.prepaid_plans import (  # noqa: F401 - fixtures
     ADDON_PROFILE,
+    RATES,
     add_on_item,
     at,
     build,
@@ -29,7 +30,7 @@ from tests.test_prepaid_plans import (  # noqa: F401 - fixtures and helpers
     price,
     stubs,
 )
-from tests.test_prepaid_renewal_producer import tick
+from tests.builders.prepaid_renewal_producer import tick
 
 pytestmark = pytest.mark.capability("worker.roamingPasses")
 
