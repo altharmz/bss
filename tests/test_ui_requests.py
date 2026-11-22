@@ -1746,6 +1746,107 @@ def test_multi_line_tier_and_data_pool_as_the_ui_sends_them(api):
     assert [c["name"] for c in pooled.json()["productSpecCharacteristic"]] == ["dataPool"]
 
 
+def _add_on_kind():
+    """withKind(..., 'addOn') in api/bss.ts."""
+    return {
+        "@type": "CharacteristicSpecification",
+        "name": "offeringKind",
+        "valueType": "string",
+        "characteristicValueSpecification": [
+            {
+                "@type": "StringCharacteristicValueSpecification",
+                "valueType": "string",
+                "isDefault": True,
+                "value": "addOn",
+            }
+        ],
+    }
+
+
+def test_roaming_passes_as_the_ui_sends_them(api):
+    """Issue 383. Catalog.specifications.test.tsx: the roaming and international profile
+    documents; Catalog.offering.test.tsx: passDays as withPassDays() sends it, after the
+    kind; Catalog.test.tsx: a roaming usage price with prodSpecCharValueUse usageZone
+    (docs/decisions/prepaid.md, usage.md)."""
+    offering = create_offering(api)
+    spec_url = offering["productSpecification"]["href"]
+    profile = [
+        _profile_document("roaming", [1, 0]),
+        _profile_document("roamingDataMb", [1000]),
+        _profile_document("roamingMinutes", [60]),
+        _profile_document("roamingSmsCount", [50]),
+        _profile_document("internationalMinutes", [100, 0]),
+    ]
+    saved = api.patch(spec_url, {"productSpecCharacteristic": profile})
+    assert saved.status_code == 200, saved.text
+    assert [c["name"] for c in saved.json()["productSpecCharacteristic"]] == [
+        "roaming",
+        "roamingDataMb",
+        "roamingMinutes",
+        "roamingSmsCount",
+        "internationalMinutes",
+    ]
+
+    add_on = api.post(
+        f"{CATALOG}/productOffering",
+        {
+            "@type": "ProductOffering",
+            "name": "Roam 7 days",
+            "lifecycleStatus": "Active",
+            "productOfferingCharacteristic": [_add_on_kind()],
+        },
+    )
+    assert add_on.status_code == 201, add_on.text
+    days = {
+        "@type": "CharacteristicSpecification",
+        "name": "passDays",
+        "valueType": "integer",
+        "characteristicValueSpecification": [
+            {
+                "@type": "IntegerCharacteristicValueSpecification",
+                "valueType": "integer",
+                "isDefault": True,
+                "value": 7,
+            }
+        ],
+    }
+    url = add_on.json()["href"]
+    passed = api.patch(url, {"productOfferingCharacteristic": [_add_on_kind(), days]})
+    assert passed.status_code == 200, passed.text
+    stored = {c["name"]: c for c in api.get(url).json()["productOfferingCharacteristic"]}
+    assert stored["passDays"]["characteristicValueSpecification"][0]["value"] == 7
+    # the dialog's guard: 1 to 30 days
+    too_long = dict(
+        days,
+        characteristicValueSpecification=[
+            dict(days["characteristicValueSpecification"][0], value=31)
+        ],
+    )
+    refused = api.patch(url, {"productOfferingCharacteristic": [_add_on_kind(), too_long]})
+    assert refused.status_code in (400, 422), refused.text
+
+    roaming = api.post_raw(
+        f"{CATALOG}/productOfferingPrice",
+        '{"@type":"ProductOfferingPrice","name":"Metered roaming voice usage",'
+        '"lifecycleStatus":"Active","priceType":"usage",'
+        '"unitOfMeasure":{"amount":1,"units":"minute"},'
+        '"prodSpecCharValueUse":[{"@type":"ProductSpecCharacteristicValueUse",'
+        '"name":"usageZone","valueType":"string","productSpecCharacteristicValue":'
+        '[{"@type":"StringCharacteristicValueSpecification","valueType":"string",'
+        '"value":"roaming"}]}],'
+        '"price":{"unit":"USD","value":1.20},'
+        '"validFor":{"startDateTime":"2026-10-02T00:00:00+03:00"}}',
+    )
+    assert roaming.status_code == 201, roaming.text
+    price = decimals(api.get(roaming.json()["href"]))
+    assert price["price"] == {"unit": "USD", "value": Decimal("1.20")}
+    (use,) = price["prodSpecCharValueUse"]
+    assert use["name"] == "usageZone"
+    assert use["productSpecCharacteristicValue"][0]["value"] == "roaming"
+    listed = api.get(f"{CATALOG}/productOfferingPrice?priceType=usage&offset=0&limit=100")
+    assert roaming.json()["id"] in [p["id"] for p in listed.json()]
+
+
 def test_network_command_reads_and_retry_as_the_ui_makes_them(api, db_conn):
     """NetworkCommands (api/network.ts): the list per order and per product with the
     query it sends, and Retry as a POST without a body (409 unless exhausted)."""

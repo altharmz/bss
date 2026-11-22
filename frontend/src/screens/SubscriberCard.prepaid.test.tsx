@@ -280,6 +280,72 @@ describe('usage tab', () => {
     expect(expectUi('ui.subscriber.usage.previous').hasAttribute('disabled')).toBe(false);
   });
 
+  it('shows roaming and international sections with their own bars (#383)', async () => {
+    const zoned = summary({
+      throttled: false,
+      allowances: [
+        ...summary().allowances,
+        {
+          kind: 'data',
+          zone: 'roaming',
+          unit: 'bytes',
+          used: 850 * MIB,
+          included: 1000 * MIB,
+          remaining: 150 * MIB,
+          percent: 85,
+          thresholds: [80],
+        },
+        {
+          kind: 'voice',
+          zone: 'international',
+          unit: 'seconds',
+          used: 30 * 60,
+          included: 100 * 60,
+          remaining: 70 * 60,
+          percent: 30,
+          thresholds: [],
+        },
+      ],
+    });
+    const international = record('u1', {
+      usageType: 'voice',
+      usageCharacteristic: [
+        { name: 'quantity', value: 120 },
+        { name: 'unit', value: 'seconds' },
+        { name: 'eventTime', value: '2026-10-01T06:00:00Z' },
+        { name: 'roaming', value: false },
+        { name: 'international', value: true },
+        { name: 'throttled', value: false },
+      ],
+    });
+    lazy({ [SUMMARY]: () => json(zoned), [RECORDS]: () => json([international], { total: 1 }) });
+    await open('#usage');
+    await waitFor(() => expectUi('ui.subscriber.usage.zone'));
+    const sections = document.querySelectorAll('[data-ui="ui.subscriber.usage.zone"]');
+    expect([...sections].map((z) => z.querySelector('h4')?.textContent)).toEqual([
+      'Roaming',
+      'International',
+    ]);
+    const [roaming, world] = [...sections] as HTMLElement[];
+    expect(roaming?.textContent).toContain('850.0 MB of 1000.0 MB');
+    expect(roaming?.textContent).toContain('80% reached');
+    expect(world?.textContent).toContain('30 min 0 s of 100 min');
+    // the domestic bars stay above, outside the zone sections
+    const domestic = document.querySelectorAll('[data-ui="ui.subscriber.usage.data"]')[0];
+    expect(domestic?.closest('[data-ui="ui.subscriber.usage.zone"]')).toBeNull();
+    expect(domestic?.textContent).toContain('850.0 MB of 1000.0 MB');
+    expect(
+      await screen.findByText('International', { selector: '.usage-record-flags *' }),
+    ).toBeTruthy();
+  });
+
+  it('shows no zone section when the summary lists only domestic pools (#383)', async () => {
+    lazy({ [SUMMARY]: () => json(summary()), [RECORDS]: () => json([], { total: 0 }) });
+    await open('#usage');
+    await waitFor(() => expectUi('ui.subscriber.usage.data'));
+    expect(document.querySelector('[data-ui="ui.subscriber.usage.zone"]')).toBeNull();
+  });
+
   it('shows the rating status and the applied price only on a rated record', async () => {
     lazy({
       [SUMMARY]: () => json(summary({ throttled: false })),

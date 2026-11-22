@@ -44,6 +44,8 @@ export interface UsageRecord {
   unit: string;
   time: string;
   roaming: boolean;
+  /** a call or SMS to a non-US number (issue 200) */
+  international: boolean;
   throttled: boolean;
   status: string;
   appliedPrice: { name: string; unit: string; cents: number; currency: string } | null;
@@ -88,6 +90,7 @@ export function toRecord(body: UsageBody): UsageRecord {
     unit: String(pick(body, 'unit') ?? ''),
     time,
     roaming: pick(body, 'roaming') === true,
+    international: pick(body, 'international') === true,
     throttled: pick(body, 'throttled') === true,
     status: body.status ?? '',
     appliedPrice: appliedPrice(body),

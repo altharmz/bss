@@ -30,6 +30,7 @@ from app.internal.context import no_query
 from app.network import e911, profile
 from app.network import kind as offering_kind
 from app.ordering.cancel import undoable_status_change
+from app.ordering.prepaid import add_on_end
 from app.repository import billing, catalog, funding, parties, products
 from app.repository import lifecycle as lifecycle_repo
 from app.repository import payment_methods as payment_methods
@@ -123,16 +124,50 @@ def first_charge(account_id: str, request: Request, tx: Tx, clock: ClockDep) -> 
     orders completed before 00:00 of D - and lands on the first bill on or after that run
     date. balanceAfter is today's balance minus this one charge, nothing else.
     """
-    params = _params(request, "productOffering.id", "startDate", optional=("product.id",))
+    params = _params(
+        request, "productOffering.id", "startDate", optional=("product.id", "parentProduct.id")
+    )
     offering_id = _uuid_param("productOffering.id", params["productOffering.id"])
     changed = _uuid_param("product.id", params["product.id"]) if "product.id" in params else None
+    parent = (
+        _uuid_param("parentProduct.id", params["parentProduct.id"])
+        if "parentProduct.id" in params
+        else None
+    )
     start = _date_param("startDate", params["startDate"])
     with tx() as conn:
         row = _account(conn, account_id)
         offering = catalog.get_product_offering(conn, offering_id)
         if offering is None:
             raise unprocessable(f"productOffering {offering_id} does not exist")
-        return TmfJSONResponse(quote(conn, row, offering, start, clock.today(), changed))
+        body = quote(conn, row, offering, start, clock.today(), changed)
+        if parent is not None:
+            body["addOn"] = _add_on_quote(conn, row, offering, parent, start)
+        return TmfJSONResponse(body)
+
+
+def _add_on_quote(
+    conn: psycopg.Connection, row: Row, offering: Row, parent_id: UUID, start: date
+) -> dict[str, Any]:
+    """How long an add-on bought for the plan `parent_id` on `start` lasts, as the order will
+    set it (issue 383): its pass length (null: the rest of the plan's period) and its end."""
+    if offering_kind.kind_of(offering["details"]) != offering_kind.ADD_ON:
+        raise unprocessable("parentProduct.id is only for an add-on offering")
+    parent = products.get_product(conn, parent_id)
+    if parent is None or parent["billing_account_id"] != row["id"]:
+        raise unprocessable(f"product {parent_id} does not belong to this billing account")
+    grant = entitlement.latest_grant(conn, parent_id)
+    if (
+        parent["grantless"]
+        or grant is None
+        or not grant["period"].lower <= start < grant["period"].upper
+    ):
+        raise unprocessable(f"product {parent_id} is not a plan with a paid period on {start}")
+    return {
+        "parentProduct": {"id": str(parent_id), "href": product_href(parent_id)},
+        "passDays": offering_kind.pass_days(offering["details"]),
+        "endDate": add_on_end(conn, parent_id, offering["details"], start),
+    }
 
 
 def quote(
@@ -592,6 +627,8 @@ def open_products(account_id: str, request: Request, tx: Tx, clock: ClockDep) ->
                             "id": str(p["parent_product_id"]),
                             "href": product_href(p["parent_product_id"]),
                         },
+                        # an add-on pass's length in days, null otherwise (issue 383)
+                        "passDays": offering_kind.pass_days(p["offering_details"]),
                         "fundingSource": "balanceThenCard" if card else "balance",
                         "renewalHistory": history.get(p["id"], []),
                         "lifecycle": lifecycles[p["id"]],

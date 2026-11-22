@@ -523,6 +523,38 @@ Issue #380, the UI of multi-line discounts (#196) and pooled data (#379). Decisi
   pinned in `Catalog.test.tsx` and `Catalog.specifications.test.tsx` and replayed by
   `tests/test_ui_requests.py::test_multi_line_tier_and_data_pool_as_the_ui_sends_them`.
 
+### Roaming and international passes (`ui.catalog.passDays`, `ui.catalog.usageZone`, `ui.subscriber.buyAddOn.passEnd`, `ui.subscriber.usage.zone`, `ui.subscriber.passes`) - `screens/Catalog.tsx`, `screens/OfferingEdit.tsx`, `screens/PrepaidPlans.tsx`, `screens/UsageTab.tsx`
+
+Issue #383, the UI of roaming and international passes (#200). Decision:
+[frontend.md](decisions/frontend.md#roaming-and-international-passes-ui-2026-11-22-issue-383).
+
+- **Specification:** the network profile section has five more rows: **Roaming** (0 or 1),
+  **Roaming data (MB)**, **Roaming minutes**, **Roaming SMS count** and **International
+  minutes**, written like the other profile documents.
+- **Offering:** the edit dialog of an add-on has **Pass length (days)** (`ui.catalog.passDays`),
+  a whole number from 1 to 30 checked before sending, or empty for an add-on that lasts the
+  plan's period. It is the `passDays` productOfferingCharacteristic, sent after the kind in the
+  same PATCH; changing the kind away from add-on drops it. The detail shows "Add-on · 7-day pass".
+- **Usage prices:** Add price on a usage price has **Zone** (`ui.catalog.usageZone`): Domestic
+  (the default, sent as nothing), Roaming or International, sent as TMF620
+  `prodSpecCharValueUse` `usageZone`; the overlap check runs per kind, zone and currency. The
+  usage price list and the price dialog show the zone, which never changes afterwards.
+- **Buy add-on:** the quote is asked with `parentProduct.id` = the plan, and shows **Pass
+  length** "7-day · ends 2026-10-08" or **Lasts** "the plan period · ends …"
+  (`ui.subscriber.buyAddOn.passEnd`), from the quote's `addOn`. The end is exclusive, like
+  every product end on the card.
+- **Product rows:** a pass add-on's facts read "Add-on · 7-day pass · plan PRD-… · ends …"; a
+  plan row lists its **Live passes** with their end dates (`ui.subscriber.passes`), from the
+  products' `passDays`.
+- **Usage tab:** the domestic bars stay at the top; a **Roaming** and an **International**
+  section (`ui.subscriber.usage.zone`) follow, each with its own bars, only when the summary
+  lists that zone (the server lists it when it has an allowance or usage). A record to a
+  non-US number carries an **International** flag.
+- No new MCP tool: catalog writes, add-on orders and the usage summary already have one. Bodies
+  are pinned in `Catalog.test.tsx`, `Catalog.offering.test.tsx` and
+  `Catalog.specifications.test.tsx` and replayed by
+  `tests/test_ui_requests.py::test_roaming_passes_as_the_ui_sends_them`.
+
 ### Products (`ui.products`, `ui.products.status`, `ui.products.accountChip`, `ui.products.detail`, `ui.products.orderItems`, `ui.products.resource`) - `screens/Products.tsx`
 
 Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.

@@ -7,7 +7,10 @@ import {
   NETWORK_PROFILE,
   endPrice,
   KIND_LABEL,
+  MAX_PASS_DAYS,
   OFFERING_KINDS,
+  validPassDays,
+  ZONE_LABEL,
   loadCategories,
   loadPriceDetail,
   offeringChanges,
@@ -64,6 +67,8 @@ export function OfferingEditModal({
     error = 'Code may use A-Z, 0-9, "-" and "_" (up to 32 characters)';
   else if (form.validFrom && form.validTo && form.validTo < form.validFrom)
     error = 'End date is before start date';
+  else if (form.kind === 'addOn' && !validPassDays(form.passDays))
+    error = `Pass length must be a whole number of days from 1 to ${MAX_PASS_DAYS}`;
   const ready = error === null && changes !== null;
 
   async function save() {
@@ -183,6 +188,22 @@ export function OfferingEditModal({
             uses its one-time price.
           </span>
         </label>
+        {form.kind === 'addOn' && (
+          <label>
+            Pass length (days)
+            <TextInput
+              data-ui="ui.catalog.passDays"
+              inputMode="numeric"
+              mono
+              value={form.passDays}
+              onChange={(e) => set('passDays', e.target.value)}
+            />
+            <span className="bss-secondary">
+              A pass ends this many days after its purchase, or with its plan&apos;s paid period if
+              that comes first. Empty: the add-on lasts the rest of the plan&apos;s period.
+            </span>
+          </label>
+        )}
         {Object.keys(declared).length > 0 && (
           <section className="bss-form" data-ui="ui.catalog.offeringNetworkProfile">
             <h3>Network profile</h3>
@@ -427,6 +448,8 @@ function PriceBody({
               <dd className="num" data-ui="ui.catalog.usageUnit">
                 {price.unitOfMeasure?.amount ?? 1} {price.unitOfMeasure?.units ?? ''}
               </dd>
+              <dt>Zone</dt>
+              <dd data-ui="ui.catalog.usageZone">{ZONE_LABEL[price.zone]}</dd>
             </>
           )}
           <dt>Validity</dt>
