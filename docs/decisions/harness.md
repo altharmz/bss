@@ -602,6 +602,8 @@ subpackages too.
   fixture it needs (with `# noqa: F401`, and `# ruff: noqa: F811` at the top where a test
   parameter shadows the import).
 - Collected tests before and after: 3,037 in 185 files.
+- The domain subpackages, the prepaid docstrings and one helper for the performance guards
+  are #440 (one PR closes one issue, so #423 was split).
 
 ## Test speed (2026-11-11, #319)
 
