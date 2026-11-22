@@ -112,6 +112,7 @@ def test_account_mode_cannot_change_after_history(db_conn, history):
         db_conn.execute("UPDATE billing_account SET rating_type = 'prepaid'")
 
 
+@pytest.mark.migration_history
 def test_migration_preserves_populated_finances_and_refund_immutability(temp_db_url):
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "0033")
@@ -166,6 +167,7 @@ def test_migration_preserves_populated_finances_and_refund_immutability(temp_db_
     command.upgrade(cfg, "0034")
 
 
+@pytest.mark.migration_history
 def test_downgrade_refuses_prepaid_mode_and_retained_bucket(temp_db_url):
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "0034")

@@ -62,7 +62,8 @@ does not know and lists the ones it accepts.
    needed only when `push`, `create-pr` or `check-pr` asks for it (both sides change a path).
 3. **Commit** with `make commit`. It stages only the listed files and runs the normal
    pre-commit hook, which is the one local verification run (see Hooks and checks). Run
-   `make test` (the full suite) before a PR touching billing, migrations or the API. A pass
+   `make test` (the full suite but the `migration_history` and `slow` tests; `make test-all`
+   runs everything) before a PR touching billing, migrations or the API. A pass
    on a clean tree is recorded, and `check-pr` reports it as `full_suite`: a resumed session
    reads it there instead of running the suite again.
 4. **PR.** `make create-pr` publishes the branch and opens (or reuses) the PR with

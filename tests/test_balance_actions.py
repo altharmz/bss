@@ -518,6 +518,7 @@ def test_hold_on_new_source_kinds_converts_to_exact_allocations(db_conn):
     assert (snapshot.ledger, snapshot.reserved, snapshot.spendable) == (D(1), D(0), D(1))
 
 
+@pytest.mark.migration_history
 def test_migration_keeps_holds_and_refuses_losing_actions(temp_db_url):
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "0044")

@@ -212,6 +212,7 @@ def test_conversion_does_not_adopt_existing_allocations(db_conn):
     ).fetchone() == (None,)
 
 
+@pytest.mark.migration_history
 def test_conversion_migration_preserves_holds_and_retains_results(temp_db_url):
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "0036")

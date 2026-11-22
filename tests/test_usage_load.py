@@ -58,6 +58,7 @@ def test_the_daily_shape_peaks_at_20_and_bottoms_at_04_with_the_average_kept():
     assert split == pytest.approx(day, rel=1e-9)
 
 
+@pytest.mark.slow
 def test_records_follow_the_rate_and_name_assigned_numbers():
     clock = FixedClock(local(19, 30))
     gen = load(clock, numbers=("13025550100", "13025550101"))
@@ -81,6 +82,7 @@ def test_records_follow_the_rate_and_name_assigned_numbers():
     assert night  # the hours in between were made too, ending at 04:00
 
 
+@pytest.mark.slow
 def test_a_pinned_hour_keeps_that_hours_rate_at_any_time_of_day():
     # the peak hour's 70/s at 04:00, the night's 8/s at 20:00
     assert expected(23, local(4), local(4, 1), MSK, hour=20) == pytest.approx(70 * 60, abs=30)

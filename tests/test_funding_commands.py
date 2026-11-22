@@ -120,6 +120,7 @@ def test_command_duplicates_serialize_before_account_lock(db_conn, migrated_db_u
         assert funding.load(other, acc["id"]).spendable == D("5")
 
 
+@pytest.mark.migration_history
 def test_command_ownership_migration_round_trip_and_retention(temp_db_url):
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "0035")

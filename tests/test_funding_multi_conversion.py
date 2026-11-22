@@ -182,6 +182,7 @@ def test_database_refuses_inexact_batch_conversion(db_conn, mismatch):
         db_conn.execute("SET CONSTRAINTS ALL IMMEDIATE")
 
 
+@pytest.mark.migration_history
 def test_batch_migration_preserves_legacy_results_and_refuses_loss(temp_db_url):
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "0040")

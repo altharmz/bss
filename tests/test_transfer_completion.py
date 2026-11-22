@@ -377,6 +377,7 @@ def test_the_database_scopes_the_checks_by_charge_type(api, db_conn):
     insert(balance_action_id=free)  # the same row shape is fine for a transfer without a fee
 
 
+@pytest.mark.migration_history
 def test_the_migration_refuses_to_lose_a_fee(temp_db_url):
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "0047")

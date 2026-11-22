@@ -39,7 +39,7 @@ for test speed - not crash-safe; recover with `make clean && make up` ([decision
 | Suite | Command | What it covers |
 |---|---|---|
 | Backend | `make test` (`pytest -n auto`) | every test gets its own database cloned from a template migrated to head and dropped afterwards (`tests/conftest.py`); every API response is validated against `spec/` (`tests/apiclient.py`); hypothesis properties with 50 examples (`dev`) or 200 in `make check` (`ci`, `HYPOTHESIS_PROFILE`) |
-| Migrations | part of `make test` | upgrade on an empty database, downgrade to base and up again, as a NOSUPERUSER database owner like production, data-carrying upgrades of 0002 and 0004, and 0005's comments (`tests/test_migrations.py`, `tests/test_nonsuperuser_migration.py`) |
+| Migrations | part of `make test`; the data tests of deployed migrations (`migration_history`) in `make test-all`, the nightly run and the hook when `alembic/` changes | upgrade on an empty database, downgrade to base and up again, as a NOSUPERUSER database owner like production; data-carrying upgrades of single migrations such as 0002 and 0004, and 0005's comments (`tests/test_migrations.py`, `tests/test_nonsuperuser_migration.py`) |
 | Worker processes | part of `make test` | real `python -m app.worker` processes on a pinned clock, SIGTERM and SIGKILL (`tests/test_worker_signals.py`) |
 | UI unit/component | `make web-test` | vitest, twice (UTC and `America/New_York`) |
 | UI lint | `make web-lint` | tsc, eslint, prettier |

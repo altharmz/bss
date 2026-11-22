@@ -10,6 +10,12 @@ each test ran). testmon cannot see two kinds of change:
   suite, recorded (`make test-recorded`), unless that suite already ran to its end on
   exactly this content of the FULL files (the stamp): then a retry runs what testmon
   selects, which includes every test that failed.
+- MARKED: the tests `make test` and `make test-recorded` leave out (#424): the historical
+  migration replays (`migration_history`) and the slowest tests (`slow`). They run again
+  when a path they depend on changes: in the whole suite (`make test-recorded MARKS=...`)
+  when that is called for, else by themselves (`make test-marked MARKS=...`, recorded for
+  testmon, so `make test-changed` after it does not repeat them). A FULL path the stamp
+  says the whole suite already ran on brings none back: that run had them.
 - DATA: data files only a few tests read. They call for exactly those tests
   (`make test-files`). tests/conftest.py refuses a read of a DATA path by a test file that
   is not listed here, so the map cannot fall behind the tests.
@@ -47,6 +53,19 @@ FULL = re.compile(
     r"^(spec|app/worker|alembic)/"
     r"|^(pyproject\.toml|requirements.*\.txt|constraints.*\.txt|Dockerfile|compose.*\.yaml)$"
 )
+
+# The marks the default suite leaves out (#424), and the paths that bring each back. Every
+# migration_history path is a FULL path too (a case of the hook selection tests keeps it so).
+MARKED = {
+    "migration_history": re.compile(
+        r"^alembic/|^(requirements.*\.txt|constraints.*\.txt|Dockerfile|compose.*\.yaml)$"
+    ),
+    "slow": re.compile(
+        r"^loadtest/"
+        r"|^(tests/seed\.py|tests/tmf_gaps\.py|tests/tmf-gaps\.txt"
+        r"|app/integrations/network/usage_load\.py)$"
+    ),
+}
 
 # A path, or a directory with a trailing slash, and the test files that read it.
 DATA = {
@@ -159,14 +178,25 @@ def ci_check(path):
     )
 
 
+def marked(paths):
+    """The marks of MARKED whose paths are among `paths`."""
+    paths = list(paths)
+    return [mark for mark, pattern in MARKED.items() if any(pattern.search(p) for p in paths)]
+
+
 def plan(staged, digest, stamp, merge_tested=False):
     """The make invocations for the staged paths. `digest` names the FULL files as they
     are now, `stamp` the content the whole suite last ran to its end on (or None).
     `merge_tested`: a merge commit whose own FULL files the suite already ran on
     (merge_full_tested)."""
     if any(FULL.search(path) for path in staged) and stamp != digest and not merge_tested:
-        return ["test-recorded"]
-    steps = ["test-smoke", "test-changed"] if any(backend(path) for path in staged) else []
+        marks = marked(staged)
+        return ["test-recorded" + (" MARKS=" + ",".join(marks) if marks else "")]
+    steps = []
+    if any(backend(path) for path in staged):
+        marks = marked(path for path in staged if not FULL.search(path))
+        steps = ["test-smoke", *(["test-marked MARKS=" + ",".join(marks)] if marks else [])]
+        steps.append("test-changed")
     tests = data_tests(staged)
     if tests:
         steps.append("test-files TESTS=" + ",".join(tests))

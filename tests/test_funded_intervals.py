@@ -162,6 +162,7 @@ def test_grant_effects_rollback_together(db_conn):
     db_conn.commit()
 
 
+@pytest.mark.migration_history
 def test_migration_preserves_finances_and_retains_grants(temp_db_url):
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "0039")

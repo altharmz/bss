@@ -34,7 +34,14 @@ def recorded() -> list[str]:
     return gaps + deviations
 
 
-@pytest.mark.parametrize("part", tmf_gaps.PARTS)
+# the nested part seeds a history and probes every resource in it: marked slow (#424)
+@pytest.mark.parametrize(
+    "part",
+    [
+        pytest.param(part, marks=pytest.mark.slow) if part == tmf_gaps.NESTED else part
+        for part in tmf_gaps.PARTS
+    ],
+)
 def test_the_gap_list_is_the_recorded_one(api, db_conn, part):
     # in parts, so xdist runs them side by side (the whole probe took over a minute)
     found = tmf_gaps.gaps(api, part)

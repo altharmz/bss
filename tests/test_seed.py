@@ -38,6 +38,7 @@ def all_of(api, url: str) -> list[dict]:
             return items
 
 
+@pytest.mark.slow
 def test_seed_builds_the_demo_and_is_idempotent(api, db_conn):
     assert seeding.seed(api, api.clock, TODAY) is True
     before = counts(db_conn)
