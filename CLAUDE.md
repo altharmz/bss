@@ -45,7 +45,7 @@ that PR at its exact head (`make merge-task HUMAN_APPROVAL=<PR>:<head-SHA>`).
 
 ```
 make up / down / logs / ps / psql   # local stack (app + postgres, hot reload)
-make test                           # FULL suite in the container (~11 min)
+make test / test-all                # suite in the container (~12 min) / plus migration_history, slow
 make lint / fmt / format            # ruff check / auto-format / backend + UI
 make migrate / seed / worker-once   # alembic upgrade, demo data, one billing wake-up
 make smoke / mcp-smoke              # local app / MCP connector checks
@@ -63,7 +63,8 @@ make telemetry-collect / telemetry-report / telemetry-summary
 ## Rules
 
 - **Tests:** one local run per cycle - the pre-commit hook (lint, smoke tests, the tests the
-  change affects). Run `make test` (the full suite) before a PR that touches billing,
+  change affects). Run `make test` (the full suite but the `migration_history` and `slow`
+  tests, which the hook and the nightly run cover) before a PR that touches billing,
   migrations or the API. Every new feature or fix comes with a test that fails without it;
   never delete, skip or weaken a test to make the suite pass. If a test is wrong because
   the requirements changed, change it and add `TEST-CHANGE: <reason>` to the commit message.
