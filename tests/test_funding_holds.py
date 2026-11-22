@@ -151,6 +151,7 @@ def test_hold_details_are_immutable_and_totals_must_match(db_conn):
         db_conn.execute("SET CONSTRAINTS ALL IMMEDIATE")
 
 
+@pytest.mark.migration_history
 def test_hold_downgrade_retains_released_history(temp_db_url):
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "0034")

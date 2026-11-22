@@ -4,6 +4,7 @@ from datetime import timedelta
 from decimal import Decimal as D
 from uuid import UUID
 
+import pytest
 from alembic.config import Config
 
 from alembic import command
@@ -274,6 +275,7 @@ def test_an_ended_product_cannot_change(
     assert order["state"] == "rejected" and "productAlreadyEnded" in errors(order)
 
 
+@pytest.mark.migration_history
 def test_0050_round_trips(temp_db_url):
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "head")

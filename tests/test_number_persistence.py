@@ -22,6 +22,7 @@ def number(conn, value="12025550123"):
     ).fetchone()[0]
 
 
+@pytest.mark.migration_history
 def test_number_requirement_migration_preserves_existing_products(temp_db_url):
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "0032")
@@ -149,6 +150,7 @@ def test_assignment_rejects_invalid_transitions_and_references(db_conn, clause, 
         )
 
 
+@pytest.mark.migration_history
 def test_number_migration_preserves_financial_history_and_blocks_lossy_downgrade(temp_db_url):
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "0031")

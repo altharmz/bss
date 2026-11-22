@@ -14,6 +14,7 @@ from app.repository import billing, payments
 from tests import factories
 
 
+@pytest.mark.migration_history
 def test_0031_relabels_existing_money_atomically(temp_db_url):
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "0030")

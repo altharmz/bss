@@ -29,8 +29,9 @@ no automated regex check is added because dates, versions and money cause false 
 
 One local test run per cycle: develop -> `make commit` (the pre-commit hook is the run) ->
 push -> PR. Commit and push need no approval. Extra runs (`make check`, `make web-e2e`,
-`make progress`) are optional. Run `make test` (the full suite, about 11 minutes) before a PR
-that touches billing, migrations or the API. Every feature or fix comes with a test that
+`make progress`) are optional. Run `make test` (the full suite but the tests marked
+`migration_history` or `slow`, [below](#tests-left-out-of-the-default-run-2026-11-22-424);
+`make test-all` runs those too) before a PR that touches billing, migrations or the API. Every feature or fix comes with a test that
 fails without it (a CLAUDE.md rule, not enforced by a hook).
 
 **Pre-commit** (`scripts/pre-commit.sh`, run by the shared dispatcher `make hooks` installs
@@ -527,6 +528,62 @@ covers billing core, the TMF contract (validator, enum lock, operation ids, spec
 health, order states, catalog, conventions), migrations on an empty database, and the MCP
 connector. A new test is not smoke by default: mark one only where it guards what the gate
 exists for, and keep the set near two minutes of summed time.
+
+### Tests left out of the default run (2026-11-22, #424)
+
+Two marks (`pyproject.toml`) name tests that cost much more than they protect in an
+ordinary run. `make test` and `make test-recorded` leave them out (`-m "not
+(migration_history or slow)"`, the Makefile's `MARKS`):
+
+- **`migration_history`**: a test that replays migrations from an empty database
+  (`temp_db_url`) to check the data handling of one deployed migration. Deployed
+  migrations are immutable, so such a test fails only when `alembic/env.py`, the Postgres
+  image, the pins or a shared helper changes.
+- **`slow`**: the six slowest tests (`test_seed`, the two `test_loadtest_seed` runs,
+  `test_tmf_gaps[nested]`, two `test_usage_load` generator tests). Their time is the
+  application's own work (#373), and they depend only on the seed, load-test, gap-probe and
+  usage-generator code.
+
+They still run:
+
+- in the nightly CI run: its job sets `FULL=true`, which the Makefile maps to `MARKS=all`
+  (`scripts/test_ci_workflow.py` checks both), so the workflow needed no change;
+- in the commit hook, when a path they depend on changes (`scripts/hook_selection.py`,
+  `MARKED`): `alembic/`, the pins, the `Dockerfile` and the compose files bring
+  `migration_history` into the whole-suite run they already call for (`make test-recorded
+  MARKS=migration_history`); `tests/seed.py`, `loadtest/`, `tests/tmf_gaps.py`,
+  `tests/tmf-gaps.txt` and `app/integrations/network/usage_load.py` run the `slow` tests
+  (`make test-marked MARKS=slow`, before `make test-changed` and recorded for testmon, so it
+  does not repeat them). `make test-changed` has no `-m`, so testmon still runs a marked test
+  whose Python code changed, and a run with `-m` keeps the selection records of the tests it
+  leaves out (testmon reads the names before `-m` deselects);
+- by hand: `make test-all` (everything), `make test-marked MARKS=...`.
+
+**The rule for a migration's tests.** A test that takes `temp_db_url` carries
+`migration_history` unless `KEPT_REPLAYS` in `tests/conftest.py` lists it; a collection check
+refuses anything else, and a smoke test that carries either mark (`tests/test_smoke_marker.py`
+tests the check). Kept: the upgrade to head on an empty database, the downgrade-and-upgrade
+round trip of every migration, the drill's refusal of an unknown mode (no replay), and an
+app check against an older schema (`test_worker_round_trips.py`). A new migration's data
+test is written into `KEPT_REPLAYS` and stays in the default run until the migration is
+deployed (`make deployed` names the newest deployed one); the next task that touches
+migrations after that moves it to `migration_history`. On 2026-11-22 the newest deployed
+migration was 0088, and no data test of 0088 or 0089 replays migrations.
+
+**Measured** (2026-11-22, the 12-CPU workstation with no other test run, the backend
+pytest part of `make test` back to back, `-p no:randomly`; CPU is the host's busy time
+over the run, summed is the sum of the per-test `--durations=0` phases):
+
+| Run | Tests | Wall | Host CPU | Summed test time |
+| --- | --- | --- | --- | --- |
+| Pair 1, default first | 2,983 / 3,037 | 12 min 25 s / 12 min 25 s | - | - |
+| Pair 2, everything first | 2,983 / 3,037 | 11 min 46 s / 13 min 58 s | 7,501 s / 8,922 s | 6,851 s / 8,831 s |
+
+(default / everything). The saving is the work: about 1,400 CPU seconds (16 %) and
+2,000 s of summed test time (22 %), the six slow tests alone 478 s of it. The wall time
+moves less and not every time: twelve workers keep the host saturated either way, and
+the tail is set by whichever long test is left last (`test_seed`'s production-gates run
+and the bill PDF timing test now, 70 to 80 s under load), so pair 1 ended level.
 
 ## Test speed (2026-11-11, #319)
 

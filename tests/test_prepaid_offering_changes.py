@@ -185,6 +185,7 @@ def test_cancelling_before_the_boundary_drops_the_change(api, db_conn, granted):
     assert renewed(db_conn, first)[0] == granted.a["id"]
 
 
+@pytest.mark.migration_history
 def test_0044_combined_items_block_downgrade(temp_db_url):
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "head")

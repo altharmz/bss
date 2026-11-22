@@ -143,6 +143,52 @@ def pytest_runtest_logfinish(nodeid, location) -> None:
     _reader[0] = None
 
 
+# --- the tests make test leaves out (#424, docs/decisions/harness.md) ---
+# `migration_history` and `slow` run in the hook when their paths change
+# (scripts/hook_selection.py, MARKED), in the nightly run and in make test-all. A test that
+# replays migrations (temp_db_url) carries `migration_history` unless it is kept here: the
+# head and the round trip of every migration, the drill's refusal, an app check against an
+# older schema, and the data tests of migrations not deployed yet. Once such a migration is
+# deployed (make deployed), its tests move to `migration_history`.
+LEFT_OUT = ("migration_history", "slow")
+KEPT_REPLAYS = frozenset(
+    {
+        "tests/test_migrations.py::test_alembic_upgrade_head_on_clean_database",
+        "tests/test_migrations.py::test_alembic_downgrade_then_upgrade_roundtrip",
+        "tests/test_migrations.py::test_migration_drill_rejects_an_unknown_mode",
+        "tests/test_worker_round_trips.py::"
+        "test_an_older_schema_is_asked_again_and_a_later_migration_is_seen",
+    }
+)
+
+
+def mark_errors(items) -> list[str]:
+    """What is wrong with the marks of the collected `items`: a smoke test the default run
+    would leave out, or a migration replay that is neither kept nor `migration_history`."""
+    errors = []
+    for item in items:
+        marks = {mark.name for mark in item.iter_markers()}
+        name = item.nodeid.split("::", 1)[0] + "::" + getattr(item, "originalname", item.name)
+        if "smoke" in marks and marks & set(LEFT_OUT):
+            left_out = sorted(marks & set(LEFT_OUT))
+            errors.append(f"{item.nodeid}: a smoke test cannot also be {', '.join(left_out)}")
+        replays = "temp_db_url" in getattr(item, "fixturenames", ())
+        if replays and "migration_history" not in marks and name not in KEPT_REPLAYS:
+            errors.append(
+                f"{item.nodeid} replays migrations: mark it migration_history, or keep it in"
+                " KEPT_REPLAYS (tests/conftest.py) while its migration is not deployed"
+            )
+    return errors
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_collection_modifyitems(config, items) -> None:
+    """Before -m deselects anything, so every run checks every test."""
+    errors = mark_errors(items)
+    if errors:
+        raise pytest.UsageError("\n".join(errors))
+
+
 def pytest_sessionstart(session) -> None:
     """Drops the databases earlier runs left behind (tests/scratch_db.py). Once per run:
     not in the xdist workers, which start while their controller's session is open."""

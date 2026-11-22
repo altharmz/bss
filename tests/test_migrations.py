@@ -14,6 +14,7 @@ def test_alembic_upgrade_head_on_clean_database(temp_db_url):
     command.upgrade(Config("alembic.ini"), "head")
 
 
+@pytest.mark.migration_history
 def test_0030_preserves_monthly_data_and_refuses_lossy_downgrade(temp_db_url):
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "0029")
@@ -73,6 +74,7 @@ PREEXISTING_ROWS = {
 }
 
 
+@pytest.mark.migration_history
 @pytest.mark.parametrize("column", sorted(PREEXISTING_ROWS))
 def test_0002_fails_loudly_if_the_tables_are_not_empty(temp_db_url, column):
     """0002 adds NOT NULL columns without a default on purpose: rows that predate the API
@@ -91,6 +93,7 @@ def test_0002_fails_loudly_if_the_tables_are_not_empty(temp_db_url, column):
         command.upgrade(cfg, "head")
 
 
+@pytest.mark.migration_history
 def test_0004_on_existing_runs_and_accounts(temp_db_url):
     """0004 on a database that already has runs (local seeds) and accounts: a completed run
     stays valid, a failed one gets failure_kind 'run' (the CHECK needs one), the trigger
@@ -147,6 +150,7 @@ def test_0004_on_existing_runs_and_accounts(temp_db_url):
         assert conn.execute("SELECT count(*) FROM billing_run").fetchone() == (2,)
 
 
+@pytest.mark.migration_history
 def test_0005_comments_every_table_and_downgrade_removes_them(temp_db_url):
     """0005 is documentation only: every domain table has a COMMENT (docs/db/ is generated
     from them), and downgrading to 0004 removes every comment it wrote."""
@@ -173,6 +177,7 @@ def test_0005_comments_every_table_and_downgrade_removes_them(temp_db_url):
         assert conn.execute(count_columns).fetchone() == (0,)
 
 
+@pytest.mark.migration_history
 def test_0006_on_existing_bills(temp_db_url):
     """0006 on a database with bills (production has them since 2026-10-05): due date =
     bill_date + 30, category from the sign, one issue row per bill dated by its run's
@@ -262,6 +267,7 @@ def test_0006_on_existing_bills(temp_db_url):
         assert comment == ("TMF678 state; bills are written as new.",)
 
 
+@pytest.mark.migration_history
 def test_0007_on_existing_abrs(temp_db_url):
     """0007 on a database with ABRs (production has them since 2026-10-05): applied_at =
     the started_at of the run that wrote each one, NOT NULL and commented. Downgrading to
@@ -381,6 +387,7 @@ def test_cloned_test_databases_are_at_the_current_head(db_conn):
     assert tables == 100  # 99 domain tables + alembic_version
 
 
+@pytest.mark.migration_history
 def test_0027_offering_changes(temp_db_url):
     """Existing ABRs bill their product's offering; afterwards an ABR without one gets the
     offering on its first day, ranges may overlap but first days are unique, and a modify
@@ -425,6 +432,7 @@ def test_0027_offering_changes(temp_db_url):
     command.upgrade(cfg, "head")
 
 
+@pytest.mark.migration_history
 def test_0028_last_gaps(temp_db_url):
     """Existing products are named after their offering; a product inserted without a
     name gets its offering's; a modify item carries an offering or a status, not both.
@@ -471,6 +479,7 @@ def test_0028_last_gaps(temp_db_url):
     command.upgrade(cfg, "head")
 
 
+@pytest.mark.migration_history
 def test_0016_order_cancellation_round_trip(temp_db_url):
     """Existing orders stay as they are (no cancellation date); a cancelled order needs
     one; downgrading to 0015 works with a cancellation stored and keeps the orders."""
@@ -521,6 +530,7 @@ def test_0016_order_cancellation_round_trip(temp_db_url):
         ).fetchone() == ("cancelled", True)
 
 
+@pytest.mark.migration_history
 def test_0017_0018_events_round_trip(temp_db_url):
     """Hubs, events and deliveries; downgrading to 0016 drops them all and no other data."""
     from tests import factories
@@ -560,6 +570,7 @@ def test_0017_0018_events_round_trip(temp_db_url):
     command.upgrade(cfg, "0018")
 
 
+@pytest.mark.migration_history
 def test_0019_0020_round_trip(temp_db_url):
     """Cycle specifications and the order's descriptive attributes: both CHECK what billing
     and TMF allow; downgrading to 0018 drops them and keeps accounts and orders."""
@@ -597,6 +608,7 @@ def test_0019_0020_round_trip(temp_db_url):
     command.upgrade(cfg, "0020")
 
 
+@pytest.mark.migration_history
 def test_0009_catalog_round_trip(temp_db_url):
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "0008")
@@ -626,6 +638,7 @@ def test_0009_catalog_round_trip(temp_db_url):
     command.upgrade(cfg, "0009")
 
 
+@pytest.mark.migration_history
 def test_0013_financial_accounts_round_trip(temp_db_url):
     """Existing billing accounts stay unlinked; a link survives only while 0013 does, and
     downgrading to 0012 keeps the accounts."""
@@ -661,6 +674,7 @@ def test_0013_financial_accounts_round_trip(temp_db_url):
     command.upgrade(cfg, "head")
 
 
+@pytest.mark.migration_history
 def test_0014_party_accounts_round_trip(temp_db_url):
     """A party account may only join a financial account of its own party (composite FK);
     downgrading to 0013 drops party accounts and their enum, keeping financial accounts."""
@@ -699,6 +713,7 @@ def test_0014_party_accounts_round_trip(temp_db_url):
     command.upgrade(cfg, "head")
 
 
+@pytest.mark.migration_history
 def test_0015_catalog_jobs_round_trip(temp_db_url):
     """A stored job is finished: a failed one has its errorLog and only an export has a
     query; downgrading to 0014 drops the table and both enums."""
@@ -728,6 +743,7 @@ def test_0015_catalog_jobs_round_trip(temp_db_url):
     command.upgrade(cfg, "head")
 
 
+@pytest.mark.migration_history
 def test_0008_preserves_legacy_orders_without_inventing_quotes(temp_db_url):
     from tests import factories
 
@@ -769,6 +785,7 @@ def test_0008_preserves_legacy_orders_without_inventing_quotes(temp_db_url):
     command.upgrade(cfg, "0008")
 
 
+@pytest.mark.migration_history
 def test_0021_meta_payment_method_and_item_position(temp_db_url):
     """Existing payments answer what they answered (the one word as name and @type);
     existing items keep the order they were listed in (item_id as text); the meta
@@ -824,6 +841,7 @@ def test_0021_meta_payment_method_and_item_position(temp_db_url):
     command.upgrade(cfg, "0021")
 
 
+@pytest.mark.migration_history
 def test_0022_party_status_and_details(temp_db_url):
     """Existing parties get no status and no documents; a status must be one of its
     party type's; downgrading to 0021 keeps every row."""
@@ -859,6 +877,7 @@ def test_0022_party_status_and_details(temp_db_url):
     command.upgrade(cfg, "0022")
 
 
+@pytest.mark.migration_history
 def test_0023_account_details(temp_db_url):
     """Existing accounts and cycle specifications get no description, type or documents
     (an account then answers its anchor party alone); details must be an object;
@@ -914,6 +933,7 @@ def test_0023_account_details(temp_db_url):
     command.upgrade(cfg, "head")
 
 
+@pytest.mark.migration_history
 def test_0024_catalog_details_and_optional_attributes(temp_db_url):
     """An existing offering code becomes the externalIdentifier it was answered as;
     other entries get empty documents. Afterwards an offering may lack a specification
@@ -987,6 +1007,7 @@ def test_0024_catalog_details_and_optional_attributes(temp_db_url):
     command.upgrade(cfg, "head")
 
 
+@pytest.mark.migration_history
 def test_0025_taxes(temp_db_url):
     """Existing ABRs, payments and refunds have no tax. The upgrade refuses a stored price
     tax billing could not apply, and a taxed price on an offering already charged (its
@@ -1049,6 +1070,7 @@ def test_0025_taxes(temp_db_url):
     command.upgrade(cfg, "head")
 
 
+@pytest.mark.migration_history
 def test_0026_order_details_drafts_and_nested_items(temp_db_url):
     """Existing orders were acknowledged, with no documents, top-level items and an
     account. Afterwards only a draft (or a cancelled order) may lack an account, and a
@@ -1100,6 +1122,7 @@ def _revision_and_drill_table(url):
     return rev, table
 
 
+@pytest.mark.migration_history
 def test_0064_drill_table_refuses_downgrade_while_it_has_rows(temp_db_url):
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "0064")
@@ -1114,6 +1137,7 @@ def test_0064_drill_table_refuses_downgrade_while_it_has_rows(temp_db_url):
     assert _revision_and_drill_table(temp_db_url) == ("0063", False)
 
 
+@pytest.mark.migration_history
 @pytest.mark.parametrize("mode", ["fail", "slow"])
 def test_migration_drill_rolls_back_an_upgrade_and_a_downgrade(temp_db_url, monkeypatch, mode):
     """BSS_MIGRATION_DRILL (alembic/env.py, set by deploy.sh only for the rollback drill)
@@ -1141,6 +1165,7 @@ def test_migration_drill_rejects_an_unknown_mode(temp_db_url, monkeypatch):
         command.upgrade(Config("alembic.ini"), "0001")
 
 
+@pytest.mark.migration_history
 def test_0065_drops_the_drill_table_and_its_downgrade_recreates_it_empty(temp_db_url):
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "0065")
@@ -1152,6 +1177,7 @@ def test_0065_drops_the_drill_table_and_its_downgrade_recreates_it_empty(temp_db
     command.upgrade(cfg, "0065")
 
 
+@pytest.mark.migration_history
 def test_0075_backfills_the_stored_run_counts(temp_db_url):
     """member_count by the members' definition (opened before 00:00 of the run date in
     BILLING_TZ), the outcome counts from billing_run_account; downgrade drops the columns."""
@@ -1216,6 +1242,7 @@ def test_0075_backfills_the_stored_run_counts(temp_db_url):
     assert columns.isdisjoint({"member_count", "ok_count", "failed_count", "blocked_count"})
 
 
+@pytest.mark.migration_history
 def test_0076_moves_usage_records_into_month_partitions_and_back(temp_db_url):
     """The conversion copies every record into the partition of its event month (the
     DEFAULT partition stays empty), with the new keys; downgrade puts them back into one

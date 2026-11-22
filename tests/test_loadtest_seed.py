@@ -66,6 +66,7 @@ def test_it_refuses_any_app_env_but_test(monkeypatch, migrated_db_url):
         assert conn.execute("SELECT to_regclass('loadtest_progress')").fetchone() == (None,)
 
 
+@pytest.mark.slow
 def test_a_run_killed_mid_day_and_rerun_equals_an_uninterrupted_run(
     monkeypatch, migrated_db_url, template_db, seeding
 ):
@@ -128,6 +129,7 @@ def test_the_plan_is_deterministic_and_keeps_clear_of_the_stub_test_numbers():
     assert 0.65 < prepaid < 0.75
 
 
+@pytest.mark.slow
 def test_parallel_processes_and_fast_commit_give_the_rows_of_one_process(
     monkeypatch, migrated_db_url, template_db, seeding
 ):

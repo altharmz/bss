@@ -535,6 +535,7 @@ def test_the_migration_backfills_the_state_of_existing_imsi_rows(api, db_conn, l
     assert {n: sim_row(db_conn, sim(n)["imsi"])[0] for n in (1, 2, 3)} == expected
 
 
+@pytest.mark.migration_history
 def test_the_migration_downgrades_and_upgrades_again(temp_db_url):
     from alembic.config import Config
 

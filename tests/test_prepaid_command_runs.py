@@ -149,6 +149,7 @@ def test_newer_command_does_not_hide_daily_on_demand_readiness(api, migrated_db_
     assert api.get(request["href"]).json()["state"] == "rejected"
 
 
+@pytest.mark.migration_history
 def test_migration_preserves_daily_history_and_refuses_command_loss(temp_db_url):
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "0038")

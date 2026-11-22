@@ -151,6 +151,7 @@ def test_shortfall_rollback_and_latest_observation(db_conn):
     assert commands.needs_topup(db_conn, key)["available"] == D(10)
 
 
+@pytest.mark.migration_history
 def test_shortfall_migration_preserves_commands_and_refuses_history_loss(temp_db_url):
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "0041")
@@ -238,6 +239,7 @@ def test_invalid_journal_state_is_rejected(db_conn, assignment):
         db_conn.execute(sql.SQL("UPDATE prepaid_command SET {} ").format(sql.SQL(assignment)))
 
 
+@pytest.mark.migration_history
 def test_migration_preserves_legacy_funding_and_refuses_history_loss(temp_db_url):
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "0037")
