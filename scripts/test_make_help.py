@@ -11,7 +11,18 @@ SCRIPTS = Path(__file__).resolve().parent
 SCRIPT = SCRIPTS / "make_help.py"
 MAKEFILE = SCRIPTS.parent / "Makefile"
 GROUPS = ("task", "stack", "test", "ui", "docs", "mcp", "loadtest", "telemetry", "ops")
-OPS = {"deploy", "rollback", "verify", "deployed", "tunnel", "ssh", "remote", "deploy-web-install"}
+OPS = {
+    "deploy",
+    "rollback",
+    "verify",
+    "deployed",
+    "tunnel",
+    "ssh",
+    "remote",
+    "deploy-web-install",
+    "grafana-rules-check",
+    "grafana-rules-apply",
+}
 TARGET_LINE = re.compile(r"^  (\S+)\s")
 
 

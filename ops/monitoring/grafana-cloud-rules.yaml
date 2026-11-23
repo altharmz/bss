@@ -1,0 +1,133 @@
+# The live Grafana Cloud alert rules (folder "BSS Alerts/bss-grafana-alerts.yml", group
+# bss-operational): the source of truth. `make grafana-rules-check` compares it with the
+# stack, `make grafana-rules-apply CONFIRM=1` writes it (scripts/grafana_rules.py, the
+# human's step, like a deploy). The uids are the live ones, so rules are updated in place.
+#
+# Every rule follows two conventions (tests/test_monitoring_kit.py enforces them):
+# - `expr` returns the raw value; Grafana's threshold expression decides. An empty result then
+#   only means the series are missing (the nightly reboot, a failed scrape), never "healthy".
+#   A filter such as `x > 3600` inside PromQL made "recovered" and "no data" the same result.
+# - `no_data: KeepLast` keeps an instance's state through missing data, so a gap neither
+#   resolves an alert nor restarts its pending period. Recovery needs a real sample on the
+#   right side of the threshold. Only absence rules use `no_data: OK` (empty is their healthy
+#   result), and they report data missing for longer than the gap. Errors raise an Error alert.
+# Rate rules anchor a missing error series to `0 * <all requests>`, so "no errors yet" is 0,
+# while no requests at all in the window stays empty.
+group: bss-operational
+interval: 1m
+datasource_uid: grafanacloud-prom
+app_job: integrations/metrics_endpoint/3748204-metrics-endpoint-bss-app
+mcp_job: integrations/metrics_endpoint/3748204-metrics-endpoint-bss-mcp
+rules:
+  - uid: 889b8794-f60a-54ad-a663-15ce4a91170a
+    title: BssAppDown
+    expr: up{job="$app_job"}
+    threshold: {lt: 1}
+    for: 5m
+    no_data: KeepLast
+    severity: critical
+    summary: The bss app has not answered a scrape for 5 minutes.
+
+  - uid: 0a995c47-0e60-5ebd-917e-dd9665ee73c6
+    title: BssDbDown
+    expr: bss_db_up
+    threshold: {lt: 1}
+    for: 2m
+    no_data: KeepLast
+    severity: critical
+    summary: The bss app cannot read its database.
+
+  - uid: 49ee8d5b-1da5-5691-84de-87c5a641078e
+    title: BssHigh5xxRate
+    expr: |
+      (
+        (sum(rate(bss_http_requests_total{status=~"5.."}[10m]))
+          or 0 * sum(rate(bss_http_requests_total[10m])))
+        / sum(rate(bss_http_requests_total[10m])) > bool 0.05
+      )
+      * (sum(increase(bss_http_requests_total[10m])) >= bool 20)
+    threshold: {gt: 0}
+    for: 10m
+    no_data: KeepLast
+    severity: warning
+    summary: More than 5% of HTTP requests answered 5xx over 10 minutes.
+
+  - uid: 644efb76-5682-57dd-81d3-64db897838f4
+    title: BssSlowRequests
+    expr: |
+      (
+        histogram_quantile(0.95,
+          sum by (le) (rate(bss_http_request_duration_seconds_bucket[10m]))) > bool 2
+      )
+      * (sum(increase(bss_http_request_duration_seconds_count[10m])) >= bool 20)
+    threshold: {gt: 0}
+    for: 10m
+    no_data: KeepLast
+    severity: warning
+    summary: The 95th percentile request latency is above 2 s over 10 minutes.
+
+  - uid: 01f5fc75-b5b3-5c33-8287-2dfd1fe28407
+    title: BssBillingRunStale
+    expr: bss_billing_last_run_age_seconds
+    threshold: {gt: 93600}  # 26 hours
+    for: 5m
+    no_data: KeepLast
+    severity: critical
+    summary: The latest billing run finished more than 26 hours ago.
+
+  - uid: fa35f86b-ef9d-570d-bc62-8b0e28df3517
+    title: BssQueueStuck
+    expr: bss_queue_oldest_pending_age_seconds
+    threshold: {gt: 3600}
+    for: 5m
+    no_data: KeepLast
+    severity: warning
+    summary: "The queue {{ $labels.queue }} has had a pending row for over an hour."
+
+  - uid: 2613f353-a682-5bce-9288-167fd7801f0d
+    title: BssQueueFailed
+    expr: bss_queue_failed
+    threshold: {gt: 0}
+    for: 5m
+    no_data: KeepLast
+    severity: warning
+    summary: "The queue {{ $labels.queue }} has rows that need an operator."
+
+  # new on the stack: in alerts.yml since #282, missing from the import
+  - uid: bss-usage-default-partition
+    title: BssUsageDefaultPartition
+    expr: bss_usage_record_default_rows
+    threshold: {gt: 0}
+    for: 5m
+    no_data: KeepLast
+    severity: warning
+    summary: Usage records reached the DEFAULT partition; a monthly usage_record partition is missing.
+
+  - uid: 0c5e58b7-f864-5bb7-a489-4f3f8fba1bc5
+    title: BssMcpErrors
+    expr: |
+      sum(rate(bss_mcp_tool_calls_total{outcome=~"server_error|timeout"}[15m]))
+        or 0 * sum(rate(bss_mcp_tool_calls_total[15m]))
+    threshold: {gt: 0}
+    for: 15m
+    no_data: KeepLast
+    severity: warning
+    summary: MCP tool calls are ending in server errors or timeouts.
+
+  - uid: e2bbcea8-8c3e-5067-987c-2df6f6aa1c04
+    title: BssAppTelemetryMissing
+    expr: absent_over_time(up{job="$app_job"}[15m])
+    threshold: {gt: 0}
+    for: 5m
+    no_data: OK
+    severity: warning
+    summary: BSS App scrape telemetry is missing. Check the Grafana Metrics Endpoint integration.
+
+  - uid: 94d1e532-134d-5764-b62e-b6aa7141c6bc
+    title: BssMcpTelemetryMissing
+    expr: absent_over_time(up{job="$mcp_job"}[15m])
+    threshold: {gt: 0}
+    for: 5m
+    no_data: OK
+    severity: warning
+    summary: BSS Mcp scrape telemetry is missing. Check the Grafana Metrics Endpoint integration.

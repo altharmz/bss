@@ -431,6 +431,13 @@ deploy: ## [ops] Build locally and ship to the VPS (a failure after the new rele
 rollback: ## [ops] Roll the VPS back to the previous release (DRY_RUN=1 shows the plan)
 	DRY_RUN=$(DRY_RUN) ./scripts/deploy.sh --rollback
 
+.PHONY: grafana-rules-check grafana-rules-apply
+grafana-rules-check: ## [ops] Compare the Grafana Cloud alert rules with ops/monitoring/grafana-cloud-rules.yaml (GRAFANA_URL= GRAFANA_TOKEN_FILE=)
+	python3 -B scripts/grafana_rules.py check
+
+grafana-rules-apply: ## [ops] Write ops/monitoring/grafana-cloud-rules.yaml to Grafana Cloud and read it back (GRAFANA_URL= GRAFANA_TOKEN_FILE= CONFIRM=1)
+	python3 -B scripts/grafana_rules.py apply $(if $(filter 1,$(CONFIRM)),--confirm)
+
 # On demand only, when a change needs stronger testing; the pre-commit hook is the
 # regular gate. Target-specific: also applies to the `test` prerequisite.
 check: ## [task] Technical readiness in a validated task (full existing local checks)
