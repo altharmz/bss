@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from bss_mcp.operations import AUTH_OPERATIONS, EXCLUDED
-from tests.test_mcp_tools import api_operations
+from tests.builders.mcp_tools import api_operations
 
 sys.path.insert(0, str(Path("scripts")))
 import ui_mcp_parity as parity  # noqa: E402

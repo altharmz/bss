@@ -160,6 +160,14 @@ paths:
             answer adds credit (the unused dates of its paid interval, tax included) and
             balanceAfter counts it.
           schema: {type: string, format: uuid}
+        - name: parentProduct.id
+          in: query
+          required: false
+          description: >-
+            Prepaid add-on offerings only. The plan product the add-on would be bought for (its
+            paid period must cover startDate): the answer adds addOn, the pass length and the
+            end date the order would set (issue 383).
+          schema: {type: string, format: uuid}
       responses:
         '200':
           description: OK
@@ -1929,6 +1937,25 @@ components:
       properties:
         id: {type: string, format: uuid}
         name: {type: string}
+    E911Address:
+      description: >-
+        An E911 address (TMF637 place of role e911Address, a US GeographicAddress without
+        @type), as stored (issue 201). AccountProduct.e911Address spells out its nullable
+        variant.
+      type: object
+      additionalProperties: false
+      required: [streetName, city, stateOrProvince, postcode, country]
+      properties:
+        streetNr: {type: string}
+        streetName: {type: string}
+        streetSuffix: {type: string}
+        city: {type: string}
+        stateOrProvince: {type: string}
+        postcode: {type: string}
+        country: {type: string, enum: [US]}
+        geographicSubAddress:
+          type: array
+          items: {type: object, additionalProperties: true}
     NullableNamed:
       description: Named or null (an offering's specification, when it has one).
       type: object
@@ -2202,6 +2229,23 @@ components:
               amount: {allOf: [{$ref: '#/components/schemas/Money'}], description: Before tax.}
               tax: {$ref: '#/components/schemas/Money'}
               gross: {allOf: [{$ref: '#/components/schemas/Money'}], description: Tax included.}
+        addOn:
+          description: >-
+            Only with parentProduct.id (issue 383). How long the add-on lasts as the order sets
+            it: the plan's paid period, or passDays from startDate when that ends first.
+          type: object
+          additionalProperties: false
+          required: [parentProduct, passDays, endDate]
+          properties:
+            parentProduct: {$ref: '#/components/schemas/Link'}
+            passDays:
+              type: integer
+              nullable: true
+              minimum: 1
+              description: The pass length in days; null for an add-on that lasts the plan period.
+            endDate:
+              description: Exclusive - the first day the add-on no longer applies.
+              allOf: [{$ref: '#/components/schemas/BusinessDate'}]
     LifecycleSettings:
       type: object
       additionalProperties: false
@@ -2291,18 +2335,21 @@ components:
                 id: {type: string, format: uuid}
         pendingChanges:
           description: >-
-            Status and offering changes not yet in effect, by date; [] when there is none.
-            Undo one by cancelling its productOrder.
+            Status and offering changes not yet in effect, by date, and E911 address changes
+            the network has not confirmed (kind e911, dated by their command's due date, with
+            the new address; issue 384); [] when there is none. Undo one by cancelling its
+            productOrder.
           type: array
           items:
             type: object
             additionalProperties: false
             required: [kind, date, productOrder]
             properties:
-              kind: {type: string, enum: [status, offering]}
+              kind: {type: string, enum: [status, offering, e911]}
               date: {$ref: '#/components/schemas/BusinessDate'}
               status: {type: string, enum: [suspended, active], nullable: true}
               productOffering: {$ref: '#/components/schemas/NullableNamed'}
+              e911Address: {$ref: '#/components/schemas/E911Address'}
               productOrder: {$ref: '#/components/schemas/Link'}
         e911Address:
           description: >-
@@ -2335,6 +2382,13 @@ components:
         parentProduct:
           description: Prepaid accounts only. An add-on's plan product; null otherwise.
           allOf: [{$ref: '#/components/schemas/NullableLink'}]
+        passDays:
+          description: >-
+            Prepaid accounts only. An add-on pass's length in days (its offering's passDays,
+            issue 200); null for any other product (issue 383).
+          type: integer
+          nullable: true
+          minimum: 1
         fundingSource:
           description: >-
             Prepaid accounts only. How a renewal is paid: the balance, or the balance and then

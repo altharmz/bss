@@ -13,9 +13,9 @@ from app.billing import prepaid
 from app.repository import billing, funding
 from app.repository import prepaid_commands as commands
 from app.worker import db as worker_db
+from tests.builders.prepaid_posting import TZ
+from tests.builders.settlement_db import make_payment
 from tests.factories import NOW, account, offering, product
-from tests.test_prepaid_posting import TZ
-from tests.test_settlement_db import make_payment
 
 
 def prepared(conn, *, zero=False, changes=None):

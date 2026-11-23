@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from app.events.types import BASES
 from app.main import app
 from tests.apiclient import total
-from tests.test_api_hub import CALLBACK, hub
+from tests.builders.api_hub import CALLBACK, hub
 
 URL = "/internal/v1/eventSubscription"
 

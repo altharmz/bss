@@ -20,9 +20,9 @@ from app.worker import db as worker_db
 from app.worker.process import DateRun
 from app.worker.runs import start_run
 from tests import apidata, timeline
-from tests.test_api_catalog_delete import _finish, _waits, gone, refused
-from tests.test_api_financial_account import FINANCIAL, financial, link, owner
-from tests.test_billing_db import at
+from tests.builders.api_catalog_delete import _finish, _waits, gone, refused
+from tests.builders.api_financial_account import FINANCIAL, financial, link, owner
+from tests.builders.billing_db import at
 from tests.timeline import TZ
 
 BASE = "/tmf-api/accountManagement/v5"

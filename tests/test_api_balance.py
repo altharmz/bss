@@ -8,9 +8,9 @@ from decimal import Decimal as D
 from app.repository import funding
 from tests import apidata
 from tests.apiclient import decimals, total
+from tests.builders.balance_actions import credit, debit, hold, prepaid, reverse, topup, transfer
+from tests.builders.number_persistence import assignment, number
 from tests.factories import offering, product
-from tests.test_balance_actions import credit, debit, hold, prepaid, reverse, topup, transfer
-from tests.test_number_persistence import assignment, number
 from tests.timeline import TODAY
 
 BASE = "/tmf-api/prepayBalanceManagement/v4"

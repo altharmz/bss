@@ -660,6 +660,17 @@ def prepare(conn, request, account, quotes, start, now, *, future=False):
     return accepted, total
 
 
+def add_on_end(conn, parent_id, offering_details, start):
+    """The exclusive end of an add-on bought on `start` for the plan `parent_id`: its plan's
+    paid period (or the plan's termination, if earlier), and for a pass of passDays `start`
+    plus them if that is earlier still (#200). The order and the firstCharge quote use it."""
+    ends = entitlement.latest_grant(conn, parent_id)["period"].upper
+    terminating = products.get_product(conn, parent_id)["termination_date"]
+    ends = ends if terminating is None else min(ends, terminating)
+    days = offering_kind.pass_days(offering_details)
+    return ends if days is None else min(ends, start + timedelta(days=days))
+
+
 def _prepare_charges(conn, request, account, core, start, now):
     """An add-on pack or a pay-as-you-go line: only its one-time fees are charged, held from
     the spendable balance now. An add-on ends with its plan's paid period, a pass with
@@ -672,14 +683,10 @@ def _prepare_charges(conn, request, account, core, start, now):
         parent = network.add_on_parent(item)
         ends = None
         if parent is not None:
-            ends = entitlement.latest_grant(conn, parent)["period"].upper
-            terminating = products.get_product(conn, parent)["termination_date"]
-            ends = ends if terminating is None else min(ends, terminating)
-            # a pass of passDays ends after them, at the latest with the plan period (#200)
             offering = catalog_repo.get_product_offering(conn, item.product_offering_id)
-            days = offering_kind.pass_days(None if offering is None else offering["details"])
-            if days is not None:
-                ends = min(ends, start + timedelta(days=days))
+            ends = add_on_end(
+                conn, parent, None if offering is None else offering["details"], start
+            )
         accepted[item.item_id] = (
             new,
             Charge(

@@ -8,8 +8,8 @@ from datetime import date
 import pytest
 
 from tests import apidata
-from tests.test_api_product_writes import orders_of, product_body, shop, timeline_z
-from tests.test_billing_db import at
+from tests.builders.api_product_writes import orders_of, product_body, shop, timeline_z
+from tests.builders.billing_db import at
 from tests.timeline import NOW, iso, midnight
 
 __all__ = ["shop"]  # the fixture, imported for these tests

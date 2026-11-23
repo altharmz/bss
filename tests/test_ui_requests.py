@@ -19,12 +19,12 @@ from app.worker.queue import process_requests
 from tests import apidata
 from tests.apiclient import decimals, total
 from tests.apidata import CATALOG, ORDER
-from tests.test_api_transfer import pair
-from tests.test_network_provisioning import make_line
-from tests.test_prepaid_command_api import failed
-from tests.test_prepaid_orders import purchase, shop
-from tests.test_prepaid_renewal_producer import tick
-from tests.test_worker_process import DEC1, DEC3, at, scenario, set_currency
+from tests.builders.api_transfer import pair
+from tests.builders.network_provisioning import make_line
+from tests.builders.prepaid_command_api import failed
+from tests.builders.prepaid_orders import purchase, shop
+from tests.builders.prepaid_renewal_producer import tick
+from tests.builders.worker_process import DEC1, DEC3, at, scenario, set_currency
 from tests.timeline import TZ
 
 OFFSET = "+03:00"
@@ -43,8 +43,7 @@ def test_ui_customer_login_invitation(api, monkeypatch):
 
 
 def test_ui_customer_payment_forms(api, db_conn, monkeypatch):
-    from tests.test_self_care import BASE, new_care
-    from tests.test_self_care_api import settle, signed_in
+    from tests.builders.self_care import BASE, new_care, settle, signed_in
 
     monkeypatch.setattr(settings, "self_care_enabled", True)
     care = new_care(api)
@@ -1115,8 +1114,13 @@ def two_open_bills(api, db_conn) -> tuple[dict, list[dict]]:
     """An account with the 300.00 bills of Dec 1 and Jan 1, both unpaid."""
     from datetime import date
 
-    from tests.test_billing_db import add, bill
-    from tests.test_billing_db import at as at_day
+    from tests.builders.billing_db import (
+        add,
+        bill,
+    )
+    from tests.builders.billing_db import (
+        at as at_day,
+    )
 
     offering = apidata.sellable_offering(api, value=300)
     account = apidata.account(api)
@@ -1725,6 +1729,7 @@ def test_network_profile_and_narrowing_as_the_ui_sends_them(api):
     profile = [
         _profile_document("dataAllowanceMb", [5000, 10000]),
         _profile_document("hotspot", [1, 0]),
+        _profile_document("wifiCalling", [1, 0]),  # #384, Catalog.specifications.test.tsx
     ]
     changed = api.patch(spec_url, {"productSpecCharacteristic": profile})
     assert changed.status_code == 200, changed.text
@@ -1795,6 +1800,107 @@ def test_multi_line_tier_and_data_pool_as_the_ui_sends_them(api):
     pooled = api.patch(spec_url, {"productSpecCharacteristic": flag})
     assert pooled.status_code == 200, pooled.text
     assert [c["name"] for c in pooled.json()["productSpecCharacteristic"]] == ["dataPool"]
+
+
+def _add_on_kind():
+    """withKind(..., 'addOn') in api/bss.ts."""
+    return {
+        "@type": "CharacteristicSpecification",
+        "name": "offeringKind",
+        "valueType": "string",
+        "characteristicValueSpecification": [
+            {
+                "@type": "StringCharacteristicValueSpecification",
+                "valueType": "string",
+                "isDefault": True,
+                "value": "addOn",
+            }
+        ],
+    }
+
+
+def test_roaming_passes_as_the_ui_sends_them(api):
+    """Issue 383. Catalog.specifications.test.tsx: the roaming and international profile
+    documents; Catalog.offering.test.tsx: passDays as withPassDays() sends it, after the
+    kind; Catalog.test.tsx: a roaming usage price with prodSpecCharValueUse usageZone
+    (docs/decisions/prepaid.md, usage.md)."""
+    offering = create_offering(api)
+    spec_url = offering["productSpecification"]["href"]
+    profile = [
+        _profile_document("roaming", [1, 0]),
+        _profile_document("roamingDataMb", [1000]),
+        _profile_document("roamingMinutes", [60]),
+        _profile_document("roamingSmsCount", [50]),
+        _profile_document("internationalMinutes", [100, 0]),
+    ]
+    saved = api.patch(spec_url, {"productSpecCharacteristic": profile})
+    assert saved.status_code == 200, saved.text
+    assert [c["name"] for c in saved.json()["productSpecCharacteristic"]] == [
+        "roaming",
+        "roamingDataMb",
+        "roamingMinutes",
+        "roamingSmsCount",
+        "internationalMinutes",
+    ]
+
+    add_on = api.post(
+        f"{CATALOG}/productOffering",
+        {
+            "@type": "ProductOffering",
+            "name": "Roam 7 days",
+            "lifecycleStatus": "Active",
+            "productOfferingCharacteristic": [_add_on_kind()],
+        },
+    )
+    assert add_on.status_code == 201, add_on.text
+    days = {
+        "@type": "CharacteristicSpecification",
+        "name": "passDays",
+        "valueType": "integer",
+        "characteristicValueSpecification": [
+            {
+                "@type": "IntegerCharacteristicValueSpecification",
+                "valueType": "integer",
+                "isDefault": True,
+                "value": 7,
+            }
+        ],
+    }
+    url = add_on.json()["href"]
+    passed = api.patch(url, {"productOfferingCharacteristic": [_add_on_kind(), days]})
+    assert passed.status_code == 200, passed.text
+    stored = {c["name"]: c for c in api.get(url).json()["productOfferingCharacteristic"]}
+    assert stored["passDays"]["characteristicValueSpecification"][0]["value"] == 7
+    # the dialog's guard: 1 to 30 days
+    too_long = dict(
+        days,
+        characteristicValueSpecification=[
+            dict(days["characteristicValueSpecification"][0], value=31)
+        ],
+    )
+    refused = api.patch(url, {"productOfferingCharacteristic": [_add_on_kind(), too_long]})
+    assert refused.status_code in (400, 422), refused.text
+
+    roaming = api.post_raw(
+        f"{CATALOG}/productOfferingPrice",
+        '{"@type":"ProductOfferingPrice","name":"Metered roaming voice usage",'
+        '"lifecycleStatus":"Active","priceType":"usage",'
+        '"unitOfMeasure":{"amount":1,"units":"minute"},'
+        '"prodSpecCharValueUse":[{"@type":"ProductSpecCharacteristicValueUse",'
+        '"name":"usageZone","valueType":"string","productSpecCharacteristicValue":'
+        '[{"@type":"StringCharacteristicValueSpecification","valueType":"string",'
+        '"value":"roaming"}]}],'
+        '"price":{"unit":"USD","value":1.20},'
+        '"validFor":{"startDateTime":"2026-10-02T00:00:00+03:00"}}',
+    )
+    assert roaming.status_code == 201, roaming.text
+    price = decimals(api.get(roaming.json()["href"]))
+    assert price["price"] == {"unit": "USD", "value": Decimal("1.20")}
+    (use,) = price["prodSpecCharValueUse"]
+    assert use["name"] == "usageZone"
+    assert use["productSpecCharacteristicValue"][0]["value"] == "roaming"
+    listed = api.get(f"{CATALOG}/productOfferingPrice?priceType=usage&offset=0&limit=100")
+    assert roaming.json()["id"] in [p["id"] for p in listed.json()]
 
 
 def test_network_command_reads_and_retry_as_the_ui_makes_them(api, db_conn):
@@ -2825,7 +2931,9 @@ def test_subscriber_overview_unfinished_order_reads_as_the_ui_makes_them(api):
 
 def test_ui_card_requests(api, db_conn):
     """Exact saved-card, card top-up and auto top-up bodies pinned in PaymentMethods.test.tsx."""
-    from tests.test_api_topup import prepaid
+    from tests.builders.api_topup import (
+        prepaid,
+    )
 
     methods = "/tmf-api/paymentMethod/v4/paymentMethod"
     _, account = prepaid(api, db_conn)
@@ -2870,8 +2978,13 @@ def test_messages_and_consent_as_the_ui_sends_them(api, db_conn):
     """The Messages tab (issue 192b, frontend/src/api/messages.ts): the list and detail reads,
     the New message, Cancel, Resend and consent bodies pinned in
     SubscriberCard.messages.test.tsx, replayed against the real TMF681 and internal API."""
-    from tests.test_api_topup import prepaid
-    from tests.test_notifications import contact, customer_of
+    from tests.builders.api_topup import (
+        prepaid,
+    )
+    from tests.builders.notifications import (
+        contact,
+        customer_of,
+    )
 
     msg = "/tmf-api/communicationManagement/v4/communicationMessage"
     consent = "/internal/v1/notification/consent"

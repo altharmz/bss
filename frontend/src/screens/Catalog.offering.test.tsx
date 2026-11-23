@@ -241,6 +241,81 @@ describe('offering detail, edit and delete', () => {
     });
   });
 
+  // an add-on pass of a number of days (#383, docs/decisions/prepaid.md "Roaming and
+  // international passes")
+  const KIND_ADD_ON = {
+    '@type': 'CharacteristicSpecification',
+    name: 'offeringKind',
+    valueType: 'string',
+    characteristicValueSpecification: [
+      {
+        '@type': 'StringCharacteristicValueSpecification',
+        valueType: 'string',
+        isDefault: true,
+        value: 'addOn',
+      },
+    ],
+  };
+  const passDays = (value: number) => ({
+    '@type': 'CharacteristicSpecification',
+    name: 'passDays',
+    valueType: 'integer',
+    characteristicValueSpecification: [
+      {
+        '@type': 'IntegerCharacteristicValueSpecification',
+        valueType: 'integer',
+        isDefault: true,
+        value,
+      },
+    ],
+  });
+
+  it('sets the pass length of an add-on as the passDays characteristic (#383)', async () => {
+    const { fetchMock } = tvBackend({
+      [`GET ${CAT}/productOffering/${ids(3)}`]: () =>
+        json({ ...DETAIL, productOfferingCharacteristic: [KIND_ADD_ON] }),
+      [`PATCH ${CAT}/productOffering/${ids(3)}`]: () => json({ id: ids(3) }),
+    });
+    const dialog = await details('TV Basic');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Offering actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit offering' }));
+    const edit = screen.getByRole('dialog', { name: 'Edit TV Basic' });
+    const days = within(edit).getByLabelText(/^Pass length \(days\)/);
+    expect(days).toBe(expectUi('ui.catalog.passDays'));
+    expect((days as HTMLInputElement).value).toBe('');
+    const save = within(edit).getByRole('button', { name: 'Save' });
+    fireEvent.change(days, { target: { value: '31' } });
+    expect(within(edit).getByRole('alert').textContent).toBe(
+      'Pass length must be a whole number of days from 1 to 30',
+    );
+    expect(save).toHaveProperty('disabled', true);
+    fireEvent.change(days, { target: { value: '7' } });
+    fireEvent.click(save);
+    await screen.findByRole('status');
+    expect(JSON.parse(bodyOf(fetchMock, 'PATCH'))).toEqual({
+      productOfferingCharacteristic: [KIND_ADD_ON, passDays(7)],
+    });
+  });
+
+  it('shows a 7-day pass and drops passDays when the kind becomes plan (#383)', async () => {
+    const { fetchMock } = tvBackend({
+      [`GET ${CAT}/productOffering/${ids(3)}`]: () =>
+        json({ ...DETAIL, productOfferingCharacteristic: [KIND_ADD_ON, passDays(7)] }),
+      [`PATCH ${CAT}/productOffering/${ids(3)}`]: () => json({ id: ids(3) }),
+    });
+    const dialog = await details('TV Basic');
+    expect(expectUi('ui.catalog.kind').textContent).toBe('Add-on · 7-day pass');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Offering actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit offering' }));
+    const edit = screen.getByRole('dialog', { name: 'Edit TV Basic' });
+    expect((within(edit).getByLabelText(/^Pass length/) as HTMLInputElement).value).toBe('7');
+    fireEvent.change(within(edit).getByLabelText(/^Offering kind/), { target: { value: 'plan' } });
+    expect(within(edit).queryByLabelText(/^Pass length/)).toBeNull();
+    fireEvent.click(within(edit).getByRole('button', { name: 'Save' }));
+    await screen.findByRole('status');
+    expect(JSON.parse(bodyOf(fetchMock, 'PATCH'))).toEqual({ productOfferingCharacteristic: [] });
+  });
+
   it('sends the specification, sellable and an emptied description', async () => {
     const { fetchMock } = tvBackend({
       [`PATCH ${CAT}/productOffering/${ids(3)}`]: () => json({ id: ids(3) }),

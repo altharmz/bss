@@ -1,8 +1,8 @@
 """Prepaid offering changes take effect only through a funded renewal (P3h)."""
+# ruff: noqa: F811
 
-from datetime import datetime, time, timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal as D
-from types import SimpleNamespace
 from uuid import UUID
 
 import psycopg
@@ -12,59 +12,24 @@ from alembic.config import Config
 from alembic import command
 from app.repository import orders
 from app.repository import prepaid_commands as commands
-from app.worker import loop
 from tests import apidata
 from tests.apidata import ORDER
+from tests.builders.api_order_cancel import CANCEL, cancel_body
+from tests.builders.api_resource_inventory import number
+from tests.builders.events import stored, subscribe
+from tests.builders.number_orders import refs
+from tests.builders.prepaid_offering_changes import (  # noqa: F401 - fixtures
+    applied,
+    at,
+    granted,
+    offering_of,
+    switch,
+)
+from tests.builders.prepaid_orders import shop
+from tests.builders.prepaid_posting import TZ
+from tests.builders.prepaid_renewal_producer import pay, tick
+from tests.builders.prepaid_status_orders import errors
 from tests.factories import world
-from tests.test_api_order_cancel import CANCEL, cancel_body
-from tests.test_api_order_modify import modify_item
-from tests.test_api_resource_inventory import number
-from tests.test_events import stored, subscribe
-from tests.test_number_orders import refs
-from tests.test_prepaid_orders import purchase, shop
-from tests.test_prepaid_posting import TZ
-from tests.test_prepaid_renewal_producer import pay, tick
-from tests.test_prepaid_status_orders import errors
-
-
-@pytest.fixture
-def granted(api, db_conn, monkeypatch):
-    """Two funded products on plan A (10 + 20% VAT), no money left, and plan B (5)."""
-    monkeypatch.setattr(loop, "scheduled", lambda *args: SimpleNamespace(gap=None, dates=[]))
-    cheaper = apidata.sellable_offering(
-        api, value=5, tax=[{"@type": "TaxItem", "taxCategory": "VAT", "taxRate": 20}]
-    )
-    response = api.patch(
-        cheaper["productSpecification"]["href"],
-        {"resourceSpecification": [{"id": "msisdn", "@type": "ResourceSpecificationRef"}]},
-    )
-    assert response.status_code == 200, response.text
-    off, acc = shop(api, db_conn)
-    order = purchase(api, off, acc)
-    assert tick(db_conn, api.clock.now()).prepaid_commands == [UUID(order["id"])]
-    rows = db_conn.execute(
-        "SELECT product_id, id, upper(period) FROM funded_interval ORDER BY product_id"
-    ).fetchall()
-    products = [{"id": str(r[0]), "grant": r[1], "due": r[2]} for r in rows]
-    return SimpleNamespace(acc=acc, a=off, b=cheaper, products=products)
-
-
-def at(day, hour=9):
-    return datetime.combine(day, time(hour), TZ)
-
-
-def switch(api, acc, product, offering, day, number_id=None):
-    item = modify_item(product, offering)
-    if number_id is not None:
-        item["product"]["realizingResource"] = refs(number_id)
-    body = apidata.order_body(acc, item, requestedStartDate=at(day).isoformat())
-    response = api.post(ORDER, body)
-    assert response.status_code == 201, response.text
-    return response.json()
-
-
-def offering_of(api, product):
-    return api.get(f"{apidata.PRODUCT}/{product['id']}").json()["productOffering"]["id"]
 
 
 def renewed(conn, product):
@@ -73,13 +38,6 @@ def renewed(conn, product):
         " WHERE product_id = %s AND command_kind = 'renewal'",
         (product["id"],),
     ).fetchone()
-
-
-def applied(conn, product):
-    return conn.execute(
-        "SELECT effect_announced_at IS NOT NULL FROM product_offering_change WHERE product_id = %s",
-        (product["id"],),
-    ).fetchone()[0]
 
 
 def test_change_at_paid_through_applies_with_the_funded_renewal(api, db_conn, granted):
@@ -185,6 +143,7 @@ def test_cancelling_before_the_boundary_drops_the_change(api, db_conn, granted):
     assert renewed(db_conn, first)[0] == granted.a["id"]
 
 
+@pytest.mark.migration_history
 def test_0044_combined_items_block_downgrade(temp_db_url):
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "head")

@@ -13,6 +13,7 @@ import hook_selection
 SCRIPT = Path(__file__).with_name("hook_selection.py")
 UI_TESTS = "tests/test_order_error_codes.py,tests/test_ui_mcp_parity.py,tests/test_ui_requests.py"
 USUAL = ["test-smoke", "test-changed"]
+RECORDED_HISTORY = "test-recorded MARKS=migration_history"
 SCRIPT_SUITES = ("runtime-check", "deploy-check")
 # A CI runner has no git identity, and a merge needs one even with --no-commit. The merge
 # cases run without the developer's own, so a missing one fails here and not only in CI.
@@ -86,7 +87,7 @@ class PlanTests(unittest.TestCase):
             "app/api/bills.py",
             "bss_mcp/server.py",
             "tests/conftest.py",
-            "loadtest/seed.py",
+            "tests/test_seed.py",
             "alembic.ini",
             ".env.example",
             "app/README.md",
@@ -103,29 +104,73 @@ class PlanTests(unittest.TestCase):
         )
 
     def test_what_any_test_may_depend_on_gets_the_whole_suite(self):
+        for path in ("spec/TMF620.json", "app/worker/run.py", "pyproject.toml"):
+            with self.subTest(path):
+                self.assertEqual(self.plan(path, "frontend/src/a.ts"), ["test-recorded"])
+
+    def test_the_migrations_pins_and_image_bring_the_migration_history_into_the_suite(self):
         for path in (
-            "spec/TMF620.json",
-            "app/worker/run.py",
             "alembic/versions/0001.py",
-            "pyproject.toml",
+            "alembic/env.py",
             "requirements-dev.txt",
             "constraints.txt",
             "Dockerfile",
             "compose.override.yaml",
         ):
             with self.subTest(path):
-                self.assertEqual(self.plan(path, "frontend/src/a.ts"), ["test-recorded"])
+                self.assertEqual(
+                    self.plan(path, "frontend/src/a.ts"),
+                    ["test-recorded MARKS=migration_history"],
+                )
+
+    def test_the_seed_load_test_and_gap_probe_paths_run_the_slow_tests(self):
+        for path in (
+            "tests/seed.py",
+            "tests/tmf_gaps.py",
+            "tests/tmf-gaps.txt",
+            "loadtest/seed.py",
+            "app/integrations/network/usage_load.py",
+        ):
+            with self.subTest(path):
+                self.assertEqual(
+                    self.plan(path), ["test-smoke", "test-marked MARKS=slow", "test-changed"]
+                )
+
+    def test_the_whole_suite_takes_every_mark_the_change_brings_back(self):
+        self.assertEqual(
+            self.plan("alembic/versions/0001.py", "tests/seed.py"),
+            ["test-recorded MARKS=migration_history,slow"],
+        )
+        self.assertEqual(
+            self.plan("spec/TMF620.json", "loadtest/seed.py"), ["test-recorded MARKS=slow"]
+        )
+
+    def test_other_paths_bring_no_marked_test_back(self):
+        for path in ("app/billing.py", "tests/test_seed.py", "tests/conftest.py", "alembic.ini"):
+            with self.subTest(path):
+                self.assertNotIn("MARKS", " ".join(self.plan(path)))
+
+    def test_every_migration_history_path_calls_for_the_whole_suite(self):
+        # so a retry on content the whole suite ran on (the stamp) owes it no second run
+        for path in ("alembic/a.py", "requirements.txt", "constraints-x.txt", "Dockerfile"):
+            with self.subTest(path):
+                self.assertTrue(hook_selection.MARKED["migration_history"].search(path))
+                self.assertTrue(hook_selection.FULL.search(path))
 
     def test_a_retry_on_the_content_the_suite_ran_on_is_incremental(self):
         self.assertEqual(self.plan("alembic/versions/0001.py", stamp="d1"), USUAL)
+        self.assertEqual(
+            self.plan("alembic/versions/0001.py", "tests/seed.py", stamp="d1"),
+            ["test-smoke", "test-marked MARKS=slow", "test-changed"],
+        )
         self.assertEqual(
             self.plan("alembic/versions/0001.py", "frontend/src/a.ts", stamp="d1"),
             [*USUAL, f"test-files TESTS={UI_TESTS}"],
         )
 
     def test_another_content_or_no_stamp_is_the_whole_suite_again(self):
-        self.assertEqual(self.plan("alembic/versions/0001.py", stamp="d0"), ["test-recorded"])
-        self.assertEqual(self.plan("alembic/versions/0001.py", stamp=None), ["test-recorded"])
+        self.assertEqual(self.plan("alembic/versions/0001.py", stamp="d0"), [RECORDED_HISTORY])
+        self.assertEqual(self.plan("alembic/versions/0001.py", stamp=None), [RECORDED_HISTORY])
 
     def test_data_key(self):
         self.assertEqual(hook_selection.data_key("frontend/src/a/b.ts"), "frontend/src/")
@@ -172,16 +217,16 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(self.script("digest"), first)
 
     def test_the_plan_reads_the_staged_files_and_the_stamp(self):
-        self.assertEqual(self.script("plan"), "test-recorded")
+        self.assertEqual(self.script("plan"), RECORDED_HISTORY)
         self.write(".testmon/full-suite", "")  # a suite that did not run to its end
-        self.assertEqual(self.script("plan"), "test-recorded")
+        self.assertEqual(self.script("plan"), RECORDED_HISTORY)
         self.write(".testmon/full-suite", self.script("digest") + "\n")
         self.assertEqual(
             self.script("plan"), f"test-smoke\ntest-changed\ntest-files TESTS={UI_TESTS}"
         )
         self.write("alembic/versions/0001.py", "fixed\n")
         run(self.repo, "git", "add", "-A")
-        self.assertEqual(self.script("plan"), "test-recorded")
+        self.assertEqual(self.script("plan"), RECORDED_HISTORY)
 
 
 class MergeTests(unittest.TestCase):
@@ -301,7 +346,7 @@ class MergeTests(unittest.TestCase):
         self.write("docs/y.md", "more\n")
         run(self.repo, "git", "add", "-A")
         self.assertEqual(self.script("paths"), "alembic/versions/0003.py\ndocs/y.md")
-        self.assertEqual(self.script("plan"), "test-recorded")
+        self.assertEqual(self.script("plan"), RECORDED_HISTORY)
 
 
 class SuiteStampTests(unittest.TestCase):

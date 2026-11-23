@@ -3,7 +3,6 @@ docs/decisions/self-care.md "Online signup". Every response is checked against t
 and internal specs by the clients."""
 
 # ruff: noqa: F811
-import re
 from datetime import date, timedelta
 from decimal import Decimal as D
 from uuid import UUID
@@ -14,16 +13,9 @@ from app.config import settings
 from app.integrations.identity import adapter as identity
 from app.integrations.network import adapter as network
 from app.integrations.notify import adapter as sender
-from tests import timeline
-from tests.test_prepaid_plans import (  # noqa: F401 - fixtures
-    PROFILE,
-    balance,
-    offering,
-    price,
-    stubs,
-)
-from tests.test_prepaid_renewal_producer import tick
-from tests.test_self_care import (  # noqa: F401 - fixtures
+from tests.builders.care_signup import identity_stub, last_code, shop, stock, wake  # noqa: F401
+from tests.builders.prepaid_plans import balance, stubs  # noqa: F401 - fixtures
+from tests.builders.self_care import (  # noqa: F401 - fixtures
     BASE,
     PASSWORD,
     care,
@@ -38,52 +30,6 @@ INTERNAL = "/internal/v1/careSignup"
 EMAIL = "new.customer@example.org"
 ADDRESS = {"street1": "1 Main St", "city": "Albany", "stateOrProvince": "NY", "postCode": "12207"}
 PERSON = {"givenName": "Grace", "familyName": "Hopper", "birthDate": "1990-12-09"}
-
-
-@pytest.fixture(autouse=True)
-def identity_stub():
-    identity().reset()
-    yield identity()
-    identity().reset()
-
-
-@pytest.fixture
-def shop(api, db_conn, stubs):
-    """A plan of 10 a month (+20% tax) that needs a number and a SIM, eSIM stock and a pool."""
-    plan = offering(api, "Plan 10", [price(api, "recurring", 10, "Monthly", "monthly", 1)],
-                    kind="plan", profile=PROFILE)  # fmt: skip
-    spec = api.get(plan["productSpecification"]["href"]).json()
-    response = api.patch(
-        spec["href"],
-        {
-            "resourceSpecification": [
-                {"id": "msisdn", "@type": "ResourceSpecificationRef"},
-                {"id": "imsi", "@type": "ResourceSpecificationRef"},
-            ]
-        },
-    )
-    assert response.status_code == 200, response.text
-    api.clock.set(timeline.START + timedelta(hours=9))
-    return plan
-
-
-def stock(api, esims=2, numbers=2):
-    if esims:
-        assert (
-            api.post("/internal/v1/sim/esim-generate", {"batch": "E1", "count": esims}).status_code
-            == 201
-        )
-    if numbers:
-        assert (
-            api.post("/internal/v1/number/pool", {"areaCode": "212", "count": numbers}).status_code
-            == 201
-        )
-
-
-def last_code():
-    return re.search(
-        r"code to confirm this email for your new line is (\d{6})\.", sender().sent[-1].body
-    ).group(1)
 
 
 def start(care, plan, email=EMAIL):
@@ -103,12 +49,6 @@ def details(care, signup, **over):
     return care.put(
         f"{SIGNUP}/{signup['id']}/details", {**PERSON, "serviceAddress": ADDRESS, **over}
     )
-
-
-def wake(api, db_conn, times=1):
-    for _ in range(times):
-        tick(db_conn, api.clock.now())
-        api.clock.set(api.clock.now() + timedelta(minutes=1))
 
 
 def state(care, signup):
@@ -251,7 +191,8 @@ def test_codes_details_and_replays(api, care, db_conn, shop):
     assert early_pay.status_code == 409 and early_pay.json()["code"] == "signupState"
     unknown = care.post(SIGNUP, {"email": "x@example.org", "offeringId": signup["id"]})
     assert unknown.status_code == 422 and unknown.json()["code"] == "offeringUnavailable"
-    assert care.get(f"{SIGNUP}/{signup['id'][:-1]}0").status_code == 404
+    unknown = signup["id"][:-1] + ("1" if signup["id"].endswith("0") else "0")
+    assert care.get(f"{SIGNUP}/{unknown}").status_code == 404
     assert care.post(SIGNUP, {"email": EMAIL, "offeringId": shop["id"], "x": 1}).status_code == 400
 
 

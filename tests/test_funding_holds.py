@@ -11,13 +11,15 @@ from psycopg import errors
 from alembic import command
 from app.billing.funding import InsufficientFunds
 from app.repository import funding
+from tests.builders.funding_db import billed_charge
+from tests.builders.settlement_db import allocate, make_payment
 from tests.factories import NOW, account, rejected, world
-from tests.test_funding_db import billed_charge
-from tests.test_settlement_db import allocate, make_payment
 
 
 def test_settlement_skips_mixed_held_sources_and_release_restores_them(db_conn):
-    from tests.test_settlement_db import settle_account
+    from tests.builders.settlement_db import (
+        settle_account,
+    )
 
     w = world(db_conn)
     make_payment(db_conn, w.account, "6")
@@ -151,6 +153,7 @@ def test_hold_details_are_immutable_and_totals_must_match(db_conn):
         db_conn.execute("SET CONSTRAINTS ALL IMMEDIATE")
 
 
+@pytest.mark.migration_history
 def test_hold_downgrade_retains_released_history(temp_db_url):
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "0034")

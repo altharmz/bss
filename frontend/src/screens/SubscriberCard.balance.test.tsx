@@ -709,6 +709,8 @@ describe('prepaid plans (#212)', () => {
     shortfall: usd(1.8),
     fees: [{ name: 'Extra 2 GB', amount: usd(4), tax: usd(0.8), gross: usd(4.8) }],
   };
+  // the quote names the plan the add-on is for: it then gives the add-on's end (#383)
+  const QUOTE = `GET ${INTERNAL}/firstCharge?productOffering.id=${ADDON}&startDate=2026-10-01&parentProduct.id=${P1}`;
   const routes = (extra: Record<string, Handler> = {}) =>
     backend(
       {
@@ -805,8 +807,7 @@ describe('prepaid plans (#212)', () => {
 
   it('offers Buy add-on on a plan only, quotes the fee and orders the add item', async () => {
     const { fetchMock } = routes({
-      [`GET ${INTERNAL}/firstCharge?productOffering.id=${ADDON}&startDate=2026-10-01`]: () =>
-        json(quote),
+      [QUOTE]: () => json(quote),
       [`POST ${ORDERS}`]: () =>
         json({ id: 'o1', state: 'completed', '@type': 'ProductOrder' }, { status: 201 }),
     });
@@ -853,10 +854,90 @@ describe('prepaid plans (#212)', () => {
     });
   });
 
+  it('quotes a pass with its length and end date (#383)', async () => {
+    routes({
+      [QUOTE]: () =>
+        json({
+          ...quote,
+          addOn: {
+            parentProduct: { id: P1, href: '/p1' },
+            passDays: 7,
+            endDate: '2026-10-08',
+          },
+        }),
+    });
+    await open();
+    const row = await waitFor(() => productRow('Mobile L'));
+    fireEvent.click(productAction(row, 'Buy add-on…'));
+    const dialog = await screen.findByRole('dialog', { name: /Buy add-on/ });
+    fireEvent.click((await within(dialog).findAllByRole('radio'))[0] as HTMLElement);
+    await within(dialog).findByTestId('addon-required');
+    const end = expectUi('ui.subscriber.buyAddOn.passEnd');
+    expect(expectUi('ui.subscriber.buyAddOn.quote').contains(end)).toBe(true);
+    expect(end.textContent).toBe('Pass length7-day · ends 2026-10-08');
+  });
+
+  it('quotes an add-on without a pass length as lasting the plan period (#383)', async () => {
+    routes({
+      [QUOTE]: () =>
+        json({
+          ...quote,
+          addOn: { parentProduct: { id: P1, href: '/p1' }, passDays: null, endDate: '2026-10-20' },
+        }),
+    });
+    await open();
+    const row = await waitFor(() => productRow('Mobile L'));
+    fireEvent.click(productAction(row, 'Buy add-on…'));
+    const dialog = await screen.findByRole('dialog', { name: /Buy add-on/ });
+    fireEvent.click((await within(dialog).findAllByRole('radio'))[0] as HTMLElement);
+    await within(dialog).findByTestId('addon-required');
+    expect(expectUi('ui.subscriber.buyAddOn.passEnd').textContent).toBe(
+      'Laststhe plan period · ends 2026-10-20',
+    );
+  });
+
+  it("lists a plan's live passes with their end dates, not a plain pack (#383)", async () => {
+    // a hexadecimal plan id: the add-on rows show it shortened
+    const PLAN = 'abcd1234-0000-4000-8000-0000000000ff';
+    const owner = { ...plan, id: PLAN };
+    const roam = product('p0000003-0000-4000-8000-000000000003', {
+      offeringKind: 'addOn',
+      fundingSource: 'balance',
+      parentProduct: { id: PLAN, href: '/p1' },
+      passDays: 7,
+      startDate: '2026-09-28',
+      terminationDate: '2026-10-05',
+      price: null,
+      nextChargeDate: null,
+      productOffering: { id: 'o-roam', name: 'Roam 7 days', code: null },
+    });
+    const ended = product('p0000004-0000-4000-8000-000000000004', {
+      offeringKind: 'addOn',
+      fundingSource: 'balance',
+      parentProduct: { id: PLAN, href: '/p1' },
+      passDays: 1,
+      startDate: '2026-09-29',
+      terminationDate: '2026-10-01',
+      price: null,
+      nextChargeDate: null,
+      productOffering: { id: 'o-day', name: 'Roam 1 day', code: null },
+    });
+    const ownPack = { ...pack, parentProduct: { id: PLAN, href: '/p1' }, passDays: null };
+    routes({
+      [`GET ${INTERNAL}/products`]: () => json([owner, ownPack, roam, ended], { total: 4 }),
+    });
+    await open();
+    const row = await waitFor(() => productRow('Mobile L'));
+    const passes = within(row).getByText(/Live passes/);
+    expect(passes).toBe(expectUi('ui.subscriber.passes'));
+    expect(passes.textContent).toBe('Live passes: Roam 7 days (7-day) ends 2026-10-05');
+    expect(within(productRow('Roam 7 days')).getByText(/Add-on · 7-day pass · plan/)).toBeTruthy();
+    expect(within(productRow('Extra 2 GB')).queryByText(/Live passes/)).toBeNull();
+  });
+
   it('shows the readable reason when the server rejects the add-on', async () => {
     routes({
-      [`GET ${INTERNAL}/firstCharge?productOffering.id=${ADDON}&startDate=2026-10-01`]: () =>
-        json(quote),
+      [QUOTE]: () => json(quote),
       [`POST ${ORDERS}`]: () =>
         json(
           {

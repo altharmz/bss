@@ -12,13 +12,14 @@ from app.integrations.notify import adapter as sender
 from tests import apidata
 from tests.apiclient import total
 from tests.apidata import ACCOUNT, CUSTOMER, ORDER, PARTY
-from tests.test_api_account_attributes import CONTACT
-from tests.test_api_resource_inventory import number
-from tests.test_imsi import all_refs
-from tests.test_network_provisioning import stub, world  # noqa: F401 - fixtures
-from tests.test_notifications import contact, customer_of, fetched, of_event, quiet
-from tests.test_prepaid_renewal_producer import tick
-from tests.test_sim_inventory import (  # noqa: F401 - fixtures
+from tests.builders.account_security import PIN, SEC, audit, head, set_pin
+from tests.builders.api_account_attributes import CONTACT
+from tests.builders.api_resource_inventory import number
+from tests.builders.imsi import all_refs
+from tests.builders.network_provisioning import stub, world  # noqa: F401 - fixtures
+from tests.builders.notifications import contact, customer_of, fetched, of_event, quiet
+from tests.builders.prepaid_renewal_producer import tick
+from tests.builders.sim_inventory import (  # noqa: F401 - fixtures
     activate_line,
     by_imsi,
     line_world,
@@ -31,10 +32,8 @@ from tests.test_sim_inventory import (  # noqa: F401 - fixtures
 
 pytestmark = pytest.mark.capability("worker.accountSecurity")
 
-SEC = "/internal/v1/security"
 PORT = "/internal/v1/port"
 PIN_URL = "/internal/v1/port/pin"
-PIN = "482913"
 OTHER = "135790"
 
 
@@ -48,21 +47,6 @@ def log_sender():
     sender().reset()
     yield sender()
     sender().reset()
-
-
-def head(pin):
-    return {} if pin is None else {"X-Account-Pin": pin}
-
-
-def set_pin(api, customer, pin=PIN, reason="identity checked at the counter"):
-    return api.put(f"{SEC}/pin/{customer}", {"pin": pin, "reason": reason})
-
-
-def audit(api, **filters):
-    query = "&".join(f"{k}={v}" for k, v in filters.items())
-    response = api.get(f"{SEC}/audit?limit=100" + (f"&{query}" if query else ""))
-    assert response.status_code == 200, response.text
-    return response.json()
 
 
 def swap(api, db_conn, world, product, new_sim, pin=None):

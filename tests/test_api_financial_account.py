@@ -9,38 +9,7 @@ from psycopg import errors
 from tests import apidata
 from tests.apiclient import decimals, total
 from tests.apidata import ACCOUNT, NIL, PARTY
-
-FINANCIAL = "/tmf-api/accountManagement/v5/financialAccount"
-
-
-def owner(party, **over):
-    return {
-        "role": "owner",
-        "partyOrPartyRole": {
-            "id": party["id"],
-            "href": party["href"],
-            "@type": "PartyRef",
-            "@referredType": party["@type"],
-        },
-        "@type": "RelatedPartyRefOrPartyRoleRef",
-        **over,
-    }
-
-
-def financial(api, party, **over):
-    body = {
-        "@type": "FinancialAccount",
-        "name": "Group receivables",
-        "relatedParty": [owner(party)],
-    }
-    response = api.post(FINANCIAL, {**body, **over})
-    assert response.status_code == 201, response.text
-    assert response.headers["location"] == response.json()["href"]
-    return response.json()
-
-
-def link(fa):
-    return {"id": fa["id"], "@type": "FinancialAccountRef", "@referredType": "FinancialAccount"}
+from tests.builders.api_financial_account import FINANCIAL, financial, link, owner
 
 
 def test_financial_account_round_trip(api):

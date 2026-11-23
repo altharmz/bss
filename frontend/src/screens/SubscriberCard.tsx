@@ -56,6 +56,8 @@ import {
 import { NumberModal } from './ProductNumber';
 import { TransferPinDialog } from './TransferPin';
 import { DeviceDialog } from './ProductDevice';
+import { E911Dialog, E911Line, offersE911Edit } from './E911Address';
+import { e911Text } from '../api/e911';
 import { BillDialog, RecordPaymentModal, useBills } from './Bills';
 import { ActionDialog, BalanceActions } from './PrepaidHistory';
 import {
@@ -66,7 +68,7 @@ import {
   type ProductAction,
 } from './ProductActions';
 import { PaymentMethodsPanel } from './PaymentMethods';
-import { BuyAddOnDialog, canBuyAddOn, PlanFacts, RenewalHistory } from './PrepaidPlans';
+import { BuyAddOnDialog, canBuyAddOn, LivePasses, PlanFacts, RenewalHistory } from './PrepaidPlans';
 import { PrepaidMoneyModal, type MoneyForm } from './PrepaidMoney';
 import { FailedCommands, OrderWatch } from './PrepaidOrderWatch';
 import { PrepaidTransferModal, TransferWatch } from './PrepaidTransfer';
@@ -259,6 +261,7 @@ function Card({
   const [numberProduct, setNumberProduct] = useState<string | null>(null);
   const [pinProduct, setPinProduct] = useState<string | null>(null);
   const [deviceProduct, setDeviceProduct] = useState<AccountProduct | null>(null);
+  const [e911Product, setE911Product] = useState<AccountProduct | null>(null);
   const [adding, setAdding] = useState(false);
   const [paying, setPaying] = useState(false);
   const [money, setMoney] = useState<MoneyForm | null>(null);
@@ -591,9 +594,11 @@ function Card({
                       key={product.id}
                       account={account}
                       product={product}
+                      siblings={rows}
                       onNumber={() => setNumberProduct(product.id)}
                       onTransferPin={() => setPinProduct(product.id)}
                       onDevice={() => setDeviceProduct(product)}
+                      onE911={() => setE911Product(product)}
                       onBuyAddOn={() => setAddOnFor(product)}
                       onPick={(change, immediate) =>
                         setProductDialog({ product, change, immediate })
@@ -807,6 +812,19 @@ function Card({
           productId={deviceProduct.id}
           canChange={['active', 'suspended'].includes(deviceProduct.status)}
           onClose={() => setDeviceProduct(null)}
+          onDone={(message, accepted) => {
+            toast(message);
+            if (accepted?.id) onWatch(watch('order', accepted.id, accepted.label));
+            reload();
+          }}
+        />
+      )}
+      {e911Product !== null && (
+        <E911Dialog
+          accountId={account.id}
+          product={e911Product}
+          onClose={() => setE911Product(null)}
+          onRefresh={reload}
           onDone={(message, accepted) => {
             toast(message);
             if (accepted?.id) onWatch(watch('order', accepted.id, accepted.label));
@@ -1273,22 +1291,27 @@ function statusNote(product: AccountProduct): { status: string; label: string } 
 function ProductRow({
   account,
   product,
+  siblings,
   onDone,
   onTopUp,
   onPick,
   onNumber,
   onTransferPin,
   onDevice,
+  onE911,
   onBuyAddOn,
 }: {
   account: Account;
   product: AccountProduct;
+  /** the account's products, for a plan's live passes */
+  siblings: AccountProduct[];
   onDone: (message: string, accepted?: PendingOrder) => void;
   onTopUp: (amount: string) => void;
   onPick: (change: ProductAction, immediate: boolean) => void;
   onNumber: () => void;
   onTransferPin: () => void;
   onDevice: () => void;
+  onE911: () => void;
   onBuyAddOn: () => void;
 }) {
   const context = useSystemContext();
@@ -1347,6 +1370,8 @@ function ProductRow({
               <span className="bss-name">{name}</span>
               <div className="bss-code">{code}</div>
               <PlanFacts product={product} />
+              <E911Line product={product} prepaid={account.ratingType === 'prepaid'} />
+              <LivePasses plan={product} products={siblings} today={context.businessDate} />
               {product.lifecycle && (
                 <div className="bss-secondary" data-ui="ui.subscriber.productLifecycle">
                   Lifecycle: {product.lifecycle.state}
@@ -1431,6 +1456,15 @@ function ProductRow({
                 ...(account.ratingType === 'prepaid'
                   ? [{ label: 'Device…', ui: 'ui.subscriber.deviceItem', onClick: onDevice }]
                   : []),
+                ...(offersE911Edit(product, account.ratingType === 'prepaid')
+                  ? [
+                      {
+                        label: 'Edit E911 address…',
+                        ui: 'ui.subscriber.e911.edit',
+                        onClick: onE911,
+                      },
+                    ]
+                  : []),
                 ...(canBuyAddOn(product, context.businessDate)
                   ? [
                       {
@@ -1493,11 +1527,15 @@ function ProductRow({
               ? c.status === 'suspended'
                 ? `Suspends on ${c.date}`
                 : `Resumes on ${c.date}`
-              : `Changes to ${c.productOffering?.name ?? 'another offering'} on ${c.date}${
-                  account.ratingType === 'prepaid' && c.date < context.businessDate
-                    ? ' (waits for funds)'
-                    : ''
-                }`}
+              : c.kind === 'e911'
+                ? `E911 address changes to ${
+                    c.e911Address ? e911Text(c.e911Address) : 'a new address'
+                  } when the network confirms`
+                : `Changes to ${c.productOffering?.name ?? 'another offering'} on ${c.date}${
+                    account.ratingType === 'prepaid' && c.date < context.businessDate
+                      ? ' (waits for funds)'
+                      : ''
+                  }`}
           </span>{' '}
           <Button
             small

@@ -15,7 +15,7 @@ from app.config import settings
 from tests import apidata
 from tests.apiclient import decimals, total
 from tests.apidata import ACCOUNT, CATALOG, NIL
-from tests.test_billing_db import add, at, bill, delete
+from tests.builders.billing_db import add, at, bill, delete
 from tests.timeline import iso, midnight
 
 D = Decimal

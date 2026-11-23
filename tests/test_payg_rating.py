@@ -14,9 +14,16 @@ from app.repository import housekeeping as housekeeping_repo
 from app.repository import usage as usage_repo
 from app.worker import db as worker_db
 from app.worker.housekeeping import housekeep
-from tests import apidata, contract, timeline
+from tests import contract, timeline
 from tests.apidata import CATALOG
-from tests.test_prepaid_plans import (  # noqa: F401 - fixtures and helpers
+from tests.builders.payg_rating import (  # noqa: F401 - fixtures
+    USAGE,
+    next_day,
+    payg,
+    report,
+    usage_price,
+)
+from tests.builders.prepaid_plans import (  # noqa: F401 - fixtures
     RATES,
     VAT,
     at,
@@ -27,85 +34,13 @@ from tests.test_prepaid_plans import (  # noqa: F401 - fixtures and helpers
     offering,
     stubs,
 )
-from tests.test_prepaid_renewal_producer import tick
+from tests.builders.prepaid_renewal_producer import tick
 
 pytestmark = pytest.mark.capability("worker.usageRating")
 
-USAGE = "/tmf-api/productUsageManagement/v5/productUsage"
 SUMMARY = "/internal/v1/usage/summary"
 TOPUP = "/tmf-api/prepayBalanceManagement/v4/topupBalance"
 MIB = 1024 * 1024
-RECORDS = iter(range(10**6))
-
-
-def usage_price(api, units, value, amount=1, name=None, tax=VAT, **over):
-    body = {
-        "@type": "ProductOfferingPrice",
-        "name": name or f"Usage per {units}",
-        "lifecycleStatus": "Active",
-        "priceType": "usage",
-        "price": {"unit": "USD", "value": value},
-        "validFor": {"startDateTime": timeline.iso(timeline.START)},
-        "tax": tax,
-        "unitOfMeasure": {"amount": amount, "units": units},
-    } | over
-    return create(api, "productOfferingPrice", body)
-
-
-@pytest.fixture
-def payg(api, db_conn, build):
-    """A funded prepaid account with a pay-as-you-go line whose offering rates data per
-    MB (0.10), voice per minute (0.05) and SMS per message (0.02), each +20% tax."""
-
-    def make(funds="10", kinds=("data", "voice", "sms")):
-        world = build(funds)
-        prices = {
-            "data": lambda: usage_price(api, "MB", 0.10, name="Data"),
-            "voice": lambda: usage_price(api, "minute", 0.05, name="Voice"),
-            "sms": lambda: usage_price(api, "message", 0.02, name="SMS"),
-        }
-        api.clock.set(timeline.START)  # prices valid from the start of the timeline
-        world.offering = offering(
-            api, "Usage line", [prices[k]() for k in kinds], kind="payAsYouGo"
-        )
-        api.clock.set(timeline.START + timedelta(hours=9))
-        placed = apidata.order(api, world.acc, apidata.add_item(world.offering))
-        assert placed["state"] == "inProgress", placed
-        tick(db_conn, api.clock.now())
-        done = api.get(placed["href"]).json()
-        assert done["state"] == "completed", done
-        world.product = apidata.product_of(api, done)
-        network().received.clear()
-        return world
-
-    return make
-
-
-def report(api, product, kind, quantity, when, record=None):
-    record = record or f"mediation-{next(RECORDS)}"
-    body = {
-        "@type": "ProductUsage",
-        "usageSpecification": {"id": kind, "@type": "ProductUsageSpecificationRef"},
-        "product": {"id": product["id"], "@type": "ProductRef", "@referredType": "Product"},
-        "usageCharacteristic": [
-            {
-                "@type": "IntegerCharacteristic",
-                "name": "quantity",
-                "valueType": "integer",
-                "value": quantity,
-            },
-            {
-                "@type": "StringCharacteristic",
-                "name": "eventTime",
-                "valueType": "string",
-                "value": when.isoformat(),
-            },
-        ],
-        "externalIdentifier": [{"@type": "ExternalIdentifier", "owner": "mediation", "id": record}],
-    }
-    response = api.post(USAGE, body)
-    assert response.status_code == 201, response.text
-    return response.json()
 
 
 def top_up(api, db_conn, world, value):
@@ -123,11 +58,6 @@ def top_up(api, db_conn, world, value):
         },
     )
     assert response.status_code == 201, response.text
-
-
-def next_day(api, db_conn, days=1):
-    api.clock.set(at(api.clock.today() + timedelta(days=days)))
-    return tick(db_conn, api.clock.now())
 
 
 def rates(db_conn):

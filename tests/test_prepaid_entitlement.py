@@ -12,12 +12,13 @@ from app.clock import FixedClock
 from app.repository import parties, products
 from app.worker import db as worker_db
 from app.worker.prepaid import observe_entitlements
+from tests.builders.events import stored, subscribe
+from tests.builders.prepaid_posting import TZ, post, prepared
+from tests.builders.prepaid_renewal import renewal
 from tests.factories import NOW
-from tests.test_events import stored, subscribe
-from tests.test_prepaid_posting import TZ, post, prepared
-from tests.test_prepaid_renewal import renewal
 
 
+@pytest.mark.migration_history
 def test_manual_cause_migration_preserves_suspended_history(temp_db_url):
     from tests.factories import account, offering, product
 

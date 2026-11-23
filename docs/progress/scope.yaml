@@ -567,6 +567,11 @@ items:
   - {id: ui.subscriber.buyAddOn, area: ui, stage: 5, title: "Buy add-on dialog: add-on offerings and the TMF622 add order with an addOn relationship"}
   - {id: ui.subscriber.buyAddOn.quote, area: ui, stage: 5, title: "Add-on price with taxes and fees from the first-charge quote"}
   - {id: ui.subscriber.buyAddOn.topUp, area: ui, stage: 5, title: "Top up the add-on shortfall"}
+  - {id: ui.subscriber.buyAddOn.passEnd, area: ui, stage: 5, title: "Pass length and end date of an add-on in the Buy add-on quote (issue 383)"}
+  - {id: ui.subscriber.passes, area: ui, stage: 5, title: "Live passes of a plan line with their end dates (issue 383)"}
+  - {id: ui.subscriber.e911, area: ui, stage: 5, title: "E911 address of a Wi-Fi calling line on its product row, or that none is registered (issue 384)"}
+  - {id: ui.subscriber.e911.edit, area: ui, stage: 5, title: "Edit E911 address menu item of a prepaid line with Wi-Fi calling or an address, no change waiting (issue 384)"}
+  - {id: ui.subscriber.e911.form, area: ui, stage: 5, title: "Edit E911 address dialog: a modify order with only product.place and the account PIN; a Wi-Fi line waits for the network (issue 384)"}
   - {id: ui.subscriber.offeringChange, area: ui, stage: 5, title: "Change offering dialog (both modes)"}
   - {id: ui.subscriber.undoChange, area: ui, stage: 5, title: "Undo a pending change (cancel its order)"}
   - {id: ui.subscriber.topUpProduct, area: ui, stage: 5, title: "Top up from a funding-suspended product"}
@@ -607,6 +612,7 @@ items:
   - {id: ui.subscriber.prepaid.editNoteForm, area: ui, stage: 5, title: "Note form of the Balance action dialog"}
   - {id: ui.addProduct.prepaidPreview, area: ui, stage: 5, title: "Prepaid first-charge preview in Add product: to pay, available, shortfall, ledger after"}
   - {id: ui.addProduct.serviceAddress, area: ui, stage: 5, title: "Set service address from Add product after a serviceAddressRequired refusal: opens the card's service address dialog"}
+  - {id: ui.addProduct.e911, area: ui, stage: 5, title: "E911 address group of a Wi-Fi calling offering in Add product: Same as service address by default, or a typed address sent as product.place (issue 384)"}
   - {id: ui.addProduct.topUpShortfall, area: ui, stage: 5, title: "Top up the shortfall from Add product: opens the Top-up form with the amount typed in"}
   - {id: ui.bills, area: ui, stage: 5, title: "Bills screen: bills and bill cycles tabs with state, account and billing date filters"}
   - {id: ui.wholesale, area: ui, stage: 5, title: "Wholesale invoice list with totals, discrepancies and margin"}
@@ -658,11 +664,13 @@ items:
   - {id: ui.catalog.lifecycle, area: ui, stage: 5, title: "Offering lifecycle step (Activate / Retire)"}
   - {id: ui.catalog.addPrice, area: ui, stage: 5, title: "Add a one-time, monthly recurring or pay-as-you-go usage price with its rounding block"}
   - {id: ui.catalog.usagePrices, area: ui, stage: 5, title: "Usage prices in a pay-as-you-go offering detail"}
+  - {id: ui.catalog.usageZone, area: ui, stage: 5, title: "Zone of a usage price (domestic, roaming, international) in Add price and the price dialog (issue 383)"}
   - {id: ui.catalog.multiLineTiers, area: ui, stage: 5, title: "Multi-line discounts group of a plan offering: tiers by minimum lines, amount off per line and validity (issue 380)"}
   - {id: ui.catalog.multiLineTiers.new, area: ui, stage: 5, title: "New multi-line tier: Add price on a discount with Minimum lines and the plan period (issue 380)"}
   - {id: ui.catalog.multiLineTiers.lines, area: ui, stage: 5, title: "Minimum lines of a multi-line tier in the price dialog (issue 380)"}
   - {id: ui.catalog.usageUnit, area: ui, stage: 5, title: "Fixed rounding unit in a usage-price detail"}
   - {id: ui.catalog.offeringKind, area: ui, stage: 5, title: "Set the offering kind: plan, add-on or pay as you go"}
+  - {id: ui.catalog.passDays, area: ui, stage: 5, title: "Pass length (days) of an add-on offering in its edit and detail (issue 383)"}
   - {id: ui.catalog.kind, area: ui, stage: 5, title: "Offering kind in the offering detail"}
   - {id: ui.catalog.oneTimePrices, area: ui, stage: 5, title: "One-time prices (activation fee) in the offering detail"}
   - {id: ui.catalog.changePrice, area: ui, stage: 5, title: "Change price of a live offering"}
@@ -836,6 +844,7 @@ items:
   - {id: ui.prepaidCommands.previous, area: ui, stage: 5, title: "Prepaid commands: previous page"}
   - {id: ui.subscriber.usage.barred, area: ui, stage: 5, title: "Usage allowance: service barred"}
   - {id: ui.subscriber.usage.throttled, area: ui, stage: 5, title: "Usage allowance: service throttled"}
+  - {id: ui.subscriber.usage.zone, area: ui, stage: 5, title: "Usage allowance: roaming and international sections when the line has an allowance or usage in that zone (issue 383)"}
   - {id: ui.subscriber.usage.pooled, area: ui, stage: 5, title: "Usage allowance: a pooled line's data bar reads from the account pool, with its members and period (issue 380)"}
   - {id: ui.subscriber.usage.status, area: ui, stage: 5, title: "Subscriber usage record: rating status"}
   - {id: ui.subscriber.usage.appliedPrice, area: ui, stage: 5, title: "Subscriber usage record: applied usage price and rounding unit"}

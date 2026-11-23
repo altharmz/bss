@@ -89,6 +89,12 @@ G5 / B8: Products started today first become visible to tomorrow’s run. Unchar
   `id IN (... UNION ...)`: the planner cannot know how many rows a prefix matches, and
   hashing every match cost 20-60 ms (narrow) to 1.6 s (one letter) at 100k accounts.
   Measurements: [loadtest-plan-sweep.md](../loadtest-plan-sweep.md#registry-lists-and-searches-330).
+  A match can have a probe form and a page form (#365, 2026-11-21). The subscriber number
+  probes from the number side (a lateral nested loop from each matching number to its
+  account) and its page tests each account with a correlated EXISTS, never the set of
+  every matching number. The probe is read through a server-side cursor and stops at
+  MATCH_CAP + 1 distinct rows. A broad number prefix went from 1.3-1.9 s to ~75 ms:
+  [loadtest-plan-sweep.md](../loadtest-plan-sweep.md#subscriber-number-prefixes-365).
 
 - `GET /internal/v1/report/kpi` (issue #198): prepaid KPIs by month (lines, net adds, churn,
   billed revenue by source, ARPU), read-only and computed on request. Entry:

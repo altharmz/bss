@@ -14,21 +14,13 @@ from app.integrations.tax.stub import FAILING_ZIP
 from app.worker import loop
 from tests import apidata
 from tests.apidata import ACCOUNT, ORDER, service_address_contact
-from tests.test_prepaid_orders import shop
-from tests.test_prepaid_renewal_producer import TZ, tick
-from tests.test_prepaid_terminations import terminate
+from tests.builders.prepaid_orders import shop
+from tests.builders.prepaid_posting import TZ
+from tests.builders.prepaid_renewal_producer import tick
+from tests.builders.prepaid_terminations import terminate
+from tests.builders.tax_engine import CA, set_address
 
-CA = {
-    "street1": "1 Market St",
-    "city": "San Francisco",
-    "stateOrProvince": "CA",
-    "postCode": "94105",
-}
 NY = {"street1": "5 Main St", "city": "Albany", "stateOrProvince": "NY", "postCode": "12207-1234"}
-
-
-def set_address(api, acc, address, **kw):
-    return api.patch(f"{ACCOUNT}/{acc['id']}", {"contact": service_address_contact(address)}, **kw)
 
 
 @pytest.fixture(autouse=True)

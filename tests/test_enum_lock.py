@@ -5,15 +5,12 @@ typo with a trailing space ('aborted ' in ProductStatusType). Order matters too.
 A missing spec file is a failure, never a skip.
 """
 
-import json
-from pathlib import Path
-
 import pytest
-import yaml
+
+from tests.builders.enum_lock import SPEC_DIR, _spec_enum
 
 pytestmark = pytest.mark.smoke
 
-SPEC_DIR = Path(__file__).resolve().parent.parent / "spec"
 
 # Postgres enum type -> (spec file, schema name)
 TMF_ENUMS = {
@@ -41,15 +38,6 @@ TMF_ENUMS = {
         "TroubleTicketStatusType",
     ),
 }
-
-
-def _spec_enum(filename: str, schema: str) -> list[str]:
-    path = SPEC_DIR / filename
-    assert path.is_file(), f"spec file missing: {path} (is ./spec mounted?)"
-    text = path.read_text()
-    doc = json.loads(text) if path.suffix == ".json" else yaml.load(text, Loader=yaml.CSafeLoader)
-    schemas = doc.get("components", {}).get("schemas") or doc["definitions"]
-    return [v.strip() for v in schemas[schema]["enum"]]
 
 
 def _pg_enum(conn, type_name: str) -> list[str]:

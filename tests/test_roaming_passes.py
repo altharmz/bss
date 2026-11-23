@@ -15,10 +15,11 @@ from app.network.usage import Incoming, ingest, ingest_batch
 from app.notify import events
 from tests import apidata, timeline
 from tests.apidata import CATALOG
-from tests.test_network_provisioning import PROFILE, characteristics
-from tests.test_payg_rating import RATES, usage_price
-from tests.test_prepaid_plans import (  # noqa: F401 - fixtures and helpers
+from tests.builders.network_provisioning import PROFILE, characteristics
+from tests.builders.payg_rating import usage_price
+from tests.builders.prepaid_plans import (  # noqa: F401 - fixtures
     ADDON_PROFILE,
+    RATES,
     add_on_item,
     at,
     build,
@@ -29,7 +30,7 @@ from tests.test_prepaid_plans import (  # noqa: F401 - fixtures and helpers
     price,
     stubs,
 )
-from tests.test_prepaid_renewal_producer import tick
+from tests.builders.prepaid_renewal_producer import tick
 
 pytestmark = pytest.mark.capability("worker.roamingPasses")
 
@@ -179,6 +180,39 @@ def test_a_pass_bought_3_days_before_the_period_ends_ends_with_it_and_sends_no_r
         "SELECT count(*) FROM network_command WHERE purpose = 'passEnd'"
     ).fetchone() == (0,)
     db_conn.commit()
+
+
+def test_the_add_on_quote_and_the_products_view_give_the_pass_length_and_end(api, db_conn, passes):
+    """Issue 383: firstCharge with parentProduct.id gives the end the order sets, and the
+    products view gives each add-on's passDays (the Buy add-on dialog and the passes list)."""
+    acc, plan = passes.acc, passes.line.product
+    base = f"/internal/v1/billingAccount/{acc['id']}/firstCharge"
+    start = api.clock.now().astimezone(timeline.TZ).date()
+
+    def quote(offering_, parent=plan["id"]):
+        query = f"?productOffering.id={offering_['id']}&startDate={start}"
+        return api.get(base + query + ("" if parent is None else f"&parentProduct.id={parent}"))
+
+    roam = quote(passes.roaming)
+    assert roam.status_code == 200, roam.text
+    assert roam.json()["addOn"] == {
+        "parentProduct": {"id": plan["id"], "href": plan["href"]},
+        "passDays": 7,
+        "endDate": str(start + timedelta(days=7)),
+    }
+    world = quote(passes.world).json()["addOn"]
+    assert world["passDays"] is None
+    assert world["endDate"] == str(passes.line.due)  # the rest of the plan period
+    assert "addOn" not in quote(passes.roaming, parent=None).json()
+    assert quote(passes.plan).status_code == 422  # not an add-on offering
+    assert quote(passes.roaming, parent=passes.roaming["id"]).status_code == 422
+
+    bought = buy_add_on(api, db_conn, passes, passes.roaming)
+    assert str(termination(db_conn, bought)) == roam.json()["addOn"]["endDate"]
+    rows = api.get(f"/internal/v1/billingAccount/{acc['id']}/products").json()
+    days = {p["id"]: p["passDays"] for p in rows}
+    assert days[bought["id"]] == 7
+    assert days[plan["id"]] is None
 
 
 # --- usage zones ---

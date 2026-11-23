@@ -152,12 +152,34 @@ hook-cases: ## [test] The shell cases of the hook's own scripts (the hook's lock
 	./scripts/test-billing-status-check.sh
 	./scripts/test-pre-commit-lock.sh
 
+# The tests make test and make test-recorded leave out (#424, docs/decisions/harness.md,
+# "Tests left out of the default run"): the historical migration replays and the slowest
+# tests. MARKS=a,b brings those marks back; MARKS=all runs everything (make test-all, and
+# the nightly CI run, whose job sets FULL=true). The hook passes MARKS when a path they
+# depend on changes (scripts/hook_selection.py, MARKED).
+comma := ,
+empty :=
+space := $(empty) $(empty)
+LEFT_OUT := migration_history slow
+MARKS ?= $(if $(filter true,$(FULL)),all)
+MARK_LIST = $(subst $(comma), ,$(MARKS))
+DESELECTED = $(if $(filter all,$(MARK_LIST)),,$(filter-out $(MARK_LIST),$(LEFT_OUT)))
+MARK_ARGS = $(if $(DESELECTED),-m "not ($(subst $(space), or ,$(strip $(DESELECTED))))")
+
 # A pass on a clean tree is recorded (scripts/full_suite.py, .testmon/full-suite-passed.json):
 # make check-pr reports it as full_suite, so a resumed session need not run the suite again.
 .PHONY: full-suite-snapshot
-test: full-suite-snapshot runtime-check deploy-check hook-cases ## [test] The FULL suite in the container (parallel; HYPOTHESIS_PROFILE=dev|ci), plus the harness and deploy script tests (runtime-check, deploy-check, hook-cases): nightly in CI, by hand before a PR (a pass on a clean tree is recorded for make check-pr)
-	$(LOCKED) ./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) $(if $(PLAN_CAPTURE_DIR),-e BSS_PLAN_CAPTURE_DIR=$(PLAN_CAPTURE_DIR)) oneoff pytest -n auto
+test: full-suite-snapshot runtime-check deploy-check hook-cases ## [test] The FULL suite in the container (parallel; HYPOTHESIS_PROFILE=dev|ci) without the tests marked migration_history or slow (make test-all), plus the harness and deploy script tests (runtime-check, deploy-check, hook-cases): by hand before a PR (a pass on a clean tree is recorded for make check-pr)
+	$(LOCKED) ./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) $(if $(PLAN_CAPTURE_DIR),-e BSS_PLAN_CAPTURE_DIR=$(PLAN_CAPTURE_DIR)) oneoff pytest -n auto $(MARK_ARGS)
 	@python3 -B scripts/full_suite.py record
+
+.PHONY: test-all test-marked
+test-all: ## [test] make test with every test, the ones marked migration_history or slow too: what the nightly CI run runs
+	$(MAKE) test MARKS=all
+
+test-marked: ## [test] Only the tests marked MARKS=a,b (migration_history, slow), recorded for testmon: the hook runs them when a path they depend on changes
+	@test -n "$(MARKS)" || { echo "MARKS=migration_history,slow is required" >&2; exit 2; }
+	$(LOCKED) ./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) oneoff pytest -n auto --testmon-noselect -m "$(subst $(space), or ,$(strip $(MARK_LIST)))"
 
 full-suite-snapshot: | testmon-dir
 	@python3 -B scripts/full_suite.py snapshot
@@ -178,17 +200,16 @@ test-changed: ## [test] Only the tests affected by the change since their last r
 # tested in full. Without runtime-check and deploy-check: the hook runs those by its own
 # path rules.
 .PHONY: test-recorded test-files
-test-recorded: ## [test] The hook's full backend suite, recorded for testmon (no harness or deploy suites; by hand use make test)
+test-recorded: ## [test] The hook's full backend suite, recorded for testmon (no harness or deploy suites, and the marks MARKS does not bring back left out; by hand use make test)
 	@: >.testmon/full-suite
-	$(LOCKED) ./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) -e FULL_SUITE_DIGEST="$$(python3 -B scripts/hook_selection.py digest)" oneoff sh -c 'pytest -n auto --testmon-noselect; status=$$?; if [ $$status -le 1 ]; then echo "$$FULL_SUITE_DIGEST" >/testmon/full-suite; fi; exit $$status'
+	$(LOCKED) ./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) -e FULL_SUITE_DIGEST="$$(python3 -B scripts/hook_selection.py digest)" oneoff sh -c 'pytest -n auto --testmon-noselect $(MARK_ARGS); status=$$?; if [ $$status -le 1 ]; then echo "$$FULL_SUITE_DIGEST" >/testmon/full-suite; fi; exit $$status'
 
-comma := ,
 test-files: ## [test] The listed test files (TESTS=tests/a.py,tests/b.py): the hook runs the readers of a staged data file
 	@test -n "$(TESTS)" || { echo "TESTS=tests/a.py,tests/b.py is required" >&2; exit 2; }
 	$(LOCKED) ./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) oneoff pytest -n auto $(subst $(comma), ,$(TESTS))
 
 .PHONY: testmon-dir
-test test-smoke test-changed test-recorded test-files check-preflight: | testmon-dir
+test test-smoke test-changed test-recorded test-files test-marked check-preflight: | testmon-dir
 testmon-dir:
 	@# Recover only an empty directory auto-created by Docker; preserve existing data.
 	@if [ -d .testmon ] && [ ! -w .testmon ]; then rmdir .testmon; fi

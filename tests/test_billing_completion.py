@@ -1,4 +1,5 @@
 """Real financial flows: final bill -> credit note -> payout, and immutable documents."""
+# ruff: noqa: F811
 
 import base64
 import json
@@ -12,28 +13,24 @@ import pytest
 
 from app.api import tmfjson
 from app.repository import billing
-from app.worker import db as worker_db
 from app.worker.on_demand import process_demands
-from app.worker.process import bill_date
 from app.worker.queue import process_requests
 from tests import apidata
 from tests.apiclient import decimals, total
-from tests.test_api_bill_settlement import check_invariant, pay, summary
-from tests.test_billing_db import add, at, delete
+from tests.builders.api_bill_settlement import check_invariant, pay, summary
+from tests.builders.billing_completion import (  # noqa: F401 - fixtures
+    DEMAND,
+    FORMAT,
+    MEDIA,
+    demand,
+    run,
+    worker,
+)
+from tests.builders.billing_db import add, at, delete
 from tests.timeline import TZ
 
 REFUND = "/tmf-api/payment/v4/refund"
-DEMAND = "/tmf-api/customerBillManagement/v5/customerBillOnDemand"
-FORMAT = "/tmf-api/accountManagement/v5/billFormat"
-MEDIA = "/tmf-api/accountManagement/v5/billPresentationMedia"
 NIL = "00000000-0000-0000-0000-000000000000"
-
-
-@pytest.fixture
-def worker(migrated_db_url):
-    with worker_db.connect(migrated_db_url) as conn:
-        assert worker_db.acquire_ownership(conn)
-        yield conn
 
 
 def payout_body(account, value=20, **over):
@@ -64,17 +61,6 @@ def test_refund_preserves_reserved_credit(api, db_conn, restricted):
     db_conn.commit()
     response = api.post(REFUND, payout_body(account, 60, **extra))
     assert response.status_code == 201, response.text
-
-
-def run(worker, api, day):
-    api.clock.set(at(day))
-    bill_date(worker, day, clock=api.clock, tz=TZ, trigger="scheduled")
-
-
-def demand(api, account):
-    response = api.post(DEMAND, {"billingAccount": {"id": account["id"]}})
-    assert response.status_code == 201, response.text
-    return response.json()
 
 
 def test_refund_consumes_credit_and_ledger_matches_balance(api, db_conn):

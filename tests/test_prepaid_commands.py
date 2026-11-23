@@ -14,14 +14,9 @@ from app.repository import funding
 from app.repository import prepaid_commands as commands
 from app.repository._sql import count_references
 from app.repository.parties import ACCOUNT_HISTORY
+from tests.builders.prepaid_commands import enqueue
+from tests.builders.settlement_db import make_payment
 from tests.factories import NOW, account, rejected
-from tests.test_settlement_db import make_payment
-
-
-def enqueue(conn, acc, key=None, **changes):
-    values = dict(kind="order", due_date=NOW.date(), request={"amount": D("12.34")}, now=NOW)
-    values.update(changes)
-    return commands.enqueue(conn, key or uuid4(), acc["id"], **values)
 
 
 def test_committed_request_replay_and_mismatch(db_conn):
@@ -53,7 +48,10 @@ def test_rollback_consumes_no_command_identity(db_conn):
 
 
 def test_atomic_result_and_hold_conversion_recover_before_and_after_commit(db_conn):
-    from tests.test_funding_conversion import convert, prepared
+    from tests.builders.funding_conversion import (
+        convert,
+        prepared,
+    )
 
     w, key, hold, bill = prepared(db_conn)
     enqueue(db_conn, w.account, key)
@@ -151,6 +149,7 @@ def test_shortfall_rollback_and_latest_observation(db_conn):
     assert commands.needs_topup(db_conn, key)["available"] == D(10)
 
 
+@pytest.mark.migration_history
 def test_shortfall_migration_preserves_commands_and_refuses_history_loss(temp_db_url):
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "0041")
@@ -238,6 +237,7 @@ def test_invalid_journal_state_is_rejected(db_conn, assignment):
         db_conn.execute(sql.SQL("UPDATE prepaid_command SET {} ").format(sql.SQL(assignment)))
 
 
+@pytest.mark.migration_history
 def test_migration_preserves_legacy_funding_and_refuses_history_loss(temp_db_url):
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "0037")

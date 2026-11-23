@@ -10,8 +10,8 @@ from psycopg import errors
 from alembic import command
 from app.repository import billing, worker_requests
 from app.repository import prepaid_commands as commands
+from tests.builders.prepaid_commands import enqueue
 from tests.factories import NOW, account, rejected
-from tests.test_prepaid_commands import enqueue
 
 
 def command_run(conn, acc):
@@ -120,7 +120,10 @@ def test_newer_command_does_not_hide_daily_on_demand_readiness(api, migrated_db_
     from app.worker import db as worker_db
     from app.worker.on_demand import process_demands
     from tests import apidata
-    from tests.test_billing_completion import demand, run
+    from tests.builders.billing_completion import (
+        demand,
+        run,
+    )
     from tests.timeline import TZ
 
     acc = apidata.account(api)
@@ -149,6 +152,7 @@ def test_newer_command_does_not_hide_daily_on_demand_readiness(api, migrated_db_
     assert api.get(request["href"]).json()["state"] == "rejected"
 
 
+@pytest.mark.migration_history
 def test_migration_preserves_daily_history_and_refuses_command_loss(temp_db_url):
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "0038")

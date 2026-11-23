@@ -5,7 +5,7 @@ start of a name or a short id, with per-page figures."""
 import pytest
 
 from tests import apidata
-from tests.test_api_financial_account import financial
+from tests.builders.api_financial_account import financial
 
 pytestmark = pytest.mark.usefixtures("match_path")
 

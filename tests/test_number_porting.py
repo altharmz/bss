@@ -8,45 +8,22 @@ import pytest
 from app.config import settings
 from tests import apidata
 from tests.apidata import ORDER
-from tests.test_api_order_cancel import CANCEL, cancel_body
-from tests.test_api_resource_inventory import number
-from tests.test_network_provisioning import (  # noqa: F401 - fixtures
+from tests.builders.api_order_cancel import CANCEL, cancel_body
+from tests.builders.api_resource_inventory import number
+from tests.builders.network_provisioning import (  # noqa: F401 - fixtures
     commands_of,
     state,
     stub,
     world,
 )
-from tests.test_number_orders import refs
-from tests.test_prepaid_orders import shop
-from tests.test_prepaid_renewal_producer import tick
+from tests.builders.number_orders import refs
+from tests.builders.number_porting import BODY, NUMBER, PORT, buy_number, port_in
+from tests.builders.prepaid_orders import shop
+from tests.builders.prepaid_renewal_producer import tick
 
 RESOURCE = "/tmf-api/resourceInventory/v5/resource"
 POOL = "/internal/v1/number/pool"
-PORT = "/internal/v1/port"
 PIN = "/internal/v1/port/pin"
-NUMBER = "12125550142"
-BODY = {
-    "number": NUMBER,
-    "carrierAccountNumber": "ACC-998877",
-    "transferPin": "123456",
-    "billingZip": "10001",
-    "firstName": "Ada",
-    "lastName": "Lovelace",
-}
-
-
-def port_in(api, **over):
-    response = api.post(f"{PORT}/in", BODY | over)
-    assert response.status_code == 201, response.text
-    return response.json()
-
-
-def buy_number(api, world, resource_id):
-    item = apidata.add_item(world.off, "1")
-    item["product"] = {"@type": "ProductRefOrValue", "realizingResource": refs(resource_id)}
-    response = api.post(ORDER, apidata.order_body(world.acc, item))
-    assert response.status_code == 201, response.text
-    return response.json()
 
 
 def port_state(api, port):
@@ -59,7 +36,9 @@ def run_ticks(api, db_conn, count=3):
 
 
 def line_of(api, db_conn, world, value="12125550199"):
-    from tests.test_network_provisioning import line
+    from tests.builders.network_provisioning import (
+        line,
+    )
 
     return line(api, db_conn, world, value)
 

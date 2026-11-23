@@ -29,5 +29,7 @@ pythonpath = ["."]
 markers = [
     "smoke: the CI gate on pull requests and master (make test-smoke); the nightly run runs everything",
     "capability(id): proves a worker capability of docs/progress/scope.yaml (make progress runs these tests)",
+    "migration_history: replays a deployed migration; make test leaves it out, the hook runs it when alembic/, the pins or the image change (make test-all runs everything)",
+    "slow: one of the slowest tests; make test leaves it out, the hook runs it when the seed, load-test, gap-probe or usage-generator code changes (make test-all runs everything)",
 ]
 cache_dir = "/tmp/pytest_cache"

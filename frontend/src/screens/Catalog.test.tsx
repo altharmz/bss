@@ -558,6 +558,101 @@ describe('add price', () => {
       false,
     );
   });
+
+  // roaming and international zone prices (#383, docs/decisions/usage.md "Zone prices")
+  const zoneUse = (zone: string) => ({
+    '@type': 'ProductSpecCharacteristicValueUse',
+    name: 'usageZone',
+    valueType: 'string',
+    productSpecCharacteristicValue: [
+      { '@type': 'StringCharacteristicValueSpecification', valueType: 'string', value: zone },
+    ],
+  });
+
+  it('adds a roaming usage price beside a domestic one of the same kind (#383)', async () => {
+    const { fetchMock, detail } = await paygDetails(
+      {
+        [`POST ${CAT}/productOfferingPrice`]: () => json({ id: 'new-price' }, { status: 201 }),
+        [`PATCH ${CAT}/productOffering/${ids(5)}`]: () => json({ id: ids(5) }),
+      },
+      [USAGE_PRICE],
+    );
+    fireEvent.click(await within(detail).findByRole('button', { name: 'Add price…' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add price · Metered' });
+    fireEvent.change(within(dialog).getByLabelText('Charge type'), {
+      target: { value: 'usage' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Rounding unit'), {
+      target: { value: 'minute' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Price per block, USD'), {
+      target: { value: '1.20' },
+    });
+    // the domestic voice price covers the date: a second domestic one is refused here
+    expect(await within(dialog).findByRole('alert')).toHaveProperty(
+      'textContent',
+      'A voice price in USD already covers 2026-10-01',
+    );
+    const zone = within(dialog).getByLabelText('Zone');
+    expect(zone).toBe(expectUi('ui.catalog.usageZone'));
+    fireEvent.change(zone, { target: { value: 'roaming' } });
+    const add = within(dialog).getByRole('button', { name: 'Add price' }) as HTMLButtonElement;
+    await waitFor(() => expect(add.disabled).toBe(false));
+    fireEvent.click(add);
+    await screen.findByRole('status');
+    const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(String(post?.[1]?.body)).toContain('"price":{"unit":"USD","value":1.20}');
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({
+      '@type': 'ProductOfferingPrice',
+      name: 'Metered roaming voice usage',
+      lifecycleStatus: 'Active',
+      priceType: 'usage',
+      unitOfMeasure: { amount: 1, units: 'minute' },
+      prodSpecCharValueUse: [zoneUse('roaming')],
+      price: { unit: 'USD', value: 1.2 },
+      validFor: { startDateTime: '2026-10-01T00:00:00+03:00' },
+    });
+    const patch = fetchMock.mock.calls.find(([, init]) => init?.method === 'PATCH');
+    expect(JSON.parse(String(patch?.[1]?.body))).toEqual({
+      productOfferingPrice: [
+        { id: 'pru', '@type': 'ProductOfferingPriceRef' },
+        { id: 'new-price', '@type': 'ProductOfferingPriceRef' },
+      ],
+    });
+  });
+
+  it('refuses a second international price of a kind and shows the zone (#383)', async () => {
+    const world = { ...USAGE_PRICE, prodSpecCharValueUse: [zoneUse('international')] };
+    const { detail } = await paygDetails(
+      { [`GET ${CAT}/productOfferingPrice/pru`]: () => json(world) },
+      [world],
+    );
+    expect((await within(detail).findByText('Usage prices')).parentElement?.textContent).toContain(
+      '· International · from',
+    );
+    fireEvent.click(within(detail).getByRole('button', { name: 'Add price…' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add price · Metered' });
+    fireEvent.change(within(dialog).getByLabelText('Charge type'), {
+      target: { value: 'usage' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Rounding unit'), {
+      target: { value: 'second' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Zone'), {
+      target: { value: 'international' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Price per block, USD'), {
+      target: { value: '1' },
+    });
+    expect(await within(dialog).findByRole('alert')).toHaveProperty(
+      'textContent',
+      'A international voice price in USD already covers 2026-10-01',
+    );
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(within(detail).getByRole('button', { name: 'Open price 0.25 minute' }));
+    const price = await screen.findByRole('dialog', { name: 'Metered voice usage' });
+    expect(within(price).getByText('Zone').nextElementSibling?.textContent).toBe('International');
+  });
 });
 
 describe('multi-line discounts (#380)', () => {

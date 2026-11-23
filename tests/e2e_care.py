@@ -14,16 +14,15 @@ from starlette.responses import Response
 
 from app.integrations.notify import adapter as sender
 from app.main import app
-from tests.test_care_signup import (  # noqa: F401 - fixtures
-    enabled,
+from tests.builders.care_signup import (  # noqa: F401 - fixtures
     identity_stub,
     last_code,
-    log_sender,
     shop,
     stock,
-    stubs,
     wake,
 )
+from tests.builders.prepaid_plans import stubs  # noqa: F401 - fixture
+from tests.builders.self_care import enabled, log_sender  # noqa: F401 - fixtures
 
 ROOT = Path("/e2e")
 

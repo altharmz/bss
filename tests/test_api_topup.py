@@ -14,55 +14,14 @@ from app.repository import prepaid_commands as commands
 from app.worker import loop
 from tests import apidata
 from tests.apiclient import decimals
-from tests.factories import NOW, payment_hold, prepaid_bucket
-from tests.test_events import stored, subscribe, types
-from tests.test_number_persistence import number as unassigned_number
-from tests.test_prepaid_orders import purchase, shop
-from tests.test_prepaid_renewal_producer import tick
+from tests.builders.api_topup import TOPUP, body, current_balance, post, prepaid, remaining
+from tests.builders.events import stored, subscribe, types
+from tests.builders.number_persistence import number as unassigned_number
+from tests.builders.prepaid_orders import purchase, shop
+from tests.builders.prepaid_renewal_producer import tick
+from tests.factories import NOW, payment_hold
 
-BASE = "/tmf-api/prepayBalanceManagement/v4"
-TOPUP = f"{BASE}/topupBalance"
 PAYMENT = "/tmf-api/payment/v4/payment"
-
-
-class Acc(dict):
-    """The account as the API answered it, with attribute access and its bucket id."""
-
-    __getattr__ = dict.__getitem__
-
-
-def prepaid(api, db_conn, funds="0"):
-    """A prepaid account with its bucket (prepaid creation through the API waits for P5a)."""
-    off, acc = shop(api, db_conn, funds)
-    bucket = prepaid_bucket(db_conn, acc["id"], NOW)
-    db_conn.commit()
-    return off, Acc(acc, bucket=str(bucket["id"]))
-
-
-def body(acc, value=50, **over):
-    return {
-        "@type": "TopupBalance",
-        "amount": {"amount": value, "units": "USD"},
-        "usageType": "monetary",
-        "bucket": {"id": acc.bucket},
-        "partyAccount": {"id": acc.id, "@referredType": "BillingAccount"},
-        **over,
-    }
-
-
-def post(api, acc, value=50, headers=None, **over):
-    return api.post(TOPUP, body(acc, value, **over), headers=headers)
-
-
-def remaining(api, acc):
-    response = api.get(f"{BASE}/bucket/{acc.bucket}")
-    assert response.status_code == 200, response.text
-    return decimals(response)["remainingValue"]["amount"]
-
-
-def current_balance(api, acc):
-    (entry,) = decimals(api.get(f"{apidata.ACCOUNT}/{acc.id}"))["accountBalance"]
-    return entry["amount"]["value"]
 
 
 def counts(conn):

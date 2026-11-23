@@ -13,13 +13,21 @@ from app.config import Settings
 from app.integrations.payment import adapter
 from app.repository import funding
 from tests import apidata
+from tests.builders.api_topup import prepaid
+from tests.builders.events import subscribe, types
+from tests.builders.payment_gateway import (
+    ACCOUNTS,
+    METHODS,
+    card_body,
+    commands_of,
+    patch_rule,
+    rule,
+    run,
+    save,
+    topup,
+)
 from tests.factories import NOW, prepaid_bucket
-from tests.test_api_topup import prepaid
-from tests.test_events import subscribe, types
-from tests.test_prepaid_renewal_producer import tick
 
-METHODS = "/tmf-api/paymentMethod/v4/paymentMethod"
-ACCOUNTS = "/internal/v1/billingAccount"
 COMMANDS = "/internal/v1/payment/command"
 TOPUP_API = "/tmf-api/prepayBalanceManagement/v4/topupBalance"
 
@@ -31,40 +39,10 @@ def stub():
     adapter().reset()
 
 
-def card_body(acc, token="tok_visa", **over):
-    return {
-        "@type": "tokenizedCard",
-        "name": "Personal Visa",
-        "account": [{"id": acc["id"], "@referredType": "BillingAccount"}],
-        "brand": "visa",
-        "lastFourDigits": "4242",
-        "token": token,
-        **over,
-    }
-
-
-def save(api, acc, token="tok_visa", **over):
-    response = api.post(METHODS, card_body(acc, token, **over))
-    assert response.status_code == 201, response.text
-    return response.json()
-
-
 def balance(db_conn, acc):
     spendable = funding.load(db_conn, UUID(acc["id"])).spendable
     db_conn.commit()  # funding.load locks the account: release it for the API
     return spendable
-
-
-def topup(api, acc, value=25, key="k-1", **over):
-    return api.post(
-        f"{ACCOUNTS}/{acc['id']}/cardTopup",
-        {"amount": {"unit": "USD", "value": value}, "idempotencyKey": key, **over},
-    )
-
-
-def run(db_conn, api, ticks=1, minutes=0):
-    for _ in range(ticks):
-        tick(db_conn, api.clock.now() + timedelta(minutes=minutes))
 
 
 # --- TMF670 ---
@@ -257,29 +235,6 @@ def test_a_postpaid_account_has_no_card_top_up(api, db_conn):
 
 
 # --- auto top-up ---
-
-
-def patch_rule(api, acc, body):
-    return api.patch(f"{ACCOUNTS}/{acc['id']}/autoTopup", body)
-
-
-def rule(api, acc, threshold=10, amount=50, enabled=True):
-    return patch_rule(
-        api,
-        acc,
-        {
-            "enabled": enabled,
-            "threshold": {"unit": "USD", "value": threshold},
-            "amount": {"unit": "USD", "value": amount},
-        },
-    )
-
-
-def commands_of(db_conn):
-    db_conn.commit()
-    return db_conn.execute(
-        "SELECT purpose, state FROM payment_command ORDER BY created_at, id"
-    ).fetchall()
 
 
 @pytest.mark.capability("worker.paymentGateway")

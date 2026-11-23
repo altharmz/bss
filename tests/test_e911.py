@@ -7,17 +7,17 @@ from app.config import settings
 from app.network import e911
 from tests import apidata
 from tests.apidata import ORDER
-from tests.test_account_security import PIN, audit, head, set_pin
-from tests.test_api_order_cancel import CANCEL, cancel_body
-from tests.test_api_resource_inventory import number
-from tests.test_network_provisioning import make_line, stub, world  # noqa: F401 - fixtures
-from tests.test_notifications import customer_of
-from tests.test_number_orders import refs
-from tests.test_prepaid_offering_changes import switch
-from tests.test_prepaid_orders import shop
-from tests.test_prepaid_renewal_producer import tick
-from tests.test_prepaid_status_orders import errors
-from tests.test_tax_engine import CA, set_address
+from tests.builders.account_security import PIN, audit, head, set_pin
+from tests.builders.api_order_cancel import CANCEL, cancel_body
+from tests.builders.api_resource_inventory import number
+from tests.builders.network_provisioning import make_line, stub, world  # noqa: F401 - fixtures
+from tests.builders.notifications import customer_of
+from tests.builders.number_orders import refs
+from tests.builders.prepaid_offering_changes import switch
+from tests.builders.prepaid_orders import shop
+from tests.builders.prepaid_renewal_producer import tick
+from tests.builders.prepaid_status_orders import errors
+from tests.builders.tax_engine import CA, set_address
 
 pytestmark = pytest.mark.capability("worker.e911Address")
 
@@ -320,6 +320,87 @@ def test_the_account_products_show_the_address_and_wifi_calling(api, db_conn, wi
     rows = api.get(f"/internal/v1/billingAccount/{wifi.acc['id']}/products").json()
     (row,) = [r for r in rows if r["id"] == product]
     assert row["e911Address"] == HOME_STORED and row["wifiCalling"] is True
+
+
+def test_an_unconfirmed_change_is_a_pending_change_of_the_line(api, db_conn, wifi, stub):
+    """#384: the card's pending-change line shows the new address until the network confirms
+    it, and Undo (cancelling the order) removes it."""
+    product = activated(api, db_conn, wifi, HOME)
+    url = f"/internal/v1/billingAccount/{wifi.acc['id']}/products"
+
+    def pending():
+        (row,) = [r for r in api.get(url).json() if r["id"] == product]
+        return row["pendingChanges"]
+
+    order = change(api, wifi, product, OFFICE).json()
+    assert pending() == [
+        {
+            "kind": "e911",
+            "date": api.clock.today().isoformat(),
+            "e911Address": OFFICE_STORED,
+            "productOrder": {"id": order["id"], "href": order["href"]},
+        }
+    ]
+    tick(db_conn, api.clock.now())
+    assert pending() == []
+
+    other = change(api, wifi, product, HOME).json()
+    assert [c["kind"] for c in pending()] == ["e911"]
+    assert api.post(CANCEL, cancel_body(other)).status_code == 201
+    assert pending() == []
+
+
+def test_e911_address_orders_as_the_ui_sends_them(api, db_conn, wifi, stub):
+    """The UI's order bodies (frontend/src/api/e911.ts, pinned in SubscriberCard.e911.test.tsx):
+    Add product's typed address as product.place of the add item, with a sub-address, and Edit
+    E911 address's modify item carrying only the place, without a PIN header when none is
+    typed. Here (not tests/test_ui_requests.py) for the network fixtures."""
+
+    def ui_place(address):
+        return [{"@type": "RelatedPlaceRefOrValue", "role": "e911Address", "place": address}]
+
+    typed = HOME | {
+        "city": "Springfield",
+        "geographicSubAddress": [{"@type": "GeographicSubAddress", "name": "Apt 4"}],
+    }
+    item = {
+        "@type": "ProductOrderItem",
+        "id": "1",
+        "action": "add",
+        "productOffering": {"id": wifi.off["id"], "@type": "ProductOfferingRef"},
+        "product": {
+            "@type": "ProductRefOrValue",
+            "realizingResource": refs(number(api, value="79991234500")["id"]),
+            "place": ui_place(typed),
+        },
+    }
+    added = api.post(ORDER, apidata.order_body(wifi.acc, item))
+    assert added.status_code == 201 and added.json()["state"] == "inProgress", added.text
+    tick(db_conn, api.clock.now())
+    (pid,) = db_conn.execute("SELECT id FROM product ORDER BY created_at DESC LIMIT 1").fetchone()
+    assert stored(db_conn, pid) == {k: v for k, v in typed.items() if k != "@type"}
+
+    body = {
+        "@type": "ProductOrder",
+        "billingAccount": {"id": wifi.acc["id"], "@type": "BillingAccountRef"},
+        "productOrderItem": [
+            {
+                "@type": "ProductOrderItem",
+                "id": "1",
+                "action": "modify",
+                "product": {
+                    "@type": "ProductRefOrValue",
+                    "id": str(pid),
+                    "place": ui_place(OFFICE),
+                },
+            }
+        ],
+    }
+    changed = api.post(ORDER, body)
+    assert changed.status_code == 201 and changed.json()["state"] == "inProgress", changed.text
+    tick(db_conn, api.clock.now())
+    assert api.get(changed.json()["href"]).json()["state"] == "completed"
+    assert stored(db_conn, pid) == OFFICE_STORED
 
 
 def test_the_address_rules():

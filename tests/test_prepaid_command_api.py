@@ -7,30 +7,14 @@ from uuid import UUID, uuid4
 from app.repository import prepaid_commands as commands
 from app.worker import db as worker_db
 from tests.apiclient import decimals, total
+from tests.builders.prepaid_command_api import failed
+from tests.builders.prepaid_dispatch import dispatch
+from tests.builders.prepaid_orders import purchase, shop
+from tests.builders.prepaid_posting import prepared
+from tests.builders.prepaid_renewal import renewal
 from tests.factories import NOW
-from tests.test_prepaid_dispatch import dispatch
-from tests.test_prepaid_orders import purchase, shop
-from tests.test_prepaid_posting import prepared
-from tests.test_prepaid_renewal import renewal
 
 BASE = "/internal/v1/prepaid/command"
-
-
-def failed(db_conn, monkeypatch):
-    """A real postable command whose first attempt failed technically, effects rolled back."""
-    acc, prod, cmd, _ = prepared(db_conn)
-    db_conn.commit()
-    original = commands.complete
-
-    def crash(*args, **kwargs):
-        original(*args, **kwargs)
-        raise RuntimeError("after completion")
-
-    monkeypatch.setattr(commands, "complete", crash)
-    assert dispatch(db_conn) == [cmd["id"]]
-    monkeypatch.setattr(commands, "complete", original)
-    db_conn.commit()
-    return acc, prod, cmd
 
 
 def test_a_completed_order_command_with_its_links_and_filters(api, db_conn):

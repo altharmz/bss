@@ -10,15 +10,16 @@ import pytest
 from app.events.types import EVENT_TYPES
 from tests import apidata
 from tests.apiclient import total
-from tests.test_api_adjust import ADJUST
-from tests.test_api_adjust import post as adjust
-from tests.test_api_reserve import RESERVE
-from tests.test_api_reserve import post as reserve
-from tests.test_api_topup import BASE, TOPUP, prepaid, remaining, unassigned_number
-from tests.test_api_topup import post as topup
-from tests.test_api_transfer import pair
-from tests.test_api_transfer import post as transfer
-from tests.test_events import subscribe, types
+from tests.builders.api_adjust import ADJUST
+from tests.builders.api_adjust import post as adjust
+from tests.builders.api_reserve import RESERVE
+from tests.builders.api_reserve import post as reserve
+from tests.builders.api_topup import BASE, TOPUP, prepaid, remaining
+from tests.builders.api_topup import post as topup
+from tests.builders.api_transfer import pair
+from tests.builders.api_transfer import post as transfer
+from tests.builders.events import subscribe, types
+from tests.builders.number_persistence import number as unassigned_number
 
 HISTORY = f"{BASE}/balanceActionHistory"
 REFUND = "/tmf-api/payment/v4/refund"

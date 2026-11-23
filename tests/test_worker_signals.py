@@ -18,8 +18,8 @@ import psycopg
 import pytest
 
 from app.repository import billing
-from tests.test_worker_failures import accounts_with_products, advisory_locks
-from tests.test_worker_process import DEC1
+from tests.builders.worker_failures import accounts_with_products, advisory_locks
+from tests.builders.worker_process import DEC1
 
 PINNED = "2026-12-01T00:30:00+03:00"  # the run of Dec 1 is due
 

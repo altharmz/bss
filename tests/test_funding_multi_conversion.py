@@ -11,10 +11,10 @@ from psycopg import errors, sql
 
 from alembic import command
 from app.repository import funding
+from tests.builders.funding_conversion import prepared as single_prepared
+from tests.builders.funding_db import billed_charge
+from tests.builders.settlement_db import allocate, make_bill, make_payment
 from tests.factories import NOW, World, account, offering, product, rejected, world
-from tests.test_funding_conversion import prepared as single_prepared
-from tests.test_funding_db import billed_charge
-from tests.test_settlement_db import allocate, make_bill, make_payment
 
 
 def prepared(conn, *, zero=False, existing_run=None):
@@ -182,6 +182,7 @@ def test_database_refuses_inexact_batch_conversion(db_conn, mismatch):
         db_conn.execute("SET CONSTRAINTS ALL IMMEDIATE")
 
 
+@pytest.mark.migration_history
 def test_batch_migration_preserves_legacy_results_and_refuses_loss(temp_db_url):
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "0040")

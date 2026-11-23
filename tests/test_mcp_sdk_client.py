@@ -27,7 +27,7 @@ from bss_mcp.clock import FixedClock
 from bss_mcp.operations import OPERATIONS
 from bss_mcp.server import build_app
 from bss_mcp.store import Store
-from tests.test_mcp_oauth import PASSWORD, USERS, add_user
+from tests.builders.mcp_oauth import PASSWORD, USERS, add_user
 
 pytestmark = pytest.mark.smoke
 

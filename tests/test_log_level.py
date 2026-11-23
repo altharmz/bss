@@ -167,7 +167,11 @@ def raw(api):
 
 
 def test_only_an_administrator_changes_or_reads_it(raw):
-    from tests.test_users import activate, create, login
+    from tests.builders.users import (
+        activate,
+        create,
+        login,
+    )
 
     assert login(raw).status_code == 200  # the administrator
     create(raw, "alice", "user")
@@ -202,7 +206,9 @@ def test_the_service_credential_alone_reads_the_level(api, raw):
 
 
 def test_nothing_else_reads_the_service_path(raw, monkeypatch):
-    from tests.test_users import login
+    from tests.builders.users import (
+        login,
+    )
 
     monkeypatch.setattr(settings, "bss_smoke_secret", "smoke-credential")
     assert raw.get(SERVICE_PATH).status_code == 401  # nobody

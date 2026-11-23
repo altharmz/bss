@@ -11,9 +11,9 @@ from app.config import settings
 from app.ordering.process import ItemRequest, OrderRequest, place_order
 from tests import apidata, timeline
 from tests.apidata import ORDER, PRODUCT
-from tests.test_api_order_cancel import CANCEL
-from tests.test_api_resource_inventory import number
-from tests.test_events import stored, subscribe
+from tests.builders.api_resource_inventory import number
+from tests.builders.events import stored, subscribe
+from tests.builders.number_orders import cancel, refs
 
 
 @pytest.fixture
@@ -28,10 +28,6 @@ def shop(api):
     account = apidata.account(api)
     api.clock.set(timeline.START + timedelta(hours=9))
     return offering, account
-
-
-def refs(uid):
-    return [{"id": uid, "@type": "ResourceRef", "@referredType": "LogicalResource"}]
 
 
 @pytest.mark.parametrize(
@@ -86,16 +82,6 @@ def add(api, shop, uid=None, day=None):
     response = api.post(ORDER, body)
     assert response.status_code == 201, response.text
     return response.json()
-
-
-def cancel(api, order):
-    return api.post(
-        CANCEL,
-        {
-            "@type": "CancelProductOrder",
-            "productOrder": {"id": order["id"], "@type": "ProductOrderRef"},
-        },
-    )
 
 
 def modify(api, account, product, uid, day):

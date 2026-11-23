@@ -16,15 +16,9 @@ from app.config import settings
 from app.events import callbacks
 from app.events.types import BASES, EVENT_TYPES
 from tests import apidata
+from tests.builders.api_hub import CALLBACK, hub
 
 APIS = sorted(BASES)
-CALLBACK = "http://listener.test/events"
-
-
-def hub(api, name: str, **body) -> dict:
-    response = api.post(f"{BASES[name]}/hub", {"callback": CALLBACK, **body})
-    assert response.status_code == 201, response.text
-    return response.json()
 
 
 NO_HUB = ("TMF635", "TMF681")  # no listener events: no /hub (usage.md, notifications.md)

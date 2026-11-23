@@ -807,10 +807,15 @@ export function loadFirstCharge(
   startDate: string,
   signal: AbortSignal,
   productId?: string,
+  /** an add-on's plan product: the quote then gives the add-on's pass length and end */
+  parentProductId?: string,
 ): Promise<FirstCharge> {
   const query =
     `productOffering.id=${encodeURIComponent(offeringId)}&startDate=${startDate}` +
-    (productId === undefined ? '' : `&product.id=${encodeURIComponent(productId)}`);
+    (productId === undefined ? '' : `&product.id=${encodeURIComponent(productId)}`) +
+    (parentProductId === undefined
+      ? ''
+      : `&parentProduct.id=${encodeURIComponent(parentProductId)}`);
   return getJson<FirstCharge>(`${PATHS.internal}/${accountId}/firstCharge?${query}`, signal);
 }
 
@@ -829,6 +834,7 @@ export const KIND_LABEL: Record<OfferingKind, string> = {
   payAsYouGo: 'Pay as you go',
 };
 const KIND_NAME = 'offeringKind';
+const PASS_DAYS = 'passDays';
 
 type Characteristic = { name?: string; [key: string]: unknown };
 
@@ -865,6 +871,83 @@ export function withKind(others: Characteristic[], kind: OfferingKind): Characte
   ];
 }
 
+/** An add-on pass's length (TMF620 productOfferingCharacteristic passDays, issue 200);
+ * null when the offering has none. */
+export function passDaysOf(body: { productOfferingCharacteristic?: unknown }): number | null {
+  const list = (body.productOfferingCharacteristic ?? []) as {
+    name?: string;
+    characteristicValueSpecification?: { value?: unknown }[];
+  }[];
+  const value = list.find((c) => c.name === PASS_DAYS)?.characteristicValueSpecification?.[0]
+    ?.value;
+  return typeof value === 'number' && Number.isInteger(value) ? value : null;
+}
+
+/** The characteristics with passDays set to `days` (null removes it); every other entry as
+ * given. */
+export function withPassDays(others: Characteristic[], days: number | null): Characteristic[] {
+  const rest = others.filter((c) => c.name !== PASS_DAYS);
+  if (days === null) return rest;
+  return [
+    ...rest,
+    {
+      '@type': 'CharacteristicSpecification',
+      name: PASS_DAYS,
+      valueType: 'integer',
+      characteristicValueSpecification: [
+        {
+          '@type': 'IntegerCharacteristicValueSpecification',
+          valueType: 'integer',
+          isDefault: true,
+          value: days,
+        },
+      ],
+    },
+  ];
+}
+
+/** "7-day" / "1-day": a pass length as the screens say it. */
+export function passLength(days: number): string {
+  return `${days}-day`;
+}
+
+/** passDays: a whole number from 1 to 30 (app/network/kind.py MAX_PASS_DAYS), or empty. */
+export const MAX_PASS_DAYS = 30;
+export function validPassDays(text: string): boolean {
+  const t = text.trim();
+  return t === '' || (/^\d+$/.test(t) && Number(t) >= 1 && Number(t) <= MAX_PASS_DAYS);
+}
+
+/** The usage zones of a usage price (app/network/usage_price.py). */
+export const USAGE_ZONES = ['domestic', 'roaming', 'international'] as const;
+export type UsageZone = (typeof USAGE_ZONES)[number];
+export const ZONE_LABEL: Record<UsageZone, string> = {
+  domestic: 'Domestic',
+  roaming: 'Roaming',
+  international: 'International',
+};
+const ZONE_NAME = 'usageZone';
+
+function usageZoneOf(price: { prodSpecCharValueUse?: unknown }): UsageZone {
+  const uses = (price.prodSpecCharValueUse ?? []) as {
+    name?: string;
+    productSpecCharacteristicValue?: { value?: unknown }[];
+  }[];
+  const value = uses.find((u) => u.name === ZONE_NAME)?.productSpecCharacteristicValue?.[0]?.value;
+  return USAGE_ZONES.find((z) => z === value) ?? 'domestic';
+}
+
+function zoneUse(zone: UsageZone) {
+  return {
+    '@type': 'ProductSpecCharacteristicValueUse',
+    name: ZONE_NAME,
+    valueType: 'string',
+    productSpecCharacteristicValue: [
+      { '@type': 'StringCharacteristicValueSpecification', valueType: 'string', value: zone },
+    ],
+  };
+}
+
 export interface Offering {
   id: string;
   specificationId?: string | undefined;
@@ -873,6 +956,18 @@ export interface Offering {
   specification: string;
   kind: OfferingKind;
   prices: CatalogPrice[]; // display only; the charge itself comes from the preview
+  /** the offering's narrowed wifiCalling profile value (0 or 1); undefined = the
+   * specification's default (issue 384) */
+  wifiCalling?: number | undefined;
+}
+
+/** The value an offering body narrows a network profile name to, or undefined. */
+function narrowedValue(body: { prodSpecCharValueUse?: unknown }, name: string): unknown {
+  const uses = (body.prodSpecCharValueUse ?? []) as {
+    name?: string;
+    productSpecCharacteristicValue?: { value?: unknown }[];
+  }[];
+  return uses.find((u) => u.name === name)?.productSpecCharacteristicValue?.[0]?.value;
 }
 
 export function chargeInterval(type = 'monthly', length = 1): string {
@@ -918,6 +1013,7 @@ function toCatalogPrice(price: PriceBody): CatalogPrice {
     interval: chargeInterval(price.recurringChargePeriodType, price.recurringChargePeriodLength),
     periodType: price.recurringChargePeriodType ?? null,
     unitOfMeasure: price.unitOfMeasure ?? null,
+    zone: usageZoneOf(price),
     from: need(price.validFor?.startDateTime, 'price validFor.startDateTime'),
     to: price.validFor?.endDateTime ?? null,
   };
@@ -947,6 +1043,7 @@ export async function loadSellableOfferings(
     specification: offering.productSpecification?.name ?? '',
     specificationId: offering.productSpecification?.id,
     kind: kindOf(offering),
+    wifiCalling: (narrowedValue(offering, 'wifiCalling') as number | undefined) ?? undefined,
     prices: (offering.productOfferingPrice ?? []).flatMap((ref) => {
       const price = ref.id === undefined ? undefined : byId.get(ref.id);
       return price === undefined || price.price?.unit !== currency ? [] : [toCatalogPrice(price)];
@@ -991,6 +1088,8 @@ export interface CatalogPrice {
   /** recurringChargePeriodType as stored ('monthly', ...); a tier takes its plan's */
   periodType?: string | null;
   unitOfMeasure: PriceBody['unitOfMeasure'] | null;
+  /** a usage price's zone (TMF620 prodSpecCharValueUse usageZone); domestic without one */
+  zone?: UsageZone;
   from: string; // instant
   to: string | null; // instant, exclusive; null = open-ended
 }
@@ -1166,6 +1265,8 @@ export interface NewPrice {
   validFrom: string;
   existingPriceIds: string[];
   unitOfMeasure?: { amount: number; units: UsageUnit };
+  /** A usage price's zone; domestic is the server's default and is not sent (issue 200). */
+  zone?: UsageZone;
   /** A multi-line tier (priceType discount): the minimum number of live plan lines and the
    * plan's recurringChargePeriodType (docs/decisions/prepaid.md, "Multi-line discounts"). */
   tier?: { lines: number; periodType: string };
@@ -1182,16 +1283,18 @@ export async function addPrice(form: NewPrice, timeZone: string): Promise<void> 
         : usage === undefined
           ? 'oneTime'
           : `${USAGE_UNIT_KIND[usage.units]} usage`;
+  const zone = usage !== undefined && form.zone !== undefined && form.zone !== 'domestic';
   const price = await postJson<PriceBody>(
     PATHS.prices,
     jsonWithAmount(
       {
         '@type': 'ProductOfferingPrice',
-        name: `${form.offeringName} ${suffix}`,
+        name: `${form.offeringName} ${zone ? `${form.zone} ` : ''}${suffix}`,
         lifecycleStatus: 'Active',
         priceType: form.priceType,
         ...(form.priceType === 'recurring' ? { recurringChargePeriodType: 'monthly' } : {}),
         ...(usage === undefined ? {} : { unitOfMeasure: usage }),
+        ...(zone ? { prodSpecCharValueUse: [zoneUse(form.zone as UsageZone)] } : {}),
         ...(tier === undefined
           ? {}
           : {
@@ -1268,6 +1371,8 @@ export interface OfferingDetail {
   categories: { id: string; name: string }[];
   priceRefs: { id: string; name: string }[]; // every attached price, of any type
   kind: OfferingKind;
+  /** an add-on pass's length in days (characteristic passDays, issue 200); null = none */
+  passDays: number | null;
   characteristics: Characteristic[]; // every productOfferingCharacteristic, as loaded
   valueUse: { name?: string; [key: string]: unknown }[]; // every prodSpecCharValueUse, as loaded
 }
@@ -1293,6 +1398,7 @@ export async function loadOfferingDetail(id: string, signal: AbortSignal): Promi
       p.id === undefined ? [] : [{ id: p.id, name: p.name ?? p.id }],
     ),
     kind: kindOf(body),
+    passDays: passDaysOf(body),
     characteristics: (body.productOfferingCharacteristic ?? []) as Characteristic[],
     valueUse: (body.prodSpecCharValueUse ?? []) as OfferingDetail['valueUse'],
   };
@@ -1378,6 +1484,8 @@ export interface OfferingEditFields {
   specificationId: string;
   categoryIds: string[];
   kind: OfferingKind;
+  /** an add-on's pass length in whole days, 1 to 30; '' = it lasts the plan period */
+  passDays: string;
   /** narrowed network profile values by name; a name left out uses the default */
   network: Record<string, string>;
 }
@@ -1398,6 +1506,7 @@ export function offeringEditFields(o: OfferingDetail, timeZone: string): Offerin
     specificationId: o.specification?.id ?? '',
     categoryIds: o.categories.map((c) => c.id),
     kind: o.kind,
+    passDays: o.passDays === null ? '' : String(o.passDays),
     network: narrowedProfile(o),
   };
 }
@@ -1480,8 +1589,13 @@ export function offeringChanges(
           ],
         })),
     ];
-  if (form.kind !== was.kind)
-    changes.productOfferingCharacteristic = withKind(before.characteristics, form.kind);
+  // passDays is only for an add-on (the server refuses it elsewhere): another kind drops it
+  const days = form.kind === 'addOn' ? form.passDays.trim() : '';
+  if (form.kind !== was.kind || days !== was.passDays)
+    changes.productOfferingCharacteristic = withPassDays(
+      form.kind !== was.kind ? withKind(before.characteristics, form.kind) : before.characteristics,
+      days === '' ? null : Number(days),
+    );
   return Object.keys(changes).length === 0 ? null : changes;
 }
 
@@ -1502,6 +1616,7 @@ export interface PriceDetail {
   currency: string | null;
   interval: string;
   unitOfMeasure: PriceBody['unitOfMeasure'] | null;
+  zone: UsageZone; // a usage price's zone; domestic for any other
   validFrom: string | null; // instant
   validTo: string | null; // instant, exclusive
 }
@@ -1517,6 +1632,7 @@ export async function loadPriceDetail(id: string, signal: AbortSignal): Promise<
     currency: p.price?.unit ?? null,
     interval: chargeInterval(p.recurringChargePeriodType, p.recurringChargePeriodLength),
     unitOfMeasure: p.unitOfMeasure ?? null,
+    zone: usageZoneOf(p),
     validFrom: p.validFor?.startDateTime ?? null,
     validTo: p.validFor?.endDateTime ?? null,
   };
@@ -1611,6 +1727,14 @@ export const NETWORK_PROFILE: { name: string; label: string; flag: boolean }[] =
   { name: 'international', label: 'International (0 or 1)', flag: true },
   { name: 'voicemail', label: 'Voicemail (0 or 1)', flag: true },
   { name: 'dataPool', label: 'Data pool (0 or 1)', flag: true },
+  // the line can make Wi-Fi calls and needs an E911 address (issues 201 and 384)
+  { name: 'wifiCalling', label: 'Wi-Fi calling (0 or 1)', flag: true },
+  // roaming and international passes (issue 200, docs/decisions/network.md)
+  { name: 'roaming', label: 'Roaming (0 or 1)', flag: true },
+  { name: 'roamingDataMb', label: 'Roaming data (MB)', flag: false },
+  { name: 'roamingMinutes', label: 'Roaming minutes', flag: false },
+  { name: 'roamingSmsCount', label: 'Roaming SMS count', flag: false },
+  { name: 'internationalMinutes', label: 'International minutes', flag: false },
 ];
 const PROFILE_NAMES = NETWORK_PROFILE.map((p) => p.name);
 
@@ -1846,14 +1970,16 @@ export function requestedDate(day: string, timeZone: string): string {
 export type { SimType };
 
 /** What an add item may carry besides its resources: the SIM kind (instead of an IMSI, the
- * server picks a SIM of that type from stock) and the device IMEI. */
+ * server picks a SIM of that type from stock), the device IMEI and the line's E911 address
+ * (`product.place`, built by api/e911.ts placeOf; issue 384). */
 export interface AddCharacteristics {
   simType?: SimType;
   imei?: string;
+  place?: unknown[];
 }
 
-/** The product part of an add item: the chosen resources and the `simType` and `imei`
- * characteristics. */
+/** The product part of an add item: the chosen resources, the `simType` and `imei`
+ * characteristics and the E911 `place`. */
 function addProduct(numberId: string | string[] | undefined, chosen: AddCharacteristics) {
   const characteristics = [
     ...(chosen.simType
@@ -1868,11 +1994,12 @@ function addProduct(numberId: string | string[] | undefined, chosen: AddCharacte
       : []),
     ...(chosen.imei ? [imeiCharacteristic(chosen.imei)] : []),
   ];
-  if (!numberId && characteristics.length === 0) return {};
+  if (!numberId && characteristics.length === 0 && !chosen.place) return {};
   return {
     product: {
       ...(numberId ? numberProduct(numberId) : { '@type': 'ProductRefOrValue' }),
       ...(characteristics.length ? { productCharacteristic: characteristics } : {}),
+      ...(chosen.place ? { place: chosen.place } : {}),
     },
   };
 }

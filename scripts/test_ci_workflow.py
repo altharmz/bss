@@ -8,14 +8,14 @@ anything at all: the report of a failed nightly run, which opens an issue.
 """
 
 import re
+import subprocess
 import unittest
 from pathlib import Path
 
 import hook_selection
 
-LINES = (
-    (Path(__file__).resolve().parent.parent / ".github/workflows/ci.yml").read_text().split("\n")
-)
+ROOT = Path(__file__).resolve().parent.parent
+LINES = (ROOT / ".github/workflows/ci.yml").read_text().split("\n")
 
 
 def indent(line):
@@ -128,6 +128,29 @@ class CiWorkflowTests(unittest.TestCase):
         self.assertEqual(len(steps), 9)
         for step in steps[2:]:
             self.assertIn("if: steps.scope.outputs.run == 'true'", step, step)
+
+    def test_the_nightly_and_manual_runs_run_every_test(self):
+        """make test leaves the migration_history and slow marks out (#424); the job's FULL
+        brings them back, so the nightly run still runs everything without its own target."""
+        check = block(JOBS, "check")
+        self.assertEqual(
+            value(block(check, "env"), "FULL"),
+            "${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}",
+        )
+        self.assertIn(
+            "- run: make test\n        if: steps.scope.outputs.run == 'true' && env.FULL == 'true'",
+            "\n".join(check),
+        )
+        for full, expected in (("true", ""), ("false", '-m "not (migration_history or slow)"')):
+            with self.subTest(full=full):
+                shown = subprocess.run(  # noqa: S603 - fixed program, fixed arguments
+                    ["make", "-s", "-n", "-C", str(ROOT), "test", f"FULL={full}"],  # noqa: S607
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                ).stdout
+                line = next(line for line in shown.split("\n") if "pytest -n auto" in line)
+                self.assertEqual(line.split("pytest -n auto", 1)[1].strip(), expected)
 
 
 if __name__ == "__main__":

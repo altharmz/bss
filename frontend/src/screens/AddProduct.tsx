@@ -5,6 +5,16 @@ import { Note } from '../ui/Note';
 import { useRef, useState } from 'react';
 import { requirements } from '../api/numbers';
 import { imeiProblem } from '../api/devices';
+import {
+  e911Errors,
+  e911Ready,
+  formOfServiceAddress,
+  placeOf,
+  EMPTY_E911,
+  type E911Field,
+  type E911Form,
+} from '../api/e911';
+import { E911Fields } from './E911Address';
 import { createPortIn, type PortInData } from '../api/ports';
 import { NumberPicker } from './Numbers';
 import {
@@ -27,7 +37,16 @@ import { addDays, clockTime, isIsoDate, lastDay } from '../format/dates';
 import { accountLabel } from '../format/ids';
 import { formatAmount, formatCents, toCents } from '../format/money';
 import { Amount } from '../ui/Amount';
-import { Button, DateField, Dialog, Field, SelectField, TextInput, useToast } from '../ui/kit';
+import {
+  Button,
+  Checkbox,
+  DateField,
+  Dialog,
+  Field,
+  SelectField,
+  TextInput,
+  useToast,
+} from '../ui/kit';
 import { ErrorBlock, SkeletonRows } from '../ui/states';
 import { KeyValue } from '../ui/summaries';
 import type { PendingOrder } from '../api/commands';
@@ -104,6 +123,14 @@ export function AddProductModal({
   // optional: the device of a prepaid line, checked by the network when the order is placed
   const [imei, setImei] = useState(draft?.imei ?? '');
   const [uncertain, setUncertain] = useState(false);
+  // the E911 address of a Wi-Fi calling line (#384): the service address by default (the
+  // server copies it when none is sent), or one typed here
+  const serviceAddress = account.serviceAddress ?? null;
+  const [e911Same, setE911Same] = useState(true);
+  const [e911, setE911] = useState<E911Form>(
+    serviceAddress === null ? EMPTY_E911 : formOfServiceAddress(serviceAddress),
+  );
+  const [e911Problems, setE911Problems] = useState<Partial<Record<E911Field, string>>>({});
   // port-in: the customer brings a number. The port request is created first, then the order
   // takes the number it made; the request id is kept so a retried order does not create it twice
   const [porting, setPorting] = useState(false);
@@ -163,7 +190,7 @@ export function AddProductModal({
     (signal) =>
       chosen?.specificationId
         ? requirements(chosen.specificationId, signal)
-        : Promise.resolve({ msisdn: false, imsi: false }),
+        : Promise.resolve<Awaited<ReturnType<typeof requirements>>>({ msisdn: false, imsi: false }),
   );
   const needsNumber = requirement.status === 'ok' && requirement.data.msisdn;
   const needsImsi = requirement.status === 'ok' && requirement.data.imsi;
@@ -173,9 +200,19 @@ export function AddProductModal({
   const asksDevice = account.ratingType === 'prepaid' && needsImsi;
   const typedImei = asksDevice ? imei.trim() : '';
   const imeiError = typedImei === '' ? null : imeiProblem(typedImei);
+  // a Wi-Fi calling line of a prepaid account needs an E911 address (the offering's narrowed
+  // wifiCalling, else its specification's default; the server refuses it elsewhere)
+  const asksE911 =
+    account.ratingType === 'prepaid' &&
+    chosen !== undefined &&
+    requirement.status === 'ok' &&
+    (chosen.wifiCalling ?? requirement.data.wifiCalling) === 1;
+  const sameAsService = e911Same && serviceAddress !== null;
+  const typedE911 = asksE911 && !sameAsService;
   const chosenCharacteristics = {
     ...(simType ? { simType } : {}),
     ...(typedImei ? { imei: typedImei } : {}),
+    ...(typedE911 ? { place: placeOf(e911) } : {}),
   };
   const portingNumber = needsNumber && porting;
   const resources = [needsNumber && !porting && numberId, needsImsi && !simType && imsiId].filter(
@@ -185,7 +222,8 @@ export function AddProductModal({
   const complete =
     (!needsNumber || (porting ? portComplete : numberId !== '')) &&
     (!needsImsi || simType !== undefined || imsiId !== '') &&
-    imeiError === null;
+    imeiError === null &&
+    (!typedE911 || e911Ready(e911));
   const shortNow =
     account.ratingType === 'prepaid' &&
     start === today &&
@@ -262,6 +300,7 @@ export function AddProductModal({
     setBusy(true);
     setProblem([]);
     setCode(undefined);
+    setE911Problems({});
     try {
       let ordered = chosenResources;
       if (portingNumber) {
@@ -308,6 +347,13 @@ export function AddProductModal({
         setCode(result.refusal.code);
       }
     } catch (error) {
+      const { fields, rest } = e911Errors(error);
+      if (Object.keys(fields).length > 0) {
+        // the server refused the typed E911 address: nothing was ordered
+        setE911Problems(fields);
+        setProblem([rest.length ? rest.join('; ') : 'Correct the marked E911 address fields.']);
+        return;
+      }
       setProblem([`${explain(error)}. Close and check the subscriber before submitting again.`]);
       setUncertain(true);
     } finally {
@@ -525,6 +571,39 @@ export function AddProductModal({
                     onChange={(e) => setImei(e.target.value)}
                   />
                 </Field>
+              )}
+              {asksE911 && (
+                <section className="bss-dialog-section" data-ui="ui.addProduct.e911">
+                  <h3>E911 address</h3>
+                  <p className="caption">
+                    The line makes Wi-Fi calls: emergency services are sent here for a 911 call made
+                    over Wi-Fi. US addresses only.
+                  </p>
+                  <Checkbox
+                    label="Same as service address"
+                    checked={sameAsService}
+                    disabled={serviceAddress === null}
+                    onChange={(e) => setE911Same(e.target.checked)}
+                  />
+                  {serviceAddress === null && (
+                    <Note tone="warning">
+                      The account has no service address: enter the line&apos;s E911 address.
+                    </Note>
+                  )}
+                  <E911Fields
+                    form={
+                      sameAsService && serviceAddress !== null
+                        ? formOfServiceAddress(serviceAddress)
+                        : e911
+                    }
+                    errors={sameAsService ? {} : e911Problems}
+                    readOnly={sameAsService}
+                    onChange={(form) => {
+                      setE911(form);
+                      setE911Problems({});
+                    }}
+                  />
+                </section>
               )}
               <Field
                 label="Start date"

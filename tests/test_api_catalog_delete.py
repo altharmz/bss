@@ -7,7 +7,6 @@ the way out. Concurrency: orders hold their offerings FOR SHARE and new offering
 specification, so a delete never races a write that would reference what it removes.
 """
 
-import threading
 from datetime import timedelta
 from uuid import UUID
 
@@ -17,7 +16,7 @@ from app.ordering.process import ItemRequest, OrderRequest, place_order
 from app.repository import catalog
 from tests import apidata, timeline
 from tests.apidata import ORDER
-from tests.test_api_catalog import (
+from tests.builders.api_catalog import (
     BASE,
     NIL,
     OFFERING,
@@ -28,24 +27,10 @@ from tests.test_api_catalog import (
     offering_body,
     price_refs,
 )
+from tests.builders.api_catalog_delete import _finish, _waits, gone, refused
 
 CATEGORY = f"{BASE}/category"
 CATALOG = f"{BASE}/productCatalog"
-
-
-def gone(api, href: str) -> None:
-    assert api.get(href).status_code == 404
-    assert api.delete(href).status_code == 404
-
-
-def refused(api, href: str, *expected: str) -> str:
-    response = api.delete(href)
-    assert response.status_code == 409, response.text
-    message = response.json()["message"]
-    for text in expected:
-        assert text in message, message
-    assert api.get(href).status_code == 200
-    return message
 
 
 def test_unreferenced_entries_are_deleted(api):
@@ -140,23 +125,6 @@ def test_category_and_catalog_rules(api):
     assert api.get(root["href"]).json()["subCategory"] == []
     assert api.delete(root["href"]).status_code == 204
     assert api.get(offering["href"]).json()["category"] == []
-
-
-def _waits(target) -> dict:
-    """Start `target` on a thread; it must still be blocked two seconds later."""
-    result: dict = {}
-    thread = threading.Thread(target=lambda: result.update(response=target()))
-    thread.start()
-    thread.join(timeout=2)
-    assert thread.is_alive(), "it did not wait for the open transaction"
-    result["thread"] = thread
-    return result
-
-
-def _finish(result: dict):
-    result["thread"].join(timeout=10)
-    assert not result["thread"].is_alive()
-    return result["response"]
 
 
 def test_a_price_delete_waits_for_an_order_in_flight(api, migrated_db_url):
