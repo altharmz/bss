@@ -1326,7 +1326,9 @@ contract validator loads both APIs. `tests/test_prepaid_contracts.py` checks num
 states, action create/response bodies, required fields, monetary Quantity versus
 Money, future enum values and the conditional history exception. These are contract
 fixtures, not runtime or database-enum coverage; PostgreSQL enum locks will be added
-with the corresponding migrations.
+with the corresponding migrations. (#425, 2026-11-23: removed once the routes landed.
+The API tests contract-check the real bodies, `test_spec_provenance` pins the spec, and
+the history exception's own cases moved to `tests/test_contract_validator.py`.)
 
 The base-path probe resolves server variable defaults, including TMF639's entire
 URL held in apiRoot. The gap ledger and progress scope include all 36 non-listener
