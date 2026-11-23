@@ -57,6 +57,7 @@ state-based events describe the present (a low-balance account is told once afte
 | `port_in_pending` / `_rejected` / `_completed` | port-in request state | request, submission, state |
 | `sim_swap` | `swap_sim` network command confirmed | command |
 | `bill_issued` | a bill's PDF rendered, account with the `email` medium (email only, PDF attached, `BSS_BILL_EMAIL_ENABLED`; [bills.md](bills.md#pdf-documents-and-email-delivery-202-2026-11-18)) | bill |
+| `dunning_reminder1` / `_reminder2` / `dunning_suspended` | a postpaid dunning step taken (`dunning_step`; the suspension only when it suspended a product; [dunning.md](dunning.md#notifications)) | account, first overdue date and step |
 
 A port-in has no customer until an order claims the number; it is told from then on. Recipients:
 the customer's (then the party's) `contactMedium` email and phone (preferred first); without a phone

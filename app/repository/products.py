@@ -500,7 +500,8 @@ def change_status(
     cause: str = "manual",
 ) -> Row:
     """The product is `status` (suspended or active) from `change_date` on. `cause`: an
-    operator's order (`manual`) or the prepaid lifecycle's (`lifecycle`: renewal stays open).
+    operator's order (`manual`), the prepaid lifecycle's (`lifecycle`: renewal stays open) or
+    postpaid dunning's (`dunning`: restoration resumes only those).
     `applied_at`: the change takes effect now - the product's status is set here; else
     the worker's run of `change_date` sets it (`apply_status_changes`)."""
     change = returning(
@@ -518,6 +519,10 @@ def change_status(
             " FROM billing_account a"
             " WHERE a.id = p.billing_account_id AND a.rating_type = 'prepaid' AND p.id = %s",
             (status == "suspended", status == "suspended" and cause == "lifecycle", product_id),
+        )
+        conn.execute(
+            "UPDATE product SET dunning_suspended = %s WHERE id = %s",
+            (status == "suspended" and cause == "dunning", product_id),
         )
         set_product_status(conn, product_id, status)
     return change
@@ -579,9 +584,16 @@ def restore_applied_status(conn: psycopg.Connection, product_id: UUID) -> None:
     """Restore the latest effective status; future changes remain scheduled."""
     row = fetch_one(
         conn,
-        "SELECT status FROM product_status_change WHERE product_id = %s"
+        "SELECT status, cause FROM product_status_change WHERE product_id = %s"
         " AND applied_at IS NOT NULL ORDER BY change_date DESC LIMIT 1",
         (product_id,),
+    )
+    conn.execute(
+        "UPDATE product SET dunning_suspended = %s WHERE id = %s",
+        (
+            row is not None and row["status"] == "suspended" and row["cause"] == "dunning",
+            product_id,
+        ),
     )
     set_product_status(conn, product_id, row["status"] if row else "active")
 
@@ -616,8 +628,10 @@ def apply_status_changes(
             UPDATE product_status_change c SET applied_at = %(at)s
              WHERE c.product_id = ANY(%(ids)s) AND c.applied_at IS NULL
                AND c.change_date <= %(day)s
-            RETURNING c.product_id, c.status)
-        UPDATE product p SET status = a.status FROM applied a
+            RETURNING c.product_id, c.status, c.cause)
+        UPDATE product p SET status = a.status,
+               dunning_suspended = (a.status = 'suspended' AND a.cause = 'dunning')
+          FROM applied a
          WHERE p.id = a.product_id
         RETURNING p.id
         """,

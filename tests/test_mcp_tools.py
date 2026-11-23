@@ -622,6 +622,8 @@ def get_arguments(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
         },
         "open_products": {"account_id": acc},
         "account_settlement": {"account_id": acc},
+        "get_account_dunning": {"account_id": acc},
+        "list_dunning_accounts": {"step": "none", "limit": 1},
         "charges": {"account_id": acc, "limit": 5},
         "transactions": {"account_id": acc, "offset": 0},
         "get_run": {"run_id": str(world["run"]["id"])},
@@ -1119,6 +1121,15 @@ def test_every_write_tool_reaches_the_app(api, mcp, world, monkeypatch, db_conn)
         {"signup_id": str(signup_in_review(db_conn, world)), "body": {"decision": "approve"}},
     )
     assert decided["state"] == "identityPassed" and decided["decidedBy"] == "mcp-token:writer"
+
+    # postpaid dunning (#385): a setting and an exemption (audited as the token)
+    settings_now = call("patch_dunning_settings", {"body": {"minimumOverdue": "7.50"}})
+    assert settings_now["minimumOverdue"] == Decimal("7.50")
+    exempt = call(
+        "patch_account_dunning",
+        {"account_id": world["account"]["id"], "body": {"exempt": True, "reason": "MCP test"}},
+    )
+    assert exempt["exempt"] is True
 
     assert called == {n for n, t in generated().items() if not t.read_only}
     history = api.get(f"/internal/v1/customerBill/{world['bill']['id']}").json()["history"]

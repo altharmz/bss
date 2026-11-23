@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0089**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0090**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -42,6 +42,8 @@ PostgreSQL schema at Alembic head **0089**, read from `pg_catalog` of a throwawa
 | [`refund_source`](refund_source.md) | billing | TMF676 recorded refund and its consumed credit. |
 | [`customer_bill_on_demand`](customer_bill_on_demand.md) | billing | Durable TMF678 on-demand request consumed by the billing owner. |
 | [`customer_bill_document`](customer_bill_document.md) | billing | The PDF of an issued bill, rendered by the billing run in the bill's issue transaction and served at customerBill/{id}/document.pdf. Immutable: later name, address or settlement changes never rewrite it. Bills issued before migration 0086 have none. |
+| [`dunning_setting`](dunning_setting.md) | billing | The postpaid dunning steps (one row): days after O, the first overdue date, and the smallest overdue amount that counts. The worker derives the steps from them on every pass, so a change applies to the steps not yet taken. |
+| [`dunning_step`](dunning_step.md) | billing | A dunning step the worker took for an account and O (once each): the guard that makes every step happen once, and the record the notification detector reads. |
 | [`bill_format`](bill_format.md) | billing | TMF666 bill presentation configuration. |
 | [`bill_presentation_media`](bill_presentation_media.md) | billing | TMF666 bill presentation configuration. |
 | [`account_presentation_media`](account_presentation_media.md) | billing | Account bill delivery preferences; no external delivery is performed. |
@@ -157,6 +159,8 @@ flowchart LR
     refund_source[refund_source]
     customer_bill_on_demand[customer_bill_on_demand]
     customer_bill_document[customer_bill_document]
+    dunning_setting[dunning_setting]
+    dunning_step[dunning_step]
     bill_format[bill_format]
     bill_presentation_media[bill_presentation_media]
     account_presentation_media[account_presentation_media]
@@ -296,6 +300,7 @@ flowchart LR
   customer_login_code -->|"customer_login_id"| customer_login
   customer_pin -->|"customer_id"| customer
   customer_session -->|"customer_login_id"| customer_login
+  dunning_step -->|"billing_account_id"| billing_account
   event_delivery -->|"event_id"| event
   event_delivery -->|"subscription_id"| event_subscription
   financial_account -->|"party_id"| party
@@ -485,6 +490,7 @@ erDiagram
     numeric auto_topup_amount
     timestamptz auto_topup_changed_at
     date balance_zero_since
+    boolean dunning_exempt
   }
   financial_account {
     uuid id PK
@@ -763,6 +769,7 @@ erDiagram
     boolean grantless
     boolean lifecycle_suspended
     jsonb e911_address
+    boolean dunning_suspended
   }
   product_offering_change {
     uuid id PK
@@ -1073,6 +1080,23 @@ erDiagram
     bytea pdf
     text sha256
     timestamptz rendered_at
+  }
+  dunning_setting {
+    boolean id PK
+    integer reminder1_days
+    integer reminder2_days
+    integer suspend_days
+    numeric minimum_overdue
+    timestamptz updated_at
+  }
+  dunning_step {
+    uuid billing_account_id PK,FK
+    date overdue_since PK
+    text step PK
+    date business_date
+    numeric overdue_amount
+    integer products
+    timestamptz taken_at
   }
   bill_format {
     uuid id PK
@@ -1441,6 +1465,7 @@ erDiagram
   billing_account ||--o{ bill_allocation : "billing_account_id, currency"
   billing_account ||--o{ customer_bill : "billing_account_id, currency"
   billing_account ||--o{ customer_bill_on_demand : "billing_account_id"
+  billing_account ||--o{ dunning_step : "billing_account_id"
   billing_account ||--o{ funded_interval : "billing_account_id, currency, rating_type"
   billing_account ||--o{ funding_hold : "billing_account_id, currency"
   billing_account ||--o{ funding_source : "billing_account_id, currency"

@@ -31,6 +31,7 @@ SID Product (TMF637 product): an instance of an offering on a billing account. W
 | `grantless` | `boolean` | no | `false` | Prepaid: an add-on or pay-as-you-go product. Active between its dates with no funded interval, never renewed; the order that created it completes it. |
 | `lifecycle_suspended` | `boolean` | no | `false` | The status timeline's suspension was taken by the prepaid lifecycle (manually_suspended is then true as well); it does not block renewal. |
 | `e911_address` | `jsonb` | yes |  | The registered E911 address of the line (TMF637 place, role e911Address): a normalized US GeographicAddress (streetNr, streetName, streetSuffix, city, stateOrProvince, postcode, country, geographicSubAddress). Sent to the network while the profile has wifiCalling; changed by an order only once the network confirmed it. Null: none. |
+| `dunning_suspended` | `boolean` | no | `false` | The product's applied suspension was placed by postpaid dunning (cause dunning): restoration resumes it, an operator's suspension it leaves alone. Cleared by any later applied status change. |
 
 ## Foreign keys
 
@@ -65,6 +66,7 @@ SID Product (TMF637 product): an instance of an offering on a billing account. W
 | `product_billing_account_id_idx` | `CREATE INDEX product_billing_account_id_idx ON product USING btree (billing_account_id)` | no |
 | `product_created_at_id_idx` | `CREATE INDEX product_created_at_id_idx ON product USING btree (created_at, id)` | no |
 | `product_created_by_item_id_key` | `CREATE UNIQUE INDEX product_created_by_item_id_key ON product USING btree (created_by_item_id)` | yes |
+| `product_dunning_suspended_idx` | `CREATE INDEX product_dunning_suspended_idx ON product USING btree (billing_account_id) WHERE dunning_suspended` | no |
 | `product_grantless_account_idx` | `CREATE INDEX product_grantless_account_idx ON product USING btree (billing_account_id) WHERE (grantless AND (parent_product_id IS NULL))` | no |
 | `product_id_billing_account_id_key` | `CREATE UNIQUE INDEX product_id_billing_account_id_key ON product USING btree (id, billing_account_id)` | yes |
 | `product_parent_idx` | `CREATE INDEX product_parent_idx ON product USING btree (parent_product_id) WHERE (parent_product_id IS NOT NULL)` | no |

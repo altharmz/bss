@@ -15,7 +15,7 @@ from uuid import UUID
 import psycopg
 
 from app.config import settings as app_settings
-from app.repository import lifecycle
+from app.repository import dunning, lifecycle
 
 
 @dataclass(frozen=True)
@@ -32,8 +32,10 @@ class Review:
 
 
 def settings_key(conn: psycopg.Connection) -> str:
-    """Every setting the passes decide with, as one comparable text."""
+    """Every setting the passes decide with, as one comparable text (postpaid dunning's too:
+    its steps run on the full sweep, app/worker/dunning.py)."""
     row = lifecycle.get_row(conn)
+    steps = dunning.get_row(conn)
     return "|".join(
         str(value)
         for value in (
@@ -43,6 +45,10 @@ def settings_key(conn: psycopg.Connection) -> str:
             row["payg_zero_balance_days"],
             app_settings.notify_low_balance,
             app_settings.notify_expiring_days,
+            steps["reminder1_days"],
+            steps["reminder2_days"],
+            steps["suspend_days"],
+            steps["minimum_overdue"],
         )
     )
 

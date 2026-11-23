@@ -559,6 +559,76 @@ paths:
         '400': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
         '409': {$ref: '#/components/responses/Error'}
+  /dunning/settings:
+    get:
+      summary: The postpaid dunning steps (issue 385).
+      description: >-
+        Days after O (the first business date the account had an open, non-held bill past
+        its payment due date) of the first reminder, the second reminder and the suspension,
+        and the smallest amount past due (in the account currency) that counts. Defaults (1,
+        7, 14, 5.00) apply from the migration; `updatedAt` is null until an operator changes
+        them.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DunningSettings'}
+        '400': {$ref: '#/components/responses/Error'}
+    patch:
+      summary: Change the postpaid dunning steps.
+      description: >-
+        Any of the four settings, at least one; the others keep their value; none can be
+        removed (null). The days stay increasing (reminder1Days < reminder2Days <
+        suspendDays, 422 otherwise). The worker derives the steps on each pass, so a change
+        applies to the steps not yet taken; steps taken stand.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                reminder1Days: {type: integer, minimum: 0, maximum: 365}
+                reminder2Days: {type: integer, minimum: 0, maximum: 365}
+                suspendDays: {type: integer, minimum: 0, maximum: 365}
+                minimumOverdue: {type: number, minimum: 0, description: 'Exact, at most 2 decimals'}
+      responses:
+        '200':
+          description: The settings now in force
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DunningSettings'}
+        '400': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /dunning/accounts:
+    get:
+      summary: The postpaid accounts in dunning, oldest overdue date first (issue 385).
+      description: >-
+        Active, non-exempt postpaid accounts owing at least minimumOverdue past due on open
+        bills (held bills never count): O, the amount past due, the last step taken for that
+        O (`none` before the first) and the suspension's date. `step` keeps those whose last
+        step it is; `deactivationCandidate=true` those suspended more than 60 days (postpaid
+        lines are never ended automatically: an operator ends them).
+      parameters:
+        - {$ref: '#/components/parameters/Offset'}
+        - {$ref: '#/components/parameters/Limit'}
+        - name: step
+          in: query
+          schema: {type: string, enum: [none, reminder1, reminder2, suspend]}
+        - name: deactivationCandidate
+          in: query
+          schema: {type: string, enum: ['true']}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/DunningAccount'}
+        '400': {$ref: '#/components/responses/Error'}
   /lifecycle/settings:
     get:
       summary: The prepaid lifecycle durations (issue 188).
@@ -840,6 +910,52 @@ paths:
         '400': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
         '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /billingAccount/{id}/dunning:
+    get:
+      summary: The account's postpaid dunning state (issue 385).
+      description: >-
+        Whether the account is exempt and in dunning; while in dunning, O, the amount past
+        due, the steps taken for that O and the next step with its date (dated today or
+        earlier while the worker has not run yet); and the products under a dunning
+        suspension. A prepaid account is never in dunning.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AccountDunning'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+    patch:
+      summary: Exempt a postpaid account from dunning, or end its exemption.
+      description: >-
+        Postpaid accounts only (422). A change writes an account_audit row
+        (`dunning_exemption`, the operator, the optional reason); an exempt account takes no
+        step and the next pass lifts its dunning suspensions.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [exempt]
+              properties:
+                exempt: {type: boolean}
+                reason: {type: string, minLength: 1, maxLength: 500}
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AccountDunning'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
         '422': {$ref: '#/components/responses/Error'}
   /payment/command:
     get:
@@ -2256,6 +2372,77 @@ components:
         numberAgingDays: {type: integer, minimum: 0, maximum: 3650}
         paygZeroBalanceDays: {type: integer, minimum: 0, maximum: 365}
         updatedAt: {type: string, format: date-time, nullable: true}
+    DunningSettings:
+      type: object
+      additionalProperties: false
+      required: [reminder1Days, reminder2Days, suspendDays, minimumOverdue, updatedAt]
+      properties:
+        reminder1Days: {type: integer, minimum: 0, maximum: 365}
+        reminder2Days: {type: integer, minimum: 0, maximum: 365}
+        suspendDays: {type: integer, minimum: 0, maximum: 365}
+        minimumOverdue: {type: number, minimum: 0, description: 'In the account currency; exact, 2 decimals'}
+        updatedAt: {type: string, format: date-time, nullable: true}
+    DunningStep:
+      type: string
+      enum: [reminder1, reminder2, suspend]
+    DunningAccount:
+      type: object
+      additionalProperties: false
+      required: [billingAccount, overdueSince, overdueAmount, lastStep, suspendedSince, deactivationCandidate]
+      properties:
+        billingAccount:
+          type: object
+          additionalProperties: false
+          required: [id, name]
+          properties:
+            id: {type: string, format: uuid}
+            name: {type: string}
+        overdueSince: {type: string, format: date, description: 'O: the oldest overdue due date + 1'}
+        overdueAmount: {$ref: '#/components/schemas/Money'}
+        lastStep: {type: string, enum: [none, reminder1, reminder2, suspend]}
+        suspendedSince: {type: string, format: date, nullable: true}
+        deactivationCandidate: {type: boolean, description: 'Suspended more than 60 days'}
+    AccountDunning:
+      type: object
+      additionalProperties: false
+      required: [billingAccount, exempt, inDunning, overdueSince, overdueAmount, stepsTaken, nextStep, suspendedProducts]
+      properties:
+        billingAccount:
+          type: object
+          additionalProperties: false
+          required: [id, name]
+          properties:
+            id: {type: string, format: uuid}
+            name: {type: string}
+        exempt: {type: boolean}
+        inDunning: {type: boolean}
+        overdueSince: {type: string, format: date, nullable: true}
+        overdueAmount: {$ref: '#/components/schemas/NullableMoney'}
+        stepsTaken:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [step, date]
+            properties:
+              step: {$ref: '#/components/schemas/DunningStep'}
+              date: {type: string, format: date}
+        nextStep:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [step, date]
+          properties:
+            step: {$ref: '#/components/schemas/DunningStep'}
+            date: {type: string, format: date}
+        suspendedProducts:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id]
+            properties:
+              id: {type: string, format: uuid}
     LogSettings:
       type: object
       additionalProperties: false
@@ -2983,7 +3170,7 @@ components:
         product: *optionalRef
         action:
           type: string
-          enum: [sim_swap, number_change, number_transfer_pin, contact_change, port_out, pin_set, pin_reset, lock_set, lock_cleared, pin_lockout, e911_changed, interaction_logged, ticket_opened, ticket_status_changed, care_note_added, care_sign_in, care_locked, care_password_changed, care_top_up, care_card_saved, care_card_removed, care_auto_top_up, care_add_on]
+          enum: [sim_swap, number_change, number_transfer_pin, contact_change, port_out, pin_set, pin_reset, lock_set, lock_cleared, pin_lockout, e911_changed, interaction_logged, ticket_opened, ticket_status_changed, care_note_added, care_sign_in, care_locked, care_password_changed, care_top_up, care_card_saved, care_card_removed, care_auto_top_up, care_add_on, dunning_exemption]
         outcome: {type: string, enum: [done, refused]}
         reason: {type: string, nullable: true}
         verification: {type: string, enum: [pin, notRequired, none, password+code, code, session]}

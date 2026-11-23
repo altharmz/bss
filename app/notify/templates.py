@@ -15,6 +15,35 @@ TEMPLATES: dict[str, dict[str, tuple[str | None, str]]] = {
             " total is {total}; the amount due is {amount}, to be paid by {date}.",
         ),
     },
+    # postpaid dunning (docs/decisions/dunning.md): two reminders, then the suspension notice
+    "dunning_reminder1": {
+        "sms": (None, "Your bill is overdue: {amount} is past due. Please pay to keep service."),
+        "email": (
+            "Your bill is overdue",
+            "Hello {name},\n\nWe have not received payment of {amount} that is past due on your"
+            " account. Please pay it to keep your service; if it stays unpaid, your lines are"
+            " suspended on {date}.",
+        ),
+    },
+    "dunning_reminder2": {
+        "sms": (
+            None,
+            "Reminder: {amount} is past due. Your lines are suspended on {date} unless paid.",
+        ),
+        "email": (
+            "Second reminder: your bill is overdue",
+            "Hello {name},\n\n{amount} is still past due on your account. Your lines are"
+            " suspended on {date} unless it is paid before then.",
+        ),
+    },
+    "dunning_suspended": {
+        "sms": (None, "Your lines are suspended: {amount} is past due. Pay to restore service."),
+        "email": (
+            "Your lines are suspended",
+            "Hello {name},\n\nYour lines have been suspended because {amount} is past due on"
+            " your account. Service is restored once the overdue amount is paid.",
+        ),
+    },
     "low_balance": {
         "sms": (None, "Your balance is low: {balance}. Top up to keep your plan renewing."),
         "email": (

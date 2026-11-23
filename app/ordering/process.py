@@ -76,6 +76,8 @@ class ItemRequest:
     product_status: str | None = None
     # the prepaid lifecycle's own suspension/resumption: renewal stays open (worker only)
     lifecycle: bool = False
+    # postpaid dunning's own suspension/resumption (worker only, docs/decisions/dunning.md)
+    dunning: bool = False
     # the network's verdict on the item's IMEI (ordering/devices.py), filled by validation
     device_check: dict[str, Any] = field(default_factory=dict, compare=False)
     # the E911 address the item stores (ordering/e911.py), filled by validation
@@ -847,6 +849,7 @@ def _execute(
                 changed_by_item_id=row["id"],
                 # in effect today: set now; else by the worker's run of the day
                 applied_at=now if start <= today else None,
+                cause="dunning" if item.dunning else "manual",
             )
             if start <= today:
                 emit.product(conn, item.product_id, "StateChange", at=now, today=today)
