@@ -462,6 +462,15 @@ OpenMetrics check) scrapes `GET /metrics` on the app and on mcp; the kit is in
   is unchanged.
 - **Exposure on the VPS is the human's step:** the Caddy route in vps-infra, the token in
   `.env.prod`, the scraper.
+- **Grafana Cloud rules (2026-11-23, issue #444):** the live rules are
+  `ops/monitoring/grafana-cloud-rules.yaml`, written by `make grafana-rules-apply` (the human's
+  step; the provisioning API with `X-Disable-Provenance`, merged onto the live group so
+  unmanaged fields stay). The Prometheus import had made missing data a recovery, so the
+  nightly reboot resolved and re-fired alerts. Decided: no data keeps the last state, errors
+  raise an Error alert, queries return raw values and the threshold expression compares (an
+  empty result then only means missing series), absence rules (no data = OK) report a scrape
+  missing for 15 minutes. Not chosen: `keep_firing_for` (it delays genuine recoveries too), a
+  03:00 silence (it hides real failures), threshold changes.
 
 ## Automated rollback (2026-11-08)
 

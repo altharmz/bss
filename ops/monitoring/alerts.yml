@@ -1,3 +1,7 @@
+# Prometheus rule file (self-hosted Prometheus, or an import into Grafana). The live
+# Grafana Cloud rules are grafana-cloud-rules.yaml: the same rules with Grafana's no-data and
+# error handling, which this format cannot carry (README.md). Keep the two in step; a test
+# checks they name the same rules.
 groups:
   - name: bss
     rules:
@@ -19,6 +23,7 @@ groups:
         expr: |
           sum(rate(bss_http_requests_total{status=~"5.."}[10m]))
             / sum(rate(bss_http_requests_total[10m])) > 0.05
+          and sum(increase(bss_http_requests_total[10m])) >= 20
         for: 10m
         labels: {severity: warning}
         annotations:
@@ -28,6 +33,7 @@ groups:
         expr: |
           histogram_quantile(0.95,
             sum by (le) (rate(bss_http_request_duration_seconds_bucket[10m]))) > 2
+          and sum(increase(bss_http_request_duration_seconds_count[10m])) >= 20
         for: 10m
         labels: {severity: warning}
         annotations:
@@ -68,3 +74,17 @@ groups:
         labels: {severity: warning}
         annotations:
           summary: MCP tool calls are ending in server errors or timeouts.
+
+      - alert: BssAppTelemetryMissing
+        expr: absent_over_time(up{job="bss-app"}[15m])
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: BSS App scrape telemetry is missing. Check the scraper.
+
+      - alert: BssMcpTelemetryMissing
+        expr: absent_over_time(up{job="bss-mcp"}[15m])
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: BSS Mcp scrape telemetry is missing. Check the scraper.
