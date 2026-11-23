@@ -23,6 +23,7 @@ const ALL_ROUTES: Record<RouteName, true> = {
   billingRuns: true,
   prepaidCommands: true,
   financialAccounts: true,
+  careSignups: true,
   parties: true,
   billingSettings: true,
   payments: true,

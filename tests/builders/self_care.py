@@ -1,6 +1,7 @@
 """Shared builders of tests/test_self_care.py, used by other test modules (#423)."""
 
 import re
+from datetime import timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -10,12 +11,40 @@ from app.integrations.notify import adapter as sender
 from app.main import app
 from tests import apidata
 from tests.apiclient import TmfClient
+from tests.builders.prepaid_renewal_producer import tick
 
 BASE = "/self-care/v1"
 
 PASSWORD = "a-long-customer-password"
 
 EMAIL = "ada@example.org"
+
+
+def customer_of(db_conn, acc):
+    (customer_id,) = db_conn.execute(
+        "SELECT customer_id FROM billing_account WHERE id = %s", (acc["id"],)
+    ).fetchone()
+    db_conn.commit()
+    return customer_id
+
+
+def signed_in(api, care, db_conn, acc, email=EMAIL):
+    """The account's customer, invited and signed in on `care`; the login's id."""
+    _, login, code = invite(api, email, customer={"id": str(customer_of(db_conn, acc))})
+    assert care.post(BASE + "/password", {"code": code, "newPassword": PASSWORD}).status_code == 204
+    assert sign_in(care, email).status_code == 200
+    (login_id,) = db_conn.execute(
+        "SELECT id FROM customer_login WHERE email = %s", (email,)
+    ).fetchone()
+    db_conn.commit()
+    return login_id
+
+
+def settle(db_conn, api):
+    """Two wake-ups: the charge is sent, then the gateway's answer is read."""
+    tick(db_conn, api.clock.now())
+    api.clock.set(api.clock.now() + timedelta(minutes=1))
+    tick(db_conn, api.clock.now())
 
 
 class CareClient(TmfClient):

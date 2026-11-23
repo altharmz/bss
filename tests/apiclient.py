@@ -160,7 +160,7 @@ INTERNAL: dict[str, str] = {
 # The customers' self-care API (spec/self-care/bss-self-care.oas.yaml): the response schema is
 # the one the spec names for the method and status.
 SELF_CARE_BASE = "/self-care/v1"
-SELF_CARE_LITERALS = {"/session/verify", "/password/reset"}  # two segments, no id
+SELF_CARE_LITERALS = {"/session/verify", "/password/reset", "/signup/plans"}  # no id
 # Our own JSON Schemas for TMF extensions, served outside the TMF resource paths.
 SCHEMA_PREFIX = "/tmf-api/schema/"
 # Statuses we return that the specs do not declare on any operation (decided in

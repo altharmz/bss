@@ -28,6 +28,7 @@ from app.api import payment_method as cards
 from app.api.common import Money, money, parse, parse_id, utc
 from app.api.deps import ClockDep, JsonBody, Tx
 from app.api.errors import TmfError, conflict, not_found, problems_error, unprocessable
+from app.api.listing import paging_headers
 from app.api.tmfjson import TmfJSONResponse
 from app.billing.engine_tax import service_address_of
 from app.care.auth import normal
@@ -284,17 +285,22 @@ def _expired_or(row: Row, message: str) -> TmfError:
     return TmfError(409, message, code="signupState")
 
 
+def signup_plans(conn: psycopg.Connection, now: datetime) -> list[Row]:
+    return [
+        row
+        for row in scope.offerings(conn, now)
+        if offering_kind.kind_of(row["details"]) == offering_kind.PLAN
+    ]
+
+
 def plan(conn: psycopg.Connection, raw: str, now: datetime) -> Row:
     """A plan on sale now (sellable, Active, valid); any other id is a 422."""
     try:
         uid = UUID(raw)
     except ValueError:
         uid = None
-    for offering in scope.offerings(conn, now):
-        if (
-            offering["id"] == uid
-            and offering_kind.kind_of(offering["details"]) == offering_kind.PLAN
-        ):
+    for offering in signup_plans(conn, now):
+        if offering["id"] == uid:
             return offering
     raise TmfError(422, f"offeringId {raw} is not a plan on sale", code="offeringUnavailable")
 
@@ -315,6 +321,19 @@ def _limit(conn: psycopg.Connection, email: str, address: str, now: datetime) ->
 
 
 # --- the steps ---
+
+
+@router.get("/plans")
+def list_signup_plans(request: Request, tx: Tx, clock: ClockDep):
+    """Public plan choices use the same on-sale catalogue as signup creation."""
+    no_query(request)
+    with tx() as conn:
+        choices = [
+            {"id": str(row["id"]), "name": row["name"]} for row in signup_plans(conn, clock.now())
+        ]
+    response = _json(choices)
+    response.headers.update(paging_headers(len(choices), False, None))
+    return response
 
 
 @router.post("", status_code=201)

@@ -36,6 +36,12 @@ export const NAV: NavSection[] = [
         tmf: 'TMF666 billingAccount',
       },
       {
+        label: 'Signups',
+        href: '/signups',
+        routes: ['careSignups'],
+        tmf: 'internal (online signups)',
+      },
+      {
         label: 'Parties',
         href: '/parties',
         routes: ['parties'],

@@ -1,5 +1,14 @@
 # Admin UI (stage 5)
 
+Operators can open **Self-care login** on a subscriber card to check the customer's login,
+send an invitation, or disable access. Under **Customers → Signups**, filter by state and
+open a signup to inspect its plan and identity result. A signup in identity review offers
+Approve and Reject actions.
+
+Customers open `/care/` to sign in with their password and emailed code. The account page
+shows each line's plan, paid period and usage. Account controls group transaction history,
+saved cards, top-ups and the auto top-up rule by billing account.
+
 R11 money dialogs use the M Ledger Dialog, account context IDs, currency MoneyFields,
 outcome and busy labels, and Balance after computed from loaded figures. Transfer has
 Recipient, Amount and Confirm steps; Confirm requires subscriber acknowledgement and

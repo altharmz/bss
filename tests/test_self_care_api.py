@@ -25,35 +25,18 @@ from tests.builders.self_care import (  # noqa: F401 - fixtures
     BASE,
     PASSWORD,
     care,
+    customer_of,
     enabled,
     invite,
     log_sender,
     new_care,
+    settle,
     sign_in,
+    signed_in,
 )
 from tests.builders.settlement_db import make_payment
 
 EMAIL = "ada@example.org"
-
-
-def customer_of(db_conn, acc):
-    (customer_id,) = db_conn.execute(
-        "SELECT customer_id FROM billing_account WHERE id = %s", (acc["id"],)
-    ).fetchone()
-    db_conn.commit()
-    return customer_id
-
-
-def signed_in(api, care, db_conn, acc, email=EMAIL):
-    """The account's customer, invited and signed in on `care`; the login's id."""
-    _, login, code = invite(api, email, customer={"id": str(customer_of(db_conn, acc))})
-    assert care.post(BASE + "/password", {"code": code, "newPassword": PASSWORD}).status_code == 204
-    assert sign_in(care, email).status_code == 200
-    (login_id,) = db_conn.execute(
-        "SELECT id FROM customer_login WHERE email = %s", (email,)
-    ).fetchone()
-    db_conn.commit()
-    return login_id
 
 
 def other_customer(api, care_other, db_conn, email="bob@example.org"):
@@ -90,13 +73,6 @@ def top_up(care, card, value=25, key=None):
         {"amount": {"unit": "USD", "value": value}, "paymentMethodId": card["id"]},
         headers=headers,
     )
-
-
-def settle(db_conn, api):
-    """Two wake-ups: the charge is sent, then the gateway's answer is read."""
-    tick(db_conn, api.clock.now())
-    api.clock.set(api.clock.now() + timedelta(minutes=1))
-    tick(db_conn, api.clock.now())
 
 
 # --- reads ---

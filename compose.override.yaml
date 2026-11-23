@@ -57,6 +57,15 @@ services:
       disable: true
     command: ["python", "-m", "app.worker"]
 
+  e2e-care:
+    extends:
+      service: oneoff
+    profiles: [web]
+    ports: !reset []
+    volumes:
+      - ./frontend/.e2e:/e2e
+    command: ["pytest", "tests/e2e_care.py"]
+
   # Writable twin of `app` for code-mutating tooling (make fmt, .claude/hooks/format.sh).
   # `app` keeps its read-only source mounts. Same dev image, so the same ruff version.
   # Only the code ruff may rewrite is mounted (at /app, where `app` sees its sources) - not
@@ -226,7 +235,7 @@ services:
       E2E_BASE_URL: http://web-preview:4173
       HOME: /tmp
     shm_size: 1gb
-    depends_on: [web-preview]
+    depends_on: [web-preview, e2e-care]
     networks: [lab]
     command: ["npx", "playwright", "test"]
 

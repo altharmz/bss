@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Test payment gateway</title>
+  </head>
+  <body>
+    <form>
+      <label
+        >Test payment card
+        <select name="card">
+          <option value="tok_visa">Visa test card</option>
+          <option value="tok_mastercard">Mastercard test card</option>
+          <option value="tok_decline">Declined test card</option>
+        </select></label
+      >
+      <button>Use test card</button>
+    </form>
+    <script>
+      document.querySelector('form').addEventListener('submit', (event) => {
+        event.preventDefault();
+        parent.postMessage(
+          { type: 'stub-card-token', token: new FormData(event.currentTarget).get('card') },
+          location.origin,
+        );
+      });
+    </script>
+  </body>
+</html>

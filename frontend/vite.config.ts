@@ -19,6 +19,7 @@ export default defineConfig({
     proxy: {
       '/tmf-api': { target: api },
       '/internal': { target: api },
+      '/self-care/v1': { target: api },
       '/billing-status': { target: api },
       '/healthz': { target: api },
     },
@@ -27,7 +28,11 @@ export default defineConfig({
   // container; Vite refuses unknown Host headers (DNS-rebinding protection), so allow
   // exactly that name.
   preview: { host: '0.0.0.0', port: 4173, strictPort: true, allowedHosts: ['web-preview'] },
-  build: { outDir: 'dist', assetsDir: 'assets' },
+  build: {
+    outDir: 'dist',
+    assetsDir: 'assets',
+    rollupOptions: { input: ['index.html', 'care/index.html'] },
+  },
   test: {
     environment: 'jsdom',
     include: ['src/**/*.test.{ts,tsx}'],

@@ -22,6 +22,7 @@ import {
 import { explain } from '../api/client';
 import type { PendingOrder } from '../api/commands';
 import { useResource, type ResourceWithRetry } from '../api/useResource';
+import { LoginPanel } from './CareOperator';
 import { useSetCrumbs, useSystemContext } from '../app/context';
 import { hrefOf, Link, useRouter } from '../app/router';
 import { eventTypeLabel, paymentMethodLabel, plural } from '../format/labels';
@@ -458,6 +459,7 @@ function Card({
           </Link>
           {account.ratingType === 'prepaid' && <span>Charged daily at {context.billingRunAt}</span>}
         </div>
+        <LoginPanel key={account.customerId} customerId={account.customerId} />
         {account.ratingType === 'prepaid' && account.serviceAddress === null && (
           <MissingServiceAddress onEdit={() => setAddressDialog('edit')} />
         )}

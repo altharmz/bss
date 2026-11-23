@@ -13,6 +13,7 @@ from decimal import Decimal
 
 import pytest
 
+from app.config import settings
 from app.worker import db as worker_db
 from app.worker.queue import process_requests
 from tests import apidata
@@ -28,6 +29,55 @@ from tests.timeline import TZ
 
 OFFSET = "+03:00"
 RUNS = "/internal/v1/billingRun"
+
+
+def test_ui_customer_login_invitation(api, monkeypatch):
+    monkeypatch.setattr(settings, "self_care_enabled", True)
+    customer = apidata.customer(api)
+    path = f"/internal/v1/customer/{customer['id']}/careLogin"
+    response = api.post(path, {"email": "a@example.test"})
+    assert response.status_code == 201, response.text
+    assert response.json()["status"] == "invited"
+    assert api.delete(path).json()["status"] == "disabled"
+    assert api.get(path).json()["email"] == "a@example.test"
+
+
+def test_ui_customer_payment_forms(api, db_conn, monkeypatch):
+    from tests.builders.self_care import BASE, new_care, settle, signed_in
+
+    monkeypatch.setattr(settings, "self_care_enabled", True)
+    care = new_care(api)
+    try:
+        account = apidata.account(api, ratingType="prepaid")
+        signed_in(api, care, db_conn, account)
+        ref = {"billingAccountId": account["id"]}
+        card = care.post(BASE + "/paymentMethod", {**ref, "token": "tok_visa"})
+        assert card.status_code == 201, card.text
+        uid = card.json()["id"]
+        unit = care.get(BASE + "/account").json()[0]["currency"]
+        money = {"unit": unit, "value": 25}
+        charge = care.post(
+            BASE + "/topUp",
+            {"amount": money, "paymentMethodId": uid},
+            headers={"Idempotency-Key": "browser-top-up"},
+        )
+        assert charge.status_code == 202, charge.text
+        rule = care.put(
+            BASE + "/autoTopUp",
+            {
+                **ref,
+                "enabled": True,
+                "threshold": {"unit": unit, "value": 5},
+                "amount": money,
+            },
+        )
+        assert rule.status_code == 200, rule.text
+        assert care.put(BASE + "/autoTopUp", {**ref, "enabled": False}).status_code == 200
+        assert care.delete(BASE + "/paymentMethod/" + uid).status_code == 409
+        settle(db_conn, api)
+        assert care.delete(BASE + "/paymentMethod/" + uid).status_code == 204
+    finally:
+        care.client.close()
 
 
 def test_ui_wholesale_invoice_upload(api):

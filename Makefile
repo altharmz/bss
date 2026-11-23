@@ -407,7 +407,7 @@ web-e2e: ## [ui] e2e smoke (Playwright) on the built UI and the seeded local sta
 	$(E2E_USERS) cleanup
 	$(E2E_USERS) prepare --numbered-offering
 	./scripts/task-compose up -d e2e-worker
-	$(LOCKED) ./scripts/task-compose run --rm e2e; rc=$$?; $(E2E_USERS) cleanup || rc=1; ./scripts/task-compose rm -sf web-preview e2e-worker >/dev/null 2>&1; exit $$rc
+	$(LOCKED) ./scripts/task-compose run --rm e2e; rc=$$?; $(E2E_USERS) cleanup || rc=1; ./scripts/task-compose rm -sf web-preview e2e-worker e2e-care >/dev/null 2>&1; exit $$rc
 
 web-shots: ## [ui] Capture Ledger UI reference PNGs at 1280 and 1600 px
 	rm -rf frontend/.shots

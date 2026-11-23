@@ -90,7 +90,8 @@ class HandlerTests(unittest.TestCase):
         # gh's first stderr line is shown through the shared sanitizer; credentials and
         # URLs in it are not.
         error = failure(["gh", "pr", "view", LEAK], stderr=f"token {SECRET} https://user:pw@x.io")
-        text = self.run_main(task_pr, ["check-pr"], "context", error)
+        with patch.object(task_pr, "master_harness", return_value=None):
+            text = self.run_main(task_pr, ["check-pr"], "context", error)
         self.check(text, "command gh pr", "exit 3", "<redacted>")
 
     def test_finish_names_the_failing_command(self):

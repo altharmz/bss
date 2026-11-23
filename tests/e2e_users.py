@@ -126,6 +126,8 @@ def main():
             FILE.unlink()
     if args.action == "cleanup":
         CATALOG_FILE.unlink(missing_ok=True)
+        for name in ("care-plan.json", "care-mail.json", "care-finished"):
+            (FILE.parent / name).unlink(missing_ok=True)
 
 
 if __name__ == "__main__":
