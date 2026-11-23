@@ -16,7 +16,10 @@ test('admin starts and stops a temporary debug', async ({ page }) => {
   await expect(page).toHaveURL(/\/settings\/logging$/);
   await expect(page.getByRole('heading', { name: 'Logging' })).toBeVisible();
   await page.getByRole('button', { name: 'Debug 15 min' }).click();
-  await expect(page.getByText(/Debug until \d\d:\d\d:\d\d, 1[45] min left/)).toBeVisible();
+  // The display clock ticks every five seconds. Allow the first tick after the write.
+  await expect(page.getByText(/Debug until \d\d:\d\d:\d\d, 1[45] min left/)).toBeVisible({
+    timeout: 10000,
+  });
   await expect(page.locator('.bss-badge', { hasText: 'DEBUG' })).toBeVisible();
   await page.getByRole('button', { name: 'Stop debug' }).click();
   await expect(page.getByText('off', { exact: true })).toBeVisible();

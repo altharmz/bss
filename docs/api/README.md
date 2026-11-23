@@ -22,10 +22,10 @@ One page per API, generated from `app.openapi()` (what the app really serves) an
 | [TMF681 Communication Management](tmf681-communication.md) | v4 | `/tmf-api/communicationManagement/v4` | 4 | [`spec/TMF681-Communication-v4.0.0.swagger.json`](../../spec/TMF681-Communication-v4.0.0.swagger.json) |
 | [TMF683 Party Interaction Management](tmf683-party-interaction.md) | v5 | `/tmf-api/partyInteractionManagement/v5` | 6 | [`spec/TMF683-Party_Interaction-v5.0.0.oas.yaml`](../../spec/TMF683-Party_Interaction-v5.0.0.oas.yaml) |
 | [TMF621 Trouble Ticket Management](tmf621-trouble-ticket.md) | v5 | `/tmf-api/troubleTicket/v5` | 7 | [`spec/TMF621-Trouble_Ticket-v5.0.1.oas.yaml`](../../spec/TMF621-Trouble_Ticket-v5.0.1.oas.yaml) |
-| [Self-care API (customers)](self-care.md) | v1 | `/self-care/v1` | 24 | [`spec/self-care/bss-self-care.oas.yaml`](../../spec/self-care/bss-self-care.oas.yaml) |
+| [Self-care API (customers)](self-care.md) | v1 | `/self-care/v1` | 25 | [`spec/self-care/bss-self-care.oas.yaml`](../../spec/self-care/bss-self-care.oas.yaml) |
 | [Service endpoints](service.md) | - | - | 3 | - |
 
-298 operations in total.
+299 operations in total.
 
 ## Conventions
 

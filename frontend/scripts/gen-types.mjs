@@ -23,6 +23,7 @@ const SPECS = {
   tmf666: 'TMF666-Account_Management-v5.0.0.oas.yaml',
   tmf678: 'TMF678-CustomerBill-v5.0.0.oas.yaml',
   internal: 'internal/bss-internal.oas.yaml',
+  care: 'self-care/bss-self-care.oas.yaml',
 };
 
 mkdirSync(OUT_DIR, { recursive: true });

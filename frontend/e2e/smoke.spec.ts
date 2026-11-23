@@ -149,10 +149,10 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
   const latest = page.getByRole('region', { name: 'Latest run' });
   await expect(latest).toBeVisible();
   await expect(latest.getByText(/^\d{4}-\d{2}-\d{2}$/)).toBeVisible();
-  await expect(page.getByText(/^Showing [\d,]+–[\d,]+ of [\d,]+$/)).toBeVisible();
+  await expect(page.getByText(/^Showing [\d,]+–[\d,]+$/)).toBeVisible();
   await page.getByRole('row').filter({ hasText: 'latest' }).click();
   const run = page.getByRole('region', { name: /^Run for \d{4}-\d{2}-\d{2}$/ });
-  await expect(run.getByText(/^Showing \d+ of \d+$/)).toBeVisible();
+  await expect(run.getByText(/^Showing [\d,]+(?: \(more follow\))?$/)).toBeVisible();
   await expect(page.getByRole('row').filter({ hasText: 'latest' })).toHaveAttribute(
     'aria-selected',
     'true',
@@ -171,8 +171,8 @@ async function pickFreeNumber(dialog: Locator) {
   await expect(picker.or(draft).first()).toBeVisible();
   if (!(await picker.isVisible())) return;
   await expect(picker).toBeEnabled();
-  await picker.click();
-  await dialog.getByRole('option').first().click();
+  await picker.press('ArrowDown');
+  await dialog.getByRole('listbox').getByRole('option').first().click();
 }
 
 test('prepaid: Robert Taylor tops up and orders, Linda Harris waits for funds, commands list', async ({
@@ -242,22 +242,15 @@ test('prepaid: Robert Taylor tops up and orders, Linda Harris waits for funds, c
     page.getByText(/ordered: accepted, the billing worker completes it shortly/),
   ).toBeVisible();
 
-  // 4. Linda Harris: funding-suspended product with its Top up menu action
+  // 4. Linda Harris: the unpaid renewal has progressed to lifecycle suspension.
   await page.goto('/subscribers');
   await page.getByRole('row').filter({ hasText: 'Linda Harris' }).click();
   await expect(page.getByRole('heading', { name: /Linda Harris/ })).toBeVisible();
-  await expect(page.getByText(/Waiting for funds: short/)).toBeVisible();
+  await expect(page.locator('[data-ui="ui.subscriber.lifecycleSuspension"]')).toBeVisible();
   await expect(page.locator('[data-ui="ui.subscriber.prepaid.shortfall"]')).toContainText(
     /renewal needs/,
   );
-  const waitingProduct = page
-    .locator('.bss-product-row')
-    .filter({ hasText: 'Waiting for funds: short' })
-    .first();
-  await waitingProduct.getByRole('button', { name: 'Actions ▾', exact: true }).click();
-  const productTopUp = page.locator('[data-ui="ui.subscriber.topUpProduct"]');
-  await expect(productTopUp).toBeVisible();
-  await productTopUp.click();
+  await page.getByRole('button', { name: 'Top up', exact: true }).first().click();
   const renewalTopUp = page.getByRole('dialog', { name: 'Top up', exact: true });
   await expect(renewalTopUp).toBeVisible();
   await renewalTopUp.getByRole('button', { name: 'Cancel', exact: true }).click();
@@ -329,7 +322,8 @@ test('the API is reached on the same origin, as JSON', async ({ request }) => {
   expect(response.headers()['content-type']).toContain('application/json');
   const list = await request.get('/tmf-api/accountManagement/v5/billingAccount?limit=1');
   expect(list.status()).toBe(200);
-  expect(Number(list.headers()['x-total-count'])).toBeGreaterThan(0);
+  expect(list.headers()['x-result-count']).toBe('1');
+  expect(await list.json()).toHaveLength(1);
 });
 
 test('user changes the initial password, signs in again and cannot manage users', async ({

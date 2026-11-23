@@ -163,6 +163,7 @@ describe('shell', () => {
     const links = within(nav).getAllByRole('link');
     expect(links.map((a) => a.getAttribute('href'))).toEqual([
       '/subscribers',
+      '/signups',
       '/parties',
       '/financial-accounts',
       '/catalog',
@@ -191,6 +192,7 @@ describe('shell', () => {
     expect(labels).toEqual([
       '# Customers',
       '/subscribers',
+      '/signups',
       '/parties',
       '/financial-accounts',
       '# Products',

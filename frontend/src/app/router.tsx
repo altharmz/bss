@@ -32,6 +32,7 @@ export type Route =
   | { name: 'billingRuns' }
   | { name: 'prepaidCommands' }
   | { name: 'financialAccounts' }
+  | { name: 'careSignups' }
   | { name: 'parties' }
   | { name: 'billingSettings' }
   | { name: 'payments' }
@@ -53,6 +54,7 @@ export function parseRoute(path: string): Route {
   if (path === '/integrations' || path === '/integrations/') return { name: 'integrations' };
   if (path === '/numbers' || path === '/numbers/') return { name: 'numbers' };
   if (path === '/sims' || path === '/sims/') return { name: 'sims' };
+  if (path === '/signups' || path === '/signups/') return { name: 'careSignups' };
   if (path === '/ports' || path === '/ports/') return { name: 'ports' };
   if (path === '/subscribers' || path === '/subscribers/') return { name: 'subscribers' };
   const card = SUBSCRIBER.exec(path);
@@ -121,6 +123,8 @@ export function hrefOf(route: Exclude<Route, { name: 'notFound' }>): string {
       return '/prepaid-commands';
     case 'financialAccounts':
       return '/financial-accounts';
+    case 'careSignups':
+      return '/signups';
     case 'parties':
       return '/parties';
     case 'billingSettings':

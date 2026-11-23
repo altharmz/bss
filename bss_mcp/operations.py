@@ -128,6 +128,7 @@ AUTH_OPERATIONS = {
     ("PUT", "/self-care/v1/autoTopUp"),
     ("POST", "/self-care/v1/addOn"),
     # online signup (#377): a new customer's own steps, before any session
+    ("GET", "/self-care/v1/signup/plans"),
     ("POST", "/self-care/v1/signup"),
     ("GET", "/self-care/v1/signup/{signup_id}"),
     ("POST", "/self-care/v1/signup/{signup_id}/verify"),

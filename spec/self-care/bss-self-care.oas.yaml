@@ -452,6 +452,21 @@ paths:
         '422': {$ref: '#/components/responses/Error'}
         '429': {$ref: '#/components/responses/Error'}
         '503': {$ref: '#/components/responses/Error'}
+  /signup/plans:
+    get:
+      summary: The plans currently on sale for online signup.
+      security: []
+      responses:
+        '200':
+          description: Available plan choices, ordered by name.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/SignupPlan'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
   /signup:
     post:
       summary: Online signup, step 1 - the email and the plan (issue 377).
@@ -919,6 +934,13 @@ components:
         state: {type: string}
         line: {$ref: '#/components/schemas/Ref'}
         offering: {$ref: '#/components/schemas/Ref'}
+    SignupPlan:
+      type: object
+      additionalProperties: false
+      required: [id, name]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
     CareSignup:
       description: An online signup (issue 377), as the customer sees it.
       type: object

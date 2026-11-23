@@ -53,14 +53,3 @@ get_trouble_ticket: the Cases tab and screen are the UI half of issue 199
 create_trouble_ticket: opening a case; the UI action is the UI half of issue 199
 patch_trouble_ticket: working a case; the UI action is the UI half of issue 199
 get_hub_ticket: the internal eventSubscription list covers every hub
-
-# Self-care logins (#195): the operator screen is #378's operator part.
-get_care_login: the operator self-care screen comes with issue 378
-invite_care_login: the operator self-care screen comes with issue 378
-disable_care_login: the operator self-care screen comes with issue 378
-
-# Wholesale reconciliation (#197): the operator screens are issue 381.
-# Online signups (#377): the operator signup list comes with #378's operator screen.
-list_care_signups: the operator signup screen comes with issue 378
-get_care_signup: the operator signup screen comes with issue 378
-decide_care_signup: the operator signup screen comes with issue 378

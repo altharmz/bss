@@ -16,6 +16,7 @@ import { FinancialAccountsScreen } from '../screens/FinancialAccounts';
 import { NotFoundScreen } from '../screens/placeholders';
 import { SubscriberCardScreen } from '../screens/SubscriberCard';
 import { SubscribersScreen } from '../screens/Subscribers';
+import { Signups } from '../screens/CareOperator';
 import { ErrorBlock } from '../ui/states';
 import { Panel, ToastProvider } from '../ui/kit';
 import '../ui/ui.css';
@@ -60,6 +61,8 @@ function Screen() {
       return null;
     case 'subscribers':
       return <SubscribersScreen />;
+    case 'careSignups':
+      return <Signups />;
     case 'subscriber':
       return <SubscriberCardScreen key={route.accountId} accountId={route.accountId} />;
     case 'catalog':

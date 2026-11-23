@@ -1,5 +1,16 @@
 # Frontend (admin UI, stage 5): decisions and conventions
 
+## Customer self-care
+
+Vite builds a second HTML entry at `care/index.html`. Both entries share the generated
+API types, design tokens and QR renderer. Customer requests use the same-origin
+`/self-care/v1` API and its path-scoped session cookie. A separate stub gateway document
+returns a test token to the embedding form. The receiver checks the sending window and
+origin. Signup progress is resumed using the signup id in this tab's session storage.
+The signup creation contract requires the chosen offering id with the email address.
+Before requesting a code, the browser lists the on-sale plans from
+`GET /self-care/v1/signup/plans`, which returns their names and ids.
+
 ## GUI review fixes
 
 - #220: pay-as-you-go offering details list and open usage prices. Add price offers Usage only there (monthly recurring remains plan-only), with KB/MB/GB, second/minute or message, a positive whole-byte/second/message block and price per block; an overlapping price of the same usage kind and currency is refused before submit. Usage-price edit keeps type and unit fixed and patches only changed name, description and exact-decimal amount. Subscriber Usage maps TMF635 rating status and shows the first applied `usageProductPrice`; rated ledger rows use its name. Component tests pin the display, validation and exact writes, and `tests/test_ui_requests.py` replays create/edit against a real pay-as-you-go offering. No backend change.

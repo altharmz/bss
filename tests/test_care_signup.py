@@ -139,6 +139,9 @@ def count(db_conn, table):
 
 @pytest.mark.capability("worker.careSignup")
 def test_a_new_customer_goes_from_email_to_an_active_esim_line(api, care, db_conn, shop):
+    plans = care.get(SIGNUP + "/plans")
+    assert plans.status_code == 200, plans.text
+    assert {"id": shop["id"], "name": shop["name"]} in plans.json()
     stock(api)
     signup = start(care, shop)
     assert signup["state"] == "started" and signup["emailVerified"] is False
