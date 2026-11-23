@@ -605,6 +605,43 @@ subpackages too.
 - The domain subpackages, the prepaid docstrings and one helper for the performance guards
   are #440 (one PR closes one issue, so #423 was split).
 
+## Redundant tests: removed on data, not on reading (2026-11-23, #425)
+
+A test is removed only when two checks agree, and the PR lists what each removed test
+reached.
+
+1. **testmon fingerprints find candidates.** `.testmon/.testmondata` (SQLite) holds, per
+   test, the checksums of the code blocks it ran (`test_execution` -> `test_execution_file_fp`
+   -> `file_fp.method_checksums`, an `array("i")`). A test whose `app/` set is contained in
+   another test's set is a candidate. The signal is coarse (whole functions, not lines):
+   most unit tests are contained in some broad API test, so containment alone proves
+   nothing. What it does show well is a test with no container at all (keep it), or one that
+   runs no `app/` code (it tests a fixture or the spec).
+2. **One coverage run decides.** coverage is already in the image (testmon depends on it),
+   so no pin is added. Run the suite once with branch coverage and a per-test context
+   (`dynamic_context = test_function`, `parallel = True`, `source = app`), started in every
+   xdist worker by a `sitecustomize.py` on `PYTHONPATH` that calls
+   `coverage.process_startup()` (with `COVERAGE_PROCESS_START` naming the rc file). Put the
+   rc, the hook and the data under `.testmon/` (mounted writable at `/testmon`, ignored).
+   After `coverage combine`, the `arc` table has the contexts of each branch. An arc whose
+   every context is a removed test is lost coverage. Contexts are `module.function`
+   (`test_repository.test_price_at`, no `tests.` prefix). Code that runs in fixtures has an
+   empty context, which counts as reached by someone else.
+3. Do not edit `tests/` while the run is going: the source is mounted live, and the xdist
+   workers then collect different tests and the run fails. Stash the change and measure the
+   tree as it was. The run took 21 minutes (`-n auto`, all but `migration_history`); under
+   coverage one timing test (`test_worker_signals`, a deadline) failed.
+
+Outcome of the first pass (baseline 96% of `app/`: 20,513 statements, 5,574 branches):
+`test_prepaid_contracts.py` (24 cases) reached no `app/` arc of its own and was removed; its
+two cases of the history-exception helper moved to `test_contract_validator.py`, since
+no API test triggers that helper's refusals. `test_repository.py` kept 5 of its 33
+functions: the 3 with arcs of their own (`list_abrs`' period filter, the refusals of
+`reopen_run` and `take_over_run`), `list_active_products` (no testmon container) and
+`price_at` (its half-open bounds are asserted nowhere else). The offering lifecycle file
+merged into `test_api_catalog_lifecycle.py` (one rule in `app/api/catalog.py`, three
+entities). After removal no arc is reached only by a removed test.
+
 ## Test speed (2026-11-11, #319)
 
 Measured on the 12-CPU workstation. The host is shared with other agents' test runs, so

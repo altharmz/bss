@@ -98,3 +98,36 @@ def test_error_schema_requires_code_and_reason(api):
     body = {"@type": "Error", "code": "404", "reason": "Not Found"}
     assert contract.errors(api, "Error", body) == []
     assert contract.errors(api, "Error", {"@type": "Error", "code": "404"}) != []
+
+
+# TMF654 BalanceActionHistory: the one schema exception (contract.balance_history_errors,
+# which tests/apiclient.py applies to every history entry). Moved from the N1 fixtures of
+# tests/test_prepaid_contracts.py (#425): no API test reaches the helper's refusals.
+HISTORY = {
+    "@type": "BalanceActionHistory",
+    "id": "action",
+    "status": "completed",
+    "amount": {"amount": 10, "units": "USD"},
+    "usageType": "monetary",
+    "bucket": {"id": "sender-bucket"},
+    "receiverLogicalResource": {"id": "receiver-number"},
+}
+KINDS = ["TopupBalance", "AdjustBalance", "ReserveBalance", "TransferBalance"]
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_history_exception_is_conditional_and_keeps_status(kind):
+    assert contract.balance_history_errors(kind, HISTORY) == []
+    no_receiver = {k: v for k, v in HISTORY.items() if k != "receiverLogicalResource"}
+    assert (contract.balance_history_errors(kind, no_receiver) == []) == (kind != "TransferBalance")
+    assert contract.errors("TMF654", "BalanceActionHistory", no_receiver)
+    missing_status = {k: v for k, v in HISTORY.items() if k != "status"}
+    assert contract.balance_history_errors(kind, missing_status)
+
+
+def test_history_exception_rejects_unknown_kinds_and_bad_nested_values():
+    with pytest.raises(ValueError, match="unknown balance action kind"):
+        contract.balance_history_errors("unknown", {"status": "completed"})
+    assert contract.balance_history_errors(
+        "TopupBalance", {"status": "completed", "amount": {"amount": "50"}}
+    )

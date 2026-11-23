@@ -1,9 +1,8 @@
-"""Specifications and prices follow the offering's lifecycle (doc-findings #7): through
+"""Offerings, specifications and prices share one lifecycle (doc-findings #7): through
 PATCH, lifecycleStatus only moves In Design -> Active -> Retired, Retired is final, and
-any other transition is a 409 that changes nothing in the patch. Repeating the current
-status is not a transition. (POST may still create either in any status.)
-
-The offering's own rule is tests/test_api_offering_lifecycle.py."""
+any other transition is a 409 with the reason that changes nothing in the patch.
+Repeating the current status is not a transition. (POST may create any of them in any
+status.)"""
 
 import pytest
 
@@ -13,33 +12,54 @@ STATUSES = ("In Design", "Active", "Retired")
 ALLOWED = {("In Design", "Active"), ("Active", "Retired")}
 
 
-def specification(api, status: str) -> dict:
-    response = api.post(
-        f"{CATALOG}/productSpecification",
-        {"@type": "ProductSpecification", "name": "Mobile", "lifecycleStatus": status},
-    )
+def created(response) -> dict:
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def specification(api, status: str) -> dict:
+    return created(
+        api.post(
+            f"{CATALOG}/productSpecification",
+            {"@type": "ProductSpecification", "name": "Mobile", "lifecycleStatus": status},
+        )
+    )
+
+
+def offering(api, status: str) -> dict:
+    spec = specification(api, "Active")
+    return created(
+        api.post(
+            f"{CATALOG}/productOffering",
+            {
+                "@type": "ProductOffering",
+                "name": "Mobile S",
+                "lifecycleStatus": status,
+                "validFor": {"startDateTime": START},
+                "productSpecification": {"id": spec["id"], "@type": "ProductSpecificationRef"},
+            },
+        )
+    )
 
 
 def price(api, status: str) -> dict:
-    response = api.post(
-        f"{CATALOG}/productOfferingPrice",
-        {
-            "@type": "ProductOfferingPrice",
-            "name": "Monthly",
-            "lifecycleStatus": status,
-            "priceType": "recurring",
-            "recurringChargePeriodType": "monthly",
-            "price": {"unit": "USD", "value": 300},
-            "validFor": {"startDateTime": START},
-        },
+    return created(
+        api.post(
+            f"{CATALOG}/productOfferingPrice",
+            {
+                "@type": "ProductOfferingPrice",
+                "name": "Monthly",
+                "lifecycleStatus": status,
+                "priceType": "recurring",
+                "recurringChargePeriodType": "monthly",
+                "price": {"unit": "USD", "value": 300},
+                "validFor": {"startDateTime": START},
+            },
+        )
     )
-    assert response.status_code == 201, response.text
-    return response.json()
 
 
-ENTITIES = {"specification": specification, "price": price}
+ENTITIES = {"offering": offering, "specification": specification, "price": price}
 
 
 @pytest.mark.parametrize("entity", ENTITIES)
