@@ -68,7 +68,7 @@ make check               # on demand: lint, test (ci), docs-check, web-lint, web
 make verify              # = make deploy: ship to the VPS and smoke-test it there
 ```
 
-VPS is a small server whose main job is a VPN server. bss runs next to it under
+VPS is a small server, bss runs next to it under
 strict limits, and PostgreSQL, Caddy and backups belong to the separate **vps-infra**
 project. Images are built locally and shipped (`make deploy`, `scripts/deploy.sh`);
 **never build on the VPS**. Details: [docs/operations.md](docs/operations.md);
