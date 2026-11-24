@@ -35,13 +35,18 @@ def issue(number=81, priority="P2", **overrides):
         "title": "Subscriber search" if number == 81 else f"Task {number}",
         "state": "OPEN",
         "repository": {"nameWithOwner": "altharmz/bss"},
-        "labels": connection([{"name": priority}]),
+        "labels": connection([]),
         "blockedBy": connection([]),
         "linkedBranches": connection([]),
         "closedByPullRequestsReferences": connection([]),
     }
     data.update(overrides)
-    return {"id": f"item-{number}", "fieldValueByName": {"name": "Ready"}, "content": data}
+    return {
+        "id": f"item-{number}",
+        "fieldValueByName": {"name": "Ready"},
+        "priority": {"name": priority} if priority else None,
+        "content": data,
+    }
 
 
 class FreeSocket:
@@ -204,8 +209,13 @@ class StartupTests(unittest.TestCase):
             " item = next(a[5:] for a in args if a.startswith('item='))\n"
             " option = next(a[7:] for a in args if a.startswith('option='))\n"
             " row = next(r for r in rows if r['id'] == item)\n"
-            " row['fieldValueByName'] = {'name': {'47fc9ee4': 'Doing', 'abe5d139': 'Ready',\n"
-            "  'f75ad846': 'Inbox', '98f1210e': 'Waiting', '98236657': 'Done'}[option]}\n"
+            " field = next(a[6:] for a in args if a.startswith('field='))\n"
+            " if field == 'PVTSSF_lAHOEpM-b84BpHA0zhrP5BI':\n"
+            "  row['priority'] = {'name': {'0c8ba284': 'P0', '08fef3c3': 'P1', 'fd42a13c': 'P2',\n"
+            "   '1df9b3bf': 'P3'}[option]}\n"
+            " else:\n"
+            "  row['fieldValueByName'] = {'name': {'47fc9ee4': 'Doing', 'abe5d139': 'Ready',\n"
+            "   'f75ad846': 'Inbox', '98f1210e': 'Waiting', '98236657': 'Done'}[option]}\n"
             " with open(board_path, 'w') as output: json.dump(board, output)\n"
             " print(json.dumps({'data': {'updated': True}}))\n"
             " sys.exit(0)\n"
@@ -450,8 +460,9 @@ class StartupTests(unittest.TestCase):
         self.assertEqual(items[1]["fieldValueByName"]["name"], "Doing")
         self.assertEqual(
             items[1]["content"]["labels"],
-            connection([{"name": "P2"}, {"name": "agent:codex"}]),
+            connection([{"name": "agent:codex"}]),
         )
+        self.assertEqual(items[1]["priority"], {"name": "P2"})
 
     def test_requested_ineligible_issue_never_falls_back_to_another_ready_issue(self):
         cases = [
@@ -485,10 +496,10 @@ class StartupTests(unittest.TestCase):
     def test_closed_blocked_owned_non_ready_and_open_relationships_are_excluded(self):
         cases = [
             issue(1, "P0", state="CLOSED"),
-            issue(2, "P0", labels=connection([{"name": "P0"}, {"name": "blocked"}])),
-            issue(3, "P0", labels=connection([{"name": "P0"}, {"name": "needs-human"}])),
-            issue(4, "P0", labels=connection([{"name": "P0"}, {"name": "agent:codex"}])),
-            issue(5, "P0", labels=connection([{"name": "P0"}, {"name": "agent:claude"}])),
+            issue(2, "P0", labels=connection([{"name": "blocked"}])),
+            issue(3, "P0", labels=connection([{"name": "needs-human"}])),
+            issue(4, "P0", labels=connection([{"name": "agent:codex"}])),
+            issue(5, "P0", labels=connection([{"name": "agent:claude"}])),
             issue(6, "P0", blockedBy=connection([{"state": "OPEN"}])),
             issue(7, "P0", linkedBranches=connection([{"ref": {"name": "custom-task"}}])),
             issue(8, "P0", closedByPullRequestsReferences=connection([{"state": "OPEN"}])),
@@ -505,19 +516,24 @@ class StartupTests(unittest.TestCase):
         self.rejected("no eligible Ready issue")
         self.assertEqual(len(task.worktrees(self.primary)), 1)
 
-    def test_ambiguous_priorities_and_duplicate_order(self):
-        for rows in [
-            [issue(labels=connection([{"name": "P0"}, {"name": "P1"}]))],
-            [issue(), issue()],
-        ]:
-            with self.subTest(rows=rows):
-                self.board(rows)
-                self.rejected("ambiguous")
+    def test_duplicate_order_is_ambiguous(self):
+        self.board([issue(), issue()])
+        self.rejected("ambiguous")
 
-    def test_missing_priority_defaults_to_p3(self):
-        self.board([issue(10, "P3"), issue(11, "P3", labels=connection([])), issue(12, "P2")])
+    def test_unknown_priority_value_is_refused(self):
+        self.board([issue(81, "P4")])
+        self.rejected("#81: unknown Priority field value 'P4'")
+
+    def test_priority_comes_from_the_field_not_labels(self):
+        self.board([issue(10, "P3", labels=connection([{"name": "P0"}])), issue(11, "P1")])
+        self.assertEqual(self.result()["issue"], 11)
+
+    def test_empty_priority_counts_as_p3_then_board_order(self):
+        self.board([issue(11, None), issue(10, "P3"), issue(12, "P2")])
         self.assertEqual(self.result()["issue"], 12)
-        self.board([issue(10, "P3"), issue(11, "P3", labels=connection([]))])
+        self.board([issue(11, None), issue(10, "P3")])
+        self.assertEqual(self.result()["issue"], 11)
+        self.board([issue(10, "P3"), issue(11, None)])
         self.assertEqual(self.result()["issue"], 10)
 
     def test_ambiguous_board_view(self):
@@ -818,7 +834,8 @@ class StartupTests(unittest.TestCase):
         self.assertEqual(data["status"], "Ready")
         self.assertEqual(data["url"], "https://github.com/altharmz/bss/issues/82")
         self.assertEqual(task.status(item), "Ready")
-        self.assertEqual(task.ownership(item), {"P0", "harness", "docs"})
+        self.assertEqual(task.ownership(item), {"harness", "docs"})
+        self.assertEqual(task.priority(item), "P0")
         self.assertFalse(self.destination().exists())
         self.assertEqual(self.git("branch", "--format=%(refname:short)"), "master")
         self.assertFalse((self.base / "config/bss/tasks").exists())
@@ -828,6 +845,7 @@ class StartupTests(unittest.TestCase):
         ]
         create = next(call for call in calls if call[:2] == ["issue", "create"])
         self.assertEqual(create[create.index("--body") + 1], body)
+        self.assertNotIn("P0", create)
         self.assertEqual(self.result()["issue"], 82)
 
     def test_new_priority_creation_ignores_doing_items_and_unavailable_slots(self):
@@ -957,6 +975,21 @@ class StartupTests(unittest.TestCase):
                 )
                 self.assertNotEqual(refused.returncode, 0)
 
+    def test_preserved_issue_needs_priority_p0_or_empty(self):
+        loose = issue(83, None)
+        loose["fieldValueByName"] = None
+        self.board([issue(81, "P2"), loose])
+        refused = self.call(
+            ["make", "--no-print-directory", "new-priority-task", "ISSUE=81"], check=False
+        )
+        self.assertIn("#81 has Priority P2, not P0", refused.stderr)
+        result = self.call(
+            ["make", "--no-print-directory", "new-priority-task", "ISSUE=83", "JSON=1"]
+        )
+        self.assertEqual(json.loads(result.stdout)["issue"], 83)
+        item = self.remote_item()
+        self.assertEqual((task.status(item), task.priority(item)), ("Ready", "P0"))
+
     def test_github_call_is_retried_once_and_errors_are_bounded(self):
         self.env["BSS_TEST_FLAKY"] = str(self.base / "flaky")
         self.assertEqual(self.result()["issue"], 81)
@@ -1009,7 +1042,8 @@ class StartupTests(unittest.TestCase):
         )
         self.assertEqual(item["content"]["number"], 82)
         self.assertEqual(task.status(item), "Ready")
-        self.assertEqual(task.ownership(item), {"P0"})
+        self.assertEqual(task.ownership(item), set())
+        self.assertEqual(task.priority(item), "P0")
         self.env.pop("BSS_TEST_FAIL")
         self.assertEqual(self.result()["issue"], 82)
 

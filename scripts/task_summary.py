@@ -19,7 +19,8 @@ FRICTION_COLUMNS = ("format", "commit", "create-pr", "sync-task", "merge-task")
 
 
 def area(labels):
-    """Labels that describe the kind of work, not priority or ownership."""
+    """Labels that describe the kind of work, not ownership (nor the P0-P3 priority labels
+    that facts captured before #468 still carry)."""
     return sorted(
         name
         for name in labels or []
@@ -37,6 +38,7 @@ def row(task):
         "models": sorted({u["model"] or "?" for u in task["usage_identities"]}),
         "clients": sorted({u["client"] or "?" for u in task["usage_identities"]}),
         "labels": area(facts.get("labels")),
+        "priority": facts.get("priority"),
         "epic": facts.get("epic"),
         "tokens": task["tokens"]["total_tokens"],
         "cost_usd": usd,
@@ -122,6 +124,7 @@ def human(value, kind):
 def table(summary):
     header = (
         "issue",
+        "pri",
         "model",
         "tokens",
         "cost",
@@ -139,6 +142,7 @@ def table(summary):
         lines.append(
             (
                 f"#{r['issue']}",
+                r["priority"] or "-",
                 ",".join(m.removeprefix("claude-") for m in r["models"]) or "-",
                 partial + human(r["tokens"], "tokens"),
                 ("" if r["cost_complete"] else "~") + human(r["cost_usd"], "usd"),

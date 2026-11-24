@@ -107,7 +107,9 @@ class CiWorkflowTests(unittest.TestCase):
     def test_the_nightly_report_keeps_one_issue(self):
         text = "\n".join(REPORT)
         self.assertIn('--title "Nightly CI failed: $(date -u +%F)"', text)
-        self.assertIn("--label bug --label P1", text)
+        self.assertIn("--label bug \\\n", text)
+        # Priority is a board field the run's token cannot write; no P0-P3 label (#468).
+        self.assertNotRegex(text, r"--label P[0-3]")
         self.assertIn('startswith("Nightly CI failed:")', text)
         self.assertIn("gh issue comment", text)
 

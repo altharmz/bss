@@ -176,7 +176,8 @@ Board administration has Make targets (#308), so the docs name no raw `gh projec
 `make add-task` (a new issue in Inbox or Ready, never P0: that stays
 `make new-priority-task`), `make move-task` (to Inbox, Ready or Waiting, Waiting with its
 `Waiting on:` comment; Waiting to Doing only for an owned issue), `make set-priority` and
-`make reorder-task`. Doing stays owned by `make start-task` and Done by closing the issue
+`make reorder-task`. Priority is the board's Priority field, not a label
+([tracking.md](tracking.md#board-priority)). Doing stays owned by `make start-task` and Done by closing the issue
 or `make finish-task`. Priority and order changes need `HUMAN_APPROVAL=<issue>`, the same
 marker as `make start-task ISSUE=`: it records the agent's assertion that the human
 approved, not proof, and the script cannot verify the conversation. Every change is
@@ -791,12 +792,14 @@ run everything.
 **A failed nightly run opens an issue** (2026-11-15, #366). Without the push run, the
 nightly run is the only one on `master`, and a red one was found only by looking. The job
 `nightly-report` runs after a scheduled run in which `check` or `harness` failed: it opens
-`Nightly CI failed: <date>` (labels `bug`, `P1`) with the run's URL, the jobs that did not
+`Nightly CI failed: <date>` (label `bug`) with the run's URL, the jobs that did not
 succeed and the commits since the last successful scheduled run, or comments on the open
 issue with that title if there is one. It is the only job with a write permission
 (`issues: write`, plus `actions: read` and `contents: read` for the run list and the compare
 request), checks out nothing, runs no repository code and uses only the run's own token. It
-writes to GitHub issues only; the issue reaches the board's Inbox like any new issue.
+writes to GitHub issues only; the issue reaches the board's Inbox like any new issue, with
+an empty Priority field: the run's token cannot write the owner's project, so triage sets
+it (#468; the `P1` label it used to add no longer exists).
 `scripts/test_ci_workflow.py` holds the triggers and the permissions.
 
 The supply-chain scan (`.github/workflows/security.yml`, the `Security` workflow) is an

@@ -94,12 +94,14 @@ Effectiveness, per task:
   wall time; `time_to_merge_seconds` is the wall time.
 - `facts`: from GitHub, captured at `task-completed` and refreshed with
   `make telemetry-facts [TASK=]` (`scripts/task_facts.py`): PR additions, deletions, files
-  and commits, issue labels, the sub-issue parent as epic (null when an epic lists its
+  and commits, issue labels, the board's Priority field (`priority`, null when empty;
+  facts captured before #468 have it null and a `P0`-`P3` label instead), the sub-issue
+  parent as epic (null when an epic lists its
   issues in its body), and later issues or PRs that reference the issue (`followups`, with
   labels) and whether one is a revert. Numbers and labels only.
 
 `make telemetry-summary` (`JSON=1` for JSON, `scripts/task_summary.py`) prints one row per
-issue and rollups by model, client, label and epic. A `~` marks a row with incomplete
+issue (with its priority, `pri`) and rollups by model, client, label and epic. A `~` marks a row with incomplete
 coverage or pricing; rollups add tokens only from fully covered rows and cost only from
 fully priced ones, and show how many issues each sum covers.
 

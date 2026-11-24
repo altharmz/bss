@@ -188,8 +188,8 @@ SELECT json_build_object(
     s.pricing_metadata FROM usage_samples s
     JOIN agent_sessions a USING(session_id)) u), '[]'),
  'facts', COALESCE((SELECT json_agg(f) FROM
-   (SELECT task_id, pr_number, additions, deletions, changed_files, commits, labels, epic,
-    merged_at, followups, reverted, captured_at FROM task_facts) f), '[]'),
+   (SELECT task_id, pr_number, additions, deletions, changed_files, commits, labels, priority,
+    epic, merged_at, followups, reverted, captured_at FROM task_facts) f), '[]'),
  'prices', COALESCE((SELECT json_agg(p) FROM
    (SELECT model, effective_from, currency, input_per_mtok::text, cache_read_per_mtok::text,
     cache_write_per_mtok::text, output_per_mtok::text, source FROM model_prices) p), '[]'));

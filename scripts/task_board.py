@@ -10,6 +10,9 @@ PROJECT = "PVT_kwHOEpM-b84BpHA0"
 STATUS_FIELD = "PVTSSF_lAHOEpM-b84BpHA0zhnkE7M"
 READY, DOING, DONE = "abe5d139", "47fc9ee4", "98236657"
 INBOX, WAITING = "f75ad846", "98f1210e"
+# The single-select Priority field is the one source of priority (no P0-P3 labels).
+PRIORITY_FIELD = "PVTSSF_lAHOEpM-b84BpHA0zhrP5BI"
+PRIORITIES = {"P0": "0c8ba284", "P1": "08fef3c3", "P2": "fd42a13c", "P3": "1df9b3bf"}
 # POSITION is the board's manual order, not creation time or issue number.
 BOARD_QUERY = """
 query($project: ID!, $cursor: String) {
@@ -20,6 +23,8 @@ query($project: ID!, $cursor: String) {
     items(first: 100, after: $cursor, orderBy: {field: POSITION, direction: ASC}) {
       totalCount pageInfo { hasNextPage endCursor }
       nodes { id fieldValueByName(name: "Status") {
+        ... on ProjectV2ItemFieldSingleSelectValue { name }
+      } priority: fieldValueByName(name: "Priority") {
         ... on ProjectV2ItemFieldSingleSelectValue { name }
       } content { ... on Issue {
         id number title state repository { nameWithOwner }
@@ -126,7 +131,24 @@ def status(item):
     return (item.get("fieldValueByName") or {}).get("name")
 
 
+def priority(item):
+    """The item's Priority field value (P0-P3), or None when it is empty."""
+    name = (item.get("priority") or {}).get("name")
+    if name is not None and name not in PRIORITIES:
+        number = (item.get("content") or {}).get("number")
+        raise StartupError(f"#{number}: unknown Priority field value {name!r}")
+    return name
+
+
 def set_status(issue, option):
+    set_field(issue, STATUS_FIELD, option)
+
+
+def write_priority(issue, name):
+    set_field(issue, PRIORITY_FIELD, PRIORITIES[name])
+
+
+def set_field(issue, field, option):
     query(
         """mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) {
           updateProjectV2ItemFieldValue(input: {projectId: $project, itemId: $item,
@@ -136,7 +158,7 @@ def set_status(issue, option):
         }""",
         project=PROJECT,
         item=issue["item_id"],
-        field=STATUS_FIELD,
+        field=field,
         option=option,
     )
 

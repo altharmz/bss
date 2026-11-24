@@ -180,6 +180,6 @@ jobs:
           if [[ -n "$existing" ]]; then
             gh issue comment "$existing" --body "$body"
           else
-            gh issue create --title "Nightly CI failed: $(date -u +%F)" --label bug --label P1 \
+            gh issue create --title "Nightly CI failed: $(date -u +%F)" --label bug \
               --body "$body"
           fi

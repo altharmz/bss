@@ -14,18 +14,21 @@ import sys
 from task_board import (
     DOING,
     INBOX,
+    PRIORITIES,
     PROJECT,
     READY,
     WAITING,
     add_to_board,
     board_item,
     ownership,
+    priority,
     query,
     set_status,
     settled_snapshot,
     snapshot,
     status,
     wait_for_board_item,
+    write_priority,
 )
 from task_repo import StartupError, body_from_file, run
 from task_runtime import diagnostic
@@ -34,7 +37,6 @@ REPOSITORY = "altharmz/bss"
 OPERATIONS = ("board", "add-task", "move-task", "set-priority", "reorder-task")
 STATUS_ORDER = ("Inbox", "Ready", "Doing", "Waiting")
 OPTIONS = {"Inbox": INBOX, "Ready": READY, "Waiting": WAITING, "Doing": DOING}
-PRIORITIES = ("P0", "P1", "P2", "P3")
 
 
 def env(name):
@@ -114,6 +116,7 @@ def board():
                 "issue": content["number"],
                 "item_id": item["id"],
                 "status": status(item),
+                "priority": priority(item),
                 "labels": sorted(ownership(item)),
                 "title": content["title"],
                 "position": position,
@@ -125,9 +128,9 @@ def board():
     lines = []
     for name in order:
         lines.append(f"{name or 'No status'}: {len(groups[name])}")
-        lines.extend(
-            f"  #{row['issue']} [{','.join(row['labels'])}] {row['title']}" for row in groups[name]
-        )
+        for row in groups[name]:
+            labels = ",".join(row["labels"])
+            lines.append(f"  #{row['issue']} {row['priority'] or '--'} [{labels}] {row['title']}")
     return {"items": rows}, "\n".join(lines) or "board: no open items"
 
 
@@ -144,17 +147,17 @@ def add_task():
         raise StartupError("add-task requires a non-empty body")
     labels = list(dict.fromkeys(s.strip() for s in env("LABELS").split(",") if s.strip()))
     if any(label in PRIORITIES or label.startswith("agent:") for label in labels):
-        raise StartupError("LABELS must not contain priority or agent labels")
-    priority = env("PRIORITY")
-    if priority == "P0":
+        raise StartupError("LABELS must not contain agent labels or P0-P3 (use PRIORITY=)")
+    wanted = env("PRIORITY")
+    if wanted == "P0":
         raise StartupError("P0 issues are created with make new-priority-task")
-    if priority not in ("", "P1", "P2", "P3"):
+    if wanted not in ("", "P1", "P2", "P3"):
         raise StartupError("PRIORITY must be P1, P2 or P3")
     target = env("STATUS") or "Inbox"
     if target not in ("Inbox", "Ready"):
         raise StartupError("STATUS must be Inbox or Ready")
     args = ["gh", "issue", "create", "--repo", REPOSITORY, "--title", title, "--body", body]
-    for label in [*labels, *([priority] if priority else [])]:
+    for label in labels:
         args.extend(["--label", label])
     url = run(*args).stdout.strip()
     match = re.fullmatch(r"https://github\.com/altharmz/bss/issues/([1-9][0-9]*)", url)
@@ -170,15 +173,29 @@ def add_task():
             item = wait_for_board_item(number, 5)
         if item is None:
             raise StartupError(f"#{number} is not on the BSS board")
+        if wanted:
+            write_priority({"item_id": item["id"]}, wanted)
         set_status({"item_id": item["id"]}, OPTIONS[target])
-        confirm_status(number, item["id"], target)
+        confirmed(
+            number,
+            lambda items: any(
+                row["id"] == item["id"]
+                and status(row) == target
+                and priority(row) == (wanted or None)
+                for row in items
+            ),
+        )
     except (StartupError, OSError, ValueError, KeyError, TypeError) as error:
         cause = error if isinstance(error, StartupError) else diagnostic(error)
+        finish = f"make move-task ISSUE={number} STATUS={target}"
+        if wanted:
+            finish += f" and make set-priority ISSUE={number} PRIORITY={wanted}"
         raise StartupError(
-            f"issue #{number} was created but not placed: {cause}; "
-            f"finish with: make move-task ISSUE={number} STATUS={target}"
+            f"issue #{number} was created but not placed: {cause}; finish with: {finish}"
         ) from None
     result = {"issue": number, "url": url, "title": title, "status": target}
+    if wanted:
+        result["priority"] = wanted
     return result, f"Created #{number}: {url} ({target})"
 
 
@@ -234,22 +251,21 @@ def move_task():
 
 def set_priority():
     number = issue_number(env("ISSUE"))
-    priority = env("PRIORITY")
-    if priority not in PRIORITIES:
+    wanted = env("PRIORITY")
+    if wanted not in PRIORITIES:
         raise StartupError("PRIORITY must be P0, P1, P2 or P3")
     approved("set-priority", number)
-    previous = sorted(view(number) & set(PRIORITIES))
-    if previous != [priority]:
-        args = ["gh", "issue", "edit", str(number), "--repo", REPOSITORY]
-        for label in previous:
-            if label != priority:
-                args.extend(["--remove-label", label])
-        args.extend(["--add-label", priority])
-        run(*args)
-        if sorted(view(number) & set(PRIORITIES)) != [priority]:
-            raise StartupError(f"#{number}: the priority change was not confirmed")
-    result = {"issue": number, "previous": previous, "priority": priority}
-    return result, f"#{number}: priority {','.join(previous) or 'none'} -> {priority}"
+    view(number)
+    item = item_of(number)
+    previous = priority(item)
+    if previous != wanted:
+        write_priority({"item_id": item["id"]}, wanted)
+        confirmed(
+            number,
+            lambda items: any(row["id"] == item["id"] and priority(row) == wanted for row in items),
+        )
+    result = {"issue": number, "previous": previous, "priority": wanted}
+    return result, f"#{number}: priority {previous or 'none'} -> {wanted}"
 
 
 def reorder_task():
