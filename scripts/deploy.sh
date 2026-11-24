@@ -182,7 +182,9 @@ fi
 # The secret lives in .env.smoke - local only: gitignored, never rsynced (the
 # workstation-only counterpart of .env.prod, which IS shipped to the VPS as ~/bss/.env).
 # SMOKE_ENV points elsewhere only for a rehearsal with a dummy file.
-WEB_URL="${WEB_URL:-https://vpn2811.duckdns.org:8445}"
+# The UI goes through the same host as MCP_URL: vpn2811.duckdns.org (Caddy's :8445
+# directly) stopped resolving in 2026-11 and failed a deploy (#453).
+WEB_URL="${WEB_URL:-https://bss2811.duckdns.org}"
 # The MCP connector's public URL: MCP_PUBLIC_URL in compose.prod.yaml (port 443 through the
 # host's SNI router to Caddy's :8445). Its OAuth metadata names this URL only.
 MCP_URL="${MCP_URL:-https://bss2811.duckdns.org}"

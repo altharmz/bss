@@ -339,8 +339,8 @@ See [ops/monitoring/README.md](../ops/monitoring/README.md).
   role `mcp` (MCP only), a new password, Save; then reconnect the MCP client and log in with
   the new password.
 - **Routing** (vps-infra's Caddy):
-  ten exact, case-sensitive paths of the bss site (`vpn2811.duckdns.org:8445` and, since
-  2026-10-12, `bss2811.duckdns.org` - 443 is the host's nginx SNI router, which passes that
+  ten exact, case-sensitive paths of the bss site (`bss2811.duckdns.org` since 2026-10-12;
+  the older `vpn2811.duckdns.org:8445` name stopped resolving in 2026-11, #453 - 443 is the host's nginx SNI router, which passes that
   name as raw TLS to Caddy's :8445; Caddy holds its certificate) bypass basic auth
   and go to `bss-mcp:8080` - `/mcp`, `/authorize`, `/token`, `/register`, `/revoke`,
   `/login`, `/.well-known/oauth-protected-resource`,

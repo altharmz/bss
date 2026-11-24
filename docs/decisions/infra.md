@@ -306,9 +306,10 @@ their config, data, TLS and backups. This repo only ships the app container.
   setup is temporary, and a mismatch makes migrations hang until the 120s timeout
   instead of failing clearly. Migrations still run from this repo (`deploy.sh`, before the app
   starts).
-- **Reverse proxy**: this app's site block (TLS + basic auth on `8445`,
-  `https://vpn2811.duckdns.org:8445`, `/healthz` carved out without auth for external
-  monitoring) is added **by hand** to vps-infra's Caddyfile and proxies to
+- **Reverse proxy**: this app's site block (TLS + basic auth on `8445`, reached as
+  `https://bss2811.duckdns.org` through the host's SNI router on 443 - the old
+  `vpn2811.duckdns.org:8445` name stopped resolving in 2026-11, #453 - and `/healthz`
+  carved out without auth for external monitoring) is added **by hand** to vps-infra's Caddyfile and proxies to
   `bss:8080`. Routing, auth and TLS changes are made there, not here. `/healthz`
   must still stay cheap, check the DB and return nothing beyond status — the external
   monitoring depends on it.
