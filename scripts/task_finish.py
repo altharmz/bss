@@ -247,6 +247,7 @@ SERVICES = {
     "web-preview",
     "e2e",
     "e2e-worker",
+    "e2e-care",
 }
 LOADTEST_SERVICES = {"lt-db", "lt-app", "lt-worker", "lt-mcp", "lt-tools", "lt-k6", "lt-scrape"}
 

@@ -660,6 +660,18 @@ if a[0] == 'ps' and any(x.startswith('ancestor=') for x in a):
         self.assertIn(f"{self.work}/compose.loadtest.yaml", down[0])
         self.assertFalse(self.work.exists())
 
+    def test_finish_removes_the_tasks_own_e2e_containers(self):
+        dev = ("compose.yaml", "compose.override.yaml")
+        self.set_docker(
+            containers={
+                "e2e-care": self.labels("e2e-care", files=dev),
+                "e2e-worker": self.labels("e2e-worker", files=dev),
+            }
+        )
+        self.assertEqual(self.finish()["status"], "finished")
+        self.assertEqual(self.docker_now()["containers"], {})
+        self.assertFalse(self.work.exists())
+
     def test_foreign_load_test_containers_stop_finish(self):
         for name, labels in (
             ("working directory", self.labels("lt-db", root=self.base / "elsewhere")),
