@@ -7,7 +7,7 @@ import { accountBody, billBody, billsUrl, NO_SETTLEMENT } from '../test/fixtures
 
 // The bill lifecycle on the subscriber card (docs/archive/bill-lifecycle-design.md 6.7). The
 // request bodies asserted here are replayed against the real API by
-// tests/test_ui_requests.py - change both together.
+// tests/internal/test_ui_requests.py - change both together.
 
 const A = 'aaaa1111-0000-4000-8000-0000000000a1';
 const C = 'cccc2222-0000-4000-8000-0000000000c2';
@@ -380,7 +380,7 @@ describe('bill PDF and delivery', () => {
 });
 
 // #386: the postpaid card's dunning panel and the exemption. The PATCH bodies are replayed
-// against the real API by tests/test_ui_requests.py - change both together.
+// against the real API by tests/internal/test_ui_requests.py - change both together.
 const DUNNING = `${INTERNAL}/dunning`;
 const IN_DUNNING = {
   billingAccount: { id: A, name: 'Olga Kuznetsova' },

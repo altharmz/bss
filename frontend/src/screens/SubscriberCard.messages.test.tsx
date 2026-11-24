@@ -6,7 +6,7 @@ import { C, backend, open } from '../test/subscriberCardKit';
 
 // The Messages tab (issue 192b): TMF681 message log, detail, Resend, Cancel, New message,
 // and the customer's marketing consent. Write bodies are replayed against the real API in
-// tests/test_ui_requests.py (test_messages_and_consent_as_the_ui_sends_them).
+// tests/internal/test_ui_requests.py (test_messages_and_consent_as_the_ui_sends_them).
 
 const MSG = '/tmf-api/communicationManagement/v4/communicationMessage';
 const LIST = `GET ${MSG}?receiver.party.id=${C}&offset=0&limit=25`;

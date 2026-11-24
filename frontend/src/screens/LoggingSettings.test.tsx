@@ -6,7 +6,7 @@ import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } fr
 import { minutesLeft } from './LoggingSettings';
 
 // The Logging settings screen (docs/ui.md); the PUT bodies are replayed against the real
-// API in tests/test_ui_requests.py.
+// API in tests/internal/test_ui_requests.py.
 
 const PATH = '/internal/v1/logging';
 const base = {

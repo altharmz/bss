@@ -409,7 +409,7 @@ describe('subscribers list', () => {
   });
 });
 
-// The bodies asserted here are replayed against the real API by tests/test_ui_requests.py.
+// The bodies asserted here are replayed against the real API by tests/internal/test_ui_requests.py.
 const PARTY = '/tmf-api/partyManagement/v5';
 const CUSTOMERS = '/tmf-api/customer/v5/customer';
 const NEW_PARTY = 'dddd4444-0000-4000-8000-000000000004';

@@ -21,7 +21,7 @@ Black-box, through the app itself (docs/decisions/tmf-api.md, "Following TMF"):
 Behaviour - states reached, values rewritten, order kept - is not probed here; those
 gaps are listed in docs/tmf-gap-analysis.md.
 
-`tests/test_tmf_gaps.py` compares the result with `tests/tmf-gaps.txt`; closing a gap
+`tests/tmf/test_tmf_gaps.py` compares the result with `tests/tmf-gaps.txt`; closing a gap
 means removing its line there. It runs in parts (`PARTS`, `part_of`) that xdist spreads
 over its workers: one per API on an empty database, and `nested`, which alone needs the
 populated one. Every line starts with its API, so the parts never overlap.

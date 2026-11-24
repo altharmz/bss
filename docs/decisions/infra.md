@@ -251,7 +251,7 @@ connection per request; a pool only after measuring on the VPS" (history below).
   `SET`. The worker's session advisory lock is on its own connection
   (`app/worker/db.py`), not pooled.
 - **Database restarts** (nightly reboot, a db restart): `check=` tests a connection
-  before handing it out and replaces a dead one. `tests/test_db_pool.py` proves reuse,
+  before handing it out and replaces a dead one. `tests/ops/test_db_pool.py` proves reuse,
   rollback of leftovers, and replacement after `pg_terminate_backend`.
 - **Tests:** pools are keyed by URL, so each test database gets its own; conftest's
   `_drop_database` closes it before the drop (else its workers would reconnect to a

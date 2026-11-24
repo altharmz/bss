@@ -120,12 +120,12 @@ date}|null}` (null for an operator-suspended line and for add-ons) and `suspensi
 settings page), carrier-side number release. The customer notifications of each phase are done
 (#192, [notifications.md](notifications.md)).
 
-**Tests:** `tests/test_prepaid_lifecycle.py` (dates and pure schedule; unfunded renewal through
+**Tests:** `tests/prepaid/test_prepaid_lifecycle.py` (dates and pure schedule; unfunded renewal through
 grace, suspension and deactivation with the commands the network got; top-up in grace and in
 suspension; card payment in suspension; same-day suspension and top-up; number aging before
 and after the end; settings API and settings changes on transitions not yet taken; refused
 suspension retried next date; operator suspension untouched; pay-as-you-go), plus the
-port-out assertion in `tests/test_number_porting.py`.
+port-out assertion in `tests/resources/test_number_porting.py`.
 
 ## Plans, renewal, add-ons and fees (2026-11-05, issue #187)
 
@@ -336,7 +336,7 @@ and are read as such.
 
 **Postpaid** is unchanged: it charges recurring prices only.
 
-**Tests:** `tests/test_multi_line.py` - purchases and renewals of 1 to 4 lines with tiers 2 -> 5
+**Tests:** `tests/prepaid/test_multi_line.py` - purchases and renewals of 1 to 4 lines with tiers 2 -> 5
 and 3 -> 10 (net and tax exact), no repricing of a running period, an ended line stops counting
 and is credited its net, the hold equals the posted charge, one order of two lines, the tax
 engine on the net, TMF678, the bill document and `firstCharge`, catalog validation and attach
@@ -398,7 +398,7 @@ downgrade to a shorter plan ends before the grant it supersedes.
 and `balanceAfter` is ledger minus the held amount plus the credit. The product's Change
 offering dialog on a prepaid product offers a date from today to paid-through (default
 paid-through) and shows the credit, the amount held now and the balance after. The write
-body is unchanged and pinned in `tests/test_ui_requests.py` and `SubscriberCard.test.tsx`.
+body is unchanged and pinned in `tests/internal/test_ui_requests.py` and `SubscriberCard.test.tsx`.
 
 ## Slice 8: dated prepaid status changes and number-only changes (2026-10-25)
 
@@ -424,7 +424,7 @@ today-only rule).
 - **UI:** the prepaid Suspend/Resume date is editable
   ([frontend.md](frontend.md#slice-4-product-actions-and-pending-changes-2026-10-25)).
 - **Deviations:** none. Scope item `worker.prepaidDatedStatus`.
-- **Tests:** `tests/test_prepaid_dated_status.py` (dated suspend and resume after expiry, cancel
+- **Tests:** `tests/prepaid/test_prepaid_dated_status.py` (dated suspend and resume after expiry, cancel
   before and on/after the date, ordering rules, both revalidation failures, number-only today and
   dated, mixed refused), `test_ui_requests.py::test_prepaid_dated_suspend_as_the_ui_sends_it`, the
   component test in `SubscriberCard.test.tsx`. TEST-CHANGE: `test_order_states.py` allows
@@ -439,7 +439,7 @@ ordered by date: `status` entries are unapplied `product_status_change` rows dat
 `offering` entries are `product_offering_change` rows not in effect: postpaid dated after today,
 prepaid not yet announced (a change waiting for a funded renewal can be dated in the past). Each
 names the order to cancel. No migration; the MCP `open_products` carries it. Pending dated prepaid status changes appear
-through their unapplied rows (slice 8). Tests: `tests/test_internal_pending_changes.py`.
+through their unapplied rows (slice 8). Tests: `tests/internal/test_internal_pending_changes.py`.
 UI: [frontend.md](frontend.md#slice-4-product-actions-and-pending-changes-2026-10-25).
 
 ## Slice 2: transactions include balance actions (2026-10-24)
@@ -453,7 +453,7 @@ so the newest `balanceAfter` equals `account_balance`. They are guarded by
 `Transaction.type` in the internal contract gained the four values; a new entry's `href` is
 its `balanceActionHistory` resource. A reversal shares its action's `id`, so a list can hold
 two entries with one id (the UI keys rows by type and id). Test:
-`tests/test_internal_transactions_prepaid.py` (top-up purchase, credit, debit, cancelled
+`tests/prepaid/test_internal_transactions_prepaid.py` (top-up purchase, credit, debit, cancelled
 adjustment, transfer out with a fee, transfer in; counts, notes, newest balance equals the
 ledger on both accounts; a postpaid list is unchanged).
 
@@ -607,7 +607,7 @@ already spendable.
 A hold is limited to the spendable funds (the same plan a debit uses), positive, and in the
 bucket's currency. `amount` is required although the schema leaves it optional (accepted
 deviation, with `relatedParty`). Suspended accounts may hold; a Closed one is a stored
-refusal. Tests: `tests/test_api_reserve.py`.
+refusal. Tests: `tests/prepaid/test_api_reserve.py`.
 
 ## P4a: balance action and source schema (2026-10-23)
 
@@ -1328,7 +1328,7 @@ Money, future enum values and the conditional history exception. These are contr
 fixtures, not runtime or database-enum coverage; PostgreSQL enum locks will be added
 with the corresponding migrations. (#425, 2026-11-23: removed once the routes landed.
 The API tests contract-check the real bodies, `test_spec_provenance` pins the spec, and
-the history exception's own cases moved to `tests/test_contract_validator.py`.)
+the history exception's own cases moved to `tests/tmf/test_contract_validator.py`.)
 
 The base-path probe resolves server variable defaults, including TMF639's entire
 URL held in apiRoot. The gap ledger and progress scope include all 36 non-listener
@@ -1521,7 +1521,7 @@ changes `reason` only: `channel`, `requestor` and `receiver`, which the plan wou
 change, must be repeated as stored (409). `status`, `validFor`, `description`, `partyAccount`
 and the dates, which TransferBalance_Update skips, may be echoed back equal. There is no
 cancelling and no `TransferBalanceCancelEvent`. DELETE removes only a failed transfer. Five
-MCP tools. Tests: `tests/test_api_transfer.py`.
+MCP tools. Tests: `tests/prepaid/test_api_transfer.py`.
 
 ## P4h1: transfer completion without a fee (2026-10-23)
 
@@ -1586,7 +1586,7 @@ keeps matching the balance; a fee covers its one day (`billableDays` = `periodDa
 not prorated). No mapper treats non-recurring as refund any more. The UI shows
 `Transfer fee` for a charge without an offering. The daily run never reads a prepaid
 account's ABRs (P3a), so a fee cannot disturb it. Tests:
-`tests/test_transfer_completion.py`.
+`tests/prepaid/test_transfer_completion.py`.
 
 ## P4i: balanceActionHistory, events, refunds (2026-10-23)
 
@@ -1653,7 +1653,7 @@ TMF666 POST and PATCH accept `ratingType: prepaid`; the 422 gate is gone. No mig
   postpaid contract and the generated types stay valid. The funds shown are today's even
   for a future start (a future order holds nothing).
 
-Tests: `tests/test_api_prepaid_accounts.py`. TEST-CHANGE: the two tests that asserted the
+Tests: `tests/prepaid/test_api_prepaid_accounts.py`. TEST-CHANGE: the two tests that asserted the
 gate (`test_rating_type_is_postpaid`, the `ratingType: prepaid` validation row) now assert
 the new contract.
 
@@ -1699,4 +1699,4 @@ physical SIM inventory, network provisioning.
   `product.requires_imsi`. Downgrade refuses while an IMSI or an IMSI-requiring product exists.
 - **Balances** (`logicalResource` on buckets and top-ups) list MSISDNs only.
 
-Tests: `tests/test_imsi.py`.
+Tests: `tests/resources/test_imsi.py`.

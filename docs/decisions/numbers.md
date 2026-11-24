@@ -103,7 +103,7 @@ completion date, reserving pool numbers with a hold period.
 
 ## Tests
 
-`tests/test_number_porting.py`: pool by area code in TMF639 and refusals; port-in happy path
+`tests/resources/test_number_porting.py`: pool by area code in TMF639 and refusals; port-in happy path
 (activation held until completion, ported number sent), rejection with reason and resubmit with
 corrected data, pending until the carrier completes, temporary errors then `networkUnavailable`,
 order cancellation cancelling the port, non-network offerings refused, the PIN never stored or

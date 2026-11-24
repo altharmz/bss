@@ -47,7 +47,7 @@ Index: [README.md](README.md).
   status: `start_date <= d < termination_date`, excluding only `cancelled`/`aborted`.
 - **Enums verbatim from the spec**, camelCase included (`pendingActive`). One exception
   rule: values are compared after `strip()` - upstream `ProductStatusType` has the typo
-  `'aborted '`, stored as `aborted`. `tests/test_enum_lock.py` locks TMF-derived enums
+  `'aborted '`, stored as `aborted`. `tests/schema/test_enum_lock.py` locks TMF-derived enums
   against `spec/`. Where the spec field is a free string we define our own enum ("ours,
   not TMF" in the migration); casing: if the spec gives example values, use their exact
   spelling (`In Design`, `Active`), otherwise lowerCamel.

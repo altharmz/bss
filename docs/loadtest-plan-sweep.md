@@ -194,7 +194,7 @@ repository functions were run side by side through `lt-tools` on 148 combination
 filter, search term (narrow, ~1k, ~6k, ~11k and 100k matches; short and full ids;
 numbers) and offset (0, 50, 5000). Every page and its "more" flag were identical,
 row for row in order; again with the match cap at 0 (every search walks), 2500 and 5000.
-`tests/test_party_search.py` and `tests/test_subscriber_search.py` run both search paths.
+`tests/internal/test_party_search.py` and `tests/internal/test_subscriber_search.py` run both search paths.
 
 Before: psql `EXPLAIN ANALYZE`, second of two runs. After: the same, the new statement.
 

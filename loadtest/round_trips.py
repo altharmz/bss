@@ -58,7 +58,7 @@ CENT = Decimal("0.01")
 
 @contextmanager
 def counting() -> Iterator[list[str]]:
-    """Every statement psycopg executes while the block runs (as tests/querycount), and the
+    """Every statement psycopg executes while the block runs (as tests/perf/guard.py), and the
     transaction control psycopg sends on its own (BEGIN, SAVEPOINT, COMMIT, RELEASE)."""
     seen: list[str] = []
     real_execute = psycopg.Cursor.execute

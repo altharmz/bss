@@ -3,7 +3,7 @@
 A hub may subscribe to any of them (`eventType=` in its query). Some are never emitted
 here - nothing in this service produces them (InformationRequired, JeopardyAlert,
 Milestone, ProductBatch, ErrorMessage, billingCycleSpecification changes) - but they
-remain valid names. tests/test_api_hub.py checks this table against spec/.
+remain valid names. tests/tmf/test_api_hub.py checks this table against spec/.
 """
 
 BASES: dict[str, str] = {

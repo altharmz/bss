@@ -7,14 +7,14 @@ to change its number from `requestedStartDate`. Unknown, locked, overlapping or
 quarantined numbers reject the order; future starts reserve the entire interval.
 Delete releases at effective termination. Cancellation retains audit and refuses a
 restoration conflicting with another accepted claim (409, atomically).
-Number changes do not change prices or billing. See `tests/test_number_orders.py`.
+Number changes do not change prices or billing. See `tests/resources/test_number_orders.py`.
 
 Completed add items expose `itemPrice` and `itemTotalPrice` as snapshots of their
 quoted full charge-interval fee (`0008`); `orderTotalPrice` sums fees with the same
 interval and returns separate entries when intervals differ. These are not
 the prorated first charge or a lifetime total. Catalog changes do not rewrite a
 quote. Deletes have no quote, and old orders without recorded quotes and rejected
-orders omit it. `tests/test_api_read_completeness.py` verifies exact totals and history.
+orders omit it. `tests/tmf/test_api_strict_inputs_and_quotes.py` verifies exact totals and history.
 
 **Prepaid immediate starts (P3c).** An immediate add-only order checks the combined
 full-period tax-inclusive cost under the account lock. Shortfall returns a stored
@@ -25,22 +25,22 @@ offCycle documents/grants atomically, with TMF622/637 StateChange events. Techni
 failure retains the pending tree and hold; completed replay emits nothing twice.
 Drafts reserve only when submitted. Future prepaid starts and other lifecycle actions
 remain rejected until their slices land; public prepaid account creation stays gated.
-See `tests/test_prepaid_orders.py`.
+See `tests/prepaid/test_prepaid_orders.py`.
 
 Orders are the only way to create or terminate products. Postpaid POST processes the order
 **synchronously, in the request's transaction** (`app/ordering/process.py`,
 `place_order`). PATCH changes `description`, `category`, `priority` (0..4),
 `externalId[]` and the documents (note, relatedParty, channel, quote, ...; POST accepts
 them too) of any order; once processed, its account, items and start date may only be
-repeated (409) (`tests/test_api_order_patch.py`). DELETE removes only a `rejected` or
+repeated (409) (`tests/orders/test_api_order_patch.py`). DELETE removes only a `rejected` or
 `draft` order (204; any other state is a 409) -
-`tests/test_api_order_cancel.py::test_only_a_rejected_order_can_be_deleted`.
+`tests/orders/test_api_order_cancel.py::test_only_a_rejected_order_can_be_deleted`.
 
 **Drafts** (`requestedInitialState: draft`) are stored without being processed: state
 `draft`, items without a state, only what the database needs checked. PATCH changes
 anything of a draft (account, items, start date replaced whole) and `state:
 acknowledged` processes it as an order placed at that moment (its id, `creationDate` and
-documents kept) - `tests/test_api_order_attributes.py::test_a_draft_changes_and_is_submitted_by_patch`.
+documents kept) - `tests/orders/test_api_order_attributes.py::test_a_draft_changes_and_is_submitted_by_patch`.
 
 **cancelProductOrder** undoes a completed order before its effects, except a status
 change may also be undone on its effective day (restoring the previous status and
@@ -52,7 +52,7 @@ items `cancelled`, with `cancellationDate`/`cancellationReason` on the order. A 
 cancelled with nothing to undo (`::test_a_draft_is_deleted_or_cancelled`).
 `requestedCancellationDate` may only be today (422 otherwise). Anything that already took
 effect is a 409 naming every reason, and nothing is stored, so every stored cancellation
-is `done` - `app/ordering/cancel.py`; `tests/test_api_order_cancel.py`
+is `done` - `app/ordering/cancel.py`; `tests/orders/test_api_order_cancel.py`
 (`::test_taking_back_a_termination_before_its_period_is_charged`,
 `::test_a_termination_billing_already_reflects_stays`,
 `::test_a_cancellation_waits_for_the_account_lock_billing_holds`).
@@ -75,45 +75,45 @@ Everything else that is wrong is a **business rejection: the order is stored wit
 
 | Rejection code (ours) | Level | When | Proven by |
 |---|---|---|---|
-| `accountNotActive` | order | the billing account is not `Active`, and the order adds a product or changes an offering (delete, suspend, resume and noChange items are executed on any account: C9) | `::test_account_must_be_active_and_start_not_in_the_past`, `tests/test_api_suspension.py::test_an_inactive_account_takes_ends_suspensions_and_resumptions` |
+| `accountNotActive` | order | the billing account is not `Active`, and the order adds a product or changes an offering (delete, suspend, resume and noChange items are executed on any account: C9) | `::test_account_must_be_active_and_start_not_in_the_past`, `tests/orders/test_api_suspension.py::test_an_inactive_account_takes_ends_suspensions_and_resumptions` |
 | `requestedStartDateInPast` | order | requested date before today (BILLING_TZ) | same |
-| `billingAccountMismatch` | item | the item's `billingAccount` differs from the order's | `tests/test_api_ordering.py::test_delete_rules` (a delete item; `_item_problems` checks it before the action), `::test_a_rejected_order_is_stored_with_its_reason` |
+| `billingAccountMismatch` | item | the item's `billingAccount` differs from the order's | `tests/orders/test_api_ordering.py::test_delete_rules` (a delete item; `_item_problems` checks it before the action), `::test_a_rejected_order_is_stored_with_its_reason` |
 | `offeringNotSellable` | item | offering not `isSellable` or not `Active` | `::test_offering_must_be_sellable_and_priced` |
 | `offeringNotValid` | item | offering `validFor` does not cover midnight of the start date | `::test_offering_and_price_must_be_valid_at_the_start_date` |
 | `noRecurringPrice` | item | no recurring price in the account currency at that midnight | `::test_offering_must_be_sellable_and_priced` |
-| `priceEnds` | item | from the start date, the recurring prices do not form a gapless chain ending open-ended (D-W20) | `tests/test_order_price_chain.py` |
-| `productOfOtherAccount`, `productAlreadyEnded`, `openDeleteItem`, `productNotStarted` | item | delete rules (the first two also for noChange; all but `openDeleteItem` also for modify: a modify's `productAlreadyEnded` includes a known termination on or before the change day, its `productNotStarted` a change day before the start) | `tests/test_api_ordering.py::test_delete_rules`, `::test_a_product_with_an_open_delete_elsewhere_is_rejected`, `tests/test_api_order_attributes.py::test_a_no_change_item_needs_a_live_product_of_the_account`, `tests/test_api_order_modify.py::test_rejections`, `::test_a_change_must_come_before_the_termination` |
-| `openModifyItem` | item | modify: the product already has an offering change that has not taken effect, or one on that day (a status change: one waiting, or one on or after that day); delete: it would end the product on or before an offering change's day, or a status change is pending | `tests/test_api_order_modify.py::test_rejections`, `::test_a_delete_may_not_end_the_product_on_or_before_a_pending_change`, `tests/test_api_suspension.py::test_rejections`, `::test_a_delete_waits_for_a_pending_status_change` |
-| `offeringUnchanged` | item | modify: the product is on that offering on the change day already | `tests/test_api_order_modify.py::test_rejections` |
-| `terminationInPeriod` | item | modify: the product's known termination falls before the end of the change day's billing period (the change would refund the same charge a second time); cancel the delete order first. A termination on the next cycle day is allowed | `tests/test_api_order_modify.py::test_a_change_must_come_before_the_termination`, `::test_a_change_after_a_termination_refund_is_rejected_and_billing_goes_on`, `::test_a_termination_on_the_next_cycle_day_leaves_the_period_whole` |
-| `statusUnchanged` | item | modify with `product.status`: the product is that status already (suspend an active product, resume a suspended one) | `tests/test_api_suspension.py::test_rejections` |
+| `priceEnds` | item | from the start date, the recurring prices do not form a gapless chain ending open-ended (D-W20) | `tests/orders/test_order_price_chain.py` |
+| `productOfOtherAccount`, `productAlreadyEnded`, `openDeleteItem`, `productNotStarted` | item | delete rules (the first two also for noChange; all but `openDeleteItem` also for modify: a modify's `productAlreadyEnded` includes a known termination on or before the change day, its `productNotStarted` a change day before the start) | `tests/orders/test_api_ordering.py::test_delete_rules`, `::test_a_product_with_an_open_delete_elsewhere_is_rejected`, `tests/orders/test_api_order_attributes.py::test_a_no_change_item_needs_a_live_product_of_the_account`, `tests/orders/test_api_order_modify.py::test_rejections`, `::test_a_change_must_come_before_the_termination` |
+| `openModifyItem` | item | modify: the product already has an offering change that has not taken effect, or one on that day (a status change: one waiting, or one on or after that day); delete: it would end the product on or before an offering change's day, or a status change is pending | `tests/orders/test_api_order_modify.py::test_rejections`, `::test_a_delete_may_not_end_the_product_on_or_before_a_pending_change`, `tests/orders/test_api_suspension.py::test_rejections`, `::test_a_delete_waits_for_a_pending_status_change` |
+| `offeringUnchanged` | item | modify: the product is on that offering on the change day already | `tests/orders/test_api_order_modify.py::test_rejections` |
+| `terminationInPeriod` | item | modify: the product's known termination falls before the end of the change day's billing period (the change would refund the same charge a second time); cancel the delete order first. A termination on the next cycle day is allowed | `tests/orders/test_api_order_modify.py::test_a_change_must_come_before_the_termination`, `::test_a_change_after_a_termination_refund_is_rejected_and_billing_goes_on`, `::test_a_termination_on_the_next_cycle_day_leaves_the_period_whole` |
+| `statusUnchanged` | item | modify with `product.status`: the product is that status already (suspend an active product, resume a suspended one) | `tests/orders/test_api_suspension.py::test_rejections` |
 
 - **All or nothing:** one reason anywhere rejects the whole order; failing items are
-  `rejected`, the others `cancelled`, nothing is executed (`tests/test_api_ordering.py::test_one_bad_item_rejects_the_whole_order`).
+  `rejected`, the others `cancelled`, nothing is executed (`tests/orders/test_api_ordering.py::test_one_bad_item_rejects_the_whole_order`).
   A rejected order's items are stored directly in their final states, so a rejected
   delete item never collides with the one-open-delete index.
 - **States** come from the pure state machine `app/ordering/states.py`: order
   `acknowledged -> inProgress -> completed` or `acknowledged -> rejected`; items the same
   plus `acknowledged -> cancelled`; both `completed -> cancelled` for a cancellation;
   `draft -> acknowledged` (submitted) and `draft -> cancelled`
-  (`tests/test_order_states.py`). The asynchronous states (pending, held, failed,
+  (`tests/orders/test_order_states.py`). The asynchronous states (pending, held, failed,
   partial, ...) are never reached.
 - **`requestedStartDate`** (our interpretation; TMF has no per-item date) is the start
   date of add items, the termination date of delete items and the change day of modify
   items, converted to the date in BILLING_TZ; it defaults to today and may not be in the
   past.
 - **add** creates the product: `active` if it starts today, `created` if later (the
-  worker flips it on its start date) - `tests/test_api_ordering.py::test_add_creates_an_active_product`.
+  worker flips it on its start date) - `tests/orders/test_api_ordering.py::test_add_creates_an_active_product`.
 - **delete** of a started product sets the exclusive `terminationDate`: `terminated`
   for today, `pendingTerminate` for a future date (`::test_delete_terminates_a_started_product`,
   `::test_delete_with_a_future_date_is_pending_until_then`). **delete of a product not
   started yet** cancels it when the requested date is on or before its start
   (`cancelled`, `terminationDate = startDate`, zero billable days). A later date
   schedules termination: `created` until start, then `pendingTerminate`, then
-  `terminated` (`tests/test_api_product_writes.py::test_future_delete_dates`).
+  `terminated` (`tests/orders/test_api_product_writes.py::test_future_delete_dates`).
   Cancelling that delete restores an open-ended product.
 - **noChange** names a live product of the account and changes nothing
-  (`tests/test_api_order_attributes.py::test_a_no_change_item_completes_and_changes_nothing`).
+  (`tests/orders/test_api_order_attributes.py::test_a_no_change_item_completes_and_changes_nothing`).
 - **modify** changes the product's offering to the item's `productOffering` from the
   change day on, **billed prorated**: the old offering until the day before, the new one
   from that day (a charge of the old offering for the whole period is refunded from the
@@ -122,12 +122,12 @@ Everything else that is wrong is a **business rejection: the order is stored wit
   before the change day until billing reflects it. Decisions:
   [tmf-api.md](../decisions/tmf-api.md#modify-items-2026-10-18),
   [billing-core.md](../decisions/billing-core.md#offering-changes-2026-10-18);
-  `tests/test_api_order_modify.py`.
+  `tests/orders/test_api_order_modify.py`.
 - **modify with `product.status`** (`suspended` / `active`, no `productOffering`)
   suspends or resumes the product from the change day (today: at once; later: the
   worker's run of the day). Billing does not change. cancelProductOrder undoes it before
   or on its effective day ([suspension](../decisions/tmf-api.md#suspension-2026-10-19),
-  `tests/test_api_suspension.py`).
+  `tests/orders/test_api_suspension.py`).
 - **Prices:** `orderTotalPrice` names the order's `billingAccount`; `priceAlteration` is
   always empty; `productOfferingPrice` and `unitOfMeasure` are given when every add item
   has the same price.
@@ -135,7 +135,7 @@ Everything else that is wrong is a **business rejection: the order is stored wit
   (`::test_nested_items_are_processed_and_kept_nested`).
 - **Row lock:** the products of delete, modify and noChange items are locked `FOR UPDATE` in id
   order before anything about them is read; a concurrent second delete waits, then is
-  rejected `productAlreadyEnded` (`tests/test_order_concurrency.py`).
+  rejected `productAlreadyEnded` (`tests/orders/test_order_concurrency.py`).
 - **The billing account** is optional, as in the spec: the order's, else an item's, else
   that of a product a modify, delete or noChange item names
-  (`tests/test_api_order_attributes.py::test_the_account_comes_from_an_item_or_a_product`).
+  (`tests/orders/test_api_order_attributes.py::test_the_account_comes_from_an_item_or_a_product`).

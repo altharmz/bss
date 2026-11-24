@@ -60,7 +60,7 @@ def create_order(
     """Insert an order and its items, in the order given (`position`; a nested item after
     its parent). Returns the order row with an `items` list. `id` None: a new one (a
     client may choose it). The columns of migration 0026 are written only when given, so
-    older schemas (tests/test_migrations.py) take the same call."""
+    older schemas (tests/schema/test_migrations.py) take the same call."""
     order = returning(
         conn,
         """

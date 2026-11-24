@@ -82,7 +82,7 @@ Suspension does not change postpaid date-based billing.
 | Internal (ours, for the UI) | v1 | `/internal/v1` | `spec/internal/bss-internal.oas.yaml` |
 
 The specs are vendored unmodified, pinned by upstream commit and blob SHA
-(`spec/README.md`, `tests/test_spec_provenance.py`). Every response in the test suite is
+(`spec/README.md`, `tests/tmf/test_spec_provenance.py`). Every response in the test suite is
 validated against them (`tests/apiclient.py`). Per-operation reference, extensions
 (`BssBillingAccount`) and deviations: [api/](api/README.md).
 

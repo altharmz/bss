@@ -15,7 +15,7 @@ targets; do not invent commands** (CLAUDE.md, "Commands").
 |---|---|
 | `make up` / `make down` / `make logs` / `make ps` | start (and wait for healthy), stop, last 5 min of app logs, status |
 | `make migrate` | `alembic upgrade head` against the local stack |
-| `make seed` | demo data (US names, USD amounts, numbered mobile, categories and catalogs) **through the public TMF API** with a FixedClock that walks 120 days forward, billing each day; refuses `APP_ENV=prod` and any database but the local one; a second run is a no-op (`tests/seed.py`, `tests/test_seed.py`) |
+| `make seed` | demo data (US names, USD amounts, numbered mobile, categories and catalogs) **through the public TMF API** with a FixedClock that walks 120 days forward, billing each day; refuses `APP_ENV=prod` and any database but the local one; a second run is a no-op (`tests/seed.py`, `tests/ops/test_seed.py`) |
 | `make worker-once` | one wake-up of the billing worker, then exit (there is no long-running local worker) |
 | `make psql` | interactive psql in the local db (the db port is not published) |
 | `make test` | `pytest -n auto` in the app container |
@@ -39,8 +39,8 @@ for test speed - not crash-safe; recover with `make clean && make up` ([decision
 | Suite | Command | What it covers |
 |---|---|---|
 | Backend | `make test` (`pytest -n auto`) | every test gets its own database cloned from a template migrated to head and dropped afterwards (`tests/conftest.py`); every API response is validated against `spec/` (`tests/apiclient.py`); hypothesis properties with 50 examples (`dev`) or 200 in `make check` (`ci`, `HYPOTHESIS_PROFILE`) |
-| Migrations | part of `make test`; the data tests of deployed migrations (`migration_history`) in `make test-all`, the nightly run and the hook when `alembic/` changes | upgrade on an empty database, downgrade to base and up again, as a NOSUPERUSER database owner like production; data-carrying upgrades of single migrations such as 0002 and 0004, and 0005's comments (`tests/test_migrations.py`, `tests/test_nonsuperuser_migration.py`) |
-| Worker processes | part of `make test` | real `python -m app.worker` processes on a pinned clock, SIGTERM and SIGKILL (`tests/test_worker_signals.py`) |
+| Migrations | part of `make test`; the data tests of deployed migrations (`migration_history`) in `make test-all`, the nightly run and the hook when `alembic/` changes | upgrade on an empty database, downgrade to base and up again, as a NOSUPERUSER database owner like production; data-carrying upgrades of single migrations such as 0002 and 0004, and 0005's comments (`tests/schema/test_migrations.py`, `tests/schema/test_nonsuperuser_migration.py`) |
+| Worker processes | part of `make test` | real `python -m app.worker` processes on a pinned clock, SIGTERM and SIGKILL (`tests/worker/test_worker_signals.py`) |
 | UI unit/component | `make web-test` | vitest, twice (UTC and `America/New_York`) |
 | UI lint | `make web-lint` | tsc, eslint, prettier |
 | UI end-to-end | `make web-e2e` | Playwright on the built UI against the seeded local stack, read-only |

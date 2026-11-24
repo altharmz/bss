@@ -6,7 +6,7 @@ import { accountBody, billsUrl, NO_SETTLEMENT } from '../test/fixtures';
 import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } from '../test/fetch';
 
 // Payments and refunds history, including the shared account-level refund entry points.
-// Requests are replayed against the real API by tests/test_ui_requests.py.
+// Requests are replayed against the real API by tests/internal/test_ui_requests.py.
 
 const PAYMENT = '/tmf-api/payment/v4/payment';
 const REFUND = '/tmf-api/payment/v4/refund';

@@ -773,7 +773,7 @@ def page_abrs(
 
 
 # The size of the bill's PDF (#202), read with a page of bills: the TMF678 body lists it, and
-# the page keeps its statement count (tests/test_list_queries.py). get_bill stays `*`: the
+# the page keeps its statement count (tests/perf/test_list_queries.py). get_bill stays `*`: the
 # billing paths call it, also on schemas before 0086 in the migration tests.
 PDF_SIZE = (
     "(SELECT octet_length(d.pdf) FROM customer_bill_document d"

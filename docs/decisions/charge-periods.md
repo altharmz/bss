@@ -83,8 +83,8 @@ monthly prices and historical ABRs are unchanged. The UI and MCP accept the same
 and lengths. Internal preview/product views expose an optional interval label; absent
 means the original monthly interval.
 
-Coverage: `tests/test_charge_periods.py`, `tests/test_charge_period_api.py`, the `0030`
-migration case, the pinned offering requests in `tests/test_ui_requests.py` and
+Coverage: `tests/billing/test_charge_periods.py`, `tests/billing/test_charge_period_api.py`, the `0030`
+migration case, the pinned offering requests in `tests/internal/test_ui_requests.py` and
 `Catalog.test.tsx`, and the read-only browser smoke. Negative proofs: removing the
 sidebar count failed its shell assertion; treating a week as one day failed the
 explicit weekly interval example. Both mutations were reverted.

@@ -3,7 +3,7 @@
 Scrape configuration, alert rules and a Grafana dashboard for the bss app and the MCP
 connector. Both serve `GET /metrics` in the Prometheus text format; the series are listed
 by the registries in `app/metrics.py` and `bss_mcp/metrics.py`, and a test
-(`tests/test_monitoring_kit.py`) fails when the rules or the dashboard name a series that
+(`tests/ops/test_monitoring_kit.py`) fails when the rules or the dashboard name a series that
 no registry exports.
 
 | File | What |
@@ -72,7 +72,7 @@ notification, a new firing one and a new repeat cycle (issue #444).
 | no scrape at all for 15 min | `BssAppTelemetryMissing` / `BssMcpTelemetryMissing` (absence rules: no data = OK, their healthy result) |
 
 Each query returns the raw value and Grafana's threshold expression compares it, so an empty
-result only ever means missing series. A test (`tests/test_monitoring_kit.py`) refuses a filter
+result only ever means missing series. A test (`tests/ops/test_monitoring_kit.py`) refuses a filter
 in PromQL, a rule without Keep Last State (absence rules: OK) and a rule set that differs from
 `alerts.yml`.
 

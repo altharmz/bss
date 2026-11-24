@@ -20,7 +20,7 @@ import {
 // The service address of the billing account (#207, docs/decisions/taxes.md): set, change and
 // remove send the account's whole contact array; a 422 shows at the input; the PIN header is
 // sent only when typed. The same bodies are replayed against the API in
-// tests/test_ui_requests.py (test_service_address_writes_as_the_ui_sends_them).
+// tests/internal/test_ui_requests.py (test_service_address_writes_as_the_ui_sends_them).
 
 const PATCH = `PATCH /tmf-api/accountManagement/v5/billingAccount/${A}`;
 const BILLING_CONTACT = {

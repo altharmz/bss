@@ -8,7 +8,7 @@ export function loadLogging(signal: AbortSignal) {
   return getJson<LogSettings>(LOGGING, signal);
 }
 
-/** The three PUT bodies the screen sends (pinned in tests/test_ui_requests.py). */
+/** The three PUT bodies the screen sends (pinned in tests/internal/test_ui_requests.py). */
 export type LogChange =
   { baseLevel: 'WARNING' | 'INFO' | null } | { debugMinutes: 15 | 30 | 60 } | { debugMinutes: 0 };
 

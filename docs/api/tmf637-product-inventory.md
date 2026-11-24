@@ -40,10 +40,10 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF637-P
   `terminationDate` after its start, including on POST. It remains `created` until
   start, then `pendingTerminate`, then `terminated`; catching up past both dates
   moves directly to `terminated`. A delete on or before a future start cancels it
-  with zero billable days. See `tests/test_api_product_writes.py::test_future_delete_dates`.
+  with zero billable days. See `tests/orders/test_api_product_writes.py::test_future_delete_dates`.
 - A same-day suspension/resumption can be undone through TMF622 `cancelProductOrder`;
   its previous status is restored and a ProductStateChangeEvent emitted. An older
-  change remains a 409. See `tests/test_api_suspension.py::test_same_day_status_change_can_be_undone`.
+  change remains a 409. See `tests/orders/test_api_suspension.py::test_same_day_status_change_can_be_undone`.
 
 - **Writes are orders.** Products are only created, changed and ended by orders (TMF622):
   POST `/product` places an add order (with `terminationDate`, a delete order after it,
@@ -54,14 +54,14 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF637-P
   product stays readable, ended). An order that would be rejected is a 409 with its
   reasons, nothing stored. `billingAccount` and `startDate` may only repeat their value
   (409 otherwise); the other derived attributes are read-only (`app/api/inventory.py`;
-  `tests/test_api_product_writes.py`, `tests/test_api_product_attributes.py`,
-  `tests/test_api_suspension.py::test_patch_status_places_the_order`).
+  `tests/orders/test_api_product_writes.py`, `tests/tmf/test_api_product_attributes.py`,
+  `tests/orders/test_api_suspension.py::test_patch_status_places_the_order`).
 - **Descriptive attributes** (`description`, `isBundle`, `isCustomerVisible`,
   `productSerialNumber`, `agreementItem`, `intent`, `place`, `product`,
   `productCharacteristic`, `productRelationship`, `productTerm`, `realizingResource`,
   `realizingService`) are stored as sent, checked against the spec, and change directly
   on PATCH (null removes one) - they neither create nor end a product
-  (`tests/test_api_product_attributes.py`).
+  (`tests/tmf/test_api_product_attributes.py`).
 - `productOffering.version`, when sent, must be the offering's current version (422).
 - `productOrderItem[]` holds the order items that created (`role: creation`), changed
   (`role: modification`: offering or status) and terminated (`role: termination`) the
@@ -77,7 +77,7 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF637-P
   (or activation within the first period), so a mid-period catalog change waits until
   the next billing period. Future products use their start date, ended products their
   last billable period, and cancelled/aborted products have no price. The price is not
-  the prorated first charge. `tests/test_api_read_completeness.py` proves the boundaries.
+  the prorated first charge. `tests/tmf/test_api_strict_inputs_and_quotes.py` proves the boundaries.
   `priceAlteration` is always empty (billing applies no alteration); `unitOfMeasure` is
   the catalog price's, as text.
 - `status` follows dates through the billing worker: a product ordered for a future date

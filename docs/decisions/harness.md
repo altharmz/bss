@@ -308,7 +308,7 @@ Delivering #197 took two human approvals, an extra full-suite run and an extra h
   every commit since the recorded head is a merge whose changes share no path with the PR
   (`shared_paths`, the #390 rule); else `stale`. `stale` and `missing` are the reason
   `full-suite-required`, `next_command` `make test`.
-- **The flaky worker test.** `wait_until_blocked` in `tests/test_worker_signals.py` polled a
+- **The flaky worker test.** `wait_until_blocked` in `tests/worker/test_worker_signals.py` polled a
   fixed 10 s; a hook run beside another slot's tests took longer. It now waits up to 60 s and
   returns as soon as the worker blocks.
 
@@ -343,7 +343,7 @@ it had not touched, and a retry after its one failure paid all of it again. Now:
   `make test-files TESTS=...` to smoke and affected. The map cannot fall behind:
   `tests/conftest.py` installs an audit hook, and a test file that opens or lists a mapped
   path without being listed fails at the read with the line to add
-  (`tests/test_hook_selection.py`). Reads during a module's import count for that module; a
+  (`tests/harness/test_hook_selection.py`). Reads during a module's import count for that module; a
   read in a subprocess is not seen. A change to the map itself runs every mapped test.
 - **What any test may depend on** (`FULL`: the specs, which the app and the response
   validator read; the pins, image and compose files; `app/worker/`; `alembic/`) still runs
@@ -434,7 +434,7 @@ fail because of the task. The rules now:
   readers, alone (a UI commit runs three test files, not the smoke subset). Every other
   path, known or not, is backend. The rule cannot fall behind the tests: the audit hook
   of `tests/conftest.py` refuses a read of a `NO_BACKEND` path by a test unless `DATA`
-  maps the test to it (`tests/test_hook_selection.py`). The map file itself counts as
+  maps the test to it (`tests/harness/test_hook_selection.py`). The map file itself counts as
   backend code (`tests/conftest.py` imports it).
 - **The smoke run has a stamp** (`.testmon/test-smoke`: the content of every backend path
   in the index), like the script suites. A retry on the same backend content prints
@@ -523,7 +523,7 @@ Python code only, hence the full-suite triggers above; comment-only edits select
 data is `.testmon/.testmondata`, per worktree and gitignored. If the selection looks stale,
 delete `.testmon/`.
 
-The smoke marker (`pyproject.toml`; `tests/test_smoke_marker.py` keeps every area marked)
+The smoke marker (`pyproject.toml`; `tests/harness/test_smoke_marker.py` keeps every area marked)
 covers billing core, the TMF contract (validator, enum lock, operation ids, spec provenance,
 health, order states, catalog, conventions), migrations on an empty database, and the MCP
 connector. A new test is not smoke by default: mark one only where it guards what the gate
@@ -561,7 +561,7 @@ They still run:
 
 **The rule for a migration's tests.** A test that takes `temp_db_url` carries
 `migration_history` unless `KEPT_REPLAYS` in `tests/conftest.py` lists it; a collection check
-refuses anything else, and a smoke test that carries either mark (`tests/test_smoke_marker.py`
+refuses anything else, and a smoke test that carries either mark (`tests/harness/test_smoke_marker.py`
 tests the check). Kept: the upgrade to head on an empty database, the downgrade-and-upgrade
 round trip of every migration, the drill's refusal of an unknown mode (no replay), and an
 app check against an older schema (`test_worker_round_trips.py`). A new migration's data
@@ -585,25 +585,47 @@ moves less and not every time: twelve workers keep the host saturated either way
 the tail is set by whichever long test is left last (`test_seed`'s production-gates run
 and the bill PDF timing test now, 70 to 80 s under load), so pair 1 ended level.
 
-## Test layout (2026-11-22, #423)
+## Test layout (2026-11-22, #423; 2026-11-24, #440)
 
 **No test module imports another.** Until #423 the backend tests had 380 imports from
 other test files (`tests.test_prepaid_renewal_producer` alone 34 times). Editing one test
 file made testmon re-run every importer, and renaming or deleting a test broke unrelated
 files. A helper, constant or fixture that more than one module uses now lives in
-`tests/builders/`, not in a test module. `tests/test_test_imports.py` (smoke) fails on any
-`tests.test_*`, `from tests import test_*` or relative import of a test module, in
+`tests/builders/`, not in a test module. `tests/harness/test_test_imports.py` (smoke) fails
+on any `tests.test_*`, `from tests import test_*` or relative import of a test module, in
 subpackages too.
 
-- The first step moved the shared names mechanically: one `tests/builders/<module>.py` per
-  former source module, holding the imported names and the definitions they depend on.
+- The first step moved the shared names mechanically: one `tests/builders/<domain>/<module>.py`
+  per former source module, holding the imported names and the definitions they depend on.
   The source module imports them back. Builder modules do not import fixtures: pytest
   resolves a fixture from the requesting test's module, so the test module imports every
   fixture it needs (with `# noqa: F401`, and `# ruff: noqa: F811` at the top where a test
   parameter shadows the import).
 - Collected tests before and after: 3,037 in 185 files.
-- The domain subpackages, the prepaid docstrings and one helper for the performance guards
-  are #440 (one PR closes one issue, so #423 was split).
+
+**Tests live in domain subpackages (#440)**, not in one directory named by delivery history:
+`billing/`, `worker/`, `prepaid/` (accounts, balance actions, renewals, plans, usage),
+`funding/`, `orders/`, `catalog/`, `resources/` (inventory, numbers, network), `care/`,
+`internal/` (the admin UI's API), `tmf/` (the shared TMF surface and the contract), `mcp/`,
+`ops/`, `harness/` (checks of the test setup itself), `schema/` and `perf/`.
+`tests/builders/` has the same subpackages. A new test file goes in the subpackage of what it
+proves; a file is named after what it proves, not after the slice that delivered it.
+
+- The subpackages have no `__init__.py`, like `tests/` itself: pytest imports a test file
+  under its basename, so basenames stay unique across subpackages (pytest refuses a
+  duplicate at collection), and no subpackage shadows a library (`tests/mcp/` and the
+  `mcp` SDK). Builder subpackages are regular packages, imported as `tests.builders.<domain>`.
+- Shared modules that are not tests (`factories.py`, `apidata.py`, `conftest.py`, the
+  collectors and `seed.py`) stay at `tests/`; a path reads its data from the repository root
+  through `Path(__file__).parents[2]`.
+- **The performance guards share one helper, `tests/perf/guard.py`:** `plan()` (EXPLAIN with
+  sequential and bitmap scans off, or only sequential with `off=NO_SEQSCAN`; text or JSON),
+  `sent()` (the statements a repository module sends) and `counting()`/`statements()` (every
+  statement a block or request runs, formerly `tests/querycount.py`). EXPLAIN output belongs
+  to the planner, so a Postgres upgrade that changes it is fixed there, not in nine files.
+- The prepaid and funding module docstrings describe today's behaviour; the ones written while
+  public creation and the dispatcher were still off ("without a dispatcher") are gone.
+- Collected tests before and after the move: 3,030 in 186 files.
 
 ## Redundant tests: removed on data, not on reading (2026-11-23, #425)
 
@@ -656,7 +678,7 @@ taken under load is not comparable (the same smoke run took 84 to 219 s).
 | Full backend suite (`make test`, the pytest part) | 10 min 42 s | not measured again | the docs said 7 minutes; the suite grew |
 
 **2026-11-14 (#344).** The same workstation, under load from two other tasks, so only the
-per-test phases below are comparable (summed `--durations` of `tests/test_api_parties.py`,
+per-test phases below are comparable (summed `--durations` of `tests/tmf/test_api_parties.py`,
 38 tests, serial, alternated twice):
 
 | What | Before | After | Change |
@@ -690,7 +712,7 @@ per run only the building worker would lose it, so the build now puts the loggin
 principal of a static token, `mcp-token:<name>`, as a `token:` secret pair and logged
 `mcp-token:[redacted]` in the audit line and the request line's operator. That was the
 behaviour in production; the tests had only passed because the handler was gone.
-`app/logsetup.py` now leaves that principal alone (`tests/test_logging.py`).
+`app/logsetup.py` now leaves that principal alone (`tests/ops/test_logging.py`).
 
 **Suites never inherit a hook's Git selectors.** Inside a hook Git exports `GIT_DIR` and
 `GIT_INDEX_FILE`, and a git command that inherits them acts on the hook's repository,

@@ -3,7 +3,7 @@
 # stack, `make grafana-rules-apply CONFIRM=1` writes it (scripts/grafana_rules.py, the
 # human's step, like a deploy). The uids are the live ones, so rules are updated in place.
 #
-# Every rule follows two conventions (tests/test_monitoring_kit.py enforces them):
+# Every rule follows two conventions (tests/ops/test_monitoring_kit.py enforces them):
 # - `expr` returns the raw value; Grafana's threshold expression decides. An empty result then
 #   only means the series are missing (the nightly reboot, a failed scrape), never "healthy".
 #   A filter such as `x > 3600` inside PromQL made "recovered" and "no data" the same result.

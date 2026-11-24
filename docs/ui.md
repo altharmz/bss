@@ -107,7 +107,7 @@ The base level is a select (Default, INFO, WARNING) with Save, sent as `PUT {bas
 debug is active) sends `{debugMinutes: 0}`. The time left counts down locally (display only); the screen
 re-reads every 30 s and after each PUT. There is no client-side role guard: a `user` opening the route gets the
 API's refusal in the usual error state. The PUT bodies are pinned in `LoggingSettings.test.tsx` and
-`tests/test_ui_requests.py`; the operations are excluded from the MCP parity check.
+`tests/internal/test_ui_requests.py`; the operations are excluded from the MCP parity check.
 
 ### Sign-in, operator menu and users
 
@@ -128,7 +128,7 @@ A non-admin opening `/users` sees Not allowed without a users-list request.
 Session and user writes send `X-Bss-Request: 1`. User PATCH bodies use
 `application/json`, as the internal specification requires; TMF PATCH continues to use
 the existing merge-patch helper. Component tests pin both bodies and headers, with
-real-request counterparts in `tests/test_ui_requests.py`.
+real-request counterparts in `tests/internal/test_ui_requests.py`.
 
 Browser tests use `tests/e2e_users.py` to prepare random local-only admin and user
 identities. The ordinary seed still creates no users. Credentials live only in ignored
@@ -229,7 +229,7 @@ Tab on every subscriber card (`#messages`, before Account), mounted only while s
 - **Messages** from TMF681 `GET /communicationMessage?receiver.party.id=` (25 per page, newest first, Previous/Next by `Link: rel="next"`): time (sent; else "tried" for the last attempt; else "due" for a scheduled one), channel, event (or "Operator message") with a Marketing tag, the address, the state pill (Queued, Retrying, Sent, Cancelled, Failed) with the reason (no marketing consent, no address, cancelled by an operator) and the last error.
 - **Detail** (row click, `ui.subscriber.messages.detail`): `GET /communicationMessage/{id}` with the subject, content, receiver, sender, attempts, error and the original of a resend. An unsent message (Queued, Retrying) offers **Cancel message** (`PATCH` `{"@type": "CommunicationMessage", "state": "cancelled"}`); any other offers **Resend** (`POST /internal/v1/notification/message/{id}/resend` with `{}`), disabled without an address.
 - **New message** (`ui.subscriber.messages.new`): SMS or Email, Transactional or Marketing, subject (Email only, required) and text; TMF681 `POST` with the customer as `receiver[0].party` (the server takes the address from the customer's contact media), `characteristic` `category`, and the sender `bss admin`. A marketing message without an opt-in comes back `cancelled` / `noConsent` and the toast says "Not sent: no marketing consent".
-- Writes: a 4xx shows the server's reason and the action stays available; any other failure asks to check the list first and disables the action. Bodies are pinned in `SubscriberCard.messages.test.tsx` and replayed by `tests/test_ui_requests.py::test_messages_and_consent_as_the_ui_sends_them`.
+- Writes: a 4xx shows the server's reason and the action stays available; any other failure asks to check the list first and disables the action. Bodies are pinned in `SubscriberCard.messages.test.tsx` and replayed by `tests/internal/test_ui_requests.py::test_messages_and_consent_as_the_ui_sends_them`.
 
 ### Security tab (`ui.subscriber.security`) - `screens/SecurityTab.tsx`
 
@@ -239,7 +239,7 @@ Tab on every subscriber card (`#security`, after Messages), mounted only while s
 - **Line locks** (`ui.subscriber.security.locks`): one row per live product of the account (not terminated), each from `GET /internal/v1/security/lock/{productId}` (SIM swap and port-out lock, last change, by whom, reason). **Change locks** (`ui.subscriber.security.changeLocks`) opens `ui.subscriber.security.lockDialog`: two checkboxes and a reason, `PUT` `{"simSwap", "portOut", "reason"}` with both flags. The Account PIN field appears only when a set lock is being cleared, and its value goes in the `X-Account-Pin` header.
 - **Audit log** (`ui.security.audit`) from `GET /internal/v1/security/audit?customer.id=` (newest first, 25 per page, Previous/Next): when, who, action, outcome (a refusal shows its code), reason (the agent's words for a PIN or lock change), verification and the line. Action and outcome filters (`ui.security.audit.action|outcome`) go to the server. Read only. The same component is in the Parties customer dialog behind **Audit log** (`ui.parties.customerAudit`), which loads it on request.
 - **Account PIN field** (`ui.security.accountPin`, `AccountPinField`) on the sensitive dialogs: Subscriber number (number change and Change SIM), Number Transfer PIN (already there), the Parties party edit when the contact media change (email, phone, postal address), and clearing a lock. It is sent only when typed, as `X-Account-Pin`, never in a body or URL, and is cleared after a successful write.
-- Refusals: `pinRequired`, `pinInvalid`, `pinNotSet`, `pinLocked`, `simSwapLocked` and `portOutLocked` get operator sentences (`ACCOUNT_SECURITY_ERRORS` in `api/orderErrors.ts`). A rejected order shows them through `orderRefusal`; a 403 shows them through `explain`, because `ApiError` now carries the TMF Error's business `code`. Bodies and the header are pinned in `SubscriberCard.security.test.tsx`, `Numbers.test.tsx` and `Parties.test.tsx`, and replayed by `tests/test_account_security.py::test_security_requests_as_the_ui_sends_them`.
+- Refusals: `pinRequired`, `pinInvalid`, `pinNotSet`, `pinLocked`, `simSwapLocked` and `portOutLocked` get operator sentences (`ACCOUNT_SECURITY_ERRORS` in `api/orderErrors.ts`). A rejected order shows them through `orderRefusal`; a 403 shows them through `explain`, because `ApiError` now carries the TMF Error's business `code`. Bodies and the header are pinned in `SubscriberCard.security.test.tsx`, `Numbers.test.tsx` and `Parties.test.tsx`, and replayed by `tests/care/test_account_security.py::test_security_requests_as_the_ui_sends_them`.
 
 ### Balance actions (`ui.subscriber.prepaid.history`, `ui.subscriber.prepaid.historyDetail`) - `screens/PrepaidHistory.tsx`
 
@@ -493,7 +493,7 @@ the error is shown. API: `GET .../category`, `POST .../productOfferingPrice`,
 `POST .../productOffering`.
 
 **The write requests are pinned on both sides**: component tests assert the exact bodies
-(`frontend/src/screens/*.test.tsx`), and `tests/test_ui_requests.py` replays the same
+(`frontend/src/screens/*.test.tsx`), and `tests/internal/test_ui_requests.py` replays the same
 bodies against the real API.
 
 ### Network provisioning (`ui.network.commands`, `ui.network.command`, `ui.network.retry`, `ui.network.refused`, `ui.catalog.networkProfile`, `ui.catalog.offeringNetworkProfile`) - `screens/NetworkCommands.tsx`
@@ -530,7 +530,7 @@ Issue #380, the UI of multi-line discounts (#196) and pooled data (#379). Decisi
   row (`ui.bills.multiLineDiscount`) and in its detail (`ui.bills.rateDetail.multiLineDiscount`).
 - No new MCP tool: catalog price writes and the usage summary already have one. Bodies are
   pinned in `Catalog.test.tsx` and `Catalog.specifications.test.tsx` and replayed by
-  `tests/test_ui_requests.py::test_multi_line_tier_and_data_pool_as_the_ui_sends_them`.
+  `tests/internal/test_ui_requests.py::test_multi_line_tier_and_data_pool_as_the_ui_sends_them`.
 
 ### Roaming and international passes (`ui.catalog.passDays`, `ui.catalog.usageZone`, `ui.subscriber.buyAddOn.passEnd`, `ui.subscriber.usage.zone`, `ui.subscriber.passes`) - `screens/Catalog.tsx`, `screens/OfferingEdit.tsx`, `screens/PrepaidPlans.tsx`, `screens/UsageTab.tsx`
 
@@ -562,7 +562,7 @@ Issue #383, the UI of roaming and international passes (#200). Decision:
 - No new MCP tool: catalog writes, add-on orders and the usage summary already have one. Bodies
   are pinned in `Catalog.test.tsx`, `Catalog.offering.test.tsx` and
   `Catalog.specifications.test.tsx` and replayed by
-  `tests/test_ui_requests.py::test_roaming_passes_as_the_ui_sends_them`.
+  `tests/internal/test_ui_requests.py::test_roaming_passes_as_the_ui_sends_them`.
 
 ### E911 address (`ui.addProduct.e911`, `ui.subscriber.e911`, `ui.subscriber.e911.edit`, `ui.subscriber.e911.form`) - `screens/E911Address.tsx`, `screens/AddProduct.tsx`, `screens/SubscriberCard.tsx`
 
@@ -593,8 +593,8 @@ Issue #384, the UI of the E911 address of Wi-Fi calling lines (#201). Decision:
   `pendingChanges` kind `e911`.
 - No new MCP tool: the order tools already carry `product.place`. Bodies are pinned in
   `SubscriberCard.e911.test.tsx` and `Catalog.specifications.test.tsx` and replayed by
-  `tests/test_e911.py::test_e911_address_orders_as_the_ui_sends_them` and
-  `tests/test_ui_requests.py::test_network_profile_and_narrowing_as_the_ui_sends_them`.
+  `tests/resources/test_e911.py::test_e911_address_orders_as_the_ui_sends_them` and
+  `tests/internal/test_ui_requests.py::test_network_profile_and_narrowing_as_the_ui_sends_them`.
 
 ### Products (`ui.products`, `ui.products.status`, `ui.products.accountChip`, `ui.products.detail`, `ui.products.orderItems`, `ui.products.resource`) - `screens/Products.tsx`
 
@@ -721,7 +721,7 @@ The page explains that policy changes apply to transitions not yet taken and num
 is fixed at deactivation. Refusals retain values; uncertain writes require Refresh before
 another attempt. Successful saves reload the settings. Read failures offer Retry.
 Tests: `LifecycleSettings.test.tsx`, `SubscriberCard.test.tsx`, and the lifecycle settings
-request replay in `tests/test_ui_requests.py`.
+request replay in `tests/internal/test_ui_requests.py`.
 
 ### Billing settings (`ui.billingSettings.cycles|formats|media`) - `screens/BillingSettings.tsx`
 
@@ -796,7 +796,7 @@ dunning** (`.exempt`) is a checkbox that stays as the server says until the conf
 (`.exemptConfirm`, an optional reason recorded in the account audit) is saved: `PATCH
 /internal/v1/billingAccount/{id}/dunning` `{exempt, reason?}`. API: `GET` of the same path.
 Tests: `Dunning.test.tsx`, `BillingSettings.test.tsx`, `Bills.test.tsx`, the replays in
-`tests/test_ui_requests.py`.
+`tests/internal/test_ui_requests.py`.
 
 ### Payments (`ui.payments`, `ui.subscriber.payments`) - `screens/Payments.tsx`
 
@@ -936,7 +936,7 @@ for an offering that needs a number, offers **Port in the subscriber's number**:
 request (`POST /internal/v1/port/in`), then orders with the number it made; a retried order reuses
 that request. A port-in cannot be saved as a draft (the request is created when the order is
 placed). Requests are pinned in `PortRequests.test.tsx` and `SubscriberCard.test.tsx` and replayed
-in `tests/test_number_porting.py`.
+in `tests/resources/test_number_porting.py`.
 
 SIMs (issue #209, [sim.md](decisions/sim.md)): `/sims` lists the IMSI resources through TMF639
 with filters by state, type and batch (`simState`, `simType`, `batchNumber`), **Import CSV**
@@ -963,7 +963,7 @@ Add product, for a prepaid line with a SIM, has an optional **Device IMEI** fiel
 15 digits and the Luhn digit before enabling the buttons; the server checks again
 (`invalidImei`). The Products detail shows the current device from the TMF637 characteristics.
 Requests are pinned in `ProductDevice.test.tsx` and `SubscriberCard.prepaid.test.tsx` and
-replayed in `tests/test_device.py`.
+replayed in `tests/resources/test_device.py`.
 
 `make web-test`: vitest, run twice - in UTC and with `TZ=America/New_York` - so every
 request body is proven independent of the browser's zone. `make web-lint`: tsc, eslint,

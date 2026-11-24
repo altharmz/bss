@@ -296,7 +296,7 @@ describe('billing settings', () => {
 });
 
 // #386: the postpaid dunning steps. The PATCH bodies are replayed against the real API by
-// tests/test_ui_requests.py - change both together.
+// tests/internal/test_ui_requests.py - change both together.
 describe('dunning settings', () => {
   const path = '/internal/v1/dunning/settings';
   const settings = {

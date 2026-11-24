@@ -95,9 +95,9 @@ recorded below). What exists so far (slice b: b1, b2, b3; slices c, h, d, e):
   `/tmp/worker-alive`) is touched every wake-up and after every account of every path -
   scheduled, catch-up, and the retries, which have no stop checkpoint - through the
   heartbeat (`DateRun(on_account=...)`, called in `step()`; `0d463e0`), for slice f's
-  healthcheck. `tests/test_worker_heartbeat.py` proves it scaled in time (threshold 1 s,
+  healthcheck. `tests/worker/test_worker_heartbeat.py` proves it scaled in time (threshold 1 s,
   0.3 s per account, every run longer than the threshold): one heartbeat per account and
-  no gap over the threshold in all four paths; without the call all four fail. Proven on real processes on a pinned clock (`tests/test_worker_signals.py`).
+  no gap over the threshold in all four paths; without the call all four fail. Proven on real processes on a pinned clock (`tests/worker/test_worker_signals.py`).
   **Found by the SIGKILL test:** the first planner only looked at dates after the latest
   run, so a run left `running` was never resumed - fixed by resuming the earliest
   unfinished run first.
@@ -260,7 +260,7 @@ one CPU still does < 19 accounts/s.
   changed it.
 - **Results unchanged** is proven by the same digest of ABRs, bills and outcomes
   before and after on the 100k run (`loadtest/billing-digest.sql`) and by the existing
-  worker suite. The statement shape is pinned by `tests/test_worker_run_cost.py`.
+  worker suite. The statement shape is pinned by `tests/perf/test_worker_run_cost.py`.
 - **Left as is:** the savepoint around `bill_account` (a `BillingError` must undo
   the account's writes but keep its `failed` row), the `running_run FOR SHARE` per
   account, and `has_balance_ledger`'s `to_regclass` (older-schema migration tests

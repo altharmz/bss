@@ -76,15 +76,15 @@ of D executes. This makes a replayed date see exactly what the daily run saw.
 **Concurrency and guards.** `bill_account` locks the billing account row (`FOR UPDATE`)
 before reading: a concurrent second call waits, then sees the first one's ABRs and writes
 nothing (without the lock it collides on `abr_no_overlap`; proven with two connections
-in `tests/test_billing_db.py`). It only writes into a run that is `running` (re-read
+in `tests/billing/test_billing_db.py`). It only writes into a run that is `running` (re-read
 `FOR SHARE`). Any `BillingError` rolls the whole account back.
 
-**Tests.** `tests/test_billing_core.py`: the hand-checked examples (half-even 1.62 vs
-1.63, 300 x 17/31, 27/28 vs 27/29 days, refund -116.13, ...). `tests/test_billing_properties.py`
+**Tests.** `tests/billing/test_billing_core.py`: the hand-checked examples (half-even 1.62 vs
+1.63, 300 x 17/31, 27/28 vs 27/29 days, refund -116.13, ...). `tests/billing/test_billing_properties.py`
 (hypothesis, pinned exactly): idempotence, net per period = one rounding, lifetime without
 drift, refund shape, no overlap, precision/currency, bills collect every ABR exactly once,
 replay identical, daily vs one catch-up run equal in non-zero net per period. The oracle
-counts billable days one by one, independently of `app/billing`. `tests/test_billing_db.py`:
+counts billable days one by one, independently of `app/billing`. `tests/billing/test_billing_db.py`:
 the same through the adapter and the real schema, plus the TMF678 view, visibility on
 the day boundary and replay across an outage. Every rule above was broken once to see a
 test fail (half-up rounding, refund priced separately, overlapping charges, visibility `<=`,
@@ -178,11 +178,11 @@ left to "what TMF recommends" by the human. Migration `0025`. Five lines removed
 - Not in this slice (no TMF behaviour behind it, or another slice): the UI and the seed
   (the UI shows `amountDue`, now with tax), TMF622 `TaxDefinition` on order items.
 
-Tests: `tests/test_api_taxes.py` (ABR and bill lines, settlement and balance, two items
+Tests: `tests/billing/test_api_taxes.py` (ABR and bill lines, settlement and balance, two items
 per price, refund, exemptions and their validity, price views, the price rules, payment
-items and refunds), the tax cases in `tests/test_billing_core.py`,
+items and refunds), the tax cases in `tests/billing/test_billing_core.py`,
 `test_amount_and_tax_amount_split_the_total` and the refused splits in
-`tests/test_api_payment.py`, `test_0025_taxes`. Negative proofs: exemptions ignored,
+`tests/tmf/test_api_payment.py`, `test_0025_taxes`. Negative proofs: exemptions ignored,
 a refund taking back the whole tax, bills due without their taxes, a tax change not
 counted as a charge change, and a payment item allocating its `amount` alone each failed
 them (the last one only after the item test was made to exceed the bill).
@@ -240,7 +240,7 @@ offering until the day before, the new one from that day. Migration `0027`.
   (`terminationInPeriod`) when the product's known termination is before the end of
   D's billing period (a termination on the next cycle day cuts nothing and is allowed);
   cancel the delete order first. The property generator follows the rule
-  (`product_specs` takes the cycle day); `tests/test_api_order_modify.py` has the
+  (`product_specs` takes the cycle day); `tests/orders/test_api_order_modify.py` has the
   sequence end to end with the worker. Negative proof: without the rule both API tests
   fail (`[] == ['terminationInPeriod']`).
 - **`abr_no_overlap` is replaced by `abr_one_per_start`** (the human's choice,
@@ -270,14 +270,14 @@ offering until the day before, the new one from that day. Migration `0027`.
   needs `alembic downgrade 0026` by hand; it refuses while a change exists (its charges
   would no longer match a single offering) or a modify item that was not rejected.
 
-Tests: the offering-change cases in `tests/test_billing_core.py` (the three examples
+Tests: the offering-change cases in `tests/billing/test_billing_core.py` (the three examples
 above, a change plus a termination in one period, two changes in one period, a change on
 the start day, the new offering priced on the change day, one rounding per segment, a
-charge of another offering or off a segment day raising); `tests/test_billing_properties.py`
+charge of another offering or off a segment day raising); `tests/billing/test_billing_properties.py`
 now gives a product one random change under the ordering rules (the oracle splits each
 period by offering day by day and rounds once per segment): idempotence, net per
 segment = one rounding, lifetime without drift, daily vs one catch-up run, replay,
-unique first days; `tests/test_api_order_modify.py` for the adapter and API side;
+unique first days; `tests/orders/test_api_order_modify.py` for the adapter and API side;
 `test_0027_offering_changes`; `test_one_charge_per_first_day_overlaps_are_allowed`.
 Negative proofs: pricing every segment at the period's first day failed eight core and
 property tests; a change visible a day early failed

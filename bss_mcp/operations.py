@@ -5,7 +5,7 @@ body)`), so app.openapi() carries neither. This registry adds, per operation: th
 model of a write, the query parameters of a read, and a one-line note condensed from the
 API notes (scripts/docs/api-notes/, docs/api/) - the handlers mostly have no docstring.
 
-Kept honest by tests/test_mcp_tools.py (the drift check): the operations here are exactly
+Kept honest by tests/mcp/test_mcp_tools.py (the drift check): the operations here are exactly
 app.openapi()'s minus EXCLUDED and AUTH_OPERATIONS. EXCLUDED is exactly the progress
 scope's excluded API entries; AUTH_OPERATIONS keeps interactive credentials and user
 management outside MCP. Every exposed POST/PATCH names the model its handler parses

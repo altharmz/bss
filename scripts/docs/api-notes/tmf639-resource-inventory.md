@@ -27,5 +27,5 @@
   numbers under stable number locks; assignment transitions emit resource change
   events in the same transaction. Scheduled state reads follow their effective dates.
 
-Tests: `tests/test_api_resource_inventory.py`, `tests/test_api_hub.py`,
-`tests/test_mcp_tools.py`; the gap ledger locks excluded attributes and subclasses.
+Tests: `tests/resources/test_api_resource_inventory.py`, `tests/tmf/test_api_hub.py`,
+`tests/mcp/test_mcp_tools.py`; the gap ledger locks excluded attributes and subclasses.

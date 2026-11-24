@@ -49,16 +49,16 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF678-C
   **run date** of the run that wrote it (see [domain.md](../domain.md#bills)).
 - The run issues bills (new -> validated -> sent); payments and unused credit settle
   them. PATCH holds/releases a bill; remaining amounts and allocations are returned
-  (`tests/test_api_bill_settlement.py`).
+  (`tests/billing/test_api_bill_settlement.py`).
 - `billCycle` links to the issuing daily run, exposed by read-only `/billCycle` and
   `/billCycle/{cycle_id}` with standard fields/paging and a `billingDate` filter.
   A cycle's `billingPeriod` is an ISO date string; the account's monthly date range
   stays on the bill. `nextBillDate` is the next account cycle day after this bill's
-  own date, unaffected by today's clock. `tests/test_api_read_completeness.py` checks
+  own date, unaffected by today's clock. `tests/tmf/test_api_strict_inputs_and_quotes.py` checks
   links, dates, fields and MCP tools.
 - Taxes: `taxIncludedAmount` = `amountDue`; `taxExcludedAmount` is the charges before
   tax; `taxItem[]` sums the charges' tax lines per category and rate. An ABR carries
-  `appliedTax[]` and `taxIncludedAmount` (`tests/test_api_taxes.py`,
+  `appliedTax[]` and `taxIncludedAmount` (`tests/billing/test_api_taxes.py`,
   [taxes](../decisions/billing-core.md#taxes-2026-10-18)).
 - /customerBillOnDemand exposes list/retrieve/create of durable requests. The worker
   waits for a successful account run that sees orders completed on the request day,
@@ -75,7 +75,7 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF678-C
 - An ABR's `name` is its offering's, `description` what it bills (`<offering>, <first
   day> - <last day>`; a refund `refund of ...`), `characteristic` empty. Every
   `billingAccount` reference states `ratingType: postpaid`; `bill` references carry the
-  bill number as `name` (`tests/test_api_last_gaps.py`).
+  bill number as `name` (`tests/tmf/test_api_document_attributes.py`).
 - A bill names its account's customer (`relatedParty`, role `customer`), its account's
   `financialAccount` (if linked) and `defaultPaymentMethod` (as `paymentMethod`, if set).
 - A bill cycle (a daily run) states `chargeDate` = `mailingDate` = `creditDate` = its

@@ -23,7 +23,7 @@ import {
 // The E911 address of Wi-Fi calling lines (#384, docs/decisions/network.md): Add product's
 // E911 address group, the product row's address, Edit E911 address (a modify order with only
 // product.place, PIN header when typed) and the pending change until the network confirms.
-// The order bodies are replayed against the API in tests/test_e911.py
+// The order bodies are replayed against the API in tests/resources/test_e911.py
 // (test_e911_address_orders_as_the_ui_sends_them).
 
 const SERVICE = {

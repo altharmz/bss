@@ -11,7 +11,10 @@ from pathlib import Path
 import hook_selection
 
 SCRIPT = Path(__file__).with_name("hook_selection.py")
-UI_TESTS = "tests/test_order_error_codes.py,tests/test_ui_mcp_parity.py,tests/test_ui_requests.py"
+UI_TESTS = (
+    "tests/internal/test_ui_mcp_parity.py,tests/internal/test_ui_requests.py,"
+    "tests/orders/test_order_error_codes.py"
+)
 USUAL = ["test-smoke", "test-changed"]
 RECORDED_HISTORY = "test-recorded MARKS=migration_history"
 SCRIPT_SUITES = ("runtime-check", "deploy-check")
@@ -61,7 +64,7 @@ class PlanTests(unittest.TestCase):
     def test_the_scope_file_and_the_parity_script_get_only_their_readers(self):
         self.assertEqual(
             self.plan("docs/progress/scope.yaml", "scripts/ui_mcp_parity.py"),
-            ["test-files TESTS=tests/test_mcp_tools.py,tests/test_ui_mcp_parity.py"],
+            ["test-files TESTS=tests/internal/test_ui_mcp_parity.py,tests/mcp/test_mcp_tools.py"],
         )
 
     def test_what_no_backend_test_depends_on_plans_no_backend_test(self):
@@ -87,7 +90,7 @@ class PlanTests(unittest.TestCase):
             "app/api/bills.py",
             "bss_mcp/server.py",
             "tests/conftest.py",
-            "tests/test_seed.py",
+            "tests/ops/test_seed.py",
             "alembic.ini",
             ".env.example",
             "app/README.md",
@@ -146,7 +149,12 @@ class PlanTests(unittest.TestCase):
         )
 
     def test_other_paths_bring_no_marked_test_back(self):
-        for path in ("app/billing.py", "tests/test_seed.py", "tests/conftest.py", "alembic.ini"):
+        for path in (
+            "app/billing.py",
+            "tests/ops/test_seed.py",
+            "tests/conftest.py",
+            "alembic.ini",
+        ):
             with self.subTest(path):
                 self.assertNotIn("MARKS", " ".join(self.plan(path)))
 

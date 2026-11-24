@@ -45,7 +45,7 @@ hypothesis.settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "dev"))
 # Captured at import: the `api` fixture points settings.database_url at the test database,
 # and creating or dropping databases must not connect to the one being dropped.
 ADMIN_URL = settings.database_url
-# no log-level poller thread in the lifespan of every TestClient (tests/test_log_level.py
+# no log-level poller thread in the lifespan of every TestClient (tests/ops/test_log_level.py
 # drives LevelPoller itself)
 settings.log_poll_seconds = 0
 
@@ -153,10 +153,10 @@ def pytest_runtest_logfinish(nodeid, location) -> None:
 LEFT_OUT = ("migration_history", "slow")
 KEPT_REPLAYS = frozenset(
     {
-        "tests/test_migrations.py::test_alembic_upgrade_head_on_clean_database",
-        "tests/test_migrations.py::test_alembic_downgrade_then_upgrade_roundtrip",
-        "tests/test_migrations.py::test_migration_drill_rejects_an_unknown_mode",
-        "tests/test_worker_round_trips.py::"
+        "tests/schema/test_migrations.py::test_alembic_upgrade_head_on_clean_database",
+        "tests/schema/test_migrations.py::test_alembic_downgrade_then_upgrade_roundtrip",
+        "tests/schema/test_migrations.py::test_migration_drill_rejects_an_unknown_mode",
+        "tests/perf/test_worker_round_trips.py::"
         "test_an_older_schema_is_asked_again_and_a_later_migration_is_seen",
     }
 )
@@ -372,7 +372,7 @@ def install_test_user(conn):
 
 @pytest.fixture(autouse=True)
 def _no_service_address_gate(monkeypatch) -> None:
-    """Most tests buy prepaid lines on accounts without an address; tests/test_tax_engine.py
+    """Most tests buy prepaid lines on accounts without an address; tests/billing/test_tax_engine.py
     turns the gate (BSS_TAX_REQUIRE_SERVICE_ADDRESS, on by default) back on."""
     monkeypatch.setattr(settings, "tax_require_service_address", False)
 
@@ -380,7 +380,7 @@ def _no_service_address_gate(monkeypatch) -> None:
 @pytest.fixture(autouse=True)
 def _no_account_pin_gate(monkeypatch) -> None:
     """Most tests swap SIMs, change numbers and edit contacts without a PIN;
-    tests/test_account_security.py turns the gate (BSS_ACCOUNT_PIN_REQUIRED, on by default)
+    tests/care/test_account_security.py turns the gate (BSS_ACCOUNT_PIN_REQUIRED, on by default)
     back on."""
     monkeypatch.setattr(settings, "account_pin_required", False)
 

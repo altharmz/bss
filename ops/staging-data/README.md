@@ -3,7 +3,7 @@
 Dry-run-first scripts that fix the data of the deployed demo stand
 (data-quality items D1-D5 of epic #43). **The human runs them**; a
 session never does, and tests run them only against a local throwaway database
-(`tests/test_staging_data.py`).
+(`tests/ops/test_staging_data.py`).
 
 They talk HTTP to a base URL and sign in as the UI does. Credentials come from your shell,
 never from a file:

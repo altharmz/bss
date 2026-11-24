@@ -6,7 +6,7 @@ resolves the path argument through the file's string constants (and exported one
 the other files), expands `X[kind]` over every value of the map X, and turns each
 remaining `${...}` into `{}`. A call whose path cannot be resolved is returned in
 `unresolved` and the test fails on it, so a new indirection cannot hide a call.
-Used by tests/test_ui_mcp_parity.py (docs/decisions/tracking.md).
+Used by tests/internal/test_ui_mcp_parity.py (docs/decisions/tracking.md).
 """
 
 import itertools

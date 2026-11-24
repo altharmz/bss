@@ -2,7 +2,7 @@
 
 Vendored, unmodified copies of the official TM Forum Open API definitions this project
 follows. They are the source of truth for every TMF-derived Postgres enum; a test
-(`tests/test_enum_lock.py`) parses these files and compares them with `pg_enum`.
+(`tests/schema/test_enum_lock.py`) parses these files and compares them with `pg_enum`.
 
 All files come from the [tmforum-apis](https://github.com/tmforum-apis) GitHub org, pinned
 to the commit below, and are licensed under the **Apache License 2.0** (per each repo's
@@ -14,7 +14,7 @@ Three checks, which prove different things:
   from the GitHub API at the pinned commit and compares it with the SHAs recorded under
   "Upstream blob SHAs". This is the check that ties the recorded SHAs to upstream. It
   needs the network, so it is not part of `make test`; run it after re-vendoring.
-- **Files vs README** - `tests/test_spec_provenance.py` recomputes the blob SHA of every
+- **Files vs README** - `tests/tmf/test_spec_provenance.py` recomputes the blob SHA of every
   local file and compares it with the recorded one. It runs offline in `make test` and
   only ties the files to this README, not to upstream.
 - **Later tampering** - `sha256sum -c SHA256SUMS` detects a file that changed after it was

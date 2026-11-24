@@ -22,7 +22,7 @@ another contact type) clears it. No new endpoint.
 rejected with the TMF622 error `serviceAddressRequired` (the order's
 `productOrderErrorMessage`, as the other prepaid acceptance rules). The check is
 `BSS_TAX_REQUIRE_SERVICE_ADDRESS` (default true; the test suite turns it off except in
-`tests/test_tax_engine.py`, so the older prepaid tests need no address).
+`tests/billing/test_tax_engine.py`, so the older prepaid tests need no address).
 
 **Existing accounts** keep the old behaviour until an address is set: no address, no
 engine, the flat tax of the price, for new purchases only when the check is off and for

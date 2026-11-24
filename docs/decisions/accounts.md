@@ -177,7 +177,7 @@ is taken on POST and PATCH and returned; TMF666 has no gap lines left. The three
 - **MCP:** the request models carry `relatedParty` and the documents as untyped fields
   with descriptions; the tool texts say what changes when.
 
-Tests: `tests/test_api_account_attributes.py` (the spec attributes locked to the
+Tests: `tests/tmf/test_api_account_attributes.py` (the spec attributes locked to the
 documents, round trips, defaults, ratingType in orders, anchor changes and their 409/422,
 the spec's JSON Patch example, cycle offsets), `test_0023_account_details`, the
 FinancialAccounts UI test (owner after a contact), the gap lock. Negative proofs: without
@@ -210,7 +210,7 @@ it replaces "UI: read-only" above. `api/financial.ts`, `screens/FinancialForms.t
   empty. DELETE with no body, then the Subscribers list. A 409 shows "... - close it instead".
 - Tests: `FinancialAccounts.test.tsx` (create, edit, owner refusal, delete availability and
   body), `SubscriberCard.test.tsx` (link, unlink, 422, delete offered/hidden per resource, prepaid,
-  409) and `tests/test_ui_requests.py::test_financial_account_writes_and_links_as_the_ui_sends_them`.
+  409) and `tests/internal/test_ui_requests.py::test_financial_account_writes_and_links_as_the_ui_sends_them`.
 - Deviations: Delete is a header button, not a menu item (the header has no menu); the card now
   loads charges and transactions itself and passes them to the history panels (same requests).
   The existing `editBackend` test helper stubs the new financial-accounts list (TEST-CHANGE).
@@ -228,7 +228,7 @@ plus None); changing the owner resets it to None, so a stale link to the old own
 Create sends `financialAccount` only when chosen; edit sends it (a ref or `null`) only when changed.
 - Tests: `PartyAccounts.test.tsx` (lists, both creates with their `@type`, edit/link/unlink bodies,
   owner change with the server's 422, deletes) and
-  `tests/test_ui_requests.py::test_party_and_settlement_account_writes_as_the_ui_sends_them`.
+  `tests/internal/test_ui_requests.py::test_party_and_settlement_account_writes_as_the_ui_sends_them`.
 - Deviations: none. The sidebar label and heading tests of the financial screen changed to
   "Accounts" (TEST-CHANGE).
 
@@ -245,7 +245,7 @@ screen loaded name the setting. The subscriber Edit form gets a Billing group; `
 list, the built-in cycle is `{id: monthly}`).
 - Tests: `BillingSettings.test.tsx` (lists, read-only built-in, delete hidden when used, bodies for the
   three resources, the server's 409), `SubscriberCard.test.tsx` (billStructure selection, clear, 422)
-  and `tests/test_ui_requests.py::test_billing_settings_writes_and_bill_structure_as_the_ui_sends_them`.
+  and `tests/internal/test_ui_requests.py::test_billing_settings_writes_and_bill_structure_as_the_ui_sends_them`.
 - Deviations: a bill format's name is a select of the two values the API accepts
   (`FormatCreate`), not free text. The existing `editBackend` helper stubs the three new lists
   (TEST-CHANGE); the sidebar link lists in `App.test.tsx` gained `/billing-settings`.
@@ -336,7 +336,7 @@ lock expiry, and counting the carrier's wrong Number Transfer PINs.
 
 ## Tests
 
-`tests/test_account_security.py`: PIN stored hashed and in no response, log or audit row, format
+`tests/care/test_account_security.py`: PIN stored hashed and in no response, log or audit row, format
 and reason; per action (SIM swap, number change, Number Transfer PIN, contact change on a party,
 customer and billing account) refusal without, with a wrong PIN and with no PIN set, acceptance
 with the right one and exactly one audit entry; draft submission; the switch off; lockout and its

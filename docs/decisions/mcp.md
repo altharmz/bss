@@ -51,7 +51,7 @@ Decisions as taken (plan D1-D6 agreed with the human):
 - **Stateless Streamable HTTP with JSON responses**: no SSE, no sessions to keep in a
   1-vCPU container.
 - **operationId = the handler's function name (D1)**: `generate_unique_id_function` in
-  `app/main.py`; `tests/test_operation_ids.py` keeps them unique, `^[a-z0-9_]+$` and at
+  `app/main.py`; `tests/tmf/test_operation_ids.py` keeps them unique, `^[a-z0-9_]+$` and at
   most 64 characters (clients' tool-name limit). `/openapi.json` changes with it; it was
   never the contract (the vendored specs are).
 - **Scope enforcement before the SDK**: `Guard` reads a `tools/call` and answers a write
@@ -249,7 +249,7 @@ the plan still asked for.
   the first answer; same key, other body: 409). The schema is 1-255 visible ASCII, so a
   malformed key is refused before the app. No key means no journal, as over HTTP. The
   journal is scoped by operator, and the connector's operator is `mcp:<token name>`.
-  Any new journaled POST must set `idempotent=True` (tests/test_mcp_prepaid.py pins the
+  Any new journaled POST must set `idempotent=True` (tests/mcp/test_mcp_prepaid.py pins the
   list). It is optional, not required: the API does not require it either.
 - **Decimal strings** needed nothing new: the TMF654 amounts are `Quantity` strings and a
   JSON number with a fraction is already refused by the connector.

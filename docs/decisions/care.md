@@ -108,5 +108,5 @@ it. MCP tools: list, get, create, patch for both resources and the hubs; the res
 are allowlisted in the UI/MCP parity check until the UI issue; the hubs are on the
 Integrations screen.
 
-Tests: `tests/test_care.py`; the gap lock records the deliberate exclusions above as
+Tests: `tests/care/test_care.py`; the gap lock records the deliberate exclusions above as
 accepted deviations.

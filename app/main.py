@@ -30,7 +30,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 # operationId = the handler's function name (e.g. create_payment), not FastAPI's
 # name+path+method: the MCP connector names its tools after it, and clients cap tool
-# names at 64 characters (tests/test_operation_ids.py).
+# names at 64 characters (tests/tmf/test_operation_ids.py).
 app = FastAPI(
     title="bss",
     version="0.1.0",

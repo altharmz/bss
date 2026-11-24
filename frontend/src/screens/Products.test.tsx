@@ -5,7 +5,7 @@ import { expectUi } from '../test/expectUi';
 import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } from '../test/fetch';
 
 // The global Products screen (slice 21). Reads only: the query strings asserted here are
-// replayed against the real API by tests/test_ui_requests.py - change both together.
+// replayed against the real API by tests/internal/test_ui_requests.py - change both together.
 
 const PRODUCTS = '/tmf-api/productInventory/v5/product';
 const NUMBERS = '/tmf-api/resourceInventory/v5/resource';

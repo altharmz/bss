@@ -38,7 +38,7 @@ see the [documentation count rule](harness.md#documentation-no-hand-written-coun
 `scripts/ui_mcp_parity.py` scans `frontend/src` (no tests, no `generated/`) for every
 `getJson`/`getAll`/`getPage`/`postJson`/`patchJson`/`request('METHOD', ...)` call and
 resolves its path through constants, maps, single-return helpers, ternaries and local
-`const`s, turning `${...}` into `{}` (a text scan, not a parser). `tests/test_ui_mcp_parity.py`
+`const`s, turning `${...}` into `{}` (a text scan, not a parser). `tests/internal/test_ui_mcp_parity.py`
 fails for (a) an MCP operation (API operations minus scope exclusions and auth operations)
 with no matching (method, path) UI call and no line in `tests/ui-mcp-allowlist.txt`, (b) a
 UI call whose path cannot be resolved, and (c) a stale, unknown or reasonless allowlist

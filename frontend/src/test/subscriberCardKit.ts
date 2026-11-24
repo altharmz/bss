@@ -248,7 +248,7 @@ export function productRow(name: string): HTMLElement {
 }
 
 // Edit subscriber: only what changed is patched, party -> customer -> account. The bodies
-// are replayed against the real API by tests/test_ui_requests.py.
+// are replayed against the real API by tests/internal/test_ui_requests.py.
 export const PARTY_ID = 'dddd4444-0000-4000-8000-000000000004';
 export const PARTY_URL = `/tmf-api/partyManagement/v5/individual/${PARTY_ID}`;
 export const CUSTOMER_URL = `/tmf-api/customer/v5/customer/${C}`;

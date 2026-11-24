@@ -1,4 +1,4 @@
-"""The only place in app/ allowed to read the wall clock (enforced by tests/test_clock.py).
+"""The only place in app/ allowed to read the wall clock (enforced by tests/ops/test_clock.py).
 
 Everything time-dependent receives a Clock, or a `now`/`today` value derived from one, so
 tests can pin time with FixedClock.
