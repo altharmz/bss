@@ -1,0 +1,11 @@
+export interface CheckboxProps {
+  checked?: boolean;
+  defaultChecked?: boolean;
+  onChange?: (checked: boolean) => void;
+  label?: React.ReactNode;
+  disabled?: boolean;
+  /** Strike through label when checked (checklists) */
+  strike?: boolean;
+  style?: React.CSSProperties;
+}
+export declare function Checkbox(props: CheckboxProps): JSX.Element;
