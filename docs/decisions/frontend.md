@@ -991,6 +991,7 @@ and nothing checked that a screen was in the menu exactly once.
   | Billing | Billing runs (`/billing-runs`, failed badge) | internal | `billing_run`, `billing_run_account` |
   | | Bills (`/bills`) | TMF678 customerBill | `customer_bill`, `applied_customer_billing_rate` |
   | | Payments (`/payments`) | TMF676 payment, refund | `payment`, `refund`, `bill_allocation` |
+  | | Dunning (`/dunning`, #386) | internal (postpaid dunning) | `dunning_setting`, `dunning_step` |
   | | Billing settings (`/billing-settings`) | TMF678 billingCycleSpecification, billFormat, billPresentationMedia | `billing_cycle_specification`, `bill_format`, `bill_presentation_media` |
   | Prepaid | Balances (`/balances`) | TMF654 bucket, accumulatedBalance, top-up, adjust, reserve, transfer | `prepaid_bucket`, `balance_action` |
   | | Prepaid commands (`/prepaid-commands`, failed badge) | internal | `prepaid_command` |
@@ -1094,3 +1095,26 @@ The UI of the E911 address of Wi-Fi calling lines (#201); screens in
   the same place the server puts a copied `street2`. Country is always US.
 - **Markers:** `ui.subscriber.e911.edit` is the menu item and `ui.subscriber.e911.form` the
   dialog, as the issue names them.
+
+## Bill PDFs, delivery and dunning UI (2026-11-24, issue #386)
+
+The UI of the bill PDFs and email delivery (#202) and of postpaid dunning (#385); screens in
+[ui.md](../ui.md#dunning-uidunning-uibillingsettingsdunning-uisubscriberdunning---screensdunningtsx-screensdunningsettingstsx).
+
+- **The PDF link comes from the bill detail:** `GET /internal/v1/customerBill/{id}` gains `pdf`
+  (the billDocument url and size, or null), read with the same statement as the TMF678 list's
+  size, so the dialog never builds a url the server may answer with 404 (a legacy bill).
+- **Delivery is read from TMF681:** the message list takes `attachment.id` = `{bill id}-pdf`, the
+  id the bill email's attachment already carries, mapped to `customer_bill_id`. The UI sends it
+  with `billingAccount.id`, so the account index narrows the scan; no index or migration for one
+  dialog read. The newest email decides the line (a resend is newer).
+- **Dunning is a Billing item and a Billing settings tab:** its settings are postpaid billing
+  configuration, unlike the prepaid lifecycle (#414), so they are the fourth Billing settings tab,
+  and the list is its own screen after Payments.
+- **The card's dunning panel is in the Bills tab** of postpaid accounts, where Record payment
+  and the overdue bills are; it loads with the card (one cheap read). The component tests'
+  `stubFetch` answers "not in dunning" and "not emailed" by default, as for the payment panel.
+- **Exemption is a confirmed checkbox:** the checkbox shows the server's value and a click opens
+  the confirmation with an optional audited reason; only the saved answer changes it.
+- **Markers:** as the issue names them, plus `ui.subscriber.dunning.exemptConfirm` (the dialog)
+  and `ui.dunning.previous|next` (paging).

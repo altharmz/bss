@@ -251,6 +251,8 @@ items:
   - {id: ui.billingSettings.media.edit, area: ui, stage: 5, title: "Edit a presentation medium"}
   - {id: ui.billingSettings.media.delete, area: ui, stage: 5, title: "Delete a presentation medium no loaded account uses"}
   - {id: ui.billingSettings.media.confirmDelete, area: ui, stage: 5, title: "Confirm deleting a presentation medium"}
+  - {id: ui.billingSettings.dunning, area: ui, stage: 5, title: "Billing settings: Dunning tab with the reminder and suspension days and the minimum past due (issue 386)"}
+  - {id: ui.billingSettings.dunning.form, area: ui, stage: 5, title: "Edit dunning settings: errors at the field, only changed fields sent, the minimum as an exact amount (issue 386)"}
   - {id: ui.subscriber.billingGroup, area: ui, stage: 5, title: "Billing group of the subscriber Edit form (billStructure)"}
   - {id: ui.subscriber.cycleSpecification, area: ui, stage: 5, title: "Select a billing cycle specification in the subscriber Edit form"}
   - {id: ui.subscriber.billFormat, area: ui, stage: 5, title: "Select a bill format in the subscriber Edit form"}
@@ -631,6 +633,14 @@ items:
   - {id: ui.bills.rateDetail.taxLines, area: ui, stage: 5, title: "Tax lines of a charge (category, jurisdiction, rate, amount) in the rate detail and the prepaid renewal history"}
   - {id: ui.bills.multiLineDiscount, area: ui, stage: 5, title: "Multi-line discount on a rate line of a bill (issue 380)"}
   - {id: ui.bills.rateDetail.multiLineDiscount, area: ui, stage: 5, title: "Multi-line discount in the rate detail dialog (issue 380)"}
+  - {id: ui.bills.pdf, area: ui, stage: 5, title: "Bill dialog: the PDF link, opening the billDocument url in a new tab (issue 386)"}
+  - {id: ui.bills.delivery, area: ui, stage: 5, title: "Bill dialog: whether the bill was emailed, with the newest bill email's state from the message list (issue 386)"}
+  - {id: ui.dunning, area: ui, stage: 5, title: "Dunning screen (/dunning, under Billing): accounts in dunning with a last-step filter, and the deactivation candidates (issue 386)"}
+  - {id: ui.dunning.previous, area: ui, stage: 5, title: "Dunning: previous page"}
+  - {id: ui.dunning.next, area: ui, stage: 5, title: "Dunning: next page"}
+  - {id: ui.subscriber.dunning, area: ui, stage: 5, title: "Postpaid subscriber card: the dunning panel with O, the amount past due, steps taken and next step (issue 386)"}
+  - {id: ui.subscriber.dunning.exempt, area: ui, stage: 5, title: "Exempt from dunning toggle on the postpaid card (issue 386)"}
+  - {id: ui.subscriber.dunning.exemptConfirm, area: ui, stage: 5, title: "Confirm a dunning exemption or its end, with an optional audited reason (issue 386)"}
   - {id: ui.payments, area: ui, stage: 5, title: "Payments screen: payments and refunds tabs with status, account and date filters"}
   - {id: ui.payments.previous, area: ui, stage: 5, title: "Payments: previous page of newer rows"}
   - {id: ui.payments.next, area: ui, stage: 5, title: "Payments: next page of older rows"}

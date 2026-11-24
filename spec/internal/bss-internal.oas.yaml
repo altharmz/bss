@@ -2181,7 +2181,7 @@ components:
       additionalProperties: false
       required: [id, href, billNo, billingAccount, billDate, period, paymentDueDate, amountDue,
                  remainingAmount, state, category, overdue, allowedStates, charges, sources,
-                 history]
+                 history, pdf]
       properties:
         id: {type: string, format: uuid}
         href: {type: string}
@@ -2251,6 +2251,17 @@ components:
               changedAt: {type: string, format: date-time}
               cause: {type: string, enum: [run, payment, operator]}
               operator: {type: string, nullable: true}
+        pdf:
+          description: >-
+            The bill's PDF (the TMF678 billDocument entry: its url and size in bytes), or
+            null for a bill without one (issued before the PDFs, or a prepaid posting).
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [url, size]
+          properties:
+            url: {type: string}
+            size: {type: integer, minimum: 0}
     FirstCharge:
       type: object
       additionalProperties: false

@@ -108,6 +108,12 @@ export const NAV: NavSection[] = [
         tmf: 'TMF676 payment, refund',
       },
       {
+        label: 'Dunning',
+        href: '/dunning',
+        routes: ['dunning'],
+        tmf: 'internal (postpaid dunning)',
+      },
+      {
         label: 'Billing settings',
         href: '/billing-settings',
         routes: ['billingSettings'],

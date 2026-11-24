@@ -66,6 +66,7 @@ const DETAIL = {
   charges: [],
   sources: [],
   history: [],
+  pdf: null,
 };
 
 function backend(routes: Record<string, Handler>) {

@@ -763,6 +763,41 @@ on the card), whose **Related** section (`ui.bills.links`) has **Bill cycle** (`
 due) with the same date filter and a detail dialog. API: `GET .../customerBillManagement/v5/customerBill|billCycle|
 appliedCustomerBillingRate`.
 
+### Bill PDF and delivery (`ui.bills.pdf`, `ui.bills.delivery`) - `screens/Bills.tsx`
+
+Issue #386. The bill dialog (on the card and on the Bills screen) opens with a line holding
+the **PDF** link, which opens the bill's TMF678 `billDocument` url in a new tab (`pdf` in
+`GET /internal/v1/customerBill/{id}`, url and size; a bill issued before the PDFs says "No
+PDF"), and the delivery: the newest email that carried the bill's PDF with its state (queued,
+sending, sent, failed, cancelled), time and reason, and how many emails there were (resends),
+or "Not emailed". It reads `GET .../communicationMessage?billingAccount.id=&attachment.id={bill
+id}-pdf&offset=0&limit=5`; a failed read offers Retry. Tests: `Bills.test.tsx`.
+
+### Dunning (`ui.dunning`, `ui.billingSettings.dunning`, `ui.subscriber.dunning`) - `screens/Dunning.tsx`, `screens/DunningSettings.tsx`
+
+Issue #386 ([dunning.md](decisions/dunning.md)). Route `/dunning`, sidebar Billing > Dunning:
+tabs **In dunning** (a **Last step** filter on the server: No step yet, First reminder, Second
+reminder, Suspended) and **Deactivation candidates** (suspended more than 60 days; ended by an
+operator). Columns: subscriber (link to the card's Bills tab), overdue since (O), past due, last
+step (with a Candidate tag), suspended since; oldest O first, paged with Previous/Next
+(`ui.dunning.previous|next`). API: `GET /internal/v1/dunning/accounts?step=&deactivationCandidate=true`.
+
+Billing settings has a **Dunning** tab (`ui.billingSettings.dunning`): the days after O of the
+first reminder, the second reminder and the suspension, the minimum past due (in the system
+currency) and when they last changed. **Edit dunning settings** (`.form`) shows its errors at
+the field (whole days 0-365, each step later than the one before, an amount of 0 or more with
+at most 2 decimals) and sends only the changed fields in `PATCH /internal/v1/dunning/settings`,
+the minimum as an exact number token; the server's refusal shows in the footer.
+
+The postpaid card's Bills tab starts with the **Dunning** panel (`ui.subscriber.dunning`): in
+dunning since O with the amount past due, the steps taken and the next step with their dates, or
+"Not in dunning"; an Exempt tag and the number of lines suspended by dunning. **Exempt from
+dunning** (`.exempt`) is a checkbox that stays as the server says until the confirmation
+(`.exemptConfirm`, an optional reason recorded in the account audit) is saved: `PATCH
+/internal/v1/billingAccount/{id}/dunning` `{exempt, reason?}`. API: `GET` of the same path.
+Tests: `Dunning.test.tsx`, `BillingSettings.test.tsx`, `Bills.test.tsx`, the replays in
+`tests/test_ui_requests.py`.
+
 ### Payments (`ui.payments`, `ui.subscriber.payments`) - `screens/Payments.tsx`
 
 Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.

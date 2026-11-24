@@ -102,7 +102,7 @@ Internal API (`app/internal/dunning.py`, `spec/internal/bss-internal.oas.yaml`),
 - `PATCH /internal/v1/billingAccount/{id}/dunning` `{exempt, reason?}`: postpaid only (422), an
   audit row on a change, none when the value is the same.
 
-The UI is #386: the five tools are on the UI/MCP parity allowlist until then.
+The UI is #386 ([frontend.md](frontend.md#bill-pdfs-delivery-and-dunning-ui-2026-11-24-issue-386)): the Dunning screen, the Billing settings tab and the card's panel call all five, so they left the parity allowlist.
 
 ## Tests
 

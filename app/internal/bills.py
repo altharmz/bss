@@ -4,6 +4,8 @@ Everything TMF678 has, plus what it cannot carry: the charges on the bill, every
 that paid it (payments and credit notes, automatic or explicit), its state history, and
 the states an operator may set now (`allowedStates`, from the same rule PATCH applies) -
 so the UI never re-implements the hold/release rules (docs/archive/bill-lifecycle-design.md 6.5).
+`pdf` is the bill's PDF (url and size, the TMF678 billDocument entry) or null for a bill
+without one (issued before migration 0086, or a prepaid posting): the dialog's PDF link (#386).
 """
 
 from fastapi import APIRouter, Request
@@ -16,7 +18,7 @@ from app.api.inventory import product_href
 from app.api.tmfjson import TmfJSONResponse
 from app.billing import settlement
 from app.internal.context import BASE, no_query
-from app.repository import billing
+from app.repository import bill_documents, billing
 
 router = APIRouter(prefix=BASE)
 
@@ -70,6 +72,7 @@ def bill_detail(bill_id: str, request: Request, tx: Tx, clock: ClockDep) -> TmfJ
             }
             for s in billing.bill_sources(conn, row["id"])
         ]
+        pdf_size = bill_documents.sizes(conn, [row["id"]]).get(row["id"])
         history = [
             {
                 "fromState": h["from_state"],
@@ -101,5 +104,8 @@ def bill_detail(bill_id: str, request: Request, tx: Tx, clock: ClockDep) -> TmfJ
             "charges": charges,
             "sources": sources,
             "history": history,
+            "pdf": None
+            if pdf_size is None
+            else {"url": tmf_bill.pdf_href(row["id"]), "size": pdf_size},
         }
     )

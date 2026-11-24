@@ -36,6 +36,7 @@ export type Route =
   | { name: 'parties' }
   | { name: 'billingSettings' }
   | { name: 'payments' }
+  | { name: 'dunning' }
   | { name: 'bills' }
   | { name: 'wholesale'; invoiceId?: string }
   | { name: 'balances' }
@@ -75,6 +76,7 @@ export function parseRoute(path: string): Route {
   }
   if (path === '/settings/logging' || path === '/settings/logging/') return { name: 'logging' };
   if (path === '/payments' || path === '/payments/') return { name: 'payments' };
+  if (path === '/dunning' || path === '/dunning/') return { name: 'dunning' };
   if (path === '/bills' || path === '/bills/') return { name: 'bills' };
   if (path === '/wholesale' || path === '/wholesale/') return { name: 'wholesale' };
   const invoice = /^\/wholesale\/([0-9a-fA-F-]{36})\/?$/.exec(path);
@@ -131,6 +133,8 @@ export function hrefOf(route: Exclude<Route, { name: 'notFound' }>): string {
       return '/billing-settings';
     case 'payments':
       return '/payments';
+    case 'dunning':
+      return '/dunning';
     case 'bills':
       return '/bills';
     case 'wholesale':

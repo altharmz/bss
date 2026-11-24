@@ -172,6 +172,8 @@ Slice 1 of postpaid for the MVNO (epic #182); dunning is #385, the UI #386. Deci
   retries. The real provider is #203.
 - **TMF681:** a bill email lists the PDF in `attachment` (by `url`, `attachmentType` bill); an
   operator's POST with `attachment` is still a 422.
+  **#386:** the message list filters on `attachment.id` (`{bill id}-pdf`), and the internal bill
+  detail carries `pdf` (url and size, or null): the bill dialog's PDF link and delivery line.
 - **Tests:** `tests/test_bill_pdf.py` (text read back with `pypdf` 7.1.1, dev only: bill number,
   total, amount due after a payment applied at issue, every charge name, the due date; summary vs
   detailed; not rewritten by a rename or the next run; immutability trigger; render failure fails

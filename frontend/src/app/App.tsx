@@ -8,6 +8,7 @@ import { ProductsScreen } from '../screens/Products';
 import { PrepaidCommandsScreen } from '../screens/PrepaidCommands';
 import { CatalogScreen } from '../screens/Catalog';
 import { PaymentsScreen } from '../screens/Payments';
+import { DunningScreen } from '../screens/Dunning';
 import { BalancesScreen } from '../screens/Balances';
 import { BillsScreen } from '../screens/GlobalBills';
 import { PartiesScreen } from '../screens/Parties';
@@ -85,6 +86,8 @@ function Screen() {
       return <LoggingSettingsScreen />;
     case 'payments':
       return <PaymentsScreen />;
+    case 'dunning':
+      return <DunningScreen />;
     case 'bills':
       return <BillsScreen />;
     case 'wholesale':

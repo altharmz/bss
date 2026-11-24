@@ -53,10 +53,3 @@ get_trouble_ticket: the Cases tab and screen are the UI half of issue 199
 create_trouble_ticket: opening a case; the UI action is the UI half of issue 199
 patch_trouble_ticket: working a case; the UI action is the UI half of issue 199
 get_hub_ticket: the internal eventSubscription list covers every hub
-
-# Postpaid dunning (#385): its screens are issue 386 (202c).
-get_dunning_settings: the dunning settings screen is issue 386 (202c)
-patch_dunning_settings: the dunning settings screen is issue 386 (202c)
-list_dunning_accounts: the dunning list screen is issue 386 (202c)
-get_account_dunning: the subscriber card's dunning panel is issue 386 (202c)
-patch_account_dunning: the dunning exemption action is issue 386 (202c)

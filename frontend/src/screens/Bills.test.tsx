@@ -110,6 +110,7 @@ function detail(over: Record<string, unknown> = {}) {
         operator: null,
       },
     ],
+    pdf: { url: `${BILL}/${B2}/document.pdf`, size: 45_000 },
     ...over,
   };
 }
@@ -291,6 +292,222 @@ describe('bills on the subscriber card', () => {
     expect(within(dialog).getByText('Total', { exact: true })).toBeTruthy();
     expect(within(dialog).getByText('Remaining', { exact: true })).toBeTruthy();
     expect(within(dialog).queryByText('Amount due')).toBeNull();
+  });
+});
+
+// #386: the bill dialog's PDF link and delivery line
+const DELIVERY = `GET /tmf-api/communicationManagement/v4/communicationMessage?billingAccount.id=${A}&attachment.id=${B2}-pdf&offset=0&limit=5`;
+
+function email(id: string, over: Record<string, unknown> = {}) {
+  return {
+    id,
+    state: 'completed',
+    messageType: 'Email',
+    subject: 'Your bill BL-B2000002',
+    content: 'Your bill',
+    receiver: [{ email: 'olga@example.org' }],
+    sendTime: '2026-09-01T06:00:00Z',
+    sendTimeComplete: '2026-09-01T06:00:05Z',
+    characteristic: [{ name: 'event', value: 'bill_issued' }],
+    '@type': 'CommunicationMessage',
+    ...over,
+  };
+}
+
+async function openBill() {
+  await open();
+  fireEvent.click(await waitFor(() => billRow('BL-B2000002')));
+  return screen.findByRole('dialog', { name: 'Bill BL-B2000002' });
+}
+
+describe('bill PDF and delivery', () => {
+  it('links the PDF in a new tab and shows the email that carried it', async () => {
+    const { calls } = backend({ [DELIVERY]: () => json([email('m1')]) });
+    const dialog = await openBill();
+    const link = within(dialog).getByRole('link', { name: 'PDF (44 KB)' });
+    expect(link).toBe(expectUi('ui.bills.pdf'));
+    expect(link.getAttribute('href')).toBe(`${BILL}/${B2}/document.pdf`);
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+    const delivery = expectUi('ui.bills.delivery');
+    await waitFor(() =>
+      expect(delivery.textContent).toBe('Email to olga@example.org: sent · 2026-09-01 09:00'),
+    );
+    expect(calls).toContain(DELIVERY);
+  });
+
+  it('shows the newest of several emails, why it failed, and how many there were', async () => {
+    backend({
+      [DELIVERY]: () =>
+        json([
+          email('m2', {
+            state: 'failed',
+            sendTimeComplete: undefined,
+            sendTime: undefined,
+            characteristic: [{ name: 'lastError', value: 'mailbox full' }],
+          }),
+          email('m1'),
+        ]),
+    });
+    await openBill();
+    const delivery = expectUi('ui.bills.delivery');
+    await waitFor(() =>
+      expect(delivery.textContent).toBe(
+        'Email to olga@example.org: failed (mailbox full) · 2 emails',
+      ),
+    );
+  });
+
+  it('says when a bill has no PDF and was not emailed', async () => {
+    backend({ [`GET /internal/v1/customerBill/${B2}`]: () => json(detail({ pdf: null })) });
+    const dialog = await openBill();
+    expect(within(dialog).getByText('No PDF (issued before bill documents)')).toBeTruthy();
+    expect(within(dialog).queryByRole('link', { name: /PDF/ })).toBeNull();
+    await waitFor(() => expect(expectUi('ui.bills.delivery').textContent).toBe('Not emailed'));
+  });
+
+  it('retries a failed delivery read', async () => {
+    let reads = 0;
+    backend({
+      [DELIVERY]: () => (++reads === 1 ? tmfError(503, 'Unavailable') : json([email('m1')])),
+    });
+    const dialog = await openBill();
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Retry' }));
+    await waitFor(() =>
+      expect(expectUi('ui.bills.delivery').textContent).toContain('Email to olga@example.org'),
+    );
+  });
+});
+
+// #386: the postpaid card's dunning panel and the exemption. The PATCH bodies are replayed
+// against the real API by tests/test_ui_requests.py - change both together.
+const DUNNING = `${INTERNAL}/dunning`;
+const IN_DUNNING = {
+  billingAccount: { id: A, name: 'Olga Kuznetsova' },
+  exempt: false,
+  inDunning: true,
+  overdueSince: '2026-09-01',
+  overdueAmount: usd(300),
+  stepsTaken: [
+    { step: 'reminder1', date: '2026-09-02' },
+    { step: 'reminder2', date: '2026-09-08' },
+  ],
+  nextStep: { step: 'suspend', date: '2026-09-15' },
+  suspendedProducts: [],
+};
+
+describe('dunning panel', () => {
+  it('shows O, the amount past due, the steps taken and the next step', async () => {
+    backend({ [`GET ${DUNNING}`]: () => json(IN_DUNNING) });
+    await open();
+    const section = await waitFor(() => expectUi('ui.subscriber.dunning'));
+    await within(section).findByText('In dunning since 2026-09-01');
+    expect(within(section).getByText('300.00')).toBeTruthy();
+    expect(within(section).getByText('First reminder')).toBeTruthy();
+    expect(within(section).getByText('2026-09-02')).toBeTruthy();
+    expect(within(section).getByText('Second reminder')).toBeTruthy();
+    expect(within(section).getByText('Suspended')).toBeTruthy(); // the next step
+    expect(within(section).getByText('2026-09-15')).toBeTruthy();
+    const exempt = within(section).getByRole('checkbox', { name: 'Exempt from dunning' });
+    expect(exempt).toBe(expectUi('ui.subscriber.dunning.exempt'));
+    expect((exempt as HTMLInputElement).checked).toBe(false);
+  });
+
+  it('says when the account is not in dunning, and counts lines suspended by dunning', async () => {
+    backend({
+      [`GET ${DUNNING}`]: () =>
+        json({
+          ...IN_DUNNING,
+          exempt: true,
+          inDunning: false,
+          overdueSince: null,
+          overdueAmount: null,
+          stepsTaken: [],
+          nextStep: null,
+          suspendedProducts: [{ id: 'p1' }, { id: 'p2' }],
+        }),
+    });
+    await open();
+    const section = await waitFor(() => expectUi('ui.subscriber.dunning'));
+    await within(section).findByText('Not in dunning.');
+    expect(within(section).getByText('Exempt')).toBeTruthy();
+    expect(within(section).getByText('2 lines suspended by dunning.')).toBeTruthy();
+    expect(
+      (within(section).getByRole('checkbox', { name: 'Exempt from dunning' }) as HTMLInputElement)
+        .checked,
+    ).toBe(true);
+  });
+
+  it('exempts the account after a confirmation, with the reason, and reloads the panel', async () => {
+    let exempt = false;
+    const { fetchMock } = backend({
+      [`GET ${DUNNING}`]: () => json({ ...IN_DUNNING, exempt }),
+      [`PATCH ${DUNNING}`]: () => {
+        exempt = true;
+        return json({ ...IN_DUNNING, exempt: true });
+      },
+    });
+    await open();
+    const section = await waitFor(() => expectUi('ui.subscriber.dunning'));
+    const toggle = (await within(section).findByRole('checkbox', {
+      name: 'Exempt from dunning',
+    })) as HTMLInputElement;
+    fireEvent.click(toggle);
+    const dialog = await screen.findByRole('dialog', { name: 'Exempt from dunning?' });
+    expectUi('ui.subscriber.dunning.exemptConfirm');
+    expect(toggle.checked).toBe(false); // unchanged until saved
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'PATCH')).toBe(false);
+    fireEvent.change(within(dialog).getByLabelText('Reason'), {
+      target: { value: '  Hardship plan agreed  ' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Exempt' }));
+    expect(await screen.findByRole('status')).toHaveProperty('textContent', 'Exempt from dunning');
+    const patch = sentBody(fetchMock, 'PATCH');
+    expect(patch.url).toBe(DUNNING);
+    expect(patch.body).toBe('{"exempt":true,"reason":"Hardship plan agreed"}');
+    await waitFor(() =>
+      expect(
+        (within(section).getByRole('checkbox', { name: 'Exempt from dunning' }) as HTMLInputElement)
+          .checked,
+      ).toBe(true),
+    );
+  });
+
+  it('ends an exemption without a reason; Cancel sends nothing', async () => {
+    const { fetchMock } = backend({
+      [`GET ${DUNNING}`]: () => json({ ...IN_DUNNING, exempt: true }),
+      [`PATCH ${DUNNING}`]: () => json({ ...IN_DUNNING, exempt: false }),
+    });
+    await open();
+    const section = await waitFor(() => expectUi('ui.subscriber.dunning'));
+    const toggle = await within(section).findByRole('checkbox', { name: 'Exempt from dunning' });
+    fireEvent.click(toggle);
+    let dialog = await screen.findByRole('dialog', { name: 'End the dunning exemption?' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'PATCH')).toBe(false);
+    fireEvent.click(toggle);
+    dialog = await screen.findByRole('dialog', { name: 'End the dunning exemption?' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'End exemption' }));
+    expect(await screen.findByRole('status')).toHaveProperty(
+      'textContent',
+      'Dunning exemption ended',
+    );
+    expect(sentBody(fetchMock, 'PATCH').body).toBe('{"exempt":false}');
+  });
+
+  it('shows a refused exemption in the dialog', async () => {
+    backend({
+      [`GET ${DUNNING}`]: () => json(IN_DUNNING),
+      [`PATCH ${DUNNING}`]: () => tmfError(422, 'dunning applies to postpaid accounts only'),
+    });
+    await open();
+    const section = await waitFor(() => expectUi('ui.subscriber.dunning'));
+    fireEvent.click(await within(section).findByRole('checkbox', { name: 'Exempt from dunning' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Exempt from dunning?' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Exempt' }));
+    expect(await within(dialog).findByText(/postpaid accounts only/)).toBeTruthy();
+    expect(screen.queryByRole('status')).toBeNull();
   });
 });
 

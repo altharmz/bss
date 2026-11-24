@@ -52,7 +52,7 @@ const writes = (fetchMock: ReturnType<typeof stubFetch>['fetchMock']) =>
     .filter(([, init]) => init?.method && init.method !== 'GET')
     .map(([url, init]) => [init?.method, String(url), init?.body ?? null]);
 
-type Tab = 'Cycle specifications' | 'Bill formats' | 'Presentation media';
+type Tab = 'Cycle specifications' | 'Bill formats' | 'Presentation media' | 'Dunning';
 
 async function open(tab: Tab = 'Cycle specifications') {
   window.history.replaceState(null, '', '/billing-settings');
@@ -72,8 +72,9 @@ const shown = async (name: string) => waitFor(() => expect(rowOf(name)).toBeTrut
 
 describe('billing settings', () => {
   // TEST-CHANGE (#414): the prepaid lifecycle moved to its own screen under Prepaid
-  // (LifecycleSettings.test.tsx); Billing settings keeps the three TMF678 tabs
-  it('has the three billing configuration tabs and no lifecycle tab', async () => {
+  // (LifecycleSettings.test.tsx); Billing settings keeps the three TMF678 tabs.
+  // TEST-CHANGE (#386): plus the postpaid Dunning tab
+  it('has the three billing configuration tabs, Dunning, and no lifecycle tab', async () => {
     backend();
     await open();
     const tabs = within(screen.getByRole('group', { name: 'Billing settings sections' }));
@@ -81,6 +82,7 @@ describe('billing settings', () => {
       'Cycle specifications',
       'Bill formats',
       'Presentation media',
+      'Dunning',
     ]);
   });
 
@@ -290,5 +292,115 @@ describe('billing settings', () => {
     const alert = await within(dialog).findByRole('alert');
     expect(alert.textContent).toContain('billStructure first');
     expect(screen.getByRole('dialog', { name: 'Delete Spare' })).toBeTruthy();
+  });
+});
+
+// #386: the postpaid dunning steps. The PATCH bodies are replayed against the real API by
+// tests/test_ui_requests.py - change both together.
+describe('dunning settings', () => {
+  const path = '/internal/v1/dunning/settings';
+  const settings = {
+    reminder1Days: 1,
+    reminder2Days: 7,
+    suspendDays: 14,
+    minimumOverdue: 5,
+    updatedAt: null,
+  };
+
+  it('shows the steps and the minimum, and saves only what changed, the amount exact', async () => {
+    const { fetchMock } = backend({
+      [`GET ${path}`]: () => json(settings),
+      [`PATCH ${path}`]: () => json({ ...settings, reminder1Days: 0, minimumOverdue: 7.5 }),
+    });
+    await open('Dunning');
+    await screen.findByText('14 days after the first overdue date');
+    expectUi('ui.billingSettings.dunning');
+    expect(screen.getByText('1 day after the first overdue date')).toBeTruthy();
+    expect(screen.getByText('5.00 USD')).toBeTruthy();
+    expect(screen.getByText('Never (defaults)')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit dunning settings' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit dunning settings' });
+    expectUi('ui.billingSettings.dunning.form');
+    const save = within(dialog).getByRole('button', { name: 'Save' }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true); // nothing changed yet
+    fireEvent.change(within(dialog).getByLabelText('First reminder'), { target: { value: '0' } });
+    fireEvent.change(within(dialog).getByLabelText('Minimum past due'), {
+      target: { value: '7.5' },
+    });
+    expect(save.disabled).toBe(false);
+    fireEvent.click(save);
+    await screen.findByText('Dunning settings saved');
+    expect(writes(fetchMock)).toEqual([
+      ['PATCH', path, '{"reminder1Days":0,"minimumOverdue":7.50}'],
+    ]);
+  });
+
+  it('shows each validation error at its field and blocks Save', async () => {
+    backend({ [`GET ${path}`]: () => json(settings) });
+    await open('Dunning');
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit dunning settings' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit dunning settings' });
+    const save = within(dialog).getByRole('button', { name: 'Save' }) as HTMLButtonElement;
+    const field = (label: string) =>
+      within(dialog).getByLabelText(label).closest('.bss-field-control') as HTMLElement;
+    const set = (label: string, value: string) =>
+      fireEvent.change(within(dialog).getByLabelText(label), { target: { value } });
+
+    for (const value of ['', '-1', '1.5', '366']) {
+      set('First reminder', value);
+      expect(
+        within(field('First reminder')).getByText('Enter whole days from 0 to 365.'),
+      ).toBeTruthy();
+      expect(save.disabled).toBe(true);
+    }
+    set('First reminder', '7'); // not before the second reminder (7)
+    expect(
+      within(field('Second reminder')).getByText('Must be later than the first reminder.'),
+    ).toBeTruthy();
+    expect(within(field('First reminder')).queryByText(/Enter whole days/)).toBeNull();
+    expect(save.disabled).toBe(true);
+    set('First reminder', '1');
+    set('Suspension', '7');
+    expect(
+      within(field('Suspension')).getByText('Must be later than the second reminder.'),
+    ).toBeTruthy();
+    expect(within(field('Second reminder')).queryByText(/Must be later/)).toBeNull();
+    set('Suspension', '30');
+    for (const value of ['', '-1', '1.234', 'abc']) {
+      set('Minimum past due', value);
+      expect(
+        within(field('Minimum past due')).getByText(
+          'Enter an amount of 0 or more with at most 2 decimals.',
+        ),
+      ).toBeTruthy();
+      expect(save.disabled).toBe(true);
+    }
+    set('Minimum past due', '0');
+    expect(within(dialog).queryByText(/Enter|Must be/)).toBeNull();
+    expect(save.disabled).toBe(false);
+  });
+
+  it('keeps the values and shows the server refusal', async () => {
+    backend({
+      [`GET ${path}`]: () => json(settings),
+      [`PATCH ${path}`]: () => tmfError(422, 'the steps must be increasing'),
+    });
+    await open('Dunning');
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit dunning settings' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit dunning settings' });
+    fireEvent.change(within(dialog).getByLabelText('Suspension'), { target: { value: '20' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    expect(await within(dialog).findByText(/the steps must be increasing/)).toBeTruthy();
+    expect((within(dialog).getByLabelText('Suspension') as HTMLInputElement).value).toBe('20');
+  });
+
+  it('retries a failed read', async () => {
+    let reads = 0;
+    backend({
+      [`GET ${path}`]: () => (++reads === 1 ? tmfError(503, 'Unavailable') : json(settings)),
+    });
+    await open('Dunning');
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+    expect(await screen.findByText('14 days after the first overdue date')).toBeTruthy();
   });
 });
