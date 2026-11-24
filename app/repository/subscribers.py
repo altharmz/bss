@@ -3,12 +3,14 @@ by prefix on the server (#314; no counts, #312)."""
 
 import re
 from contextlib import nullcontext
+from datetime import date
 from typing import Any
 from uuid import UUID
 
 import psycopg
 
 from app.repository._sql import Row, fetch_all
+from app.repository.products import LIVE_CLAIM, OPEN_STATUSES
 
 HEX = re.compile(r"[0-9a-f]{1,8}")
 DIGITS = re.compile(r"\+?[0-9]{3,15}")
@@ -203,6 +205,40 @@ def active_products(conn: psycopg.Connection, account_ids: list[UUID]) -> dict[U
             (account_ids,),
         )
     }
+
+
+NUMBERS_SHOWN = 3
+LIVE_MSISDNS = (
+    "SELECT account, value, total FROM ("  # noqa: S608
+    " SELECT p.billing_account_id AS account, n.value,"
+    "  row_number() OVER w AS rank, count(*) OVER (PARTITION BY p.billing_account_id) AS total"
+    " FROM product p"
+    f" JOIN number_assignment na ON na.product_id = p.id AND {LIVE_CLAIM}"
+    "  AND na.resource_specification_id = 'msisdn'"
+    " JOIN subscriber_number n ON n.id = na.subscriber_number_id"
+    " WHERE p.billing_account_id = ANY(%(ids)s) AND p.status = ANY(%(open)s)"
+    " WINDOW w AS (PARTITION BY p.billing_account_id"
+    "  ORDER BY p.start_date, p.created_at, p.id)"
+    ") ranked WHERE rank <= %(shown)s ORDER BY account, rank"
+)
+
+
+def live_msisdn_params(account_ids: list[UUID], on: date) -> dict[str, Any]:
+    return {"ids": account_ids, "on": on, "open": list(OPEN_STATUSES), "shown": NUMBERS_SHOWN}
+
+
+def live_msisdns(
+    conn: psycopg.Connection, account_ids: list[UUID], on: date
+) -> dict[UUID, tuple[list[str], int]]:
+    """{account id: (msisdns, count)} for a page of accounts (#456): the numbers live on
+    `on` of the account's not-ended products, oldest product start first, at most
+    NUMBERS_SHOWN of them, and how many there are. One query for the page."""
+    rows = conn.execute(LIVE_MSISDNS, live_msisdn_params(account_ids, on))
+    out: dict[UUID, tuple[list[str], int]] = {}
+    for account, value, total in rows:
+        values, _ = out.get(account, ([], 0))
+        out[account] = ([*values, value], total)
+    return out
 
 
 def customer_accounts(conn: psycopg.Connection, customer_ids: list[UUID]) -> dict[UUID, int]:

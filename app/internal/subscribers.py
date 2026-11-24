@@ -6,7 +6,8 @@ a customer or account name, a subscriber number on a line today, or a short id.
 `serviceAddress=missing` keeps prepaid accounts with live lines and no service address
 (#207). Each row
 carries what the table shows (balance, active products, how many accounts its customer
-has), computed for the page only.
+has, and up to three numbers live today with their count, #456), computed for the page
+only.
 """
 
 from typing import Any
@@ -14,7 +15,7 @@ from typing import Any
 from fastapi import APIRouter, Request
 
 from app.api.common import CENT, money
-from app.api.deps import Tx
+from app.api.deps import ClockDep, Tx
 from app.api.errors import bad_request
 from app.api.listing import page_response, parse_page
 from app.api.tmfjson import TmfJSONResponse
@@ -44,7 +45,12 @@ def one_param(request: Request, name: str, allowed: tuple[str, ...] | None = Non
 
 
 def subscriber_body(
-    row: Row, balance: Any, financial: Row | None, active: int, accounts_of_customer: int
+    row: Row,
+    balance: Any,
+    financial: Row | None,
+    active: int,
+    accounts_of_customer: int,
+    numbers: tuple[list[str], int],
 ) -> dict[str, Any]:
     return {
         "id": str(row["id"]),
@@ -63,11 +69,13 @@ def subscriber_body(
         ),
         "activeProducts": active,
         "customerAccounts": accounts_of_customer,
+        "msisdns": numbers[0],
+        "msisdnCount": numbers[1],
     }
 
 
 @router.get("")
-def search_subscribers(request: Request, tx: Tx) -> TmfJSONResponse:
+def search_subscribers(request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     offset, limit = parse_page(request, extra=("q", "state", "ratingType", "serviceAddress"))
     q = one_param(request, "q")
     state = one_param(request, "state", STATES)
@@ -92,6 +100,7 @@ def search_subscribers(request: Request, tx: Tx) -> TmfJSONResponse:
         )
         active = repo.active_products(conn, ids)
         per_customer = repo.customer_accounts(conn, [row["customer_id"] for row in rows])
+        numbers = repo.live_msisdns(conn, ids, clock.today())
     items = [
         subscriber_body(
             row,
@@ -99,6 +108,7 @@ def search_subscribers(request: Request, tx: Tx) -> TmfJSONResponse:
             financials.get(row["financial_account_id"]),
             active.get(row["id"], 0),
             per_customer.get(row["customer_id"], 1),
+            numbers.get(row["id"], ([], 0)),
         )
         for row in rows
     ]

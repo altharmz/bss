@@ -94,7 +94,8 @@ import './screens.css';
 
 const PRODUCT_COLUMNS: Column[] = [
   { key: 'offering', label: 'Product', width: 'minmax(0, 1fr)' },
-  { key: 'number', label: 'Number', width: '72px', mono: true },
+  // the line's number, IMSI and SIM live today (#456): 15 mono digits, a 19-20 digit ICCID
+  { key: 'number', label: 'Number', width: '176px', mono: true },
   { key: 'status', label: 'Status', width: '100px' },
   { key: 'activated', label: 'Since', width: '92px', mono: true },
   { key: 'price', label: 'Price', width: '140px', align: 'right', mono: true },
@@ -1294,6 +1295,27 @@ function statusNote(product: AccountProduct): { status: string; label: string } 
   }
 }
 
+/** The line's number, IMSI and SIM live today (#456); "—" for a product with none. */
+export function LineIdentities({ product }: { product: AccountProduct }) {
+  const { msisdn, imsi, iccid } = product;
+  if (msisdn === null && imsi === null) return <span className="bss-dash">—</span>;
+  return (
+    <div data-ui="ui.subscriber.productNumber">
+      <div className="ellipsis">{msisdn ?? <span className="bss-dash">—</span>}</div>
+      {imsi !== null && (
+        <div className="bss-secondary ellipsis" title={`IMSI ${imsi}`}>
+          IMSI {imsi}
+        </div>
+      )}
+      {iccid !== null && (
+        <div className="bss-secondary ellipsis" title={`SIM (ICCID) ${iccid}`}>
+          SIM {iccid}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProductRow({
   account,
   product,
@@ -1407,7 +1429,7 @@ function ProductRow({
               <RenewalHistory product={product} />
             </div>
           ),
-          number: <span className="bss-dash">—</span>,
+          number: <LineIdentities product={product} />,
           status: (
             <StatusPill
               kind="product"

@@ -41,6 +41,9 @@ export function product(id: string, over: Record<string, unknown>) {
     price: usd(1290),
     nextChargeDate: '2026-10-28',
     pendingChanges: [],
+    msisdn: null,
+    imsi: null,
+    iccid: null,
     ...over,
   };
 }

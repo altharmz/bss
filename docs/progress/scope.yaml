@@ -232,6 +232,7 @@ items:
   - {id: ui.billingSettings.lifecycle, area: ui, stage: 5, title: "Prepaid lifecycle screen (/prepaid-lifecycle, under Prepaid since #414): the lifecycle durations"}
   - {id: ui.billingSettings.lifecycle.form, area: ui, stage: 5, title: "Edit prepaid lifecycle durations"}
   - {id: ui.subscriber.productLifecycle, area: ui, stage: 5, title: "Product lifecycle state and next transition"}
+  - {id: ui.subscriber.productNumber, area: ui, stage: 5, title: "Card products table: the line number, IMSI and SIM live today"}
   - {id: ui.subscriber.lifecycleSuspension, area: ui, stage: 5, title: "Product suspension caused by lifecycle"}
   - {id: ui.billingSettings.cycles, area: ui, stage: 5, title: "Billing settings: cycle specification tab"}
   - {id: ui.billingSettings.cycles.new, area: ui, stage: 5, title: "New cycle specification"}
@@ -495,6 +496,7 @@ items:
   - {id: ui.subscribers.previous, area: ui, stage: 5, title: "Subscribers: previous page"}
   - {id: ui.subscribers.next, area: ui, stage: 5, title: "Subscribers: next page"}
   - {id: ui.subscribers.prepaid, area: ui, stage: 5, title: "Subscribers prepaid account mode"}
+  - {id: ui.subscribers.number, area: ui, stage: 5, title: "Subscribers: the live numbers column (first number, +N, tooltip)"}
   - {id: ui.subscribers.noServiceAddress, area: ui, stage: 5, title: "No service address filter chip: prepaid accounts with live lines and no service address"}
   - {id: ui.products, area: ui, stage: 5, title: "Products screen: every status, filters, rows"}
   - {id: ui.products.status, area: ui, stage: 5, title: "Products status filter"}

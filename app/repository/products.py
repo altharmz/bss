@@ -299,6 +299,32 @@ def flip_statuses(
 # UI lists as an account's products.
 OPEN_STATUSES = ("created", "pendingActive", "active", "pendingTerminate", "suspended")
 
+# The live claim on a day: not cancelled and its half-open range holds the day.
+LIVE_CLAIM = "na.cancelled_at IS NULL AND na.valid_for @> %(on)s::date"
+LIVE_IDENTITIES = (
+    "SELECT na.product_id, n.resource_specification_id AS kind, n.value, n.iccid"  # noqa: S608
+    " FROM number_assignment na JOIN subscriber_number n ON n.id = na.subscriber_number_id"
+    f" WHERE na.product_id = ANY(%(ids)s) AND {LIVE_CLAIM}"
+)
+
+
+def live_identities(
+    conn: psycopg.Connection, product_ids: list[UUID], on: date
+) -> dict[UUID, dict[str, str | None]]:
+    """{product id: {msisdn, imsi, iccid}} from the products' claims live on `on` (#456),
+    one query for the page. A product without a live claim of a kind has None for it;
+    one whose number starts later (a scheduled change) has today's value."""
+    out: dict[UUID, dict[str, str | None]] = {
+        pid: {"msisdn": None, "imsi": None, "iccid": None} for pid in product_ids
+    }
+    rows = fetch_all(conn, LIVE_IDENTITIES, {"ids": product_ids, "on": on})
+    for row in rows:
+        found = out[row["product_id"]]
+        found[row["kind"]] = row["value"]
+        if row["kind"] == "imsi":
+            found["iccid"] = row["iccid"]
+    return out
+
 
 def list_open_products(conn: psycopg.Connection, billing_account_id: UUID, on: date) -> list[Row]:
     """The account's open products with their offering on `on` (on the start date for a
