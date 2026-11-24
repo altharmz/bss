@@ -11,7 +11,9 @@ Index: [README.md](README.md).
 
 Design and decisions: **`docs/archive/bill-lifecycle-design.md`**, section 6 (decided
 2026-10-10: option C, payment term 30 days configurable, credit notes pay older open
-bills, overdue is display only, a Record payment dialog). Four slices: 1. schema +
+bills, overdue is display only, a Record payment dialog). **Overdue is no longer display only
+since #385:** an overdue postpaid bill starts dunning (reminders, suspension, restoration when
+paid; held bills never count), [dunning.md](dunning.md). Four slices: 1. schema +
 settlement core (`cloud/bill-settlement-core`), 2. worker (`cloud/bill-settlement-worker`,
 stacked on 1), 3. API (`cloud/bill-settlement-api`, stacked on 2), 4. UI + seed
 (`cloud/bill-settlement-ui`, stacked on 3). **All four slices are built and merged**

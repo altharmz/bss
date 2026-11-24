@@ -60,6 +60,9 @@ from app.internal.care_logins import CareLoginInvite
 from app.internal.care_signups import STATES as SIGNUP_STATES
 from app.internal.care_signups import Decision as SignupDecision
 from app.internal.catalog import PriceChange
+from app.internal.dunning import LAST_STEPS as DUNNING_STEPS
+from app.internal.dunning import Exemption as DunningExemption
+from app.internal.dunning import SettingsChange as DunningSettingsChange
 from app.internal.network_commands import STATES as NETWORK_STATES
 from app.internal.payments import STATES as PAYMENT_STATES
 from app.internal.payments import AutoTopup, CardTopup
@@ -1054,6 +1057,38 @@ OPERATIONS: dict[str, Op] = {
         " types, when subscribed, the last delivery and the deliveries that failed for good.",
         query=PAGE,
         extra={"api": {"type": "string", "enum": sorted(BASES)}},
+    ),
+    # --- postpaid dunning (docs/decisions/dunning.md) ---
+    "get_dunning_settings": Op(
+        "The postpaid dunning steps: reminder1Days, reminder2Days and suspendDays after O (the"
+        " first date an account had an open, non-held bill past due) and minimumOverdue (an"
+        " account owing less past due is not in dunning)."
+    ),
+    "patch_dunning_settings": Op(
+        "Change any of reminder1Days, reminder2Days, suspendDays (0..365, increasing) or"
+        " minimumOverdue; applies to the steps not yet taken.",
+        body=DunningSettingsChange,
+    ),
+    "list_dunning_accounts": Op(
+        "Postpaid accounts in dunning, oldest overdue date first: O, the amount past due, the"
+        " last step (none, reminder1, reminder2, suspend), the suspension date and whether the"
+        " account is a deactivation candidate (suspended over 60 days; lines are never ended"
+        " automatically).",
+        query=PAGE,
+        extra={
+            "step": {"type": "string", "enum": list(DUNNING_STEPS)},
+            "deactivationCandidate": {"type": "string", "enum": ["true"]},
+        },
+    ),
+    "get_account_dunning": Op(
+        "One account's dunning state: exempt, inDunning, O, the amount past due, the steps"
+        " taken, the next step and its date, the products under a dunning suspension."
+    ),
+    "patch_account_dunning": Op(
+        "Exempt a postpaid account from dunning (exempt true, optional reason) or end the"
+        " exemption; audited. An exempt account takes no step and its dunning suspensions are"
+        " lifted on the next worker pass.",
+        body=DunningExemption,
     ),
     "bill_detail": Op(
         "A bill with its charges, payments and state history (who held or released it)."

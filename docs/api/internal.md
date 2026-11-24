@@ -4,7 +4,7 @@
 
 - Base path here: `/internal/v1`
 - Contract: [`spec/internal/bss-internal.oas.yaml`](../../spec/internal/bss-internal.oas.yaml) - BSS internal API (admin UI) version 1.0.0; the spec's server URL is `/internal/v1`
-- Operations exposed: 77
+- Operations exposed: 82
 
 
 ## Operations
@@ -16,6 +16,8 @@
 | GET | `/internal/v1/billingAccount/{account_id}/cardTopup` | path: `account_id`; query: `offset`, `limit` | - | 200 `array of PaymentCommand` | [`app/internal/payments.py`](../../app/internal/payments.py) |
 | POST | `/internal/v1/billingAccount/{account_id}/cardTopup` | path: `account_id`; body: `application/json` | `CardTopupRequest` | 200 `PaymentCommand`, 202 `PaymentCommand` | [`app/internal/payments.py`](../../app/internal/payments.py) |
 | GET | `/internal/v1/billingAccount/{account_id}/charges` | path: `account_id`; query: `offset`, `limit` | - | 200 `array of Charge` | [`app/internal/accounts.py`](../../app/internal/accounts.py) |
+| GET | `/internal/v1/billingAccount/{account_id}/dunning` | path: `account_id` | - | 200 `AccountDunning` | [`app/internal/dunning.py`](../../app/internal/dunning.py) |
+| PATCH | `/internal/v1/billingAccount/{account_id}/dunning` | path: `account_id`; body: `application/merge-patch+json` | `object` | 200 `AccountDunning` | [`app/internal/dunning.py`](../../app/internal/dunning.py) |
 | GET | `/internal/v1/billingAccount/{account_id}/firstCharge` | path: `account_id`; query: `productOffering.id` (required), `startDate` (required), `product.id`, `parentProduct.id` | - | 200 `FirstCharge` | [`app/internal/accounts.py`](../../app/internal/accounts.py) |
 | GET | `/internal/v1/billingAccount/{account_id}/products` | path: `account_id` | - | 200 `array of AccountProduct` | [`app/internal/accounts.py`](../../app/internal/accounts.py) |
 | GET | `/internal/v1/billingAccount/{account_id}/settlement` | path: `account_id` | - | 200 `AccountSettlement` | [`app/internal/accounts.py`](../../app/internal/accounts.py) |
@@ -35,6 +37,9 @@
 | GET | `/internal/v1/customerBill/{bill_id}` | path: `bill_id` | - | 200 `BillDetail` | [`app/main.py`](../../app/main.py) |
 | GET | `/internal/v1/device` | query: `product.id` (required) | - | 200 `array of ProductDevice` | [`app/internal/devices.py`](../../app/internal/devices.py) |
 | GET | `/internal/v1/device/check` | query: `imei` (required) | - | 200 `DeviceCheck` | [`app/internal/devices.py`](../../app/internal/devices.py) |
+| GET | `/internal/v1/dunning/accounts` | query: `offset`, `limit`, `step`, `deactivationCandidate` | - | 200 `array of DunningAccount` | [`app/internal/dunning.py`](../../app/internal/dunning.py) |
+| GET | `/internal/v1/dunning/settings` | - | - | 200 `DunningSettings` | [`app/internal/dunning.py`](../../app/internal/dunning.py) |
+| PATCH | `/internal/v1/dunning/settings` | body: `application/merge-patch+json` | `object` | 200 `DunningSettings` | [`app/internal/dunning.py`](../../app/internal/dunning.py) |
 | GET | `/internal/v1/eventSubscription` | query: `offset`, `limit`, `api` | - | 200 `array of EventSubscription` | [`app/main.py`](../../app/main.py) |
 | GET | `/internal/v1/lifecycle/settings` | - | - | 200 `LifecycleSettings` | [`app/internal/lifecycle.py`](../../app/internal/lifecycle.py) |
 | PUT | `/internal/v1/lifecycle/settings` | - | `object` | 200 `LifecycleSettings` | [`app/internal/lifecycle.py`](../../app/internal/lifecycle.py) |

@@ -24,6 +24,7 @@ from app.config import settings
 from app.notify import recipients
 from app.notify.service import Event
 from app.repository import billing, funding
+from app.repository import dunning as dunning_repo
 from app.repository import lifecycle as lifecycle_repo
 from app.repository import security as security_repo
 from app.repository._sql import Row, fetch_all, fetch_one
@@ -78,6 +79,7 @@ def detectors(
         ("sim_swaps", lambda conn: _sim_swaps(conn, since)),
         ("security", lambda conn: _security(conn, since)),
         ("bills_issued", lambda conn: _bills_issued(conn, since)),
+        ("dunning", lambda conn: _dunning(conn, since)),
     ]
 
 
@@ -543,6 +545,50 @@ def _bills_issued(conn: psycopg.Connection, since: datetime) -> list[Event]:
                 sms_to_line=False,
                 channels=("email",),
                 customer_bill_id=row["id"],
+            )
+        )
+    return events
+
+
+DUNNING_EVENTS = {
+    "reminder1": "dunning_reminder1",
+    "reminder2": "dunning_reminder2",
+    "suspend": "dunning_suspended",
+}
+
+
+def _dunning(conn: psycopg.Connection, since: datetime) -> list[Event]:
+    """A postpaid dunning step (docs/decisions/dunning.md): each reminder, and the suspension
+    when it suspended at least one product, told once (key `dunning:{account}:{O}:{step}`),
+    transactional, by email and SMS. A reminder names the suspension date the settings give
+    now."""
+    key = "'dunning:' || s.billing_account_id || ':' || to_char(s.overdue_since, 'YYYY-MM-DD')"
+    rows = fetch_all(
+        conn,
+        "SELECT s.*, a.currency FROM dunning_step s"  # noqa: S608 - untold() is fixed SQL
+        " JOIN billing_account a ON a.id = s.billing_account_id"
+        " WHERE s.taken_at >= %s AND (s.step IN ('reminder1', 'reminder2')"
+        " OR (s.step = 'suspend' AND s.products > 0))"
+        + untold(key + " || ':' || s.step")
+        + " ORDER BY s.taken_at, s.billing_account_id, s.step",
+        (since,),
+    )
+    if not rows:
+        return []
+    suspend_days = dunning_repo.settings(conn).suspend_days
+    events = []
+    for row in rows:
+        o = row["overdue_since"]
+        events.append(
+            Event(
+                DUNNING_EVENTS[row["step"]],
+                f"dunning:{row['billing_account_id']}:{o.isoformat()}:{row['step']}",
+                row["billing_account_id"],
+                None,
+                {
+                    "amount": money(row["overdue_amount"], row["currency"]),
+                    "date": day(o + timedelta(days=suspend_days)),
+                },
             )
         )
     return events

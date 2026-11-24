@@ -40,6 +40,7 @@ export const AUDIT_ACTIONS: Record<AuditAction, string> = {
   care_card_removed: 'Self-care card removed',
   care_auto_top_up: 'Self-care auto top-up set',
   care_add_on: 'Self-care add-on bought',
+  dunning_exemption: 'Dunning exemption changed',
 };
 
 export const VERIFICATION: Record<AuditEntry['verification'], string> = {

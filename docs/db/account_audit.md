@@ -18,7 +18,7 @@ Append-only log of agent actions on accounts: who, what, when, whether it was do
 | `customer_id` | `uuid` | yes |  |  |
 | `billing_account_id` | `uuid` | yes |  |  |
 | `product_id` | `uuid` | yes |  |  |
-| `action` | `text` | no |  | sim_swap, number_change, number_transfer_pin, contact_change, port_out, pin_set, pin_reset, lock_set, lock_cleared, pin_lockout, and the care work of issue 199: interaction_logged, ticket_opened, ticket_status_changed, care_note_added, and self-care of issue 195: care_sign_in, care_locked, care_password_changed, and the E911 address change of issue 201: e911_changed, and the self-care writes of issue 376: care_top_up, care_card_saved, care_card_removed, care_auto_top_up, care_add_on. |
+| `action` | `text` | no |  | sim_swap, number_change, number_transfer_pin, contact_change, port_out, pin_set, pin_reset, lock_set, lock_cleared, pin_lockout, and the care work of issue 199: interaction_logged, ticket_opened, ticket_status_changed, care_note_added, and self-care of issue 195: care_sign_in, care_locked, care_password_changed, and the E911 address change of issue 201: e911_changed, and the self-care writes of issue 376: care_top_up, care_card_saved, care_card_removed, care_auto_top_up, care_add_on, and the dunning exemption of issue 385: dunning_exemption. |
 | `outcome` | `text` | no |  | done, or refused (see reason). |
 | `reason` | `text` | yes |  | Why it was refused (pinRequired, pinInvalid, pinNotSet, pinLocked, simSwapLocked, portOutLocked) or the reason the agent gave for a PIN or lock change. |
 | `verification` | `text` | no |  | pin (a valid PIN was sent), notRequired (the switch is off), none (no PIN was needed or sent); for self-care password+code (a sign-in) or code (a password set with an emailed link code), or session (a write in a signed-in self-care session). |
@@ -28,7 +28,7 @@ Append-only log of agent actions on accounts: who, what, when, whether it was do
 
 | Name | Kind | Definition |
 |---|---|---|
-| `account_audit_action_check` | check | `CHECK ((action = ANY (ARRAY['sim_swap'::text, 'number_change'::text, 'number_transfer_pin'::text, 'contact_change'::text, 'port_out'::text, 'pin_set'::text, 'pin_reset'::text, 'lock_set'::text, 'lock_cleared'::text, 'pin_lockout'::text, 'interaction_logged'::text, 'ticket_opened'::text, 'ticket_status_changed'::text, 'care_note_added'::text, 'care_sign_in'::text, 'care_locked'::text, 'care_password_changed'::text, 'e911_changed'::text, 'care_top_up'::text, 'care_card_saved'::text, 'care_card_removed'::text, 'care_auto_top_up'::text, 'care_add_on'::text])))` |
+| `account_audit_action_check` | check | `CHECK ((action = ANY (ARRAY['sim_swap'::text, 'number_change'::text, 'number_transfer_pin'::text, 'contact_change'::text, 'port_out'::text, 'pin_set'::text, 'pin_reset'::text, 'lock_set'::text, 'lock_cleared'::text, 'pin_lockout'::text, 'interaction_logged'::text, 'ticket_opened'::text, 'ticket_status_changed'::text, 'care_note_added'::text, 'care_sign_in'::text, 'care_locked'::text, 'care_password_changed'::text, 'e911_changed'::text, 'care_top_up'::text, 'care_card_saved'::text, 'care_card_removed'::text, 'care_auto_top_up'::text, 'care_add_on'::text, 'dunning_exemption'::text])))` |
 | `account_audit_check` | check | `CHECK (((outcome = 'done'::text) OR (reason IS NOT NULL)))` |
 | `account_audit_detail_check` | check | `CHECK ((jsonb_typeof(detail) = 'object'::text))` |
 | `account_audit_operator_check` | check | `CHECK ((operator <> ''::text))` |

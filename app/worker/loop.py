@@ -13,9 +13,11 @@ was down (the 03:00 reboot, a deploy):
 5. the UI's queued requests, then prepaid work: due renewals are produced, retained
    commands dispatched and entitlement transitions observed (app/worker/prepaid.py), then
    the online signups' steps (app/worker/signup.py);
-6. the customer notifications (app/worker/notify.py): events found, messages sent;
-7. the due event deliveries to hub callbacks (app/events/deliver.py);
-8. from 04:00 to 05:30, the housekeeping (app/worker/housekeeping.py): usage_record
+6. postpaid dunning (app/worker/dunning.py): the steps on the full sweep of a business date,
+   the restorations on every tick;
+7. the customer notifications (app/worker/notify.py): events found, messages sent;
+8. the due event deliveries to hub callbacks (app/events/deliver.py);
+9. from 04:00 to 05:30, the housekeeping (app/worker/housekeeping.py): usage_record
    partitions and the deletion of rows past their retention, never while a run is running.
 
 A `checkpoint` (SIGTERM, liveness) is honoured between accounts and between requests;
@@ -34,6 +36,7 @@ import psycopg
 from app.clock import Clock
 from app.events import deliver
 from app.repository import account_review, billing
+from app.worker.dunning import process_dunning
 from app.worker.housekeeping import Housekeeping, housekeep
 from app.worker.lifecycle import process_lifecycle
 from app.worker.notify import process_notifications
@@ -68,9 +71,10 @@ class Tick:
     prepaid_renewals: list[UUID] = field(default_factory=list)
     prepaid_commands: list[UUID] = field(default_factory=list)
     signups: list[UUID] = field(default_factory=list)  # online signups acted on (#377)
-    deliveries: int = 0  # event POSTs tried (step 6)
+    dunning: list[tuple[UUID, str]] = field(default_factory=list)  # (account, step) taken (#385)
+    deliveries: int = 0  # event POSTs tried (step 8)
     reviewed: int | None = None  # accounts the per-account passes looked at; None: all
-    housekeeping: Housekeeping | None = None  # step 8; None when a stop came before it
+    housekeeping: Housekeeping | None = None  # step 9; None when a stop came before it
     stopped: bool = False
 
 
@@ -162,6 +166,15 @@ def tick(
             checkpoint=checkpoint,
             heartbeat=heartbeat,
             accounts=review.accounts,
+        )
+        # after billing and payments, before the notifications that tell the steps
+        result.dunning = process_dunning(
+            conn,
+            clock=clock,
+            tz=tz,
+            full=review.full,
+            checkpoint=checkpoint,
+            heartbeat=heartbeat,
         )
         process_notifications(
             conn,

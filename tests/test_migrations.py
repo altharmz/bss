@@ -384,7 +384,7 @@ def test_cloned_test_databases_are_at_the_current_head(db_conn):
         " t.schemaname, t.tablename)::regclass WHERE t.schemaname = 'public'"
         " AND NOT c.relispartition"
     ).fetchone()[0]
-    assert tables == 100  # 99 domain tables + alembic_version
+    assert tables == 102  # 101 domain tables + alembic_version
 
 
 @pytest.mark.migration_history

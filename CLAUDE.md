@@ -121,7 +121,7 @@ Unknown values stay unknown, never zero. Setup and reporting: [telemetry-usage.m
 [events](docs/decisions/events.md) · [billing-core](docs/decisions/billing-core.md) ·
 [charge-periods](docs/decisions/charge-periods.md) · [prepaid](docs/decisions/prepaid.md) ·
 [worker](docs/decisions/worker.md) · [bills](docs/decisions/bills.md) ·
-[billing-completion](docs/decisions/billing-completion.md) ·
+[billing-completion](docs/decisions/billing-completion.md) · [dunning](docs/decisions/dunning.md) ·
 [internal-api](docs/decisions/internal-api.md) · [mcp](docs/decisions/mcp.md) ·
 [users](docs/decisions/users.md) · [self-care](docs/decisions/self-care.md) ·
 [wholesale](docs/decisions/wholesale.md) · [frontend](docs/decisions/frontend.md) ·
