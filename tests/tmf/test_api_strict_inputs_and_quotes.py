@@ -149,7 +149,7 @@ def test_fields_on_every_write_preserves_identity_location_and_full_resource(api
     "path,query",
     [
         (PRODUCT, "status=active,created"),
-        (ORDER, "state=completed,rejected"),
+        (ORDER, "billingAccount.id=one,two"),  # productOrder state alone takes a list
         (ACCOUNT, "state=Active,Suspended"),
         (PAYMENT, "status=done,pending"),
         (f"{CATALOG}/productOffering", "lifecycleStatus=Active,Retired"),

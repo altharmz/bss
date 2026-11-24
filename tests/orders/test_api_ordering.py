@@ -325,6 +325,27 @@ def test_order_list_and_filters(api, shop):
     assert len(api.get(PRODUCT).json()) == 2
 
 
+def test_order_state_takes_a_comma_separated_list(api, shop):
+    """#455: `state=a,b` matches any of them (TMF630), newest first; every member must be a
+    TMF622 state. Other filters keep refusing commas
+    (test_unsupported_filter_syntax_is_an_explicit_error)."""
+    offering, acc = shop
+    done = apidata.order(api, acc, apidata.add_item(offering))
+    refused = apidata.order(api, acc, apidata.rejected_item(api, offering))
+    draft = apidata.order(api, acc, apidata.add_item(offering), requestedInitialState="draft")
+    listed = api.get(f"{ORDER}?state=rejected,draft")
+    assert listed.status_code == 200
+    assert [o["id"] for o in listed.json()] == [draft["id"], refused["id"]]
+    both = api.get(f"{ORDER}?state=completed,%20draft&billingAccount.id={acc['id']}")
+    assert [o["id"] for o in both.json()] == [draft["id"], done["id"]]
+    paged = api.get(f"{ORDER}?state=completed,rejected,draft&limit=1&offset=1")
+    assert [o["id"] for o in paged.json()] == [refused["id"]]
+    assert api.get(f"{ORDER}?state=pending,held").json() == []
+    assert api.get(f"{ORDER}?state=draft,bogus").status_code == 400
+    assert api.get(f"{ORDER}?state=draft,").status_code == 400
+    assert api.get(f"{ORDER}?state=bogus").json() == []  # a single value: as before
+
+
 @pytest.mark.parametrize("method", ["PUT"])
 def test_orders_cannot_be_replaced(api, shop, method):
     """PATCH (descriptive attributes): tests/orders/test_api_order_patch.py; DELETE (rejected

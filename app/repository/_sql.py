@@ -130,7 +130,8 @@ def conditions(
     """The `column = value` conditions of a list filter on `table`, each compared with the
     column's own type so its indexes apply (#286, #311); None when a value can match no
     row (a string that is not a label of the column's enum), so the caller answers an
-    empty page without a query. A value may also be IS_NULL or NOT_NULL. A string for a
+    empty page without a query. A value may also be IS_NULL or NOT_NULL, or a tuple of
+    strings (listing.AnyOf: the column equals any of them). A string for a
     column of `table` that is neither text nor an enum keeps the `column::text` match; a
     column `table` does not have (a derived one) is compared as text.
     """
@@ -142,6 +143,21 @@ def conditions(
             conds.append(sql.SQL("{} IS NULL").format(ident))
         elif value is NOT_NULL:
             conds.append(sql.SQL("{} IS NOT NULL").format(ident))
+        elif isinstance(value, tuple):
+            types = types if types is not None else _column_types(conn, table)
+            data_type, udt = types.get(column, ("text", "text"))
+            labels = _enum_labels(conn, udt) if data_type == "USER-DEFINED" else None
+            members = [v for v in value if labels is None or v in labels]
+            if not members:
+                return None
+            if labels is not None:
+                cond = sql.SQL("{} = ANY(%s::{}[])").format(ident, sql.Identifier(udt))
+            elif data_type in TEXT_TYPES:
+                cond = sql.SQL("{} = ANY(%s)").format(ident)
+            else:
+                cond = sql.SQL("{}::text = ANY(%s)").format(ident)
+            conds.append(cond)
+            params.append(members)
         elif isinstance(value, str):
             types = types if types is not None else _column_types(conn, table)
             data_type, udt = types.get(column, ("text", "text"))

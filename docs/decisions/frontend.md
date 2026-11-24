@@ -1198,3 +1198,28 @@ The UI of the bill PDFs and email delivery (#202) and of postpaid dunning (#385)
   the confirmation with an optional audited reason; only the saved answer changes it.
 - **Markers:** as the issue names them, plus `ui.subscriber.dunning.exemptConfirm` (the dialog)
   and `ui.dunning.previous|next` (paging).
+
+## Orders and Products: a useful first view (2026-11-24, issue #455)
+
+The global Orders and Products screens are cross-subscriber operations views; a subscriber's
+own orders and products are on the card.
+
+- **Orders opens on Unfinished:** `draft`, `acknowledged`, `inProgress` and `failed` (`failed`
+  needs a person), the default when the URL has no `state`. **All** and the single states stay.
+  The choice is in the URL (`?state=all`, `?state=failed`), written with `replaceState`, so
+  links and reloads keep it. The server takes the list as one comma-separated `state` (the one
+  comma filter, [tmf-api.md](tmf-api.md#input-correctness-and-read-completeness-2026-10-14)).
+- **Links from a subscriber context carry `state=all`:** the card's Orders link, the product
+  dialog's and the prepaid order watch's "Open in Orders" and the draft-saved toast. They mean
+  "this subscriber's orders", which may be completed; Unfinished would hide them.
+- **Subscriber search:** a combobox in both headers (`SubscriberSearch.tsx`) uses the
+  Subscribers list's own `GET /internal/v1/subscriber?q=` (first page of 50, typed text
+  debounced). The server matched the text, so the combobox shows every row it returns (a number
+  or an id need not be in the label). Choosing a row sets `?account=` and the existing
+  removable chip; no new endpoint.
+- **A caption says what the page is for** (the header's meta line). Products keeps "all
+  statuses" as its default.
+- **An empty filtered Orders page is "No matches"** with Reset filters (to All), as on
+  Products, not "No orders".
+- **Markers:** `ui.orders.unfinished` (a `Segmented` option now takes a `ui` marker),
+  `ui.orders.subscriberSearch`, `ui.products.subscriberSearch`.

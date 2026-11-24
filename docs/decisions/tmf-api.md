@@ -762,6 +762,11 @@ stage-2 mappings; they do not add taxes, payment processing or order modificatio
 - Equality filters on statuses/types, UUIDs, booleans and dates reject comma-separated
   values with 400; there is no OR filter syntax. Commas in free-text names remain
   literal. Repeated paging and fields parameters are errors rather than last-value-wins.
+  **One exception (#455, 2026-11-24):** `GET /productOrder?state=a,b` lists the orders in
+  any of the states (TMF630's OR for a comma-separated attribute value), for the Orders
+  screen's Unfinished view. Every member must be a TMF622 `ProductOrderStateType`, else
+  400; a single unknown state still matches nothing, as before. The converter is
+  `listing.AnyOf`; every other filter keeps refusing commas.
 - `Customer.account[]` returns all of the customer's billing-account references,
   including accounts beyond the default page size. References use `AccountRef` with
   `@referredType: BillingAccount`. Product reads expose `productSpecification`, the

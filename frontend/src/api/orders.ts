@@ -4,7 +4,7 @@ import { getAll, getPage, getJson } from './client';
 import { PATHS } from './bss';
 
 // The global Orders screen (docs/decisions/frontend.md, docs/ui.md):
-// TMF622 reads only. The server serves orders oldest first; there is no sort parameter.
+// TMF622 reads only. The server serves orders newest first; there is no sort parameter.
 
 export type Order = T622['schemas']['ProductOrder'];
 export type OrderItem = T622['schemas']['ProductOrderItem'];
@@ -21,17 +21,29 @@ export const ORDER_STATES: OrderState[] = [
   'cancelled',
   'failed',
 ];
+/** The Orders screen's default (#455): orders someone may still have to act on. `failed`
+ * counts: it needs a person. The API takes them as one comma-separated `state` (OR). */
+export const UNFINISHED_STATES: readonly OrderState[] = [
+  'draft',
+  'acknowledged',
+  'inProgress',
+  'failed',
+];
 export const ORDER_PAGE = 50;
+
+type StateQuery = OrderState | readonly OrderState[] | null;
 
 /** One page of orders, newest first; `more` says whether older ones follow. */
 export function loadOrderPage(
-  filter: { state: OrderState | null; account: string | null },
+  filter: { state: StateQuery; account: string | null },
   offset: number,
   signal: AbortSignal,
 ) {
   const query = [
     ...(filter.account !== null ? [`billingAccount.id=${filter.account}`] : []),
-    ...(filter.state !== null ? [`state=${filter.state}`] : []),
+    ...(filter.state !== null
+      ? [`state=${typeof filter.state === 'string' ? filter.state : filter.state.join(',')}`]
+      : []),
     `offset=${offset}`,
     `limit=${ORDER_PAGE}`,
   ];
@@ -40,7 +52,7 @@ export function loadOrderPage(
 
 /** The API serves orders newest first (#312), so the newest page is the first page. */
 export function loadNewestOrderPage(
-  filter: { state: OrderState | null; account: string | null },
+  filter: { state: StateQuery; account: string | null },
   offset: number,
   signal: AbortSignal,
 ) {
