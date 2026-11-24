@@ -7,7 +7,7 @@ import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } fr
 
 // Global bills, bill cycles and rates (docs/ui.md). Reads only:
 // the query strings asserted here are replayed against the real API by
-// tests/test_ui_requests.py - change both together.
+// tests/internal/test_ui_requests.py - change both together.
 
 const BASE = '/tmf-api/customerBillManagement/v5';
 const BILL = `${BASE}/customerBill`;

@@ -1,4 +1,4 @@
-# MCP operations the admin UI deliberately does not call (tests/test_ui_mcp_parity.py).
+# MCP operations the admin UI deliberately does not call (tests/internal/test_ui_mcp_parity.py).
 # One line per operation: `operationId: reason`. A line whose operation the UI calls
 # (or that MCP no longer has) fails the test, so the list cannot go stale.
 # Design: docs/ui.md; decision: docs/decisions/harness.md.

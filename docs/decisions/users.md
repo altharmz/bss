@@ -95,7 +95,7 @@ or a user could do over `/tmf-api` what the UI denies.
     password*, *Users* (admins only), *Sign out*.
   - **Users screen** (`/users`, admins only; a user gets "not allowed"): list (name,
     role, active, last sign-in), New user, Edit (role, disable/enable), Reset password.
-  - Write bodies pinned in component tests and `tests/test_ui_requests.py`; e2e signs in.
+  - Write bodies pinned in component tests and `tests/internal/test_ui_requests.py`; e2e signs in.
 - **U11 Caddy.** With the app authenticating, Caddy's basic auth on the bss site is a
   second login. Recommended: a vps-infra change request removing basic auth from the
   bss site block (the app is the boundary), deployed **after** the app with
@@ -267,7 +267,7 @@ the Edit tool):
    (display-only, from the Caddy era) - replace it with `request.state.operator`, the
    source `/context` and bill history use (session username, `mcp:<name>`, `smoke`).
    MCP keeps sending `X-Remote-User` directly on `shared` with the service secret;
-   `auth.py` already validates that path. Tests: `tests/test_worker_queue.py:143`
+   `auth.py` already validates that path. Tests: `tests/worker/test_worker_queue.py:143`
    sends `X-Remote-User: i.petrova` - the same name the fixture signs in with, which is
    why the bug went unseen: send a **forged** name there and assert `requestedBy` is
    the session user; an MCP-principal case. Negative proof: the old `_operator()` fails.
@@ -280,7 +280,7 @@ the Edit tool):
    `app/` (app must not import `bss_mcp`). Keys: **(username, address)** and
    **address**; drop the bare username key, so nobody can lock out a named user from
    elsewhere. Keep the 20/minute limit, `Retry-After: 60` and the 10,000-key bound
-   (with a trusted address one source cannot fill it). Tests in `tests/test_users.py`
+   (with a trusted address one source cannot fill it). Tests in `tests/internal/test_users.py`
    (replace `test_rate_limit_by_username_and_address`): one address limited across
    usernames; another address still signs in the same user; a forged multi-entry
    header (`X-Forwarded-For: 1.2.3.4, 5.6.7.8`) is keyed on its last entry; with the

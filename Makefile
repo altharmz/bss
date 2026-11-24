@@ -455,7 +455,7 @@ show-task: ## [task] Show this task's issue (title, body, labels, comments) as J
 
 .PHONY: check-preflight
 check-preflight: migrate
-	$(LOCKED) ./scripts/task-compose run --rm oneoff pytest -q tests/test_migrations.py::test_alembic_upgrade_head_on_clean_database tests/test_migrations.py::test_cloned_test_databases_are_at_the_current_head tests/test_constraints.py tests/test_worker_schema.py
+	$(LOCKED) ./scripts/task-compose run --rm oneoff pytest -q tests/schema/test_migrations.py::test_alembic_upgrade_head_on_clean_database tests/schema/test_migrations.py::test_cloned_test_databases_are_at_the_current_head tests/schema/test_constraints.py tests/schema/test_worker_schema.py
 
 # The commit was tested by the pre-commit hook: deploying does not test again.
 deployed: ## [ops] Show the last deploy recorded by scripts/deploy.sh and the commits not deployed yet

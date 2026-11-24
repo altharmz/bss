@@ -180,7 +180,7 @@ app (#378), which builds the client-side card form. SIM swap, number change, por
 plan change, termination and contact or address changes stay operator-only (decided on the
 issue).
 
-**Tests.** `tests/test_self_care_api.py`: every read with the session's data; another
+**Tests.** `tests/care/test_self_care_api.py`: every read with the session's data; another
 customer's line, account, card and top-up ids are 404 on every read and write; a saved card
 and a card top-up confirmed by the stub (two wake-ups), its replayed key and a key reused for
 another amount (409); a declined card; card numbers, security codes and card fields refused
@@ -268,13 +268,13 @@ interface takes one; the stub ignores it), the web pages (#378) and an audit ent
 operator's decision (`account_audit` needs a customer, which a signup in review does not have:
 `decided_by`/`decided_at` keep it).
 
-**Tests.** `tests/test_care_signup.py`: the happy path under the injected clock (masked code,
+**Tests.** `tests/care/test_care_signup.py`: the happy path under the injected clock (masked code,
 identity sent then passed, top-up, order with an eSIM and a pool number, activation code once
 and by email, sign-in, the operator list); the worker running again creating nothing twice;
 code, detail and payment replays and refusals; five wrong codes; `emailInUse`; feature off and
 CSRF; identity failed, in review with both decisions, and exhausted; a declined card paid
 again; a rejected token; an empty pool and no eSIM; expiry by request and by the worker; both
-abuse limits. MCP tools in `tests/test_mcp_tools.py`.
+abuse limits. MCP tools in `tests/mcp/test_mcp_tools.py`.
 
 ## Alerts
 
@@ -290,11 +290,11 @@ next sign-in; codes are small rows), audit rows for an operator's invite and dis
 
 ## Tests
 
-`tests/test_self_care.py`: invite, set password, sign in with the code (cookie, hashed token,
+`tests/care/test_self_care.py`: invite, set password, sign in with the code (cookie, hashed token,
 masked message log, audit); every refusal (wrong password, unknown and not activated logins alike;
 wrong, expired, used, spent and superseded codes; locked; disabled; feature off on every route);
 the scope rule (another customer, a missing id); a customer session on `/internal` and the TMF
 APIs, an operator session and the service credential on `/self-care`; CSRF; idle and absolute
 expiry under the injected clock; sign-out; reset and re-invite; the password policy; invite
 refusals; a refused send; throttle and lockout counted; no security alert. MCP tools in
-`tests/test_mcp_tools.py`.
+`tests/mcp/test_mcp_tools.py`.

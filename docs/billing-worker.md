@@ -47,13 +47,13 @@ flowchart TD
 
 | Rule | Code | Proven by |
 |---|---|---|
-| The run of date D is due at `BILLING_RUN_AT` (default 00:30, BILLING_TZ), not at 00:00: the margin covers orders that completed before midnight but committed after it (Q5). Before that, only up to yesterday is due | `plan.last_due` | `tests/test_worker_schedule.py::test_the_run_of_a_date_starts_at_0030_not_at_midnight`, `::test_the_clock_is_read_in_billing_tz` |
-| The worker refuses to start (exit 2) unless `BILLING_RUN_AT` is strictly between 00:00 and 02:00 (D-W13: after midnight, before the backup and the 03:00 reboot) | `app/worker/runtime.py` (`check_run_at`) | `::test_the_worker_refuses_a_run_time_outside_its_window`, `::test_run_times_inside_the_window`, `tests/test_worker_signals.py::test_the_worker_refuses_to_start` |
-| **Automatic window (Q4):** a wake-up bills every date after the latest run up to the due date only if they all lie in the due date and the day before. An older missing date is a **gap**: nothing is billed (billing past it would make it impossible to replay in order) and a warning says "catch up from the admin UI" | `plan.scheduled` | `tests/test_worker_schedule.py::test_what_a_wake_up_bills_on_its_own`, `::test_after_the_reboot_yesterday_and_today_are_caught_up_in_order`, `::test_an_older_gap_is_reported_and_never_billed_silently` |
-| First start ever (no run at all): the due date only - its run catches up every earlier period of every product (D-W15) | `plan.scheduled` | `tests/test_worker_schedule.py::test_what_a_wake_up_bills_on_its_own` |
-| A run left `running` (its worker was killed or stopped: the reboot, a deploy) is resumed first | `plan.scheduled`, `billing.unfinished_run` | `tests/test_worker_schedule.py::test_a_run_left_running_is_resumed_first`, `::test_a_wake_up_resumes_a_run_left_running` |
-| A run that failed as a whole holds the schedule: only its date is tried, after its backoff | `plan.scheduled`, `process.bill_date` | `tests/test_worker_schedule.py::test_a_whole_run_failure_holds_the_schedule_until_its_retry` |
-| The test-only clock override `WORKER_FAKE_NOW` is refused unless `APP_ENV=test` (Q14); `APP_ENV` unset means `prod` | `app/worker/runtime.py`, `app/config.py` | `tests/test_worker_runtime.py` |
+| The run of date D is due at `BILLING_RUN_AT` (default 00:30, BILLING_TZ), not at 00:00: the margin covers orders that completed before midnight but committed after it (Q5). Before that, only up to yesterday is due | `plan.last_due` | `tests/worker/test_worker_schedule.py::test_the_run_of_a_date_starts_at_0030_not_at_midnight`, `::test_the_clock_is_read_in_billing_tz` |
+| The worker refuses to start (exit 2) unless `BILLING_RUN_AT` is strictly between 00:00 and 02:00 (D-W13: after midnight, before the backup and the 03:00 reboot) | `app/worker/runtime.py` (`check_run_at`) | `::test_the_worker_refuses_a_run_time_outside_its_window`, `::test_run_times_inside_the_window`, `tests/worker/test_worker_signals.py::test_the_worker_refuses_to_start` |
+| **Automatic window (Q4):** a wake-up bills every date after the latest run up to the due date only if they all lie in the due date and the day before. An older missing date is a **gap**: nothing is billed (billing past it would make it impossible to replay in order) and a warning says "catch up from the admin UI" | `plan.scheduled` | `tests/worker/test_worker_schedule.py::test_what_a_wake_up_bills_on_its_own`, `::test_after_the_reboot_yesterday_and_today_are_caught_up_in_order`, `::test_an_older_gap_is_reported_and_never_billed_silently` |
+| First start ever (no run at all): the due date only - its run catches up every earlier period of every product (D-W15) | `plan.scheduled` | `tests/worker/test_worker_schedule.py::test_what_a_wake_up_bills_on_its_own` |
+| A run left `running` (its worker was killed or stopped: the reboot, a deploy) is resumed first | `plan.scheduled`, `billing.unfinished_run` | `tests/worker/test_worker_schedule.py::test_a_run_left_running_is_resumed_first`, `::test_a_wake_up_resumes_a_run_left_running` |
+| A run that failed as a whole holds the schedule: only its date is tried, after its backoff | `plan.scheduled`, `process.bill_date` | `tests/worker/test_worker_schedule.py::test_a_whole_run_failure_holds_the_schedule_until_its_retry` |
+| The test-only clock override `WORKER_FAKE_NOW` is refused unless `APP_ENV=test` (Q14); `APP_ENV` unset means `prod` | `app/worker/runtime.py`, `app/config.py` | `tests/worker/test_worker_runtime.py` |
 
 ## Ownership and takeover
 
@@ -62,7 +62,7 @@ One worker owns billing at a time, by a **PostgreSQL session advisory lock** (ke
 work runs on that same connection, so **the lock and the work fail together**: a dead
 connection frees the lock at the moment the work stops. The connection is autocommit,
 with `connect_timeout` 10 s, TCP keepalives 30/10/3 and `lock_timeout` 30 s (W1;
-`tests/test_worker_runs.py::test_the_worker_connection_settings`).
+`tests/worker/test_worker_runs.py::test_the_worker_connection_settings`).
 
 `start_run` (`app/worker/runs.py`) takes ownership first (another live owner ->
 `RunInProgress`, before anything is read), then the date's `billing_run` row decides:
@@ -74,11 +74,11 @@ with `connect_timeout` 10 s, TCP keepalives 30/10/3 and `lock_timeout` 30 s (W1;
 | `failed` | reopen it: attempt + 1, failure cleared |
 | `running` | its owner is gone (we hold the lock): **take it over**, attempt + 1, trigger kept, `started_at` = now (the attempt's start, as on a reopen) |
 
-Proven by `tests/test_worker_runs.py::test_no_run_yet_starts_one`,
+Proven by `tests/worker/test_worker_runs.py::test_no_run_yet_starts_one`,
 `::test_a_completed_run_is_a_noop_not_an_error`, `::test_a_failed_run_is_reopened`,
 `::test_a_running_run_whose_owner_is_gone_is_taken_over`,
 `::test_a_second_worker_backs_off_and_writes_nothing`, and the failure cases in
-`tests/test_worker_failures.py::test_a_takeover_after_a_death_between_accounts`,
+`tests/worker/test_worker_failures.py::test_a_takeover_after_a_death_between_accounts`,
 `::test_a_dropped_connection_frees_the_lock_for_a_takeover`,
 `::test_no_takeover_while_the_owner_is_alive`. A takeover is safe because accounts
 already `ok` in the run are never processed again and `bill_account` is idempotent.
@@ -87,7 +87,7 @@ already `ok` in the run are never processed again and `bill_account` is idempote
 
 `DateRun` (`app/worker/process.py`) processes the run's **members** - the accounts opened
 before 00:00 of the date (`billing_account.opened_at`, from the injected clock), any
-state, in id order (`tests/test_worker_process.py::test_an_account_opened_at_the_run_dates_midnight_is_not_a_member`).
+state, in id order (`tests/worker/test_worker_process.py::test_an_account_opened_at_the_run_dates_midnight_is_not_a_member`).
 **Per account, one transaction**: its charges and its `billing_run_account` row commit
 together or not at all (`::test_charges_and_outcome_commit_together`).
 
@@ -114,7 +114,7 @@ dates go ahead** for the other accounts (`::test_completed_when_every_member_is_
 - The scheduled retry of a run that failed as a whole waits **5 min, then 15 min, then
   hourly** from `finished_at` (`plan.retry_time`; `NotYet` before that). An operator's
   retry or catch-up is not held to the backoff
-  (`tests/test_worker_failures.py::test_the_backoff_is_5_15_then_hourly`,
+  (`tests/worker/test_worker_failures.py::test_the_backoff_is_5_15_then_hourly`,
   `::test_a_run_level_error_fails_the_run_and_later_dates_wait`,
   `::test_the_scheduled_retry_waits_for_its_backoff_then_the_dates_go_on`,
   `::test_an_operator_retry_is_not_held_to_the_backoff`, `::test_a_second_failure_waits_longer`).
@@ -129,7 +129,7 @@ blocked on an earlier date stay blocked until that date is fixed). An account th
 succeeds is then billed for its blocked later dates **in order, reopening one run at a
 time** (Q2), and stops at the next failure, where its later blocked rows are re-pointed
 to wait for that run. The account ends with exactly the rows a run without the failure
-would have written (`tests/test_worker_process.py::test_a_failed_account_blocks_only_itself_and_catches_up_in_order`,
+would have written (`tests/worker/test_worker_process.py::test_a_failed_account_blocks_only_itself_and_catches_up_in_order`,
 `::test_retrying_a_later_run_leaves_accounts_blocked_on_an_earlier_date`,
 `::test_a_catch_up_stops_at_the_next_failure_and_later_dates_wait_for_it`,
 `::test_only_a_failed_run_can_be_retried`).
@@ -137,7 +137,7 @@ would have written (`tests/test_worker_process.py::test_a_failed_account_blocks_
 Who retries:
 
 - the **schedule**: before a new scheduled date, every run failed because of accounts is
-  retried once (D-W17; `tests/test_worker_schedule.py::test_failed_accounts_are_retried_once_before_the_new_date`);
+  retried once (D-W17; `tests/worker/test_worker_schedule.py::test_failed_accounts_are_retried_once_before_the_new_date`);
   a run failed as a whole is retried on its date after the backoff;
 - the **operator**: `POST /internal/v1/billingRun/{id}/retry` queues a retry of any failed
   run (409 if not failed or already queued).
@@ -150,7 +150,7 @@ Who retries:
 failed as a whole first, then every date after the latest run up to `upTo`, in order; no
 run at all -> just `upTo` (D-W15). Nothing due -> 200 `{dates: []}` and nothing queued.
 A run that failed because of accounts is not rerun by a catch-up - its accounts come
-back through a retry (`tests/test_worker_queue.py::test_catch_up_dates`,
+back through a retry (`tests/worker/test_worker_queue.py::test_catch_up_dates`,
 `::test_catch_up_is_refused_before_the_run_is_due`,
 `::test_catch_up_queues_a_request_and_says_which_dates`,
 `::test_a_catch_up_request_runs_the_dates_in_order`,
@@ -169,7 +169,7 @@ order): mark picked, carry out, mark done.
 
 A request that raises is still marked done (logged), so one bad request cannot block the
 queue; a request picked by a worker that died is picked again; only the owner processes
-requests (`tests/test_worker_queue.py::test_a_request_that_raises_is_done_and_does_not_block_the_queue`,
+requests (`tests/worker/test_worker_queue.py::test_a_request_that_raises_is_done_and_does_not_block_the_queue`,
 `::test_a_request_picked_by_a_worker_that_died_is_picked_again`,
 `::test_only_the_owner_processes_requests`, `::test_a_retry_request_retries_only_the_failed_accounts`,
 `::test_a_retry_request_reruns_a_run_failed_as_a_whole`,
@@ -185,7 +185,7 @@ whose order (creating, resp. terminating) completed before 00:00 of the run date
 accounts included (statuses follow dates, D-W5); every other status untouched;
 idempotent. The due products are locked `ORDER BY id FOR UPDATE` first, like ordering's
 locks, so a delete order and the flips only wait for each other (Q8)
-(`tests/test_worker_flips.py::test_flips_follow_the_dates`,
+(`tests/worker/test_worker_flips.py::test_flips_follow_the_dates`,
 `::test_only_orders_completed_before_midnight_count`,
 `::test_other_statuses_are_never_touched`, `::test_a_blocked_accounts_products_are_flipped_too`,
 `::test_flips_and_a_delete_order_never_deadlock`). The flips are cosmetic for money;
@@ -230,7 +230,7 @@ during a catch-up does not fail on it.
 
 `ageSeconds` counts from `finished_at`, else `started_at`. It is **not part of
 `/healthz`**: a late run never marks the app unhealthy. An unknown query parameter is a
-400. Proven by `tests/test_billing_status.py` (all ten tests, including a strict
+400. Proven by `tests/ops/test_billing_status.py` (all ten tests, including a strict
 schema with `additionalProperties: false` on every response).
 
 ## Capacity
@@ -262,7 +262,7 @@ restored into the local load-test stack, with the worker at `cpus: 1` inside the
   (`billing.earliest_failures_before`), not once per account. Both runs gave the same
   results digest (`loadtest/billing-digest.sql`: ABRs, bills and outcomes without ids):
   abrs `fc08396b`, bills `3ec7d204`, outcomes `a5529ca7`. Proven by
-  `tests/test_worker_run_cost.py`.
+  `tests/perf/test_worker_run_cost.py`.
 
 ## Round trips
 
@@ -292,7 +292,7 @@ retries - through the heartbeat (`DateRun(on_account=...)`), and the run's
 (`compose.prod.yaml`) is `find /tmp/worker-alive -mmin -3` in bash (no interpreter start):
 older than 180 s or missing -> `unhealthy` after 3 probes, which includes a worker that
 cannot reach the database. Healthchecks are informational only: nothing restarts an
-unhealthy container. Proven by `tests/test_worker_heartbeat.py` (one heartbeat per
+unhealthy container. Proven by `tests/worker/test_worker_heartbeat.py` (one heartbeat per
 account, no gap over the threshold, in all four paths; without the call all four fail).
 
 ## Stopping
@@ -300,10 +300,10 @@ account, no gap over the threshold, in all four paths; without the call all four
 - **SIGTERM / SIGINT** (what `docker compose stop`/`up` send): the worker finishes the
   account in hand, leaves the run `running` (not failed), closes its connection - which
   releases the lock - and exits 0 (D-W11). `stop_grace_period: 60s` is far longer than
-  one account takes (`tests/test_worker_signals.py::test_sigterm_finishes_the_account_in_hand_and_stops`,
-  `tests/test_worker_schedule.py::test_the_checkpoint_stops_between_accounts`).
+  one account takes (`tests/worker/test_worker_signals.py::test_sigterm_finishes_the_account_in_hand_and_stops`,
+  `tests/worker/test_worker_schedule.py::test_the_checkpoint_stops_between_accounts`).
 - **SIGKILL** leaves nothing half-written (one transaction per account), and the next
-  worker takes the run over (`tests/test_worker_signals.py::test_sigkill_leaves_nothing_half_written_and_the_next_worker_takes_over`).
+  worker takes the run over (`tests/worker/test_worker_signals.py::test_sigkill_leaves_nothing_half_written_and_the_next_worker_takes_over`).
   This test found a real bug: the first planner never resumed a run left `running`.
 - `--once`: one wake-up, then exit; exit 1 if that wake-up failed
   (`::test_once_bills_the_due_date_and_exits`).

@@ -13,22 +13,22 @@ Before requesting a code, the browser lists the on-sale plans from
 
 ## GUI review fixes
 
-- #220: pay-as-you-go offering details list and open usage prices. Add price offers Usage only there (monthly recurring remains plan-only), with KB/MB/GB, second/minute or message, a positive whole-byte/second/message block and price per block; an overlapping price of the same usage kind and currency is refused before submit. Usage-price edit keeps type and unit fixed and patches only changed name, description and exact-decimal amount. Subscriber Usage maps TMF635 rating status and shows the first applied `usageProductPrice`; rated ledger rows use its name. Component tests pin the display, validation and exact writes, and `tests/test_ui_requests.py` replays create/edit against a real pay-as-you-go offering. No backend change.
+- #220: pay-as-you-go offering details list and open usage prices. Add price offers Usage only there (monthly recurring remains plan-only), with KB/MB/GB, second/minute or message, a positive whole-byte/second/message block and price per block; an overlapping price of the same usage kind and currency is refused before submit. Usage-price edit keeps type and unit fixed and patches only changed name, description and exact-decimal amount. Subscriber Usage maps TMF635 rating status and shows the first applied `usageProductPrice`; rated ledger rows use its name. Component tests pin the display, validation and exact writes, and `tests/internal/test_ui_requests.py` replays create/edit against a real pay-as-you-go offering. No backend change.
 
 - G8 (B9, B22, I8): the sidebar shows no item counts (Subscribers, Product catalog, Billing runs, Orders lose theirs, with the three count requests and `countOrders`); only the failed indicators remain. Deviation from epic D6 ("Counts in mono"). Postpaid Add product (and the Resume and Change offering previews) label the row "Balance after unbilled charges and this one", computed in cents as `(settlement.unallocatedCredit − settlement.outstanding) − first charge` from one `GET .../settlement`, "—" while it loads or fails; the card's `charges` list is not used, it is capped at 20. An edited draft's offering row is scrolled into view once (`scrollIntoView({ block: 'nearest' })`). `NumberPicker` is a `Combobox` (number, plus its name when the name does not repeat it); Add product and Change offering keep their filtered radio lists with price columns - "I8 offerings: satisfied by R10's filtered list", a deviation from the artboard. `/ui-kit` shows the Combobox (`ui.uikit.combobox`). No write body changes.
 
-- G15 (D1-D5): `ops/staging-data/` holds the four dry-run-first scripts the human runs against the stand (`rename_accounts.py` D1, `retire_test_data.py` D3, `seed_numbers.py` D4, `catalog_tree.py` D5; D2 is no script: history before 2026-10-21 stays, the next stand reset rebuilds it from the USD seed). They read `BSS_URL`, `BSS_USER`, `BSS_PASSWORD` from the shell, sign in as the UI does, print every change, write only with `--apply`, and a second run is a no-op; `tests/test_staging_data.py` runs them on a throwaway database (the dev compose mounts `ops/staging-data` read-only for it). A session never runs them against the stand. D3 treats a billing account as a test account when its name or its customer's name matches the same patterns, and keeps one with any product that is not terminated, cancelled or aborted. The local seed now uses US names and USD magnitudes (a tenth of the old amounts), an organization's account is `<name> corporate`, the specification "Mobile Voice & Data (numbered)" requires a number, 20 numbers `12025550100`-`119` exist and every mobile add carries the next free one, and the categories Mobile / Home Internet / TV hold every offering and are listed by the catalogs Consumer catalog and Business catalog. `scripts/mcp-prepaid-smoke.py` and the numbered-transfer e2e retire the offering and specification they create (Retired, isSellable false); `scripts/mcp-smoke.sh` creates nothing.
+- G15 (D1-D5): `ops/staging-data/` holds the four dry-run-first scripts the human runs against the stand (`rename_accounts.py` D1, `retire_test_data.py` D3, `seed_numbers.py` D4, `catalog_tree.py` D5; D2 is no script: history before 2026-10-21 stays, the next stand reset rebuilds it from the USD seed). They read `BSS_URL`, `BSS_USER`, `BSS_PASSWORD` from the shell, sign in as the UI does, print every change, write only with `--apply`, and a second run is a no-op; `tests/ops/test_staging_data.py` runs them on a throwaway database (the dev compose mounts `ops/staging-data` read-only for it). A session never runs them against the stand. D3 treats a billing account as a test account when its name or its customer's name matches the same patterns, and keeps one with any product that is not terminated, cancelled or aborted. The local seed now uses US names and USD magnitudes (a tenth of the old amounts), an organization's account is `<name> corporate`, the specification "Mobile Voice & Data (numbered)" requires a number, 20 numbers `12025550100`-`119` exist and every mobile add carries the next free one, and the categories Mobile / Home Internet / TV hold every offering and are listed by the catalogs Consumer catalog and Business catalog. `scripts/mcp-prepaid-smoke.py` and the numbered-transfer e2e retire the offering and specification they create (Retired, isSellable false); `scripts/mcp-smoke.sh` creates nothing.
 
 - G13 (P14, B14, B20): Balances adds an independent Account totals list and fresh GET detail, with account filtering and currency; the prepaid Balance actions tab reads the account's accumulated balance into a KeyValue with its own loading/error/retry state. Bill lists and details label amountDue as Total and retain Remaining. Built-in Monthly usage counts loaded accounts with the default cycle. Component regressions and backend read replay cover these paths; no writes, API or primitives change.
 
-- G11 (P5, P6, I1): Add billing account (customer dialog and subscriber card More actions) reuses the account step of New subscriber and `createBillingAccount`, so its body is the same; the customer dialog lists its accounts with an inline-confirmed Delete (the 409 shows on the row) and Delete customer replaces itself with "Remove billing accounts first" while any remain. New subscriber stays three TMF POSTs and compensates newest first (account failure: DELETE customer, then party; customer failure: DELETE party); a failed DELETE stops the undo and the error lists the leftover ids with a link to Parties. Component tests and `tests/test_ui_requests.py` pin the bodies and the DELETE sequence. Already present: `deleteBillingAccount` from the subscriber card. No backend/API change.
+- G11 (P5, P6, I1): Add billing account (customer dialog and subscriber card More actions) reuses the account step of New subscriber and `createBillingAccount`, so its body is the same; the customer dialog lists its accounts with an inline-confirmed Delete (the 409 shows on the row) and Delete customer replaces itself with "Remove billing accounts first" while any remain. New subscriber stays three TMF POSTs and compensates newest first (account failure: DELETE customer, then party; customer failure: DELETE party); a failed DELETE stops the undo and the error lists the leftover ids with a link to Parties. Component tests and `tests/internal/test_ui_requests.py` pin the bodies and the DELETE sequence. Already present: `deleteBillingAccount` from the subscriber card. No backend/API change.
 
 - G12 (B13, B15, I11): Orders labels each item by its business action, prefers snapshot names and lazily resolves missing product names once per product in the open dialog, with target status beside item state. Save details reloads only the order, retains the dialog and edit panel and reports Details saved in the footer. The global list probes X-Total-Count, reads/reverses the tail page and walks backwards, keeping rows through subsequent loads with visible refresh errors. Writes refresh only the changed row (deletes remove it) and existing navigation counts. Component regressions and backend read replays cover these paths; write bodies and the API are unchanged. The guard rejects the prescribed targeted npm invocation, so supported Make targets and the commit hook provide verification.
-- G14 (B12, B16-B19, B25-B27, I12, I13): `format/labels.ts` holds the human labels of API codes (payment methods, run triggers, event types, `plural(n, noun)`, `agoLabel`); screens show the label and keep the raw code in `title` (`Coded`, `StatusPill`). The style guard rejects a `${n} <plural noun>` template without `plural()`. `Checkbox label=` renders one `<label class="bss-check">`; name cells ellipsize with `title`, date/period/id cells never wrap. One form pattern: `DateField`, `SelectField`, `FileField`, payment method as `Segmented` (Record payment, Record refund, top-up); New category/catalog sit in the PageHeader actions; Release hold confirms with the primary style. The test setup fails any test that leaves a form control without a label or aria name. B18 (Deactivate opens End on a date with today) and B19 (toast action contrast, checked against both themes) already held. Write bodies are unchanged, so `tests/test_ui_requests.py` needs no new body.
+- G14 (B12, B16-B19, B25-B27, I12, I13): `format/labels.ts` holds the human labels of API codes (payment methods, run triggers, event types, `plural(n, noun)`, `agoLabel`); screens show the label and keep the raw code in `title` (`Coded`, `StatusPill`). The style guard rejects a `${n} <plural noun>` template without `plural()`. `Checkbox label=` renders one `<label class="bss-check">`; name cells ellipsize with `title`, date/period/id cells never wrap. One form pattern: `DateField`, `SelectField`, `FileField`, payment method as `Segmented` (Record payment, Record refund, top-up); New category/catalog sit in the PageHeader actions; Release hold confirms with the primary style. The test setup fails any test that leaves a form control without a label or aria name. B18 (Deactivate opens End on a date with today) and B19 (toast action contrast, checked against both themes) already held. Write bodies are unchanged, so `tests/internal/test_ui_requests.py` needs no new body.
 
 - G9 (B11, B28, P12, P15, P16, I7): shared positive-money errors check the sign before precision, including grouped zero; Top up optionally sends an active account number as logicalResource; Record payment sends trimmed correlatorId and description without paymentDate. Adjustments require a reason and refunds require a description in the UI. Payments header and subscriber/global payment details reuse the existing account-level refund dialog and refresh the relevant account/refund list on close. Holds through displays the business-zone exclusive end date minus one calendar day. Component and backend replay tests pin the changed bodies; midnight and browser-zone regressions cover the date. Already present: voucher refusal and business-clock payment dates. No backend/API or migration change.
 
-- G7 (P7, P8, P9, P10, I3, B21, B27): New offering sends description, isSellable (default true) and selected category references with explicitly labelled controls; non-sellable catalog rows show a Tag in every lifecycle group. Offering detail Add price supports oneTime and monthly recurring only, allows today or later, posts the price and then patches the complete old-plus-new reference list. Existing offering and price Delete flows remain unchanged. Add product and Change offering choose shownPrice at the selected start/change date's business-zone midnight from the already loaded catalog, without a catalog refetch. The sidebar link is Financial accounts, and a gallery regression requires every form control to have a label. Component tests and tests/test_ui_requests.py pin every new or changed TMF620 write, including exact decimal tokens and preserved price references.
+- G7 (P7, P8, P9, P10, I3, B21, B27): New offering sends description, isSellable (default true) and selected category references with explicitly labelled controls; non-sellable catalog rows show a Tag in every lifecycle group. Offering detail Add price supports oneTime and monthly recurring only, allows today or later, posts the price and then patches the complete old-plus-new reference list. Existing offering and price Delete flows remain unchanged. Add product and Change offering choose shownPrice at the selected start/change date's business-zone midnight from the already loaded catalog, without a catalog refetch. The sidebar link is Financial accounts, and a gallery regression requires every form control to have a label. Component tests and tests/internal/test_ui_requests.py pin every new or changed TMF620 write, including exact decimal tokens and preserved price references.
 
 - G6 (B7, retry checks): billing-run history pages 20 runs at a time through the existing offset/limit endpoint, with Previous/Next controls and a range footer. The latest-run panel survives older-page views, selection closes when its run leaves the page, and queued work returns to page one for polling. Component tests walk 23 runs and pin the already-present failed-run and failedTechnical-command Retry POSTs without bodies; no write or backend request changed.
 
@@ -124,7 +124,7 @@ The other screens grew without a designer. The UI is restyled from the second ha
 - dark mode from the same tokens.
 
 It is **visual only**: API calls, bodies, routes and polling are unchanged, so
-`tests/test_ui_requests.py` is untouched.
+`tests/internal/test_ui_requests.py` is untouched.
 
 The human delegated every decision; they are in epic #43 (rules and D1-D13; the redesign
 is done and the epic closed 2026-11-05). The ones that still matter are:
@@ -158,7 +158,7 @@ which closes Add product and opens the card's Top-up form with the amount typed 
 the hint only. Markers `ui.addProduct.prepaidPreview`, `ui.addProduct.topUpShortfall`.
 Tests (`SubscriberCard.test.tsx`, both timezones): figures today and future, the handoff with
 the amount prefilled and the top-up body pinned (the POST itself is already replayed in
-`tests/test_ui_requests.py`), no shortfall when covered, one preview request.
+`tests/internal/test_ui_requests.py`), no shortfall when covered, one preview request.
 Deviation: the first product of a new subscriber (`SubscriberForms.tsx`) has no card behind
 it, so there the warning shows without the Top-up button (`onTopUp` is optional).
 
@@ -174,7 +174,7 @@ by id and sorts by `requestedDate` descending; a row opens **Balance action**
 `version`; a postpaid card makes no TMF654 request. `TYPE_LABEL` gained the four new types.
 Tests: `SubscriberCard.test.tsx` (request pair, order, signs and labels, detail fetch and links,
 payment method and expiry, empty, error, reload after a top-up, postpaid, transaction labels) and
-`tests/test_ui_requests.py::test_balance_action_history_reads_as_the_ui_makes_them` (the reads replayed).
+`tests/internal/test_ui_requests.py::test_balance_action_history_reads_as_the_ui_makes_them` (the reads replayed).
 Deviations (the code differs from the design's facts):
 - A transfer body names only `receiverBucket`, not the receiving account, so the receiver
   ("Transfer to {name}", the dialog's To link) is resolved with one `GET bucket/{id}` per distinct
@@ -195,7 +195,7 @@ exported and takes a `load` function. The dialog is re-keyed after a write, so t
 list reload.
 Tests: `Balances.test.tsx` (the buckets join, status and chip filters, bucket detail, each kind's
 own list only, top-up cancel with its pinned PATCH body, transfer receiver named through its bucket),
-`tests/test_ui_requests.py::test_balances_screen_reads_as_the_ui_makes_them` (every query replayed).
+`tests/internal/test_ui_requests.py::test_balances_screen_reads_as_the_ui_makes_them` (every query replayed).
 Deviations (the design's facts against the code and the vendored TMF654 spec):
 - The vendored `listBucket` declares no filter, but the server filters buckets by `status`,
   `usageType`, `id` and `partyAccount.id` (`app/api/balance.py`); the screen uses the server's.
@@ -218,7 +218,7 @@ offers **Delete number** (`ui.numbers.delete`, then Confirm delete): DELETE with
 `useWrite`; hidden when the loaded data shows an assignment (a product, or allocation not
 `available`, or usage not `idle`), otherwise the server's 409 is shown in the dialog.
 Tests: `Products.test.tsx`, `Numbers.test.tsx` (delete pinned, refusal kept in the dialog),
-`tests/test_ui_requests.py::test_product_inventory_reads_and_number_delete_as_the_ui_sends_them`.
+`tests/internal/test_ui_requests.py::test_product_inventory_reads_and_number_delete_as_the_ui_sends_them`.
 Deviations: the product list has no number value, only the resource id, so the Number column joins
 the inventory list (`loadNumbers`); order links go to `/orders?account=` because the Orders screen
 filters by account only; the status filter is a select of the eight stored statuses.
@@ -237,7 +237,7 @@ fresh Idempotency-Key) and an edit mode (`DraftToEdit`, button Save draft) that 
 `productOrderItem` and `requestedStartDate`. `ToastProvider` now takes any node, for the toast link.
 Tests: `Orders.test.tsx` (actions per state, every body, 409/rejected/unsure messages, edit round
 trip, in-progress follow), `SubscriberCard.test.tsx` (save as draft body, header, toast), and
-`tests/test_ui_requests.py::test_order_writes_replay_as_the_ui_sends_them`.
+`tests/internal/test_ui_requests.py::test_order_writes_replay_as_the_ui_sends_them`.
 Deviations:
 - The toast after Save as draft links to `/orders?account=<id>`, not to the order: the Orders screen has
   no per-order link.
@@ -256,7 +256,7 @@ request). `/orders` is `screens/Orders.tsx` with `api/orders.ts`; the order dial
 `inProgress` order to `/prepaid-commands?account=` when the journal (asked by
 `billingAccount.id`) holds a command with that order link; the card links `Orders`
 (`ui.subscriber.orders`). Tests: `Orders.test.tsx`, the sidebar and route tests in `App.test.tsx`,
-the card link test, and `tests/test_ui_requests.py::test_orders_screen_reads_as_the_ui_makes_them`.
+the card link test, and `tests/internal/test_ui_requests.py::test_orders_screen_reads_as_the_ui_makes_them`.
 Deviations:
 - The nav's accessible name is "Main" (was "Operations"): App, FinancialAccounts tests and the e2e
   smoke use it (TEST-CHANGE).
@@ -277,7 +277,7 @@ state filter, `?account=<id>` chip (`ui.prepaidCommands.accountChip`, removing i
 The row opens `ui.prepaidCommands.detail` (every field, `needs_topup` block, Retry
 `ui.prepaidCommands.retry` only for `failedTechnical`, 409 shown). The prepaid KPI area of the card
 links "Commands" (`ui.subscriber.prepaid.commands`). Tests: `PrepaidCommands.test.tsx` and the
-replay in `tests/test_ui_requests.py::test_prepaid_order_and_command_reads_as_the_ui_makes_them`
+replay in `tests/internal/test_ui_requests.py::test_prepaid_order_and_command_reads_as_the_ui_makes_them`
 (list query, badge, Retry POST).
 Deviations:
 - The API filter is `billingAccount.id` (the design's `account` is only the screen's URL parameter).
@@ -300,7 +300,7 @@ is read-only `max(paidThrough, today)`. Body: one `modify` item, `product: {id}`
 `productOffering: {id, href, @type}`, never a `status`. The pending change then shows through
 slice 4's line and Undo. Tests: `SubscriberCard.test.tsx` ("change offering": menu rules, both
 bodies, offering list, fixed prepaid date, rejection and 422 shown) and the replays
-`tests/test_ui_requests.py::test_postpaid_offering_change_as_the_ui_sends_it` and
+`tests/internal/test_ui_requests.py::test_postpaid_offering_change_as_the_ui_sends_it` and
 `::test_prepaid_offering_change_as_the_ui_sends_it`.
 Deviations:
 - The menu tests of slice 4 listed the items exactly, so the new item changed their expectations
@@ -320,8 +320,8 @@ funding-suspended prepaid product shows "Waiting for funds" and a **Top up** but
 the Top-up form with the shortfall. Backend: `pendingChanges` on the internal account products
 (see [prepaid.md](prepaid.md)), no migration. Tests: `SubscriberCard.test.tsx` ("product actions":
 menu items per status and cause, every body, the rejected reasons, pending lines, Undo and its
-409), `tests/test_internal_pending_changes.py`, and the replays
-`tests/test_ui_requests.py::test_postpaid_product_actions_as_the_ui_sends_them` and
+409), `tests/internal/test_internal_pending_changes.py`, and the replays
+`tests/internal/test_ui_requests.py::test_postpaid_product_actions_as_the_ui_sends_them` and
 `::test_prepaid_product_actions_as_the_ui_sends_them`.
 Deviations:
 - `requestedStartDate` is noon of the date in BILLING_TZ (`requestedDate`, as the add order
@@ -344,7 +344,7 @@ cancel/remove behind an inline Yes/No with the design's texts, one request, a to
 reload. A 409 shows the server's message in the dialog, which stays open; a 5xx says "Unsure
 whether it was saved" with Refresh. Tests: `SubscriberCard.test.tsx` ("writes on a balance
 action": every body, buttons per kind and status, the 409, the 5xx) and
-`tests/test_ui_requests.py::test_balance_action_writes_as_the_ui_sends_them` (replay: reversed
+`tests/internal/test_ui_requests.py::test_balance_action_writes_as_the_ui_sends_them` (replay: reversed
 top-up, released hold, 409 for a held top-up, DELETE of a refused action).
 Deviations (the code differs from the design's facts):
 - Every `*_Update` schema requires `status`, so Edit note sends the current status with the
@@ -411,7 +411,7 @@ and frontend-only: TMF622 `GET /productOrder` already filters by `state` and
   resume, change offering) remain gap slice 2.
 - Tests: component tests pin the list request (filters, paging), the account chip from
   the URL, the dialog's item and cancellation rendering, and the error and empty states.
-  `tests/test_ui_requests.py` replays the GET filters against the backend. The e2e opens
+  `tests/internal/test_ui_requests.py` replays the GET filters against the backend. The e2e opens
   `/orders` and one dialog read-only.
 
 ## P6a: account mode and the prepaid card (2026-10-23)
@@ -447,7 +447,7 @@ No backend change. A prepaid card header offers **Top up**, **Adjust** and **Hol
 (disabled until the bucket has loaded; the bucket's `id` is now read with the figures).
 `PrepaidMoney.tsx` is one modal for the three; the requests are built in one place
 (`balanceActionRequest` in `api/bss.ts`) and pinned in `SubscriberCard.test.tsx` (both time
-zones) and replayed against the real API in `tests/test_ui_requests.py`.
+zones) and replayed against the real API in `tests/internal/test_ui_requests.py`.
 
 - **Bodies.** Top-up: `TopupBalance` with `partyAccount`, `paymentMethod {id, name}` (TMF654's
   `PaymentMethodRef` requires an `id`; the method name is both) and an optional `reason`.
@@ -617,7 +617,7 @@ Index: [README.md](README.md). Screen-level detail:
   a run is running or a request queued from the screen is not carried out yet -
   carried out = a run started at or after the request's `requestedAt` (server clock,
   never the browser's) has finished; proven against the real worker in
-  `tests/test_ui_requests.py`. It gives up after 3 minutes with a note. The sidebar's
+  `tests/internal/test_ui_requests.py`. It gives up after 3 minutes with a note. The sidebar's
   Billing runs item shows the run count, or the red "failed" badge when the latest run
   failed, and is reloaded when the screen sees the latest run change.
 - Postpaid charge timing copy follows the end-of-day rule: an order completed today is charged by
@@ -641,7 +641,7 @@ the lifecycle suspension cause. Billing settings gains a Prepaid lifecycle tab w
 GET/partial PUT of the four durations. It reuses the shared edit dialog and write handling:
 integer bounds, changed fields only, retained refusal values, and Refresh after uncertainty.
 No backend or policy changes. Component tests cover projections and settings, and
-`tests/test_ui_requests.py` replays the exact partial PUT including zero and the upper bound.
+`tests/internal/test_ui_requests.py` replays the exact partial PUT including zero and the upper bound.
 
 ## Messages tab and consent (2026-11-14, issue #222)
 
@@ -684,8 +684,8 @@ The UI half of #184 ([taxes.md](taxes.md)).
   address…**, which closes it and opens the card's dialog.
 - Tests: `SubscriberCard.serviceAddress.test.tsx`, `Subscribers.test.tsx`,
   `GlobalBills.test.tsx` (rate detail), `SubscriberCard.balance.test.tsx` (renewal history);
-  `tests/test_ui_requests.py::test_service_address_writes_as_the_ui_sends_them`,
-  `tests/test_subscriber_search.py`, `tests/test_tax_engine.py`.
+  `tests/internal/test_ui_requests.py::test_service_address_writes_as_the_ui_sends_them`,
+  `tests/internal/test_subscriber_search.py`, `tests/billing/test_tax_engine.py`.
 
 ## Frontend conventions
 
@@ -751,7 +751,7 @@ self-hosted (`@fontsource`), no CDN at runtime. Every dependency needs a stated 
   limits), refunds, payments, bills. Refuses `APP_ENV=prod` and any database but the
   local `db`. Idempotent: if its catalog exists it does nothing; a partial seed is
   reported (reset with `make clean && make up`), never patched. Needs migrations at head
-  (`make migrate`). `tests/test_seed.py` runs it on a throwaway database.
+  (`make migrate`). `tests/ops/test_seed.py` runs it on a throwaway database.
 - **Catalog:** lifecycle steps (In Design -> Active -> Retired, Retired final) are made
   from an offering detail dialog (row click), with an inline confirm; the table has no
   room for an action column at 1280px. New offering = TMF620 price, then the In Design
@@ -762,7 +762,7 @@ self-hosted (`@fontsource`), no CDN at runtime. Every dependency needs a stated 
   pick up the new price from their next billing period starting on or after the date,
   and new orders from the date.
 - **The UI's write requests are pinned on both sides**: component tests assert the exact
-  bodies, and `tests/test_ui_requests.py` replays the same bodies against the real API.
+  bodies, and `tests/internal/test_ui_requests.py` replays the same bodies against the real API.
   Change both together.
 - **Routes:** `/subscribers`, `/subscribers/{accountId}`, `/catalog`, `/billing-runs`
   (not `/billing`: never confusable with the app's `/billing-status`, which Caddy routes
@@ -812,7 +812,7 @@ Built as designed, frontend only.
 a status filter, the `?account=` chip (sent as `account.id`) and a client-side date range. Both
 lists load with `getAll`, newest first.
 Tests: `Payments.test.tsx` (list, links, tabs, filters and requests, detail, error and retry, the
-card panel) and `tests/test_ui_requests.py::test_payment_and_refund_history_reads_as_the_ui_makes_them`.
+card panel) and `tests/internal/test_ui_requests.py::test_payment_and_refund_history_reads_as_the_ui_makes_them`.
 Deviations: `done` is the only payment and refund status, so the status filter has one choice
 besides All; the reference column is `correlatorId`, else `authorizationCode`, else `name` (the
 payment has no single reference field); refund rows have no account name, so they show `BA-xxxx`.
@@ -835,9 +835,9 @@ to the `hub` path the server names. The server's 422 shows in the dialog with th
 The System panel (`ui.system`) shows `/healthz`, `/billing-status` as key/value (a 503 body is shown,
 not hidden) and the BssBillingAccount schema link. The dev proxy forwards `/healthz` and
 `/billing-status`.
-Tests: `tests/test_event_subscription_list.py` (list, filter, paging, deleted excluded, delivery
+Tests: `tests/internal/test_event_subscription_list.py` (list, filter, paging, deleted excluded, delivery
 summary, 401), `Integrations.test.tsx` (list, panel, 503 states, role, create for TMF676 v4 and
-TMF620 v5, 422 kept, delete), `tests/test_ui_requests.py::test_event_subscriptions_as_the_ui_sends_them`
+TMF620 v5, 422 kept, delete), `tests/internal/test_ui_requests.py::test_event_subscriptions_as_the_ui_sends_them`
 and `test_the_ui_event_lists_are_the_servers` (`hubs.ts` base paths and events against
 `app/events/types.py`; `compose.override.yaml` mounts that one file into the test container).
 Deviations:
@@ -861,7 +861,7 @@ Design: [network.md](network.md). No backend change; the UI reads and writes wha
 - **Narrowing.** The offering edit dialog shows, for each name the offering's specification declares (`ui.catalog.offeringNetworkProfile`), a select of its listed values, "Default (v)" meaning no `prodSpecCharValueUse` entry. The PATCH sends the whole `prodSpecCharValueUse` array: entries for other characteristics as loaded, the narrowed profile ones rebuilt. Changing the specification drops narrowings the new one does not list.
 - **Network step.** `NetworkCommands` (`screens/NetworkCommands.tsx`, `api/network.ts`) is a section of the order dialog (`productOrder.id=`) and the product dialog (`product.id=`); it is **hidden when there are no commands** (offerings that are not network lines send nothing) and shows kind, state (`network` status family), due date, attempts, last attempt, next attempt (pending), last error and refusal code.
 - **Retry** (`ui.network.retry`) is a bodiless POST, offered only for `exhausted`; a refusal shows a note that it is final (a new order is the fix), and a 409 is shown with the button kept. The API never sends: the worker does on its next tick, so the panel re-reads and shows `pending`.
-- Tests: `Catalog.test.tsx` (profile and narrowing bodies), `Orders.test.tsx`, `Products.test.tsx`; `test/fetch.ts` answers the two list queries with an empty list by default; `tests/test_ui_requests.py` replays the bodies and reads. `list_network_commands` and `retry_network_command` left `tests/ui-mcp-allowlist.txt` (the UI calls them); `get_network_command` stays, the list rows carry every field shown.
+- Tests: `Catalog.test.tsx` (profile and narrowing bodies), `Orders.test.tsx`, `Products.test.tsx`; `test/fetch.ts` answers the two list queries with an empty list by default; `tests/internal/test_ui_requests.py` replays the bodies and reads. `list_network_commands` and `retry_network_command` left `tests/ui-mcp-allowlist.txt` (the UI calls them); `get_network_command` stays, the list rows carry every field shown.
 
 ## Device UI (2026-11-14, issue #225)
 
@@ -884,7 +884,7 @@ what #194 built.
   network's reasons to the toast (`OrderOutcome.deviceWarning`); `deviceIncompatible` keeps the
   dialog open with the server's reason.
 - Tests: `ProductDevice.test.tsx`, `SubscriberCard.prepaid.test.tsx`, `Products.test.tsx`;
-  `tests/test_device.py::test_device_requests_as_the_ui_sends_them` replays the bodies.
+  `tests/resources/test_device.py::test_device_requests_as_the_ui_sends_them` replays the bodies.
   `list_devices` and `check_device` left `tests/ui-mcp-allowlist.txt`.
 
 ## Account security UI (2026-11-14, issue #226)
@@ -894,9 +894,9 @@ This is the UI half of #193 ([accounts.md](accounts.md#account-security-pin-veri
 - **Where.** A Security tab on **every** subscriber card, after Messages, mounted only while shown. A postpaid customer can have a PIN and locks too; the server decides when they are asked for. The audit log is filtered by `customer.id`, so a customer's two accounts show the same log. The Parties customer dialog shows the same `AuditLog` behind a button, so opening the dialog adds no request.
 - **Locks per line.** The card's product list carries no lock, so each live line's lock row reads `GET /security/lock/{id}`. That is one request per line, while the Security tab is open; accounts have few lines, and a batch read would need a new endpoint.
 - **PIN field.** `AccountPinField` appears on the dialogs whose request the server may verify: number change and SIM swap (one dialog), Number Transfer PIN, the party edit when the contact media change, and clearing a lock. It is always offered there, not only for prepaid lines, because the server alone knows whether the customer is protected. The value travels only in `X-Account-Pin`, sent when typed (`accountPinHeader`), and is cleared after a successful write.
-- **Codes.** `ApiError` keeps the TMF Error's `code` when it is not a bare status. `explain` maps the six account security codes to operator sentences, so every 403 path (party edit, Transfer PIN, lock clearing) shows them without its own mapping. `ORDER_ERRORS` includes them for rejected orders. `tests/test_order_error_codes.py` now also reads `guard.MESSAGES`, so the exported code list follows the guard.
+- **Codes.** `ApiError` keeps the TMF Error's `code` when it is not a bare status. `explain` maps the six account security codes to operator sentences, so every 403 path (party edit, Transfer PIN, lock clearing) shows them without its own mapping. `ORDER_ERRORS` includes them for rejected orders. `tests/orders/test_order_error_codes.py` now also reads `guard.MESSAGES`, so the exported code list follows the guard.
 - **Not here.** Submitting a draft order that swaps a SIM (`PATCH state acknowledged`) sends no PIN. The order detail has no PIN field, so such a draft is rejected with `pinRequired` and the operator places the swap from the Subscriber number dialog instead. There is no MCP parity work: the security operations are operator-only (`EXCLUDED`).
-- Tests: `SubscriberCard.security.test.tsx`, `Numbers.test.tsx` (header and refusal), `Parties.test.tsx` (contact PIN, customer audit), `client.test.ts` (code, `explain`) and the replay `tests/test_account_security.py::test_security_requests_as_the_ui_sends_them`.
+- Tests: `SubscriberCard.security.test.tsx`, `Numbers.test.tsx` (header and refusal), `Parties.test.tsx` (contact PIN, customer audit), `client.test.ts` (code, `explain`) and the replay `tests/care/test_account_security.py::test_security_requests_as_the_ui_sends_them`.
 
 ## Screens page on the server (2026-11-10, issue #314)
 

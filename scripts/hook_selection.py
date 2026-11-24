@@ -70,12 +70,12 @@ MARKED = {
 # A path, or a directory with a trailing slash, and the test files that read it.
 DATA = {
     "frontend/src/": (
-        "tests/test_order_error_codes.py",
-        "tests/test_ui_mcp_parity.py",
-        "tests/test_ui_requests.py",
+        "tests/orders/test_order_error_codes.py",
+        "tests/internal/test_ui_mcp_parity.py",
+        "tests/internal/test_ui_requests.py",
     ),
-    "docs/progress/scope.yaml": ("tests/test_mcp_tools.py",),
-    "scripts/ui_mcp_parity.py": ("tests/test_ui_mcp_parity.py",),
+    "docs/progress/scope.yaml": ("tests/mcp/test_mcp_tools.py",),
+    "scripts/ui_mcp_parity.py": ("tests/internal/test_ui_mcp_parity.py",),
 }
 # A change to the map itself runs every test in it, and with them the read check.
 SELF = "scripts/hook_selection.py"

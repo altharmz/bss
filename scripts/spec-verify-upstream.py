@@ -3,7 +3,7 @@
 spec/README.md. Run via `make spec-verify-upstream`.
 
 Needs the network, so it is not part of `make test`. This is the check that ties the SHAs
-recorded in the README to upstream; tests/test_spec_provenance.py only ties the local
+recorded in the README to upstream; tests/tmf/test_spec_provenance.py only ties the local
 files to the README. Runs on the host with the standard library only (the `tools`
 container has no network and does not mount spec/).
 """

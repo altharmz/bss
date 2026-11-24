@@ -86,7 +86,7 @@ Here `unbilledABRs` is the sum of ABRs with `customer_bill_id IS NULL`. In words
 customer owes on bills, minus credit not yet used, equals what they owe overall, minus
 charges not yet billed.
 
-Worked example (the mid-cycle case of `tests/test_billing_core.py:216`; cycle day 1,
+Worked example (the mid-cycle case of `tests/billing/test_billing_core.py:216`; cycle day 1,
 300.00/month, product from Oct 15):
 
 | Day | Event | Balance | Unbilled | Nov 1 bill (464.52) | Unallocated |
@@ -332,7 +332,7 @@ Spec deviations to add to CLAUDE.md:
     sends no `paymentItem` and the server allocates oldest-first.
   - After the POST, the card reloads.
 - Writes are pinned on both sides as usual: component tests assert the exact bodies of
-  the payment POST and the bill PATCH, and `tests/test_ui_requests.py` replays them
+  the payment POST and the bill PATCH, and `tests/internal/test_ui_requests.py` replays them
   against the real API.
 - **Seed:** besides the existing payments (which will produce `settled` and
   `partiallyPaid` bills automatically), one `onHold` bill and one lettered payment, so

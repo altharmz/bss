@@ -22,7 +22,7 @@ it takes the plan's `recurringChargePeriodType`. Billing charges
 `recurring` prices only, as before; TMF622/637 prices answer `priceAlteration: []`.
 Like `oneTime`, an alteration has no `recurringChargePeriodType` (422). Migration
 `0028` adds the three values to `price_type` (rolling back refuses while such a price
-exists). Test: `tests/test_api_last_gaps.py`.
+exists). Test: `tests/tmf/test_api_document_attributes.py`.
 
 ### Usage prices (2026-11-06, issue #191)
 
@@ -106,12 +106,12 @@ POST and PATCH and returned (`fields=` included). TMF620 has no gap lines left.
   `mimeType`, a number characteristic value `"8"`, a ProductSpecificationRelationship
   `role`, a PricingLogicAlgorithm `href`, a ProductOfferingPriceRelationship `validFor`):
   the schemas win, as everywhere; the tests send the examples corrected
-  (`tests/test_api_catalog_attributes.py`, `example`).
+  (`tests/catalog/test_api_catalog_attributes.py`, `example`).
 - UI: the code is the `offeringCode` entry (not the first identifier); an offering
   without validFor shows "any time"; a product without a specification shows its code
   alone. MCP: the request models carry the documents (`documents_model`).
 
-Tests: `tests/test_api_catalog_attributes.py` (the spec's three create examples round
+Tests: `tests/catalog/test_api_catalog_attributes.py` (the spec's three create examples round
 trip, nested problems, documents patched and removed, versions, inline prices and their
 event, prices without an amount, the charge rule, the specification rule, an offering
 without validFor/specification ordered and shown, categories from the offering side, a
@@ -160,8 +160,8 @@ Migration `0015` adds `catalog_job` (one table, `kind` = `ImportJob`/`ExportJob`
 
 MCP gets eight tools (`create_export_job` -> `create_import_job` round trip; the job
 writes need the write scope). Coverage: 92/129 non-listener operations (71.3%); TMF620
-now lacks only `/hub`. Tests: `tests/test_api_catalog_jobs.py`,
-`tests/test_migrations.py::test_0015_catalog_jobs_round_trip`. Negative proofs: without
+now lacks only `/hub`. Tests: `tests/catalog/test_api_catalog_jobs.py`,
+`tests/schema/test_migrations.py::test_0015_catalog_jobs_round_trip`. Negative proofs: without
 the savepoint a failed import left its specification behind; without the comparison a
 conflicting entry was skipped and the import succeeded; without the past-price rule the
 import failed only later, at the offering's attach check - each test failed and the code
@@ -200,7 +200,7 @@ Concurrent orders still run side by side (shared locks).
 
 MCP gets five write-scope tools (`delete_specification`, `delete_offering`,
 `delete_price`, `delete_category`, `delete_catalog`). Coverage: 84/129 non-listener
-operations (65.1%). Tests: `tests/test_api_catalog_delete.py`. Negative proofs: without
+operations (65.1%). Tests: `tests/catalog/test_api_catalog_delete.py`. Negative proofs: without
 the order's `FOR SHARE` lock the racing order is a 500 instead of a rejection; without
 the specification lock the racing offering POST is a 500 instead of a 422; without the
 price's reference check the price of an offering with a rejected order is deleted. All
@@ -273,7 +273,7 @@ the required `scripts/docs/` registry and notes edits. No commit or deployment m
   the reason, and nothing in that PATCH is applied. Repeating the current status is not
   a transition (200). POST may still create an offering in any status. The admin UI only
   offers the forward step; the rule lives here. **Specifications and prices follow the
-  same rule** (`_check_lifecycle`, `tests/test_api_catalog_lifecycle.py`).
+  same rule** (`_check_lifecycle`, `tests/catalog/test_api_catalog_lifecycle.py`).
 - **An offering's `validFor` is never rewritten in the past**: PATCH may not move
   `startDateTime` to before now, nor set or move `endDateTime` to before now (409);
   repeating the current value is fine. Billing never reads it (only ordering,
@@ -359,7 +359,7 @@ specification, and the server's 409 still shows. `+ New specification`
 text fields; New offering has a **New specification…** button that opens the same dialog and
 preselects the result. Code: `screens/Specifications.tsx`, `api/bss.ts`. Tests:
 `Catalog.test.tsx` (list, create/edit/delete bodies, forward-only lifecycle, delete hidden,
-409 messages, preselection) and `tests/test_ui_requests.py::test_specification_writes_as_the_ui_sends_them`.
+409 messages, preselection) and `tests/internal/test_ui_requests.py::test_specification_writes_as_the_ui_sends_them`.
 Deviation: none. The search box filters the Specifications tab by name or brand; the
 lifecycle filter shows on the Offerings tab only.
 
@@ -378,7 +378,7 @@ amount goes out as an exact number token and a 409 adds a pointer to Change pric
 (`ui.catalog.endPrice`, from tomorrow, keeps the loaded start) and **Delete**
 (`ui.catalog.deletePrice`). Code: `screens/OfferingEdit.tsx`, `screens/Catalog.tsx`, `api/bss.ts`.
 Tests: `Catalog.test.tsx` (detail, bodies, identifiers kept, refusals, delete) and
-`tests/test_ui_requests.py::test_offering_and_price_edits_as_the_ui_sends_them`.
+`tests/internal/test_ui_requests.py::test_offering_and_price_edits_as_the_ui_sends_them`.
 Deviations: "has no products" cannot be known in the UI, so Delete hides on status and prices
 only and the server's 409 covers the rest; the price dialog is offered Delete always (its
 offering's order history is not loaded); only the price amount is a charge field in Edit price
@@ -399,7 +399,7 @@ offerings (the 409 for catalog membership still shows); Delete of a catalog is a
 Code: `screens/Classification.tsx`, `api/classification.ts`. Tests: `Catalog.test.tsx`
 ("categories and catalogs": tree, exact bodies, cycle-free parent select, membership replacement,
 delete availability, refusals) and
-`tests/test_ui_requests.py::test_category_and_catalog_writes_as_the_ui_sends_them`.
+`tests/internal/test_ui_requests.py::test_category_and_catalog_writes_as_the_ui_sends_them`.
 Deviation: the server requires `validFor.startDateTime` whenever `validFor` is sent, so the dialog
 refuses a "Valid to" without "Valid from" (the refusal is certain).
 
@@ -413,6 +413,6 @@ a job dialog with Delete ("Nothing it imported is undone."). The document is enc
 base64 into the `data:` URL; the size check is 1,000,000 bytes of the text. Tests:
 `Catalog.test.tsx` ("import and export jobs": list, exact bodies including the base64 of fixtures,
 Blob and file name, size check, failed log, delete) and
-`tests/test_ui_requests.py::test_catalog_jobs_as_the_ui_sends_them` (export, then its import, is a
+`tests/internal/test_ui_requests.py::test_catalog_jobs_as_the_ui_sends_them` (export, then its import, is a
 no-op success, for both scopes). Deviations: "Everything" sends no `query` (an empty one is the
 same); the file name date is the job's creation business date, not the browser clock.

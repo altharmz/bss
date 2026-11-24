@@ -87,7 +87,7 @@ expectUi('ui.accounts.party.form');   // asserts data-ui and records it for the 
 
 ## 5. Replay test (backend)
 
-`tests/test_ui_requests.py` sends the same request strings to the real API with the
+`tests/internal/test_ui_requests.py` sends the same request strings to the real API with the
 `api` fixture and `tests/apidata.py` factories; it asserts the status and what is
 stored. One test per slice, named `test_<what>_as_the_ui_sends_them`:
 

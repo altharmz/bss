@@ -28,7 +28,7 @@ proofs: payment amount as a float, prefill newest first. Slice 3: payments settl
 `paymentItem`s (see ["TMF676 (v4) mapping"](tmf-api.md#tmf676-v4-mapping)), bills carry remainingAmount, paymentDueDate,
 appliedPayment, billNo, runType, category and are held/released by PATCH (see ["TMF637
 and TMF678 mapping"](tmf-api.md#tmf637-and-tmf678-mapping)), and two internal endpoints (settlement summary, bill detail; see
-["Internal API"](internal-api.md#internal-api-stage-5)). `tests/test_api_bill_settlement.py`; negative proofs: no settlement in
+["Internal API"](internal-api.md#internal-api-stage-5)). `tests/billing/test_api_bill_settlement.py`; negative proofs: no settlement in
 POST /payment, no settlement on release, no explicit lock in POST /payment (fails only
 the payment-vs-payment test - the foreign key already serializes a payment with a run).
 
@@ -45,7 +45,7 @@ the payment-vs-payment test - the foreign key already serializes a payment with 
   trigger IMMEDIATE once it has written allocations, so a breach fails inside the
   account's savepoint, not at the worker's commit. History rows of one run share
   `changed_at`; `seq` (identity) orders them.
-- Proven (`tests/test_bill_lifecycle_db.py`): issue steps and idempotence; the stage 3
+- Proven (`tests/billing/test_bill_lifecycle_db.py`): issue steps and idempotence; the stage 3
   example 4 credit note (-116.13) settled at issue and paying the Dec bill down to 183.87;
   a payment before the first bill settling it at issue, the rest carried to January, a
   later payment applied by a run without a bill; a bill left `new` issued and settled by
@@ -83,10 +83,10 @@ the payment-vs-payment test - the foreign key already serializes a payment with 
   used; call it under `load_account`'s row lock), `write_settlement` (allocations, state
   changes with history rows, touches every paid bill so `lastUpdate` moves),
   `record_bill_state` (refuses if the bill left `from_state`), `bill_state_history`.
-- **Tests**: `tests/test_settlement.py` (examples, hold/release table, hypothesis: the
+- **Tests**: `tests/billing/test_settlement.py` (examples, hold/release table, hypothesis: the
   remaining per bill equals the cumulative rule of the design's 3.0 whether payments
   settle at once or only in runs; no open bill and unused credit at once; holds skipped;
-  explicit items exact), `tests/test_settlement_db.py` (round trip, trigger bounds at
+  explicit items exact), `tests/billing/test_settlement_db.py` (round trip, trigger bounds at
   commit, FKs, CHECKs), `test_0006_on_existing_bills`. Negative proofs, each made once
   and reverted: newest-first allocation, holds not skipped, credit notes ignored,
   release to any open state, the trigger's bill bound doubled, the due date ignoring the
@@ -101,7 +101,7 @@ as `billingAccount.id`) and a billing date (client side); a bill row opens the e
 (hold/release PATCH included), which now ends with **Related**: a **Bill cycle** button (when the bill
 has a `billCycle` ref) and **Rates** (`GET appliedCustomerBillingRate?bill.id=`, period, product,
 amount, tax; a row opens the raw GET). Both load only when opened. The card's bill dialog gets the same.
-Tests: `GlobalBills.test.tsx` and `tests/test_ui_requests.py::test_global_bill_cycle_and_rate_reads_as_the_ui_makes_them`.
+Tests: `GlobalBills.test.tsx` and `tests/internal/test_ui_requests.py::test_global_bill_cycle_and_rate_reads_as_the_ui_makes_them`.
 Deviations: the API has no `billingDate` filter on bills, so the date filter compares `billDate` on
 the loaded rows (bill cycles likewise, on their `billingDate`); a bill cycle is a daily run and has no
 account, so the cycles tab has name, billing date and payment due instead of an account column;
@@ -149,7 +149,7 @@ Slice 1 of postpaid for the MVNO (epic #182); dunning is #385, the UI #386. Deci
   resolve exactly to the constraints, pip check clean.
 - **Cost:** measured 13 ms a bill (a five-charge detailed bill, 1000 renders in the dev
   container, alone; 21 ms of CPU with other stacks busy), about 45 KB a PDF with the subset
-  font. `tests/test_bill_pdf.py::test_rendering_takes_under_50_ms_a_bill` holds the 50 ms target
+  font. `tests/billing/test_bill_pdf.py::test_rendering_takes_under_50_ms_a_bill` holds the 50 ms target
   when run alone; under `-n auto` (the hook, `make test`) the same renders took 79 ms on the wall
   clock and 154 ms of CPU, so there it fails only above 1 s a bill (a timing gate would be flaky,
   like the worker heartbeat test). The bill list reads the PDF size in its
@@ -174,7 +174,7 @@ Slice 1 of postpaid for the MVNO (epic #182); dunning is #385, the UI #386. Deci
   operator's POST with `attachment` is still a 422.
   **#386:** the message list filters on `attachment.id` (`{bill id}-pdf`), and the internal bill
   detail carries `pdf` (url and size, or null): the bill dialog's PDF link and delivery line.
-- **Tests:** `tests/test_bill_pdf.py` (text read back with `pypdf` 7.1.1, dev only: bill number,
+- **Tests:** `tests/billing/test_bill_pdf.py` (text read back with `pypdf` 7.1.1, dev only: bill number,
   total, amount due after a payment applied at issue, every charge name, the due date; summary vs
   detailed; not rewritten by a rename or the next run; immutability trigger; render failure fails
   only that account with no bill or ABR written; off-cycle bill; legacy bill and unknown bill
@@ -183,6 +183,6 @@ Slice 1 of postpaid for the MVNO (epic #182); dunning is #385, the UI #386. Deci
   not texted, resend carries the PDF; render time). Negative proofs, each made once and
   reverted: the switch check removed (the switch test failed), the PDF rendered before the
   settlement (the payment-applied assertion failed). TEST-CHANGE: the bill's `billDocument` has
-  two entries (`test_api_last_gaps.py`), the template test knows the bill parameters, the table
+  two entries (`test_api_document_attributes.py`), the template test knows the bill parameters, the table
   count is 97 (`test_migrations.py`, `test_nonsuperuser_migration.py`), the url gap line is
   removed.

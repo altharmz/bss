@@ -11,7 +11,7 @@ discriminator handling replaced:
   permissive schemas, so a plain reference matches both branches. Here a `oneOf` with a
   discriminator validates only the branch that `@type` selects.
 
-tests/test_contract_validator.py proves each of these statements.
+tests/tmf/test_contract_validator.py proves each of these statements.
 """
 
 import json

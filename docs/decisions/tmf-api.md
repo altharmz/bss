@@ -42,7 +42,7 @@ the spec does not (`requires`), every top-level attribute of each resource schem
 through `fields=` (`missing`), every PATCH content type a spec lists (`content-type`),
 and the API name/version of each spec's server URL (`base path`). A control attribute
 must be refused at each probed place, else the place is reported `unprobed`.
-`tests/test_tmf_gaps.py` requires the result to equal `tests/tmf-gaps.txt` line for line
+`tests/tmf/test_tmf_gaps.py` requires the result to equal `tests/tmf-gaps.txt` line for line
 (831 lines on 2026-10-17): a slice that closes a gap removes its lines, and nothing opens
 unnoticed. It runs in parts that xdist spreads over its workers (2026-10-23: the whole
 probe was one 65 s test at the end of the run): one per API on the empty database, and
@@ -97,11 +97,11 @@ Slice 1 of "Following TMF", the three choices approved by the human. Migration `
   PATCH (Customer_MVO has them) and `href` on POST are accepted when unchanged.
 - An empty merge patch of a bill is a 200 no-op, as for every other resource.
 
-Tests: `tests/test_api_tmf_meta.py` (every client-created resource: meta round trip,
+Tests: `tests/tmf/test_api_tmf_meta.py` (every client-created resource: meta round trip,
 chosen id), `test_0021_meta_payment_method_and_item_position`, and the updated
 read-only cases across the suite. Negative proofs: items ordered by `item_id` again,
 `check_server_set` inverted, and the engagedParty account check inverted each failed
-`tests/test_api_tmf_meta.py`. Rolling back `0021` needs `alembic downgrade 0020` by
+`tests/tmf/test_api_tmf_meta.py`. Rolling back `0021` needs `alembic downgrade 0020` by
 hand (drops the meta, method and position columns).
 
 ### PATCH formats (2026-10-17)
@@ -128,7 +128,7 @@ every PATCH takes them (`app/api/deps.py`, `merge_patch_body`):
   attribute in between is overwritten, as with a merge patch sent after a GET.
   `test` operations check what was read.
 
-Tests: `tests/test_api_patch_formats.py`. Negative proofs: refusing `application/json`
+Tests: `tests/tmf/test_api_patch_formats.py`. Negative proofs: refusing `application/json`
 again, and skipping the `test` comparison, each failed it.
 
 ### Base paths (2026-10-18)
@@ -152,8 +152,8 @@ disagree with its `servers` (TMF629's say `customerManagement`, TMF632's `party/
   (`bss_mcp/operations.py`; tool names do not contain the path), the event types'
   bases, `docs/progress/scope.yaml` paths (ids unchanged), `docs/api/` (generated).
 
-Tests: the gap lock (`tests/test_tmf_gaps.py`) with the two `base path` lines removed,
-and `test_old_base_paths_are_gone` in `tests/test_api_conventions.py`. Negative proof:
+Tests: the gap lock (`tests/tmf/test_tmf_gaps.py`) with the two `base path` lines removed,
+and `test_old_base_paths_are_gone` in `tests/tmf/test_api_conventions.py`. Negative proof:
 the old TMF629 base in `app/api/customer.py` failed the suite.
 
 ### Party and customer attributes (2026-10-18)
@@ -215,7 +215,7 @@ Slice 4 of "Following TMF", the plan approved by the human (2026-10-18, "go"). M
   A JSON float stays refused by the connector (a decimal characteristic value needs the
   API directly).
 
-Tests: `tests/test_api_party_attributes.py` (round trips, the spec's own customer
+Tests: `tests/tmf/test_api_party_attributes.py` (round trips, the spec's own customer
 example, subclasses, unknown/required/type/enum/format problems, merge and JSON patch,
 exact numbers, status events), `test_0022_party_status_and_details`, and the gap lock.
 Negative proofs: without the nested unknown check the lock fails with `unprobed` lines
@@ -292,7 +292,7 @@ is ours, as below. `modify` items come in slice 8b (below, when done).
 - **MCP:** the recursive item model is inlined once in the tool schema; below that, a
   nested item is "an object of the same shape" (`bss_mcp/schema.py`).
 
-Tests: `tests/test_api_order_attributes.py` (documents, spec checks, relationships,
+Tests: `tests/orders/test_api_order_attributes.py` (documents, spec checks, relationships,
 server-set items, derived account, noChange, nested items, drafts),
 `test_0026_order_details_drafts_and_nested_items`, the updated cases in
 `test_api_ordering.py`, `test_api_order_patch.py`, `test_order_states.py`, and the gap
@@ -359,7 +359,7 @@ every action is executed.
   `apidata.rejected_item` (an add item naming another account: `billingAccountMismatch`);
   `test_full_flow.py` modifies its ended product (`productAlreadyEnded`).
 
-Tests: `tests/test_api_order_modify.py` (the shape 422s, every rejection, the delete
+Tests: `tests/orders/test_api_order_modify.py` (the shape 422s, every rejection, the delete
 rule, a change placed on a day first seen by the next day's run, billing through the
 API - a mid-period change after the month was charged and one known beforehand -
 TMF637 and the TMF678 product names before and after D, the open-products view, events
@@ -507,7 +507,7 @@ The human: "follow TMF recommendations"; confirmed with the plan above, billing
 unchanged. TMF637 has no suspend operation; TMF622 changes a product's state with a
 `modify` item carrying `product.status`. Code: `app/ordering/process.py`
 (`_status_problems`), `app/repository/products.py` (status changes), the worker's flip
-step. Tests: `tests/test_api_suspension.py`.
+step. Tests: `tests/orders/test_api_suspension.py`.
 
 - **The item.** `action: modify`, `product: {id, status}` with `status` `suspended` or
   `active` (resume), no `productOffering`: an item changes the offering or the status,
@@ -572,7 +572,7 @@ events.
 - **An order that would be rejected** is a 409 with its reasons (`code: reason`), and
   nothing is stored: the order runs in a savepoint that is rolled back (a direct order
   POST still stores rejected orders, as before). Reference problems are a 422.
-- Tests: `tests/test_api_product_writes.py`. Negative proof: without the savepoint
+- Tests: `tests/orders/test_api_product_writes.py`. Negative proof: without the savepoint
   rollback a rejected add answers 500 instead of 409.
 
 ### Billing cycle specification writes (2026-10-17)
@@ -586,7 +586,7 @@ answers 409 to PATCH and DELETE. PATCH changes name and description. An account'
 `billStructure.cycleSpecification` is writable now (`monthly`, a stored id, or null =
 monthly; an unknown one is a 422), taking the specification FOR KEY SHARE; DELETE is a
 409 while an account names it. Events: BillingCycleSpecification Create,
-AttributeValueChange, Delete. Tests: `tests/test_api_cycle_specification.py`. Negative
+AttributeValueChange, Delete. Tests: `tests/tmf/test_api_cycle_specification.py`. Negative
 proof: without the account reference check the 409 loses its reason.
 
 ### PATCH productOrder (2026-10-17)
@@ -596,7 +596,7 @@ Migration `0020` adds `description`, `category`, `priority` (`0` highest .. `4`)
 `product_order`; POST accepts them, PATCH changes only them (null removes), on an order
 in any state. Everything processing decided - state, items, dates, account, totals,
 cancellation - is read-only (400). Emits ProductOrderAttributeValueChangeEvent. Tests:
-`tests/test_api_order_patch.py`. Negative proof: with null ignored, removing an attribute
+`tests/orders/test_api_order_patch.py`. Negative proof: with null ignored, removing an attribute
 keeps it.
 
 ### Order cancellation and deleting rejected orders (2026-10-17)
@@ -608,7 +608,7 @@ cancellationReason; set exactly when the order is cancelled, CHECK-enforced).
 **Rollback:** `alembic downgrade 0015` drops the table and columns but keeps cancelled
 orders as `cancelled` (0015's code never acts on them); upgrading again gives them back a
 `cancellation_date` of their completion date, so the CHECK holds
-(`tests/test_migrations.py::test_0016_order_cancellation_round_trip`).
+(`tests/schema/test_migrations.py::test_0016_order_cancellation_round_trip`).
 
 **What a cancellation means here.** Orders complete synchronously, so there is never an
 order in progress to stop. A cancellation undoes a **completed** order whose every effect
@@ -655,7 +655,7 @@ ordered for a later date (through the API or MCP).
 
 MCP gets `cancel_order` and `delete_order` (write) and `list_cancellations`,
 `get_cancellation` (read). Coverage: 105/129 non-listener operations (81.4%). Tests:
-`tests/test_api_order_cancel.py`, `tests/test_ui_requests.py::test_undo_deactivation_as_the_ui_sends_it`,
+`tests/orders/test_api_order_cancel.py`, `tests/internal/test_ui_requests.py::test_undo_deactivation_as_the_ui_sends_it`,
 SubscriberCard component tests. Negative proofs, each reverted: without the account lock
 the cancellation does not wait for a run holding the account; without the charge check a
 termination November's charge already reflects is taken back (201) - in the race test too;
@@ -704,7 +704,7 @@ MCP gets nine write-scope tools (`delete_individual`, `delete_organization`,
 `delete_party_account`, `delete_settlement_account`, `delete_bill_format`,
 `delete_bill_media`). The shared helpers moved from `app/api/catalog.py` to
 `app/api/deletes.py`. Coverage: 101/129 non-listener operations (78.3%). Tests:
-`tests/test_api_deletes.py`. Negative proofs, each reverted: without the customer's
+`tests/tmf/test_api_deletes.py`. Negative proofs, each reverted: without the customer's
 `FOR KEY SHARE` on its party, a customer racing a party delete is a 500 instead of a 422;
 without the payment's up-front `FOR UPDATE`, a payment racing an account delete is a 500
 (LookupError in `load_account`); without the worker's check, a run whose member was
@@ -730,7 +730,7 @@ The list supports equality filters on name, billingPeriod and frequency, standar
 paging/count headers and fields selection; retrieval accepts fields only. Other
 ids return 404. No migration or billing behavior change is needed. The two new
 operations also have read-only MCP tools and vendored-spec contract tests in
-`tests/test_api_cycle_specification.py`.
+`tests/tmf/test_api_cycle_specification.py`.
 
 Local validation: 24 focused contract/MCP tests and three full backend runs passed
 (882 tests each; two dev-profile runs and one CI-profile run). Backend/frontend lint
@@ -797,9 +797,9 @@ stage-2 mappings; they do not add taxes, payment processing or order modificatio
   with the clock or settlement; negative credit notes retain their negative amounts.
   They are read-only. No bill is created by a new endpoint.
 
-Validation: `tests/test_api_read_completeness.py`, the real-database `0008` migration
-round trip in `tests/test_migrations.py`, and the generated-tool drift checks in
-`tests/test_mcp_tools.py`. Fields-projected responses still validate every returned
+Validation: `tests/tmf/test_api_strict_inputs_and_quotes.py`, the real-database `0008` migration
+round trip in `tests/schema/test_migrations.py`, and the generated-tool drift checks in
+`tests/mcp/test_mcp_tools.py`. Fields-projected responses still validate every returned
 attribute and nested required field; only omitted top-level required fields are
 waived by the contract test client.
 
@@ -864,7 +864,7 @@ implemented; order processing lives in `app/ordering/`.
   checked against the party it names (`Individual` or `Organization`;
   `check_referred_type`). Not a supertype (`Party` for an Individual is a 422): the
   response would state another value. Same principle as the account's `role` (#3).
-  `tests/test_api_referred_type.py`.
+  `tests/tmf/test_api_referred_type.py`.
 - **Money** is `{"unit": "<ISO 4217>", "value": <JSON number>}`, Decimal end to end.
   FastAPI's own body parsing goes through float (proven by a test), so handlers parse the
   raw body with `parse_float=Decimal` (`app/api/deps.py`, `tmfjson.loads`). Responses are
@@ -1035,7 +1035,7 @@ allocates `amount + taxAmount`, which `totalAmount` (if sent) must equal
 - **Row lock.** The products of delete items are locked (`SELECT ... FOR UPDATE`, in id
   order) before anything about them is read. A concurrent second delete waits, then sees
   the product terminated and is rejected with `productAlreadyEnded` (proven with two
-  connections in `tests/test_order_concurrency.py`; without the lock it waits on the
+  connections in `tests/orders/test_order_concurrency.py`; without the lock it waits on the
   product UPDATE instead and terminates the product a second time).
 - **Dates.** `requestedStartDate` is converted to the date in BILLING_TZ and returned
   normalized (`2026-10-01T23:30:00Z` -> product `startDate` 2026-10-02). It defaults to
@@ -1056,7 +1056,7 @@ allocates `amount + taxAmount`, which `totalAmount` (if sent) must equal
   start, subject to the existing billing checks. An add order with such a delete
   cannot be cancelled until that delete is undone. Modify and status rules with an
   end set remain as before (including `terminationInPeriod`). Tests:
-  `tests/test_api_product_writes.py::test_future_delete_dates`,
+  `tests/orders/test_api_product_writes.py::test_future_delete_dates`,
   `::test_post_future_product_with_end_and_cancel`.
   Negative proof (review C): restoring unconditional cancellation of unstarted products
   makes the after-start delete case fail (`cancelled` instead of `created`); reverted.
@@ -1088,7 +1088,7 @@ Prepaid tax quotes still come from the command's stored intervals, falling back 
 the quoted catalog price as before. No response attribute or nested array order changes.
 
 `cancelProductOrder` needs no related rows; its existing row builder already serves
-both list and single-item responses. `tests/test_list_queries.py` pins the statement
+both list and single-item responses. `tests/perf/test_list_queries.py` pins the statement
 counts for full pages and compares list bodies with creation and single-item responses.
 
 ## Batched payment, saved-card and usage bodies (2026-11-13, #301)
@@ -1101,7 +1101,7 @@ still omit `usageProductPrice`, and rated records without a price still return `
 Single-item reads, write responses and event bodies use the same loaders with one row.
 No response attributes or nested array order change; no migration is needed.
 
-`tests/test_list_queries.py` compares pages of 1 and 100 through the raw client:
+`tests/perf/test_list_queries.py` compares pages of 1 and 100 through the raw client:
 payment uses 7 statements, saved cards 6, and usage 6 (unrated) or 7 (rated), including
 session authentication and pool checks. Full pages are compared with single-item
 responses, and payments/cards also with their creation responses.
@@ -1120,7 +1120,7 @@ transfer-fee fallback. `billCycle` batches stored due dates, still considering o
 bills whose bill date equals their run's date and falling back to the configured term
 only when none exists. Every single-item builder uses the same loader with one row.
 
-`tests/test_list_queries.py` pins equal statement counts for pages of 1 and 100:
+`tests/perf/test_list_queries.py` pins equal statement counts for pages of 1 and 100:
 11 for bills with financial links, 7 for rates and 6 for cycles, including session
 authentication and pool checks. It covers full pages, multiple products/tax lines and
 payments, empty pages, stored versus fallback terms, and single-item response equality.
@@ -1138,7 +1138,7 @@ page; balances are still summed per currency in currency order. `partyAccount` a
 needs no related rows. Single-item reads, write responses and event bodies use the
 same loaders with one row; no response attribute or nested array order changes.
 
-`tests/test_list_queries.py` pins equal statement counts for pages of 1 and 100 and
+`tests/perf/test_list_queries.py` pins equal statement counts for pages of 1 and 100 and
 compares full pages with single-item reads (and creation responses where nothing
 changed since).
 
@@ -1151,7 +1151,7 @@ page mixing kinds costs the same as a page of one; entries keep the page order
 (`ORDER BY requested_at, id`). Single-item reads, write responses and event bodies use
 the same builders with one row. No response attribute changes; no migration is needed.
 
-`tests/test_list_queries.py` compares pages of 1 and 100 through the raw client for all
+`tests/perf/test_list_queries.py` compares pages of 1 and 100 through the raw client for all
 five lists (6 statements each, including session authentication and pool checks), on two
 accounts with every kind, refused actions and transfers in both directions. Full pages
 are compared with single-item responses, and the four kind lists with their creation

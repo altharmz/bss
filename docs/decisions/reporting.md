@@ -64,10 +64,10 @@ step, as their own issue.
 **Not here:** postpaid KPIs, splits per offering or kind, churn by cause, stored snapshots and
 export.
 
-**Tests:** `tests/test_kpi_report.py` inserts prepaid, postpaid and other-currency accounts
+**Tests:** `tests/internal/test_kpi_report.py` inserts prepaid, postpaid and other-currency accounts
 whose lines start and end around three months, plus an add-on, a cancelled product, a line
 that was never live and a start after today. Its ABRs cover every source, include a refund
 and run on dates inside and outside the range. The tests check the counts and the invariant,
 churn and ARPU with their nulls, the revenue split, the defaults and the 400s.
 `frontend/src/screens/Reports.test.tsx` checks the tiles, both tables newest first, the range
-request and the error state. `tests/test_mcp_tools.py` calls the tool.
+request and the error state. `tests/mcp/test_mcp_tools.py` calls the tool.

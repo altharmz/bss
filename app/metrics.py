@@ -134,7 +134,7 @@ class HttpMetricsMiddleware:
 
         IN_PROGRESS.inc()
         # perf_counter is a monotonic duration clock, not the wall clock: the rule that only
-        # app/clock.py reads the wall clock is about dates and instants (tests/test_clock.py)
+        # app/clock.py reads the wall clock is about dates and instants (tests/ops/test_clock.py)
         started = monotonic.perf_counter()
         try:
             await self.app(scope, receive, capture)

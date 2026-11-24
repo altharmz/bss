@@ -2118,7 +2118,7 @@ erDiagram
 
 ## Enums
 
-TMF-derived enums are verbatim from `spec/` (camelCase included) and locked by `tests/test_enum_lock.py`; the others are ours (migration comments say which).
+TMF-derived enums are verbatim from `spec/` (camelCase included) and locked by `tests/schema/test_enum_lock.py`; the others are ours (migration comments say which).
 
 | Enum | Values | Used by |
 |---|---|---|

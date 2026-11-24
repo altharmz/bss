@@ -12,15 +12,15 @@ services:
       - ./tests:/app/tests:ro
       # the load-test dataset generator (python -m loadtest.seed), imported by its tests
       - ./loadtest:/app/loadtest:ro
-      # run by tests/test_staging_data.py (never against the stand)
+      # run by tests/ops/test_staging_data.py (never against the stand)
       - ./ops/staging-data:/app/ops/staging-data:ro
-      # read by tests/test_monitoring_kit.py (the kit names only series the registries export)
+      # read by tests/ops/test_monitoring_kit.py (the kit names only series the registries export)
       - ./ops/monitoring:/app/ops/monitoring:ro
-      # read by tests/test_mcp_tools.py: the MCP tools = the API
+      # read by tests/mcp/test_mcp_tools.py: the MCP tools = the API
       # operations minus scope.yaml's api exclusions (drift check)
       - ./docs/progress/scope.yaml:/app/docs/progress/scope.yaml:ro
-      # read by tests/test_ui_requests.py (the UI's hub event lists = app/events/types.py)
-      # and tests/test_ui_mcp_parity.py (every call the UI makes, scanned by the script)
+      # read by tests/internal/test_ui_requests.py (the UI's hub event lists = app/events/types.py)
+      # and tests/internal/test_ui_mcp_parity.py (every call the UI makes, scanned by the script)
       - ./frontend/src:/app/frontend/src:ro
       - ./scripts/ui_mcp_parity.py:/app/scripts/ui_mcp_parity.py:ro
       # read by tests/conftest.py: which test files may read which data files (#344)
@@ -29,7 +29,7 @@ services:
       - ./alembic:/app/alembic
       - ./alembic.ini:/app/alembic.ini:ro
       # TMF specs: read by the app (app/api/specschema.py; the runtime image copies them)
-      # and by the tests (tests/contract.py, tests/test_enum_lock.py).
+      # and by the tests (tests/contract.py, tests/schema/test_enum_lock.py).
       - ./spec:/app/spec:ro
     ports:
       # Explicit task-local host port from scripts/task-compose.

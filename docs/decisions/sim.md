@@ -104,7 +104,7 @@ operator unlock. A real carrier SIM or eSIM (SM-DP+) integration is a later issu
 
 ## Tests
 
-`tests/test_sim_inventory.py`: import, list and filter, refusals, CSV, generation, activation
+`tests/resources/test_sim_inventory.py`: import, list and filter, refusals, CSV, generation, activation
 (physical and eSIM, ICCID/IMSI sent), activation code visibility, refused and cancelled
 activation, SIM never active on two lines (order and database), swap confirmed / refused /
 cancelled / alone, legacy rows, unlocking, migration backfill and round trip.

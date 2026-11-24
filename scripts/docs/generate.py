@@ -794,7 +794,7 @@ def render_db_index(tables: dict[str, dict], enums: list[dict], head: str) -> st
     lines.append("## Enums\n")
     lines.append(
         "TMF-derived enums are verbatim from `spec/` (camelCase included) and locked by"
-        " `tests/test_enum_lock.py`; the others are ours (migration comments say which).\n"
+        " `tests/schema/test_enum_lock.py`; the others are ours (migration comments say which).\n"
     )
     users = enum_users(tables)
     lines.append("| Enum | Values | Used by |")

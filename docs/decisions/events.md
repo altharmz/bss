@@ -36,7 +36,7 @@ by decision (TMF637 product writes, billingCycleSpecification writes, PATCH prod
   in slice 3, again before every delivery.
 - **MCP:** 17 tools; creating and deleting hubs needs the write scope, `get_hub_customer`
   is read.
-- Tests: `tests/test_api_hub.py`. Negative proofs, each reverted: without the
+- Tests: `tests/tmf/test_api_hub.py`. Negative proofs, each reverted: without the
   `is_global` check, all twelve private/special address cases and the staging API test
   fail; without the `api` filter in `hubs.get_live`, another API deletes a hub that is
   not its own.
@@ -85,7 +85,7 @@ by decision (TMF637 product writes, billingCycleSpecification writes, PATCH prod
     `accountBalance` moving because of charges or payments (not a change of the account).
 - **Imports:** `app/events` never imports `app.api` at module level - the API modules
   import it, and importing the package loads all of them (a circular import otherwise).
-- Tests: `tests/test_events.py` - every stored payload is validated against its
+- Tests: `tests/tmf/test_events.py` - every stored payload is validated against its
   listener's request schema in `spec/`. Negative proofs, each reverted: without the state
   comparison a customer's status change arrives as an AttributeValueChange; without
   `notify=False` an issued bill's first event is a StateChange of an internal step.
@@ -109,7 +109,7 @@ by decision (TMF637 product writes, billingCycleSpecification writes, PATCH prod
   never connected to.
 - **New traffic:** on the VPS this means outbound HTTPS from the worker container to the
   hubs' callbacks (none until somebody creates a hub). No inbound port changes.
-- Tests: `tests/test_event_delivery.py` (a local listener on a thread). Negative proofs,
+- Tests: `tests/worker/test_event_delivery.py` (a local listener on a thread). Negative proofs,
   each reverted: connecting to the host name instead of the checked address, and
   skipping the check before the send, each fail their test.
 

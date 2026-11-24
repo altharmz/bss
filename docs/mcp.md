@@ -100,7 +100,7 @@ app answers 401 `credentialRevoked`, ends the grant and answers the client 401
 `invalid_token`, so it authorizes again.
 
 Compatibility is tested with the official MCP Python SDK's own OAuth client
-(`tests/test_mcp_sdk_client.py`): discovery, registration, PKCE, login, tools, as a real
+(`tests/mcp/test_mcp_sdk_client.py`): discovery, registration, PKCE, login, tools, as a real
 client runs them.
 
 ### Static API tokens
@@ -151,7 +151,7 @@ registry (`bss_mcp/operations.py`) that adds what the OpenAPI document does not 
   keys without inlining the full polymorphic schema. TMF622 `externalId` keeps its
   existing lenient model.
 
-**Drift check** (`tests/test_mcp_tools.py`, in `make test` and so in `make check`): the
+**Drift check** (`tests/mcp/test_mcp_tools.py`, in `make test` and so in `make check`): the
 tool set equals the API operations minus `scope.yaml`'s exclusions; the registry's copy
 of the exclusions (the runtime image has no `docs/`) equals `scope.yaml`'s; every
 POST/PATCH names the very model class its handler passes to `parse()` (read from the

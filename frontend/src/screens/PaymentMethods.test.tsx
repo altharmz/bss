@@ -8,7 +8,7 @@ import { ToastProvider } from '../ui/kit';
 import { PaymentMethodsPanel } from './PaymentMethods';
 
 // Saved cards, Top up by card and auto top-up (issue 185b). The write bodies are replayed
-// against the real API by tests/test_ui_requests.py.
+// against the real API by tests/internal/test_ui_requests.py.
 
 const A = 'a0000001-0000-4000-8000-000000000001';
 const CARD1 = 'c0000001-0000-4000-8000-000000000001';

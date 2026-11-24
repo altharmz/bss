@@ -106,7 +106,7 @@ The UI is #386 ([frontend.md](frontend.md#bill-pdfs-delivery-and-dunning-ui-2026
 
 ## Tests
 
-`tests/test_dunning.py`: the pure step function at its boundaries; the timeline under the
+`tests/billing/test_dunning.py`: the pure step function at its boundaries; the timeline under the
 injected clock (due, reminder 1, reminder 2, suspension through a completed order with cause
 `dunning`, the customer told each step once on both channels, payment, restoration on a tick that
 is no full sweep), each step once over two passes; the wiring through `loop.tick`; payment on the

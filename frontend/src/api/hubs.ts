@@ -1,6 +1,6 @@
 // Event subscriptions (hubs), docs/decisions/events.md and docs/ui.md.
 // TMF defines POST/DELETE /hub per API; the list is ours (internal API). The base paths and
-// the event types below are the server's (app/events/types.py); tests/test_ui_requests.py
+// the event types below are the server's (app/events/types.py); tests/internal/test_ui_requests.py
 // compares them, so a change there fails until this file follows.
 
 import type { components as Internal } from './generated/internal';

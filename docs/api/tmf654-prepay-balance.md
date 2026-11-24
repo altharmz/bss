@@ -170,9 +170,9 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF654-P
 - DELETE removes only a failed transfer (409 otherwise) and retires its idempotency key.
 - Lists filter by `id`, `status`, `bucket.id`, `receiverBucket.id` and `partyAccount.id`.
 
-Tests: `tests/test_api_balance.py`, `tests/test_api_topup.py`, `tests/test_api_adjust.py`,
-`tests/test_api_reserve.py`, `tests/test_api_transfer.py`, `tests/test_api_hub.py`,
-`tests/test_mcp_tools.py`; the gap ledger locks the absent endpoints and the deviations.
+Tests: `tests/prepaid/test_api_balance.py`, `tests/prepaid/test_api_topup.py`, `tests/prepaid/test_api_adjust.py`,
+`tests/prepaid/test_api_reserve.py`, `tests/prepaid/test_api_transfer.py`, `tests/tmf/test_api_hub.py`,
+`tests/mcp/test_mcp_tools.py`; the gap ledger locks the absent endpoints and the deviations.
 
 In these notes `::test_name` is a test in the test file named last before it. Hand-written: [`scripts/docs/api-notes/tmf654-prepay-balance.md`](../../scripts/docs/api-notes/tmf654-prepay-balance.md).
 

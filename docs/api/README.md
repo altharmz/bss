@@ -34,33 +34,33 @@ silently rewriting it. Every TMF POST/PATCH accepts `fields` once and rejects ot
 query parameters and unknown field names before writing; selected responses retain
 `id`, `href`, `@type` and POST's `Location`. Equality filters reject comma-separated
 values except commas in literal free-text names. Repeated paging/fields parameters
-are errors. `tests/test_api_read_completeness.py` covers these rules and their MCP
+are errors. `tests/tmf/test_api_strict_inputs_and_quotes.py` covers these rules and their MCP
 equivalents. For `fields` projections the contract checker waives only omitted
 top-level required attributes; nested required attributes remain checked.
 
 Shared by every TMF API (`app/api/`); the internal API follows the same rules except that
 its dates are plain business dates (`YYYY-MM-DD` in BILLING_TZ). In the last column,
-`::name` is a test in `tests/test_api_conventions.py`.
+`::name` is a test in `tests/tmf/test_api_conventions.py`.
 
 | Rule | Code | Proven by |
 |---|---|---|
 | Paths `/tmf-api/<apiName>/v5/<resource>` (TMF676: `v4`); `href` is the absolute path without host. The spec files' own server URLs differ (e.g. TMF629 says `/tmf-api/customer/v5/`); the paths here are ours. | `app/api/*.py` (`BASE`) | `tests/apiclient.py` maps every path to its spec |
-| Every non-2xx body is the TMF `Error`, including unknown routes (404), unsupported methods (405), FastAPI's own validation errors and unhandled exceptions (500 "internal error", traceback logged) | `app/api/errors.py` | `tests/test_api_conventions.py::test_unknown_resources_and_routes_answer_with_a_tmf_error`, `::test_unsupported_methods_are_405_with_a_tmf_error`, `::test_unhandled_exception_is_a_tmf_500_without_details`, `::test_unhandled_exception_is_logged_with_its_traceback` |
+| Every non-2xx body is the TMF `Error`, including unknown routes (404), unsupported methods (405), FastAPI's own validation errors and unhandled exceptions (500 "internal error", traceback logged) | `app/api/errors.py` | `tests/tmf/test_api_conventions.py::test_unknown_resources_and_routes_answer_with_a_tmf_error`, `::test_unsupported_methods_are_405_with_a_tmf_error`, `::test_unhandled_exception_is_a_tmf_500_without_details`, `::test_unhandled_exception_is_logged_with_its_traceback` |
 | Unknown attributes are a 400, never dropped; `@type`, `@baseType`, `@schemaLocation` always accepted; `id`/`href` are server-managed (400) | `app/api/common.py` (`TmfModel`, `parse`) | `::test_meta_attributes_are_accepted_unknown_business_attributes_are_not`, `::test_server_managed_attributes_are_rejected_on_post` |
 | Missing mandatory field or wrong value is a 422; malformed JSON a 400 | `app/api/errors.py` (`describe_validation`), `app/api/deps.py` | `::test_missing_mandatory_field_is_422_and_malformed_json_is_400` |
 | Money is `{unit, value}` with `value` a JSON number, Decimal end to end: the raw body is parsed with `parse_float=Decimal`, responses are written by `tmfjson.dumps`, which refuses floats. More than 2 decimals is a 422, never rounded (`19.9900` is fine) | `app/api/tmfjson.py`, `app/api/common.py` (`Money`) | `::test_incoming_amount_never_passes_through_float`, `::test_fastapi_own_body_parsing_goes_through_float`, `::test_more_than_two_decimals_is_rejected_not_rounded`, `::test_equal_value_with_trailing_zeros_is_accepted`, `::test_the_encoder_refuses_floats` |
 | `validFor` is a half-open `[start, end)`; no `endDateTime` = open-ended; date-times need an offset; output in UTC (`Z`) | `app/api/common.py` (`TimePeriod`, `time_period`) | `::test_missing_end_means_open_ended`, `::test_period_with_end_is_stored_half_open`, `::test_invalid_periods_are_rejected` |
-| Dates stored as `date` (product start/termination, requested start, bill and ABR periods) are the calendar date in BILLING_TZ of an incoming date-time and go out as midnight BILLING_TZ | `app/api/common.py` (`to_billing_date`, `from_billing_date`) | `tests/test_api_parties.py::test_date_times_become_dates_in_the_billing_timezone`, `tests/test_api_ordering.py::test_requested_start_date_is_the_date_in_billing_tz` |
+| Dates stored as `date` (product start/termination, requested start, bill and ABR periods) are the calendar date in BILLING_TZ of an incoming date-time and go out as midnight BILLING_TZ | `app/api/common.py` (`to_billing_date`, `from_billing_date`) | `tests/tmf/test_api_parties.py::test_date_times_become_dates_in_the_billing_timezone`, `tests/orders/test_api_ordering.py::test_requested_start_date_is_the_date_in_billing_tz` |
 | Lists: `offset` (default 0), `limit` (default 20, max 100; above is a 400), always 200, `X-Result-Count`, and `Link: <next page>; rel="next"` while more rows follow (no `X-Total-Count`: a deliberate deviation, #312); `fields=` selects top-level attributes (`id`, `href`, `@type` always); filters are equality only; any other query parameter is a 400 | `app/api/listing.py` | `::test_list_defaults_and_count_headers`, `::test_partial_page_is_200_with_both_counts`, `::test_default_and_maximum_limit`, `::test_equality_filters`, `::test_unknown_query_parameters_are_rejected`, `::test_fields_selects_top_level_attributes` |
 | POST answers 201 with `Location` | `app/api/common.py` (`created`) | `::test_post_returns_201_with_location_of_the_new_resource` |
 | PATCH accepts `application/merge-patch+json` only (else 415); `null` removes an optional attribute and is a 422 on a mandatory one; `@type` may be repeated, not changed; read-only attributes are a 400 | `app/api/deps.py`, `app/api/common.py` (`not_null`, `check_type`) | `::test_patch_is_a_merge_patch`, `::test_patch_accepts_only_merge_patch_json`, `::test_patch_rejects_read_only_attributes` |
 | One database transaction per request, rolled back if the handler raises | `app/api/deps.py` (`Tx`) | `::test_a_failed_request_leaves_nothing_behind` |
-| DELETE only in TMF620, only for entries nothing references (204, else 409; no query parameters), elsewhere a 405; no `/hub` or listeners, no cancelProductOrder | the routers in `app/api/`; `app/api/catalog.py` (`refuse_if_referenced`) | `tests/test_api_catalog_delete.py`, `::test_unsupported_methods_are_405_with_a_tmf_error`, `tests/test_api_ordering.py::test_cancel_product_order_is_not_exposed`, `tests/test_api_inventory_bill.py::test_products_are_not_written_through_tmf637` |
+| DELETE only in TMF620, only for entries nothing references (204, else 409; no query parameters), elsewhere a 405; no `/hub` or listeners, no cancelProductOrder | the routers in `app/api/`; `app/api/catalog.py` (`refuse_if_referenced`) | `tests/catalog/test_api_catalog_delete.py`, `::test_unsupported_methods_are_405_with_a_tmf_error`, `tests/orders/test_api_ordering.py::test_cancel_product_order_is_not_exposed`, `tests/tmf/test_api_inventory_bill.py::test_products_are_not_written_through_tmf637` |
 
 **Contract tests.** `tests/apiclient.py` validates every response the suite receives
 against the schema in `spec/` for its path (`Error` for non-2xx), with
 `tests/contract.py`'s OAS 3.0 validator (its discriminator handling replaced; proven by
-`tests/test_contract_validator.py`). Known limit: a discriminator next to `allOf` is not
+`tests/tmf/test_contract_validator.py`). Known limit: a discriminator next to `allOf` is not
 dispatched on, so a wrong `@type` on a reference passes schema validation; the API tests
 assert those `@type` values explicitly.
 

@@ -399,8 +399,8 @@ both configured time zones. MCP keeps read and write scopes and decimal-string a
 
 ## Tests
 
-The proofs are `tests/test_prepaid_*.py`, `tests/test_number_*.py`,
-`tests/test_ui_requests.py` and the frontend suites: exact funds and one cent short with tax,
+The proofs are `tests/prepaid/`, `tests/funding/`, `tests/resources/test_number_*.py`,
+`tests/internal/test_ui_requests.py` and the frontend suites: exact funds and one cent short with tax,
 zero prices, every cadence, month ends, leap years, DST and midnight boundaries; late worker
 recovery buying one interval from today; duplicate and concurrent submissions with the same
 or different keys; reserved sources against settlement, payouts, debits and transfers; final

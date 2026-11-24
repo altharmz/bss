@@ -106,7 +106,7 @@ receipts, other settings than the environment variables above.
 
 ## Tests
 
-`tests/test_notifications.py`: every trigger once (and not again), recipients and the line-number
+`tests/care/test_notifications.py`: every trigger once (and not again), recipients and the line-number
 fallback, sender failure with backoff, `failed` and recovery, resend, consent (opt-in, opt-out,
 history), quiet hours, TMF681 conformance and refusals, adapter selection; MCP tools in
-`tests/test_mcp_tools.py`.
+`tests/mcp/test_mcp_tools.py`.

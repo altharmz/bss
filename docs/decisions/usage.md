@@ -112,7 +112,7 @@ issue (the human's delegation, data-model plan included). Migration `0089`; the 
   goes to the account and names the line whose record crossed the mark. `ingest` and
   `ingest_batch` give the same rows: the batch reads the cycle days, the pool lines, the
   offering profiles and the pool totals in one statement per step and walks the batch back
-  from the totals, like the per-line thresholds (`tests/test_data_pool.py`).
+  from the totals, like the per-line thresholds (`tests/prepaid/test_data_pool.py`).
 - **Summary:** each allowance entry has `pooled` and `pool`. A member's domestic data entry
   is the pool's: used, included and remaining in the pool period, its thresholds, and
   `pool {id (the account), startDate, endDate, members}`, where `members` counts the members

@@ -27,7 +27,7 @@ def effective_state(product, account, grant, today):
 
 # `effective_state(...)[0]` in SQL, for a product `p` of the account `a` that is not ended,
 # with `g` its latest grant (`LATEST_GRANT`, NULL columns when none) at the business date
-# %(today)s. The same branches in the same order; tests/test_full_review.py checks
+# %(today)s. The same branches in the same order; tests/prepaid/test_full_review.py checks
 # the two agree. It lets a full entitlement pass find the products to change in one
 # statement (#404).
 EFFECTIVE_STATUS = (

@@ -116,8 +116,8 @@ the margin's detail, a currency other than the lines' own for revenue.
 
 ## Tests
 
-`tests/test_wholesale.py`: every discrepancy kind and clean lines in one invoice, a number that
+`tests/billing/test_wholesale.py`: every discrepancy kind and clean lines in one invoice, a number that
 moves mid-period, a SIM-only match, cost/revenue/margin exact with proration, the usage
 tolerance, a duplicate number (409), malformed files (422 naming row and column), a float-looking
 amount, content type and invoice number, the row limit (413), immutability, and the statement
-count. MCP tools in `tests/test_mcp_tools.py`.
+count. MCP tools in `tests/mcp/test_mcp_tools.py`.

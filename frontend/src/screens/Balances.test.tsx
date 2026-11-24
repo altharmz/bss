@@ -6,7 +6,7 @@ import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, type Handler } from '../tes
 
 // The global Balances screen (slice 22). Reads only, plus the Balance action dialog's writes
 // (pinned in SubscriberCard.test.tsx). The query strings asserted here are replayed against the
-// real API by tests/test_ui_requests.py - change both together.
+// real API by tests/internal/test_ui_requests.py - change both together.
 
 const PREPAY = '/tmf-api/prepayBalanceManagement/v4';
 const BUCKETS = `${PREPAY}/bucket`;

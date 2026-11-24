@@ -6,7 +6,7 @@ import { C, P1, P2, P3, backend, open } from '../test/subscriberCardKit';
 
 // The Security tab (issue 226): the account PIN status with Set/Reset, the line locks with
 // the PIN asked for clearing one, and the read-only audit log. Write requests are replayed
-// against the real API in tests/test_account_security.py
+// against the real API in tests/care/test_account_security.py
 // (test_security_requests_as_the_ui_sends_them).
 
 const SEC = '/internal/v1/security';
