@@ -1,6 +1,6 @@
 import { orderRefusal } from '../api/orderErrors';
 import { Footer } from './FinancialForms';
-import { submitDialogPrimary } from '../ui/kit';
+import { submitDialogPrimary, IconButton } from '../ui/kit';
 import { statusPresentation } from '../ui/status';
 import { Note } from '../ui/Note';
 import { useState } from 'react';
@@ -206,14 +206,12 @@ export function OrdersScreen() {
             {account !== null && (
               <span className="bss-run-tag" data-ui="ui.orders.accountChip">
                 Account {name ?? accountLabel(account)}{' '}
-                <button
-                  type="button"
-                  className="bss-link"
-                  aria-label="Remove the account filter"
+                <IconButton
+                  icon="x"
+                  small
+                  label="Remove the account filter"
                   onClick={dropAccount}
-                >
-                  ×
-                </button>
+                />
               </span>
             )}
           </>

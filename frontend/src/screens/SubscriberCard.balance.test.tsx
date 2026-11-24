@@ -350,8 +350,8 @@ describe('prepaid balance actions', () => {
       within(dialog)
         .queryAllByRole('button')
         .filter((b) => !(b.getAttribute('aria-label') ?? '').startsWith('Copy '))
-        .map((b) => b.textContent)
-        .filter((t) => t !== '×');
+        .filter((b) => b.getAttribute('aria-label') !== 'Close')
+        .map((b) => b.textContent);
 
     it('cancels a completed top-up after a confirmation, then reloads the card', async () => {
       const { dialog, fetchMock, calls } = await detailOf(topup, 'Top-up', {
@@ -815,7 +815,7 @@ describe('prepaid plans (#212)', () => {
     const row = await waitFor(() => productRow('Mobile L'));
     expect(productAction(row, 'Buy add-on…')).toBe(expectUi('ui.subscriber.buyAddOnItem'));
     const packRow = productRow('Extra 2 GB');
-    fireEvent.click(within(packRow).getByRole('button', { name: 'Actions ▾' }));
+    fireEvent.click(within(packRow).getByRole('button', { name: 'Actions' }));
     expect(
       within(productMenu(packRow)).queryByRole('menuitem', { name: 'Buy add-on…' }),
     ).toBeNull();

@@ -1,4 +1,4 @@
-import { submitDialogPrimary } from '../ui/kit';
+import { submitDialogPrimary, IconButton } from '../ui/kit';
 import { NetworkCommands } from './NetworkCommands';
 import { characteristicOf } from '../api/devices';
 import { Note } from '../ui/Note';
@@ -138,14 +138,12 @@ export function ProductsScreen() {
             {account !== null && (
               <span className="bss-run-tag" data-ui="ui.products.accountChip">
                 Account {name ?? accountLabel(account)}{' '}
-                <button
-                  type="button"
-                  className="bss-link"
-                  aria-label="Remove the account filter"
+                <IconButton
+                  icon="x"
+                  small
+                  label="Remove the account filter"
                   onClick={dropAccount}
-                >
-                  ×
-                </button>
+                />
               </span>
             )}
           </>

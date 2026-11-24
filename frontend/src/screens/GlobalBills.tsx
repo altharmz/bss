@@ -16,7 +16,7 @@ import { formatInt, toCents } from '../format/money';
 import { Amount } from '../ui/Amount';
 import { runTriggerLabel } from '../format/labels';
 import { statusPresentation } from '../ui/status';
-import { Coded, PageHeader, Panel, StatusPill, Segmented, DateField } from '../ui/kit';
+import { Coded, PageHeader, Panel, StatusPill, Segmented, DateField, IconButton } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import { PageFooter, usePageOffset } from '../ui/paging';
@@ -138,14 +138,7 @@ export function BillsScreen() {
         {tab === 'bills' && account !== null && (
           <span className="bss-run-tag" data-ui="ui.bills.accountChip">
             Account {name ?? <Id id={account} prefix="BA-" />}{' '}
-            <button
-              type="button"
-              className="bss-link"
-              aria-label="Remove the account filter"
-              onClick={dropAccount}
-            >
-              ×
-            </button>
+            <IconButton icon="x" small label="Remove the account filter" onClick={dropAccount} />
           </span>
         )}
       </div>

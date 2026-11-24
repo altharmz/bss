@@ -53,9 +53,9 @@ describe('product actions', () => {
   const products = (rows: object[]) => ({ [`GET ${INTERNAL}/products`]: only(rows) });
   const posts = (fetchMock: ReturnType<typeof stubFetch>['fetchMock']) =>
     fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST');
-  const menuOf = (row: HTMLElement) => within(row).queryByRole('button', { name: 'Actions ▾' });
+  const menuOf = (row: HTMLElement) => within(row).queryByRole('button', { name: 'Actions' });
   const openMenu = (row: HTMLElement) =>
-    fireEvent.click(within(row).getByRole('button', { name: 'Actions ▾' }));
+    fireEvent.click(within(row).getByRole('button', { name: 'Actions' }));
   const items = (row: HTMLElement) =>
     within(productMenu(row))
       .queryAllByRole('menuitem')
@@ -88,7 +88,7 @@ describe('product actions', () => {
     );
     await open();
     const active = await waitFor(() => productRow('Mobile L'));
-    expect(within(active).getByRole('button', { name: 'Actions ▾' })).toBe(
+    expect(within(active).getByRole('button', { name: 'Actions' })).toBe(
       expectUi('ui.subscriber.productActions'),
     );
     openMenu(active);
@@ -674,7 +674,7 @@ describe('change offering', () => {
   async function openDialog() {
     await open();
     const row = await waitFor(() => productRow('Mobile L'));
-    fireEvent.click(within(row).getByRole('button', { name: 'Actions ▾' }));
+    fireEvent.click(within(row).getByRole('button', { name: 'Actions' }));
     fireEvent.click(within(productMenu(row)).getByRole('menuitem', { name: 'Change offering…' }));
     const dialog = screen.getByRole('dialog');
     expect(dialog).toBe(expectUi('ui.subscriber.offeringChange'));
@@ -749,11 +749,11 @@ describe('change offering', () => {
     );
     await open();
     const pending = await waitFor(() => productRow('Mobile L'));
-    fireEvent.click(within(pending).getByRole('button', { name: 'Actions ▾' }));
+    fireEvent.click(within(pending).getByRole('button', { name: 'Actions' }));
     expect(
       within(productMenu(pending)).queryByRole('menuitem', { name: 'Change offering…' }),
     ).toBeNull();
-    expect(within(productRow('Ending 1')).queryByRole('button', { name: 'Actions ▾' })).toBeNull();
+    expect(within(productRow('Ending 1')).queryByRole('button', { name: 'Actions' })).toBeNull();
   });
 
   it('hides the item for a prepaid product without paidThrough', async () => {
@@ -768,7 +768,7 @@ describe('change offering', () => {
     );
     await open();
     const row = await waitFor(() => productRow('Mobile L'));
-    fireEvent.click(within(row).getByRole('button', { name: 'Actions ▾' }));
+    fireEvent.click(within(row).getByRole('button', { name: 'Actions' }));
     expect(
       within(productMenu(row)).queryByRole('menuitem', { name: 'Change offering…' }),
     ).toBeNull();

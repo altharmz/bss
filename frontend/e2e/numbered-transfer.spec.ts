@@ -32,7 +32,7 @@ test('numbered prepaid subscribers complete a transfer by subscriber number', as
   };
   expect(fixture.currency).toBe(context.currency);
   await page.getByRole('tab', { name: 'Specifications', exact: true }).click();
-  await page.getByRole('button', { name: '+ New specification' }).click();
+  await page.getByRole('button', { name: 'New specification' }).click();
   const editor = page.getByRole('dialog', { name: 'New product specification' });
   await editor.getByLabel('Name', { exact: true }).fill(name);
   await editor.getByLabel('Requires a subscriber number').check();

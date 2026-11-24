@@ -78,7 +78,7 @@ decisions replace them.
   (and later `Avatar`) are added.
 - **T2** `tokens.css` holds Tidewell's palette (sand, tide, ember, green, amber, red, blue,
   plum) and its values behind the existing Ledger role names, which stay as aliases until
-  every screen is restyled; unused aliases go in the last slice.
+  every screen is restyled; unused aliases go in the last slice (done, #460).
 - **T3** Fonts are self-hosted, pinned `@fontsource/newsreader`, `schibsted-grotesk` and
   `geist-mono` 5.3.0. No font family is named outside `tokens.css` (style guard).
 - **T4** Icons: pinned `lucide-react` 0.460.0 (the handoff's version) behind `Icon` with the
@@ -103,7 +103,9 @@ decisions replace them.
 - **T9** The brand stays BSS (Tidewell is the handoff's fictional product).
 - **T10** Tidewell voice where it changes no behaviour or tested name: sentence case,
   verb-first buttons, no exclamation marks or emoji.
-- **T11** The care portal shares `tokens.css` and loads Schibsted Grotesk itself.
+- **T11** The care portal shares `tokens.css` and loads Schibsted Grotesk itself, plus
+  Newsreader 400 for its page and section titles (#460); it keeps its mobile-first 16 px
+  body.
 - **T12** Ledger's binding rules stay: Rule 1, D4, D9, D11 and the R15 inspector.
 
 Progress:
@@ -118,6 +120,28 @@ Progress:
   the transfer uses 0.10 and the postpaid card gets a settlement fixture with credit.
   Remaining slices (primitives and shell, screens, release review, alias cleanup,
   CLAUDE.md) are #460; the handoff in `design-ref/` is #459 (human).
+- Built slice 2 (#460), primitives and shell: buttons 600 with a 1 px press and
+  `opacity: .45` when disabled (busy stays opaque); fields with a tide focus border and
+  ring; checkbox (native input, Lucide tick over it), new `Radio` and `Switch` (native
+  inputs, `role="switch"`); Segmented with a raised selected segment; tide-underlined Tabs;
+  Menu items with a 2 px rise; Dialog with a 3 px blurred scrim, hairline, 24 px padding,
+  no header rule and an `IconButton` close; Toast with a check icon and a 600 title; Tag
+  and Flag sans 500, Badge a pill; serif empty-state lines; drawn disclosure chevrons;
+  sidebar wordmark without a mark, `Avatar` in the operator footer, chevron breadcrumbs,
+  pill business-date chip. Motion is 120/200/320 ms ease-out with fades and 2 px slides;
+  `prefers-reduced-motion` turns it off. The focus rules that set a colour as a
+  `box-shadow` (no visible ring) now use `--focus-ring`. `/ui-kit` adds the choices
+  (`ui.uikit.choices`), icon buttons and avatars.
+- Built slice 3 (#460), screens: Lucide icons replace the subscriber-search SVG, the
+  remove-filter crosses, the row-menu `⋯`, the Back arrow, the `+` of New buttons, the
+  dialog `×` and the list error `!`; the catalog stepper and the card's section rules
+  follow T7 and hairlines; New user puts Cancel before Save; the care portal takes the
+  tokens' radii, focus ring, motion and serif titles. TEST-CHANGE: "+ New …" buttons are
+  "New …", "Actions ▾" is "Actions", the close and error marks are icons.
+- Built slice 4 (#460): every `make web-shots` PNG reviewed against the handoff, evidence
+  in [tidewell-release.md](../tidewell-release.md); the shots run with reduced motion so no
+  capture catches a fade; unused Ledger aliases deleted. CLAUDE.md's "Current state" line
+  waits for the human (a CLAUDE.md merge needs their approval).
 
 ## Ledger v2: visual redesign (designed 2026-10-26) (superseded by Tidewell)
 

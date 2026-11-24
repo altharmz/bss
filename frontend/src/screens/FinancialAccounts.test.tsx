@@ -189,7 +189,7 @@ describe('financial accounts', () => {
       });
       await open();
       await screen.findByText('Group receivables');
-      fireEvent.click(screen.getByRole('button', { name: '+ New financial account' }));
+      fireEvent.click(screen.getByRole('button', { name: 'New financial account' }));
       expectUi('ui.financialAccounts.new');
       const dialog = await screen.findByRole('dialog', { name: 'New financial account' });
       expectUi('ui.financialAccounts.form');
@@ -289,7 +289,7 @@ describe('financial accounts', () => {
       const { calls } = withWrites({});
       await open();
       await screen.findByText('Group receivables');
-      fireEvent.click(screen.getByRole('button', { name: '+ New financial account' }));
+      fireEvent.click(screen.getByRole('button', { name: 'New financial account' }));
       const dialog = await screen.findByRole('dialog', { name: 'New financial account' });
       const owner = within(dialog).getByRole('combobox', { name: 'Owner' });
       await waitFor(() => expect(owner.hasAttribute('disabled')).toBe(false));

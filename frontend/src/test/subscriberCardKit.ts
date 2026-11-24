@@ -210,14 +210,14 @@ export function selectTab(name: string) {
 }
 
 export function productMenu(row: HTMLElement) {
-  const id = within(row).getByRole('button', { name: 'Actions ▾' }).getAttribute('aria-controls');
+  const id = within(row).getByRole('button', { name: 'Actions' }).getAttribute('aria-controls');
   const menu = id ? document.getElementById(id) : null;
   if (!menu) throw new Error('Product action menu is not open');
   return menu;
 }
 
 export function productAction(row: HTMLElement, name: string) {
-  const trigger = within(row).getByRole('button', { name: 'Actions ▾' });
+  const trigger = within(row).getByRole('button', { name: 'Actions' });
   if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger);
   return within(productMenu(row)).getByRole('menuitem', { name });
 }

@@ -170,7 +170,7 @@ test('capture the admin pages at both design widths', async ({ page }) => {
       if (name === 'users' || name === 'financial-accounts') {
         const user = name === 'users';
         await page
-          .getByRole('button', { name: user ? 'New user' : '+ New financial account', exact: true })
+          .getByRole('button', { name: user ? 'New user' : 'New financial account', exact: true })
           .click();
         const dialog = page.getByRole('dialog');
         const primary = dialog.locator('.bss-modal-footer .primary');
@@ -266,13 +266,13 @@ test('capture the admin pages at both design widths', async ({ page }) => {
           });
         }
         await page.getByRole('tab', { name: 'Offerings', exact: true }).click();
-        await page.getByRole('button', { name: '+ New offering' }).click();
+        await page.getByRole('button', { name: 'New offering' }).click();
         const offering = page.getByRole('dialog', { name: 'New product offering' });
         await expect(offering.locator('.bss-modal-footer .primary')).toBeInViewport({ ratio: 1 });
         await page.screenshot({ path: `/web/.shots/dialog-offering-${width}.png` });
         await offering.getByRole('button', { name: 'Cancel' }).click();
         await page.getByRole('tab', { name: 'Categories', exact: true }).click();
-        await page.getByRole('button', { name: '+ New category' }).click();
+        await page.getByRole('button', { name: 'New category' }).click();
         const category = page.getByRole('dialog', { name: 'New category' });
         await expect(category.getByRole('button', { name: 'Create', exact: true })).toBeInViewport({
           ratio: 1,
@@ -280,7 +280,7 @@ test('capture the admin pages at both design widths', async ({ page }) => {
         await page.screenshot({ path: `/web/.shots/dialog-category-${width}.png` });
         await category.getByRole('button', { name: 'Cancel' }).click();
         await page.getByRole('tab', { name: 'Specifications', exact: true }).click();
-        await page.getByRole('button', { name: '+ New specification' }).click();
+        await page.getByRole('button', { name: 'New specification' }).click();
         const specification = page.getByRole('dialog', { name: 'New product specification' });
         await specification.getByLabel('Name', { exact: true }).fill('Numbered mobile');
         await specification.getByLabel('Requires a subscriber number').check();

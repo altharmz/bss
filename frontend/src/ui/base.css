@@ -45,3 +45,35 @@ body {
 .neg {
   color: var(--color-negative);
 }
+
+/* Disclosures: a drawn chevron instead of the native triangle, turning in 200 ms. */
+summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--color-ink-2);
+  font-weight: 500;
+}
+summary::-webkit-details-marker {
+  display: none;
+}
+summary::before {
+  content: '';
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+details[open] > summary::before {
+  transform: rotate(45deg);
+}
+summary:focus-visible {
+  outline: none;
+  border-radius: var(--radius-xs);
+  box-shadow: var(--focus-ring);
+}

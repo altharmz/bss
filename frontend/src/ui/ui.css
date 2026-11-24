@@ -211,6 +211,7 @@
 }
 .bss-row.clickable {
   cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
 }
 .bss-row.clickable:hover {
   background: var(--color-bg-hover);
@@ -279,7 +280,12 @@
   text-align: left;
 }
 .bss-state .title {
-  font: var(--type-body-strong);
+  font: var(--type-title);
+  letter-spacing: var(--tracking-title);
+}
+.bss-state[role='alert'] .title {
+  font: var(--type-section);
+  letter-spacing: normal;
 }
 .bss-state .text {
   color: var(--color-ink-2);
@@ -305,8 +311,19 @@
   background: var(--color-bg);
   color: var(--color-ink-1);
   font: var(--type-body-strong);
+  font-weight: 600;
+  letter-spacing: -0.01em;
   cursor: pointer;
   white-space: nowrap;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+/* Press moves the button down 1 px: no scale, no bounce. */
+.bss-btn:active:not(:disabled),
+.bss-icon-btn:active:not(:disabled) {
+  transform: translateY(1px);
 }
 .bss-btn.small {
   height: var(--control-height-sm);
@@ -340,14 +357,53 @@
   color: var(--color-negative);
 }
 .bss-btn:disabled {
-  background: var(--color-bg-sunken);
-  color: var(--color-ink-4);
+  opacity: 0.45;
   cursor: not-allowed;
 }
+.bss-btn.is-busy:disabled {
+  opacity: 1;
+  cursor: progress;
+}
 .bss-btn:focus-visible,
-.bss-seg button:focus-visible {
+.bss-seg button:focus-visible,
+.bss-icon-btn:focus-visible {
   outline: none;
-  box-shadow: var(--color-primary-tint);
+  box-shadow: var(--focus-ring);
+}
+.bss-btn.secondary:focus-visible {
+  box-shadow:
+    inset 0 0 0 1px var(--color-border-strong),
+    var(--focus-ring);
+}
+.bss-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--control-height);
+  height: var(--control-height);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-ink-3);
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.bss-icon-btn.small {
+  width: var(--control-height-sm);
+  height: var(--control-height-sm);
+}
+.bss-icon-btn:hover:not(:disabled) {
+  background: var(--color-bg-hover);
+  color: var(--color-ink-1);
+}
+.bss-icon-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 .bss-btn.is-busy:disabled {
   background: var(--color-bg);
@@ -387,6 +443,18 @@
 }
 .bss-link:hover {
   text-decoration: underline;
+}
+button.bss-link {
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: none;
+  font: inherit;
+  font-weight: 500;
+}
+.bss-link:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 .bss-field-control {
   display: flex;
@@ -428,6 +496,12 @@
   background: var(--color-bg);
   color: var(--color-ink-1);
   font: var(--type-body);
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+.bss-input::placeholder {
+  color: var(--color-ink-4);
 }
 .bss-combobox {
   position: relative;
@@ -473,8 +547,9 @@
   box-shadow: var(--focus-halo);
 }
 .bss-input:disabled {
-  background: var(--color-bg-sunken);
+  background: var(--color-bg-subtle);
   color: var(--color-ink-4);
+  cursor: not-allowed;
 }
 .bss-select-wrap,
 .bss-date-wrap {
@@ -486,16 +561,12 @@
   padding-right: 30px;
   width: 100%;
 }
-.bss-select-wrap::after {
-  content: '';
+.bss-select-wrap .select-icon {
   position: absolute;
-  right: 12px;
-  top: 12px;
-  width: 6px;
-  height: 6px;
-  border-right: 1px solid var(--color-ink-3);
-  border-bottom: 1px solid var(--color-ink-3);
-  transform: rotate(45deg);
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-ink-4);
   pointer-events: none;
 }
 .bss-date-wrap .bss-input {
@@ -531,11 +602,97 @@
   font: var(--type-code);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
-.bss-checkbox {
-  width: 14px;
-  height: 14px;
+/* Checkbox, radio and switch: native inputs drawn in Tidewell's shapes. */
+.bss-checkbox-box {
+  position: relative;
+  display: inline-grid;
+  flex: none;
+  vertical-align: middle;
+}
+.bss-checkbox-box > * {
+  grid-area: 1 / 1;
+}
+.bss-checkbox,
+.bss-radio,
+.bss-switch {
+  appearance: none;
+  flex: none;
   margin: 0;
-  accent-color: var(--color-primary);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    background-position var(--dur-base) var(--ease-out);
+}
+.bss-checkbox,
+.bss-radio {
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--color-border-strong);
+  background: var(--color-bg);
+}
+.bss-checkbox {
+  border-radius: var(--radius-xs);
+}
+.bss-radio {
+  border-radius: var(--radius-pill);
+}
+.bss-checkbox:checked {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+}
+.bss-radio:checked {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  box-shadow: inset 0 0 0 2.5px var(--color-bg);
+}
+.checkbox-tick {
+  place-self: center;
+  color: var(--color-on-primary);
+  visibility: hidden;
+  pointer-events: none;
+}
+.bss-checkbox:checked + .checkbox-tick {
+  visibility: visible;
+}
+.bss-switch {
+  width: 32px;
+  height: 18px;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-switch-off);
+  background-image: radial-gradient(circle, var(--color-thumb) 6.5px, transparent 7px);
+  background-size: 14px 14px;
+  background-repeat: no-repeat;
+  background-position: 2px center;
+}
+.bss-switch:checked {
+  background-color: var(--color-primary);
+  background-position: 16px center;
+}
+.bss-checkbox:focus-visible,
+.bss-radio:focus-visible,
+.bss-switch:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.bss-radio:checked:focus-visible {
+  box-shadow:
+    inset 0 0 0 2.5px var(--color-bg),
+    var(--focus-ring);
+}
+.bss-checkbox:disabled,
+.bss-radio:disabled,
+.bss-switch:disabled {
+  cursor: not-allowed;
+}
+.bss-checkbox:disabled:not(:checked),
+.bss-radio:disabled:not(:checked) {
+  background: var(--color-bg-subtle);
+}
+.bss-check:has(:disabled) {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 .bss-seg {
   display: inline-flex;
@@ -544,6 +701,9 @@
   background: var(--color-bg-sunken);
   border-radius: var(--radius-sm);
 }
+.bss-seg button:hover:not([aria-pressed='true']):not([aria-checked='true']) {
+  color: var(--color-ink-1);
+}
 .bss-seg button {
   display: inline-flex;
   align-items: center;
@@ -551,17 +711,21 @@
   height: 28px;
   padding: 0 10px;
   border: 0;
-  border-radius: calc(var(--radius-sm) - 1px);
+  border-radius: 7px;
   background: transparent;
-  color: var(--color-ink-2);
+  color: var(--color-ink-3);
   font: var(--type-body-strong);
   cursor: pointer;
+  transition:
+    background var(--dur-base) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
 }
 .bss-seg button[aria-pressed='true'],
 .bss-seg button[aria-checked='true'] {
   background: var(--color-bg);
   color: var(--color-ink-1);
-  box-shadow: inset 0 0 0 1px var(--color-border);
+  font-weight: 600;
+  box-shadow: var(--elev-raised);
 }
 .bss-seg .count {
   font: var(--type-code);
@@ -579,6 +743,31 @@
   padding: var(--space-8) 0;
   overflow: hidden;
   background: var(--scrim);
+  backdrop-filter: blur(var(--blur-overlay));
+  animation: bss-fade var(--dur-slow) var(--ease-out);
+}
+.bss-overlay > .bss-modal {
+  animation: bss-rise var(--dur-slow) var(--ease-out);
+}
+/* Tidewell motion: fades and 2 px slides, nothing bounces. */
+@keyframes bss-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes bss-rise {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
 }
 .bss-modal {
   display: flex;
@@ -587,8 +776,10 @@
   width: var(--modal-width);
   max-width: calc(100vw - 40px);
   background: var(--color-bg);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--elev-dialog);
+  overflow: hidden;
 }
 .bss-inspector {
   position: sticky;
@@ -643,7 +834,7 @@
 .bss-dialog-body {
   overflow: auto;
   min-height: 0;
-  padding: 20px;
+  padding: 18px 24px 22px;
 }
 /* Existing modal callers own body spacing until their screen migration. */
 .bss-dialog-body:has(.bss-modal-body) {
@@ -669,9 +860,8 @@
   flex-shrink: 0;
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--color-border);
+  gap: 16px;
+  padding: 22px 24px 0;
 }
 .bss-modal-header h2 {
   margin: 0;
@@ -690,32 +880,16 @@
 }
 .bss-modal-header .close {
   margin-left: auto;
-  width: 28px;
-  height: 28px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: none;
-  font: var(--type-section);
-  color: var(--color-ink-2);
-  cursor: pointer;
-}
-.bss-modal-header .close:hover {
-  background: var(--color-bg-hover);
-}
-.bss-modal-header .close:focus-visible {
-  outline: none;
-  box-shadow: var(--color-primary-tint);
 }
 .bss-modal-footer {
   flex-shrink: 0;
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  padding: 12px 20px;
+  padding: 14px 24px;
   align-items: center;
   border-top: 1px solid var(--color-border);
-  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-  background: var(--color-bg-subtle);
+  background: var(--color-page);
 }
 .bss-modal-footer:has(> .bss-write-actions) {
   display: block;
@@ -724,17 +898,16 @@
   background: var(--color-bg);
 }
 .bss-write-note {
-  margin: 0 20px 20px;
+  margin: 0 24px 20px;
 }
 .bss-write-actions {
   display: flex;
   justify-content: flex-end;
   align-items: center;
   gap: 8px;
-  padding: 12px 20px;
+  padding: 14px 24px;
   border-top: 1px solid var(--color-border);
-  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-  background: var(--color-bg-subtle);
+  background: var(--color-page);
 }
 .bss-write-fields {
   border: 0;
@@ -775,27 +948,38 @@
   bottom: 24px;
   z-index: 20;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
-  padding: 10px 12px 10px 14px;
+  max-width: 420px;
+  padding: 12px 14px;
   border-radius: var(--radius-md);
   background: var(--color-ink-1);
-  color: var(--color-bg);
+  color: var(--color-on-inverse);
   font: var(--type-body);
   box-shadow: var(--elev-popover);
+  animation: bss-rise var(--dur-slow) var(--ease-out);
+}
+.bss-toast .toast-icon {
+  flex: none;
+  margin-top: 2px;
+  color: var(--color-on-inverse-positive);
+}
+.bss-toast .toast-title {
+  font-weight: 600;
 }
 .bss-toast button {
   margin-left: auto;
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--color-primary-tint);
+  color: var(--color-on-inverse-accent);
   font: var(--type-body-strong);
+  font-weight: 600;
   cursor: pointer;
 }
 .bss-toast button:focus-visible {
   outline: none;
-  box-shadow: var(--color-primary-tint);
+  box-shadow: var(--focus-ring);
 }
 .bss-toast-preview {
   position: static;
@@ -823,10 +1007,11 @@
   align-items: center;
   gap: 6px;
   height: 20px;
-  padding: 0 7px 0 6px;
+  padding: 0 8px 0 7px;
   border-radius: var(--radius-pill);
   box-sizing: border-box;
   font: var(--type-label);
+  font-weight: 500;
   white-space: nowrap;
 }
 .status-pill::before {
@@ -906,34 +1091,30 @@
   box-sizing: border-box;
 }
 .bss-tag {
-  height: 18px;
-  padding: 0 6px;
+  height: 20px;
+  padding: 0 7px;
   border-radius: var(--radius-tag);
-  box-shadow: inset 0 0 0 1px var(--color-border-strong);
+  background: var(--color-bg);
+  box-shadow: inset 0 0 0 1px var(--color-border);
   color: var(--color-ink-2);
-  font: var(--type-micro);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-micro);
+  font: var(--type-label);
+  font-weight: 500;
 }
 .bss-flag {
-  height: 18px;
-  padding: 0 5px;
+  height: 20px;
+  padding: 0 7px;
   border-radius: var(--radius-tag);
   background: var(--color-warning-tint);
   color: var(--color-warning);
-  font: var(--type-micro);
+  font: var(--type-label);
   font-weight: 500;
-  text-transform: none;
-  letter-spacing: normal;
 }
 .bss-badge {
-  height: 16px;
-  padding: 0 6px;
-  border-radius: 8px;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: var(--radius-pill);
   font: var(--type-micro);
   font-weight: 500;
-  text-transform: none;
-  letter-spacing: normal;
 }
 .badge-count {
   background: var(--color-bg-sunken);
@@ -994,7 +1175,7 @@
 }
 .bss-id:focus-visible {
   outline: none;
-  box-shadow: var(--color-primary-tint);
+  box-shadow: var(--focus-ring);
 }
 
 .bss-row {
@@ -1013,19 +1194,25 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 40px;
+  height: 38px;
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--color-ink-2);
+  color: var(--color-ink-3);
   font: var(--type-body);
   font-weight: 500;
   cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out);
+}
+.bss-tabs [role='tab']:hover {
+  color: var(--color-ink-1);
 }
 .bss-tabs [aria-selected='true'] {
   color: var(--color-ink-1);
   font-weight: 600;
-  box-shadow: inset 0 -2px 0 var(--color-ink-1);
+  box-shadow: inset 0 -2px 0 var(--color-primary);
 }
 .bss-tabs .count {
   font: var(--type-code);
@@ -1033,7 +1220,8 @@
 }
 .bss-tabs [role='tab']:focus-visible,
 [role='tabpanel']:focus-visible {
-  outline: var(--color-primary-tint);
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 .bss-menu {
   position: relative;
@@ -1054,12 +1242,17 @@
   box-shadow: var(--elev-popover);
   display: flex;
   flex-direction: column;
+  animation: bss-rise var(--dur-base) var(--ease-out);
 }
 .bss-menu-items .bss-btn {
   justify-content: flex-start;
   height: 30px;
   padding: 0 10px;
+  border-radius: var(--radius-tag);
   font: var(--type-body);
+}
+.bss-menu-items .bss-btn:active:not(:disabled) {
+  transform: none;
 }
 .bss-menu-items [role='separator'] {
   height: 1px;
@@ -1132,4 +1325,42 @@
 .bss-file-name {
   color: var(--color-ink-2);
   font: var(--type-body);
+}
+
+/* Tidewell Avatar: initials on a tinted pill; the tint follows the name. */
+.bss-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-pill);
+  font: var(--type-label);
+  font-size: var(--size-micro);
+  letter-spacing: 0.02em;
+}
+.avatar-tint-0 {
+  background: var(--tide-100);
+  color: var(--tide-700);
+}
+.avatar-tint-1 {
+  background: var(--ember-100);
+  color: var(--ember-700);
+}
+.avatar-tint-2 {
+  background: var(--plum-100);
+  color: var(--plum-600);
+}
+.avatar-tint-3 {
+  background: var(--blue-100);
+  color: var(--blue-600);
+}
+.avatar-tint-4 {
+  background: var(--amber-100);
+  color: var(--amber-650);
+}
+.avatar-tint-5 {
+  background: var(--green-100);
+  color: var(--green-650);
 }

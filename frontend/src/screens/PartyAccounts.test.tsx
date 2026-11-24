@@ -138,7 +138,7 @@ describe('party and settlement accounts', () => {
     });
     await open('Party');
     await screen.findByText('Payroll');
-    fireEvent.click(screen.getByRole('button', { name: '+ New party account' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New party account' }));
     expectUi('ui.accounts.party.new');
     const dialog = await screen.findByRole('dialog', { name: 'New party account' });
     expectUi('ui.accounts.party.form');
@@ -180,7 +180,7 @@ describe('party and settlement accounts', () => {
     });
     await open('Settlement');
     await screen.findByText('Partner payouts');
-    fireEvent.click(screen.getByRole('button', { name: '+ New settlement account' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New settlement account' }));
     expectUi('ui.accounts.settlement.new');
     const dialog = await screen.findByRole('dialog', { name: 'New settlement account' });
     expectUi('ui.accounts.settlement.form');

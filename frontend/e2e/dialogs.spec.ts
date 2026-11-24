@@ -32,12 +32,12 @@ for (const viewport of [
     await check(add, add.getByRole('button', { name: 'Add product', exact: true }));
     await add.getByRole('button', { name: 'Cancel' }).click();
     await page.goto('/catalog');
-    await page.getByRole('button', { name: '+ New offering' }).click();
+    await page.getByRole('button', { name: 'New offering' }).click();
     const offering = page.getByRole('dialog', { name: 'New product offering' });
     await check(offering, offering.locator('.bss-modal-footer .bss-btn.primary'));
     await offering.getByRole('button', { name: 'Cancel' }).click();
     await page.getByRole('tab', { name: 'Categories', exact: true }).click();
-    await page.getByRole('button', { name: '+ New category' }).click();
+    await page.getByRole('button', { name: 'New category' }).click();
     const category = page.getByRole('dialog', { name: 'New category' });
     await check(category, category.getByRole('button', { name: 'Create', exact: true }));
     await category.getByRole('button', { name: 'Cancel' }).click();

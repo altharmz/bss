@@ -7,7 +7,7 @@ import { useCrumbs, useNavVersion, type SystemContext } from './context';
 import { visibleNav } from './nav';
 import { Link, useRouter } from './router';
 import './shell.css';
-import { Badge, Segmented, Tag } from '../ui/kit';
+import { Avatar, Badge, Icon, Segmented, Tag } from '../ui/kit';
 import { readTheme, saveTheme, type Theme } from './theme';
 import { SignOut, useSession } from './session';
 
@@ -57,7 +57,6 @@ export function Sidebar({ context }: { context: SystemContext }) {
   return (
     <aside className="bss-sidebar">
       <div className="bss-brand">
-        <span className="mark">B</span>
         <span className="name">BSS Admin</span>
         <Tag>{context.environment.toUpperCase()}</Tag>
       </div>
@@ -88,9 +87,10 @@ export function Sidebar({ context }: { context: SystemContext }) {
       <div className="bss-operator">
         <details data-ui="ui.session.menu">
           <summary data-ui="ui.shell.operator">
-            <span className="avatar" aria-hidden="true">
-              {operatorInitials(session?.username ?? '')}
-            </span>
+            <Avatar
+              name={session?.username ?? ''}
+              initials={operatorInitials(session?.username ?? '')}
+            />
             <span className="identity">
               <span className="who">{session?.username}</span>
               <span className="role">{session?.role}</span>
@@ -138,7 +138,7 @@ export function TopBar({ context }: { context: SystemContext | null }) {
       <nav className="bss-crumbs" aria-label="Breadcrumbs">
         {crumbs.map((crumb, i) => (
           <Fragment key={`${i}-${crumb.label}`}>
-            {i > 0 && <span className="sep">/</span>}
+            {i > 0 && <Icon name="chevron-right" size={14} className="sep" />}
             {crumb.href !== undefined && i < crumbs.length - 1 ? (
               <Link href={crumb.href}>{crumb.label}</Link>
             ) : (

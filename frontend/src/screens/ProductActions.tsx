@@ -96,7 +96,7 @@ export function ProductActionsMenu({
   if (items.length === 0 && !undoable && extra.length === 0) return null;
   return (
     <Menu
-      label="Actions ▾"
+      label="Actions"
       ui="ui.subscriber.productActions"
       items={[
         ...(undoable

@@ -3,6 +3,7 @@ import type { ResourceWithRetry } from '../api/useResource';
 import { useOptionalSystemContext } from '../app/context';
 import { clockTime } from '../format/dates';
 import { Button } from './kit';
+import { Icon } from './Icon';
 import { TableRow, type Column } from './Table';
 
 // The four required states of every list (README "Required states"): loading skeleton,
@@ -71,9 +72,7 @@ export function ErrorBlock({
   if (failure.error !== error) setFailure({ error, at: new Date().toISOString() });
   return (
     <div className="bss-state" role="alert">
-      <span className="icon" aria-hidden="true">
-        !
-      </span>
+      <Icon name="octagon-alert" size={20} className="icon" />
       <div className="title">{title}</div>
       {/* An ApiError's message is the call: "GET /path → 503 Service Unavailable". */}
       <div className="call">{error.message}</div>

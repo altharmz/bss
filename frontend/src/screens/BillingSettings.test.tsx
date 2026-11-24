@@ -121,7 +121,7 @@ describe('billing settings', () => {
     });
     await open();
     await screen.findByText('Corporate monthly');
-    fireEvent.click(screen.getByRole('button', { name: '+ New cycle specification' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New cycle specification' }));
     expectUi('ui.billingSettings.cycles.new');
     let dialog = await screen.findByRole('dialog', { name: 'New cycle specification' });
     expectUi('ui.billingSettings.cycles.form');
@@ -190,7 +190,7 @@ describe('billing settings', () => {
     await open('Bill formats');
     await screen.findByText('JSON summary');
     expectUi('ui.billingSettings.formats');
-    fireEvent.click(screen.getByRole('button', { name: '+ New bill format' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New bill format' }));
     expectUi('ui.billingSettings.formats.new');
     let dialog = await screen.findByRole('dialog', { name: 'New bill format' });
     expectUi('ui.billingSettings.formats.form');
@@ -243,7 +243,7 @@ describe('billing settings', () => {
     await open('Presentation media');
     await screen.findByText('Post');
     expectUi('ui.billingSettings.media');
-    fireEvent.click(screen.getByRole('button', { name: '+ New presentation medium' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New presentation medium' }));
     expectUi('ui.billingSettings.media.new');
     let dialog = await screen.findByRole('dialog', { name: 'New presentation medium' });
     expect(dialog).toBe(expectUi('ui.billingSettings.media.form'));
