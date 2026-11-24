@@ -1,0 +1,14 @@
+<!-- @dsCard group="Components" viewport="700x400" name="Overlays" subtitle="Dialog, Toast, Tooltip" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css"><style>body{margin:0;padding:20px 24px;background:var(--surface-page);font-family:var(--font-sans);color:var(--text-body)}#root{display:flex;flex-direction:column;gap:16px}.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}</style></head><body><div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<script type="text/babel">
+const { Button, IconButton, Icon, Avatar, Badge, Tag, Card, Input, Select, Checkbox, Radio, Switch, Tabs, Dialog, Toast, Tooltip } = window.TidewellDesignSystem_8a4ccf;
+function Demo(){ return <div style={{display:"grid",gridTemplateColumns:"1.2fr 1fr",gap:20,alignItems:"start"}}>
+<Dialog open inline onClose={()=>{}} title="New task" description="Adds to This week" footer={<><Button variant="ghost" size="sm">Cancel</Button><Button size="sm">Create task</Button></>}><Input label="Title" placeholder="Write launch email"/></Dialog>
+<div style={{display:"flex",flexDirection:"column",gap:12,paddingTop:44}}><Toast tone="success" title="Task moved to Review" action={{label:"Undo"}} onClose={()=>{}}/><Toast title="Maya assigned you" description="Draft launch email · Due Fri"/>
+<div style={{paddingTop:16,display:"flex",gap:24}}><Tooltip label="Filter · F" open><IconButton icon="filter" label="Filter" variant="outline"/></Tooltip></div></div></div>; }
+ReactDOM.createRoot(document.getElementById('root')).render(<Demo/>);
+</script></body></html>

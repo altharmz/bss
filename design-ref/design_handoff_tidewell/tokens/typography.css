@@ -1,0 +1,18 @@
+:root{
+--font-display:"Newsreader",Georgia,"Times New Roman",serif;
+--font-sans:"Schibsted Grotesk",ui-sans-serif,system-ui,sans-serif;
+--font-mono:"Geist Mono",ui-monospace,"SF Mono",Menlo,monospace;
+--weight-regular:400;/* @kind font */--weight-medium:500;/* @kind font */--weight-semibold:600;/* @kind font */--weight-bold:700;/* @kind font */
+--display-xl-size:64px;--display-xl-lh:1.0;/* @kind other */--display-xl-track:-1.6px;/* @kind other */
+--display-lg-size:44px;--display-lg-lh:1.05;/* @kind other */--display-lg-track:-0.88px;/* @kind other */
+--display-md-size:32px;--display-md-lh:1.1;/* @kind other */--display-md-track:-0.48px;/* @kind other */
+--heading-lg-size:22px;--heading-lg-lh:1.3;/* @kind other */--heading-lg-track:-0.3px;/* @kind other */
+--heading-md-size:17px;--heading-md-lh:1.35;/* @kind other */--heading-md-track:-0.15px;/* @kind other */
+--body-lg-size:17px;--body-lg-lh:1.55;/* @kind other */
+--body-md-size:15px;--body-md-lh:1.5;/* @kind other */
+--body-sm-size:13px;--body-sm-lh:1.45;/* @kind other */
+--caption-size:12px;--caption-lh:1.4;/* @kind other */
+--eyebrow-size:11px;--eyebrow-track:0.08em;/* @kind other */
+--code-size:13px;--code-lh:1.6;/* @kind other */
+--text-display:var(--font-display);--text-ui:var(--font-sans);--text-code:var(--font-mono);
+}
