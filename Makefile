@@ -417,7 +417,7 @@ web-shots: ## [ui] Capture Tidewell UI reference PNGs at 1280 and 1600 px
 	mkdir -p frontend/.e2e
 	$(E2E_USERS) cleanup
 	$(E2E_USERS) prepare
-	$(LOCKED) ./scripts/task-compose run --rm e2e npx playwright test -c playwright.shots.config.ts; rc=$$?; $(E2E_USERS) cleanup || rc=1; ./scripts/task-compose rm -sf web-preview >/dev/null 2>&1; exit $$rc
+	$(LOCKED) ./scripts/task-compose run --rm e2e npx playwright test -c playwright.shots.config.ts; rc=$$?; $(E2E_USERS) cleanup || rc=1; ./scripts/task-compose rm -sf web-preview e2e-worker e2e-care >/dev/null 2>&1; exit $$rc
 
 spec-verify-upstream: ## [docs] Re-fetch the spec blob SHAs from GitHub and compare with spec/README.md (network; not in make test)
 	python3 scripts/spec-verify-upstream.py
