@@ -22,6 +22,7 @@ import {
   Tag,
   TextInput,
   useToast,
+  Icon,
 } from '../ui/kit';
 import { useMediaQuery, WIDE_QUERY } from '../ui/useMediaQuery';
 import { ListState } from '../ui/states';
@@ -210,10 +211,7 @@ export function SubscribersScreen() {
         filters={
           <>
             <div className="bss-subscriber-search" ref={search}>
-              <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14">
-                <circle cx="6" cy="6" r="4.5" />
-                <path d="M9.5 9.5L13 13" />
-              </svg>
+              <Icon name="search" size={14} />
               <TextInput
                 placeholder="Name, BA id or subscriber no. (starts with)"
                 aria-label="Search subscribers"

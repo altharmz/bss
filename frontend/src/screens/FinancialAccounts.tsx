@@ -14,7 +14,7 @@ import { shortId } from '../format/ids';
 import { plural } from '../format/labels';
 import { formatInt } from '../format/money';
 import { Amount } from '../ui/Amount';
-import { Button, PageHeader, Panel, StatusPill, Segmented, useToast } from '../ui/kit';
+import { Button, PageHeader, Panel, StatusPill, Segmented, useToast, Icon } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import { DeleteFinancialModal, FinancialFormModal } from './FinancialForms';
@@ -92,7 +92,8 @@ function FinancialTab({ tabs }: { tabs: React.ReactNode }) {
           data-ui="ui.financialAccounts.new"
           onClick={() => setDialog({ kind: 'new' })}
         >
-          + New financial account
+          <Icon name="plus" size={14} />
+          New financial account
         </Button>
       </div>
       {tabs}
@@ -262,7 +263,8 @@ function PartyTab({ kind, tabs }: { kind: PartyAccountKind; tabs: React.ReactNod
           data-ui={`${marker}.new`}
           onClick={() => setDialog({ kind: 'new' })}
         >
-          + New {word} account
+          <Icon name="plus" size={14} />
+          New {word} account
         </Button>
       </div>
       {tabs}
@@ -274,7 +276,7 @@ function PartyTab({ kind, tabs }: { kind: PartyAccountKind; tabs: React.ReactNod
           errorTitle={`Failed to load ${word} accounts`}
           empty={{
             title: `No ${word} accounts yet`,
-            text: `Create one with + New ${word} account.`,
+            text: `Create one with New ${word} account.`,
           }}
           count={(data) => data.length}
           rows={(data) => data}

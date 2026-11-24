@@ -6,8 +6,12 @@ import { Id, ID_PREFIXES } from '../ui/Id';
 import { STATUS_MAP, type StatusKind } from '../ui/status';
 import { useState } from 'react';
 import {
+  Avatar,
   Icon,
+  IconButton,
   ICON_NAMES,
+  Radio,
+  Switch,
   Menu,
   Note,
   Tabs,
@@ -385,6 +389,36 @@ export function UiKitScreen() {
           <Field label="Confirmed">
             <Checkbox />
           </Field>
+        </div>
+      </section>
+      <section data-ui="ui.uikit.choices">
+        <h2>Checkbox, radio and switch</h2>
+        <div className="ui-kit-row">
+          <Checkbox label="Unchecked" />
+          <Checkbox label="Checked" defaultChecked />
+          <Checkbox label="Disabled" disabled />
+          <Checkbox label="Checked, disabled" defaultChecked disabled />
+        </div>
+        <div className="ui-kit-row" role="radiogroup" aria-label="Billing cycle">
+          <Radio name="kit-cycle" label="Monthly" defaultChecked />
+          <Radio name="kit-cycle" label="Quarterly" />
+          <Radio name="kit-cycle-off" label="Disabled" disabled />
+        </div>
+        <div className="ui-kit-row">
+          <Switch label="Off" />
+          <Switch label="On" defaultChecked />
+          <Switch label="Disabled" disabled />
+        </div>
+      </section>
+      <section>
+        <h2>Icon buttons and avatars</h2>
+        <div className="ui-kit-row">
+          <IconButton icon="search" label="Search" />
+          <IconButton icon="copy" label="Copy" small />
+          <IconButton icon="x" label="Close" disabled />
+          {['admin', 'operator', 'olga', 'care', 'billing', 'mk'].map((name) => (
+            <Avatar key={name} name={name} initials={name.slice(0, 2).toUpperCase()} />
+          ))}
         </div>
       </section>
       <section data-ui="ui.uikit.combobox">

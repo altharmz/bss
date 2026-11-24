@@ -11,6 +11,8 @@ export default defineConfig({
   timeout: 30_000,
   retries: 0,
   reporter: 'list',
-  use: { baseURL: process.env.E2E_BASE_URL ?? 'http://web-preview:4173' },
+  // Reduced motion: the Tidewell fades (320 ms) finish at once, so a capture never catches a
+  // dialog or toast half-faded in.
+  use: { baseURL: process.env.E2E_BASE_URL ?? 'http://web-preview:4173', reducedMotion: 'reduce' },
   projects: [{ name: 'chromium' }],
 });

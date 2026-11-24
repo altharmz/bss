@@ -146,7 +146,7 @@ describe('catalog', () => {
     expect(
       screen.getByText('Create the first product offering. It starts in In design.'),
     ).toBeTruthy();
-    expect(screen.getAllByRole('button', { name: '+ New offering' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'New offering' })).toHaveLength(2);
   });
 
   it('shows the failing call', async () => {
@@ -168,7 +168,7 @@ describe('new offering', () => {
   async function openForm() {
     await open();
     await waitFor(() => row('Mobile L'));
-    fireEvent.click(screen.getByRole('button', { name: '+ New offering' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New offering' }));
     const dialog = screen.getByRole('dialog', { name: 'New product offering' });
     await waitFor(() =>
       expect((within(dialog).getByLabelText('Categories') as HTMLSelectElement).disabled).toBe(

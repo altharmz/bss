@@ -1,3 +1,4 @@
+import { Icon } from './Icon';
 import {
   useEffect,
   useLayoutEffect,
@@ -107,7 +108,7 @@ export type MenuItem =
 export function Menu({
   items,
   label = 'Row actions',
-  trigger = '⋯',
+  trigger = <Icon name="ellipsis" />,
   ui,
   defaultOpen = false,
 }: {

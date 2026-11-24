@@ -1,4 +1,5 @@
-/* Ledger shell; screen layouts live in screens.css. */
+/* Tidewell shell (sand-100 sidebar panel, hairline, display-face wordmark); screen
+   layouts live in screens.css. */
 .bss-root {
   display: flex;
   min-width: 1280px;
@@ -12,7 +13,7 @@
   flex: 0 0 var(--sidebar-width);
   width: var(--sidebar-width);
   height: 100vh;
-  padding: 10px var(--space-sm) var(--space-md);
+  padding: 14px var(--space-sm) var(--space-sm);
   background: var(--color-bg-subtle);
   border-right: 1px solid var(--color-border);
 }
@@ -20,24 +21,15 @@
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  height: var(--control-height-sm);
+  height: var(--control-height);
   flex: none;
-  padding: 0 var(--space-sm);
+  padding: 0 10px;
 }
-.bss-brand .mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 18px;
-  height: 18px;
-  border-radius: var(--radius-sm);
-  background: var(--color-ink-1);
-  color: var(--color-on-primary);
-  font: var(--type-code);
-}
+/* T9: the brand stays BSS, set as a display-face wordmark; no logo mark (Tidewell). */
 .bss-brand .name {
-  font: var(--type-body-strong);
+  font: var(--type-title);
+  letter-spacing: var(--tracking-title);
+  color: var(--color-ink-1);
   white-space: nowrap;
 }
 .bss-brand .bss-tag {
@@ -53,7 +45,7 @@
   align-items: center;
   height: 22px;
   margin-top: 14px;
-  padding: 0 var(--space-sm);
+  padding: 0 10px;
   font: var(--type-micro);
   text-transform: uppercase;
   letter-spacing: var(--tracking-micro);
@@ -68,20 +60,25 @@
   gap: var(--space-sm);
   height: var(--control-height-sm);
   margin-top: 1px;
-  padding: 0 var(--space-sm);
+  padding: 0 10px;
   border-radius: var(--radius-sm);
   color: var(--color-ink-2);
   text-decoration: none;
-  font: var(--type-body);
+  font: var(--type-body-strong);
+  transition: background var(--dur-fast) var(--ease-out);
 }
 .bss-nav a:hover {
-  background: var(--color-bg-hover);
+  background: var(--color-bg-sunken);
 }
 .bss-nav a.is-active {
   background: var(--color-bg);
-  box-shadow: inset 0 0 0 1px var(--color-border);
+  box-shadow: 0 0 0 1px var(--color-border);
   color: var(--color-ink-1);
-  font: var(--type-body-strong);
+  font-weight: 600;
+}
+.bss-nav a:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 .bss-nav a .bss-badge {
   margin-left: auto;
@@ -92,33 +89,35 @@
 }
 .bss-operator summary {
   display: flex;
+  color: inherit;
+  font-weight: inherit;
   align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-sm);
+  gap: 10px;
+  padding: 10px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   list-style: none;
+  transition: background var(--dur-fast) var(--ease-out);
 }
-.bss-operator summary::-webkit-details-marker {
+.bss-operator summary:hover {
+  background: var(--color-bg-sunken);
+}
+.bss-operator summary:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.bss-operator summary::-webkit-details-marker,
+.bss-operator summary::before {
   display: none;
-}
-.bss-operator .avatar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--color-border);
-  color: var(--color-ink-2);
-  font: var(--type-label);
 }
 .bss-operator .identity {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 .bss-operator .who {
   font: var(--type-label);
+  color: var(--color-ink-1);
 }
 .bss-operator .role {
   font: var(--type-label);
@@ -155,6 +154,7 @@
   gap: 6px;
 }
 .bss-crumbs .sep {
+  flex: none;
   color: var(--color-ink-4);
 }
 .bss-crumbs .current {
@@ -163,6 +163,10 @@
 .bss-crumbs a {
   color: var(--color-ink-3);
   text-decoration: none;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+.bss-crumbs a:hover {
+  color: var(--color-ink-1);
 }
 .bss-business-date {
   display: flex;
@@ -170,7 +174,7 @@
   height: var(--control-height-sm);
   margin-left: auto;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   overflow: hidden;
   white-space: nowrap;
 }
@@ -179,7 +183,7 @@
   align-items: center;
 }
 .bss-business-date .label {
-  padding: 0 var(--space-sm);
+  padding: 0 10px;
   background: var(--color-bg-subtle);
   border-right: 1px solid var(--color-border);
   font: var(--type-micro);

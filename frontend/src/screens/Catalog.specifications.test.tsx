@@ -60,7 +60,7 @@ describe('specifications', () => {
         json({ id: 's9', name: 'Roaming' }, { status: 201 }),
     });
     await openTab();
-    fireEvent.click(screen.getByRole('button', { name: '+ New specification' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New specification' }));
     const dialog = screen.getByRole('dialog', { name: 'New product specification' });
     expectUi('ui.catalog.newSpecification');
     const create = within(dialog).getByRole('button', { name: 'Create' }) as HTMLButtonElement;
@@ -139,7 +139,7 @@ describe('specifications', () => {
         json({ id: 's9', name: 'Roaming' }, { status: 201 }),
     });
     await openTab();
-    fireEvent.click(screen.getByRole('button', { name: '+ New specification' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New specification' }));
     const dialog = screen.getByRole('dialog', { name: 'New product specification' });
     expectUi('ui.catalog.networkProfile');
     fireEvent.change(field(dialog, /^Name/), { target: { value: 'Roaming' } });
@@ -302,7 +302,7 @@ describe('specifications', () => {
           json({ id: 's9', name: 'Numbered' }, { status: 201 }),
       });
       await openTab();
-      fireEvent.click(screen.getByRole('button', { name: '+ New specification' }));
+      fireEvent.click(screen.getByRole('button', { name: 'New specification' }));
       const dialog = screen.getByRole('dialog');
       fireEvent.change(field(dialog, /^Name/), { target: { value: 'Numbered' } });
       fireEvent.click(field(dialog, /Requires a subscriber number/));
@@ -530,7 +530,7 @@ describe('specifications', () => {
     });
     await open();
     await waitFor(() => row('Mobile L'));
-    fireEvent.click(screen.getByRole('button', { name: '+ New offering' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New offering' }));
     const offering = screen.getByRole('dialog', { name: 'New product offering' });
     fireEvent.click(within(offering).getByRole('button', { name: 'New specification…' }));
     const dialog = screen.getByRole('dialog', { name: 'New product specification' });
@@ -652,7 +652,7 @@ describe('categories and catalogs', () => {
       [`POST ${CAT}/category`]: () => json({ id: 'c9', name: 'Roaming' }, { status: 201 }),
     });
     await openCategories();
-    fireEvent.click(screen.getByRole('button', { name: '+ New category' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New category' }));
     const dialog = screen.getByRole('dialog', { name: 'New category' });
     expectUi('ui.catalog.newCategory');
     const create = within(dialog).getByRole('button', { name: 'Create' }) as HTMLButtonElement;
@@ -811,7 +811,7 @@ describe('categories and catalogs', () => {
       [`POST ${CAT}/productCatalog`]: () => json({ id: 'k9', name: 'Wholesale' }, { status: 201 }),
     });
     await openCatalogs();
-    fireEvent.click(screen.getByRole('button', { name: '+ New catalog' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New catalog' }));
     const dialog = screen.getByRole('dialog', { name: 'New product catalog' });
     expectUi('ui.catalog.newCatalog');
     // only the roots are listed
@@ -819,7 +819,7 @@ describe('categories and catalogs', () => {
     expect(
       within(group)
         .getAllByRole('checkbox')
-        .map((c) => c.parentElement?.textContent?.trim()),
+        .map((c) => c.closest('label')?.textContent?.trim()),
     ).toEqual(['Mobile', 'Home']);
     fireEvent.change(field(dialog, /^Name/), { target: { value: 'Wholesale' } });
     fireEvent.change(field(dialog, /Catalog type/), { target: { value: 'b2b' } });

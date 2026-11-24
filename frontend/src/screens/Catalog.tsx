@@ -1,4 +1,4 @@
-import { submitDialogPrimary } from '../ui/kit';
+import { submitDialogPrimary, Icon } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { Fragment, useState } from 'react';
 import {
@@ -148,7 +148,8 @@ export function CatalogScreen() {
   const [newRequests, setNewRequests] = useState(0);
   const newButton = (
     <Button variant="primary" onClick={() => setCreating(true)} disabled={catalog.status !== 'ok'}>
-      + New offering
+      <Icon name="plus" size={14} />
+      New offering
     </Button>
   );
   const specs = tab === 'specifications';
@@ -171,7 +172,8 @@ export function CatalogScreen() {
               disabled={catalog.status !== 'ok'}
               onClick={() => setNewRequests((n) => n + 1)}
             >
-              + New category
+              <Icon name="plus" size={14} />
+              New category
             </Button>
           ) : tab === 'catalogs' ? (
             <Button
@@ -179,7 +181,8 @@ export function CatalogScreen() {
               data-ui="ui.catalog.newCatalog"
               onClick={() => setNewRequests((n) => n + 1)}
             >
-              + New catalog
+              <Icon name="plus" size={14} />
+              New catalog
             </Button>
           ) : specs ? (
             <Button
@@ -188,7 +191,8 @@ export function CatalogScreen() {
               onClick={() => setCreatingSpec(true)}
               disabled={catalog.status !== 'ok'}
             >
-              + New specification
+              <Icon name="plus" size={14} />
+              New specification
             </Button>
           ) : (
             offeringsTab && newButton

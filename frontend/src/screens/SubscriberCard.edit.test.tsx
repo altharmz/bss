@@ -592,7 +592,7 @@ describe('same-day status Undo', () => {
   const posts = (fetchMock: ReturnType<typeof stubFetch>['fetchMock']) =>
     fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST');
   const openMenu = (row: HTMLElement) =>
-    fireEvent.click(within(row).getByRole('button', { name: 'Actions ▾' }));
+    fireEvent.click(within(row).getByRole('button', { name: 'Actions' }));
   it.each([
     ['suspended', 'Undo suspension', 'Resume…'],
     ['active', 'Undo resumption', 'Suspend…'],

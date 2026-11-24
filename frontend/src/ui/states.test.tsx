@@ -121,7 +121,7 @@ describe('error', () => {
         'GET /tmf-api/accountManagement/v5/billingAccount → 503 Service Unavailable',
       ),
     ).toBeTruthy();
-    expect(within(alert).getByText('!')).toBeTruthy();
+    expect(alert.querySelector('svg[data-icon="octagon-alert"]')).toBeTruthy();
     fireEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
     expect(retry).toHaveBeenCalledOnce();
   });

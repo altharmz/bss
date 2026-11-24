@@ -1,4 +1,4 @@
-import { submitDialogPrimary } from '../ui/kit';
+import { submitDialogPrimary, Icon } from '../ui/kit';
 import { useState } from 'react';
 import {
   createBody,
@@ -126,7 +126,8 @@ function SettingsTab({ kind, tabs }: { kind: SettingKind; tabs: React.ReactNode 
           data-ui={`${marker}.new`}
           onClick={() => setDialog({ kind: 'new' })}
         >
-          + New {tab.word}
+          <Icon name="plus" size={14} />
+          New {tab.word}
         </Button>
       </div>
       {tabs}

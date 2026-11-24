@@ -78,7 +78,7 @@ describe('Ledger compact products', () => {
       within(row).getByText('Mobile L').closest('[role="cell"]'),
     );
     expect(within(row).queryByRole('button', { name: 'Deactivate' })).toBeNull();
-    const trigger = within(row).getByRole('button', { name: 'Actions ▾' });
+    const trigger = within(row).getByRole('button', { name: 'Actions' });
     expect(trigger.textContent).not.toContain('Actions');
     fireEvent.click(trigger);
     expect(within(productMenu(row)).getByRole('menuitem', { name: 'Deactivate' })).toBeTruthy();

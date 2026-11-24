@@ -115,7 +115,7 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
     .click();
   await expect(page.getByRole('heading', { name: 'Product catalog' })).toBeVisible();
   await expect(page.getByRole('cell', { name: /MOB-L/ })).toBeVisible();
-  await page.getByRole('button', { name: '+ New offering' }).click();
+  await page.getByRole('button', { name: 'New offering' }).click();
   const newOffering = page.getByRole('dialog', { name: 'New product offering' });
   await expect(newOffering.getByLabel('Recurrence')).toBeEnabled();
   await newOffering.getByLabel('Recurrence').selectOption('weekly');

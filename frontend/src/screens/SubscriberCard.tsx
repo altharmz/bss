@@ -34,6 +34,7 @@ import { Id } from '../ui/Id';
 import {
   Badge,
   Button,
+  Icon,
   KeyValue,
   Menu,
   MoneyStrip,
@@ -169,7 +170,8 @@ export function SubscriberCardScreen({ accountId }: { accountId: string }) {
   return (
     <div className="bss-screen" data-ui="ui.subscriber.card">
       <Link className="bss-link bss-back" href={hrefOf({ name: 'subscribers' })}>
-        ← Back to subscribers
+        <Icon name="arrow-left" size={14} />
+        Back to subscribers
       </Link>
       {account.status === 'loading' && (
         <Panel title="Billing account">

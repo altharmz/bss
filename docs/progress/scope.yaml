@@ -837,6 +837,7 @@ items:
   - {id: ui.kit, area: ui, stage: 5, title: "Primitive gallery with success toast and dialog write-state previews"}
   - {id: ui.uikit.icons, area: ui, stage: 5, title: "UI kit Icon gallery: every registered Lucide icon by name"}
   - {id: ui.uikit.combobox, area: ui, stage: 5, title: "UI kit Combobox gallery: empty, selected and disabled"}
+  - {id: ui.uikit.choices, area: ui, stage: 5, title: "UI kit Checkbox, Radio and Switch gallery: every state"}
 
   - {id: ui.subscriber.tabs, area: ui, stage: 5, title: "Subscriber section tabs"}
   - {id: ui.subscriber.charges, area: ui, stage: 5, title: "Subscriber Charges tab history"}

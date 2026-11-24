@@ -1,4 +1,4 @@
-import { submitDialogPrimary } from '../ui/kit';
+import { submitDialogPrimary, IconButton } from '../ui/kit';
 import { useState } from 'react';
 import {
   loadBucketDetail,
@@ -194,14 +194,7 @@ export function BalancesScreen() {
         {account !== null && (
           <span className="bss-run-tag" data-ui="ui.balances.accountChip">
             Account {name ?? <Id id={account} prefix="BA-" />}{' '}
-            <button
-              type="button"
-              className="bss-link"
-              aria-label="Remove the account filter"
-              onClick={dropAccount}
-            >
-              ×
-            </button>
+            <IconButton icon="x" small label="Remove the account filter" onClick={dropAccount} />
           </span>
         )}
       </div>

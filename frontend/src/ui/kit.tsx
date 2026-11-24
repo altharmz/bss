@@ -1,7 +1,7 @@
 import { createPortal } from 'react-dom';
 import { statusPresentation, type StatusKind } from './status';
 import { useInspectorFit } from './inspectorFit';
-import { Icon } from './Icon';
+import { Icon, type IconName } from './Icon';
 export { Menu, Tabs, TabPanel } from './navigation';
 export { Note } from './Note';
 export { Icon, ICON_NAMES } from './Icon';
@@ -53,6 +53,43 @@ export function Button({
     >
       {busy && busyLabel ? busyLabel : children}
     </button>
+  );
+}
+
+/** An icon-only control (Tidewell IconButton): the label is its accessible name and
+ * tooltip. */
+export function IconButton({
+  icon,
+  label,
+  small = false,
+  className = '',
+  ...rest
+}: Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children' | 'aria-label'> & {
+  icon: IconName;
+  label: string;
+  small?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      className={`bss-icon-btn${small ? ' small' : ''} ${className}`.trim()}
+      aria-label={label}
+      title={label}
+      {...rest}
+    >
+      <Icon name={icon} size={small ? 14 : 16} />
+    </button>
+  );
+}
+
+/** A person's initials on a pill (Tidewell Avatar); the tint follows the name, so one
+ * person always gets the same colour. */
+export function Avatar({ name, initials }: { name: string; initials: string }) {
+  const tint = [...name].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 6;
+  return (
+    <span className={`bss-avatar avatar-tint-${tint}`} aria-hidden="true">
+      {initials}
+    </span>
   );
 }
 
@@ -128,6 +165,7 @@ export function SelectField({ className = '', ...rest }: SelectHTMLAttributes<HT
   return (
     <span className="bss-select-wrap">
       <select className={`bss-input bss-select ${className}`.trim()} {...rest} />
+      <Icon name="chevrons-up-down" size={14} className="select-icon" />
     </span>
   );
 }
@@ -184,18 +222,57 @@ export function MoneyField({
   );
 }
 
-/** A checkbox; with `label` it renders as <label class="bss-check"><input/> text</label>. */
+/** A checkbox; with `label` it renders as <label class="bss-check"><input/> text</label>.
+ * The native input stays (behaviour, labels, tests); the tick is an Icon drawn over it. */
 export function Checkbox({
   className = '',
   label,
   ...props
 }: Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> & { label?: ReactNode }) {
-  const input = <input {...props} type="checkbox" className={`bss-checkbox ${className}`.trim()} />;
+  const input = (
+    <span className="bss-checkbox-box">
+      <input {...props} type="checkbox" className={`bss-checkbox ${className}`.trim()} />
+      <Icon name="check" size={12} className="checkbox-tick" />
+    </span>
+  );
   return label === undefined ? (
     input
   ) : (
     <label className="bss-check">
       {input}
+      <span>{label}</span>
+    </label>
+  );
+}
+
+/** A native radio button with a text label. */
+export function Radio({
+  label,
+  className = '',
+  ...props
+}: Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> & { label: ReactNode }) {
+  return (
+    <label className="bss-check">
+      <input {...props} type="radio" className={`bss-radio ${className}`.trim()} />
+      <span>{label}</span>
+    </label>
+  );
+}
+
+/** An on/off control: a native checkbox with the switch role. */
+export function Switch({
+  label,
+  className = '',
+  ...props
+}: Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'role'> & { label: ReactNode }) {
+  return (
+    <label className="bss-check">
+      <input
+        {...props}
+        type="checkbox"
+        role="switch"
+        className={`bss-switch ${className}`.trim()}
+      />
       <span>{label}</span>
     </label>
   );
@@ -360,9 +437,7 @@ export function Dialog({
             {context !== undefined && <div className="subtitle">{context}</div>}
           </div>
           {headerActions}
-          <button type="button" className="close" aria-label="Close" onClick={onClose}>
-            ×
-          </button>
+          <IconButton icon="x" label="Close" small className="close" onClick={onClose} />
         </header>
         <DialogFooterContext.Provider value={footerHost}>
           <div className="bss-dialog-body">{children}</div>
@@ -393,7 +468,8 @@ export function ToastMessage({
 }) {
   return (
     <div className={`bss-toast${preview ? ' bss-toast-preview' : ''}`} role="status">
-      <span>{message}</span>
+      <Icon name="circle-check" className="toast-icon" />
+      <span className="toast-title">{message}</span>
       {action && (
         <button type="button" onClick={action.onClick}>
           {action.label}

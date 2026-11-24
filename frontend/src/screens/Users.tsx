@@ -245,11 +245,11 @@ function UserForm({
         {self && <p>Saving changes revokes your session. Sign in again afterward.</p>}
         {error && <p role="alert">{error}</p>}
         <DialogFooter>
-          <Button type="submit" form={formId} variant="primary" disabled={busy}>
-            {kind === 'reset' ? 'Reset password' : 'Save'}
-          </Button>
           <Button disabled={busy} onClick={onClose}>
             Cancel
+          </Button>
+          <Button type="submit" form={formId} variant="primary" disabled={busy}>
+            {kind === 'reset' ? 'Reset password' : 'Save'}
           </Button>
         </DialogFooter>
       </form>
