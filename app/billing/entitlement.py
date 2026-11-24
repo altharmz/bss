@@ -25,6 +25,37 @@ def effective_state(product, account, grant, today):
     return "suspended", "funding"
 
 
+# `effective_state(...)[0]` in SQL, for a product `p` of the account `a` that is not ended,
+# with `g` its latest grant (`LATEST_GRANT`, NULL columns when none) at the business date
+# %(today)s. The same branches in the same order; tests/test_full_review.py checks
+# the two agree. It lets a full entitlement pass find the products to change in one
+# statement (#404).
+EFFECTIVE_STATUS = (
+    "CASE WHEN p.termination_date IS NOT NULL AND p.termination_date <= %(today)s"
+    " THEN 'terminated'"
+    " WHEN p.manually_suspended THEN 'suspended'"
+    " WHEN a.state IS DISTINCT FROM 'Active' THEN 'suspended'"
+    " WHEN p.grantless THEN CASE WHEN p.status::text IN ('created', 'pendingActive')"
+    " THEN 'pendingActive' ELSE 'active' END"
+    " WHEN g.period IS NULL THEN 'pendingActive'"
+    " WHEN lower(g.period) <= %(today)s AND %(today)s < upper(g.period)"
+    " THEN CASE WHEN p.termination_date IS NULL THEN 'active' ELSE 'pendingTerminate' END"
+    " ELSE 'suspended' END"
+)
+
+# The latest grant of the product `p` (`latest_grant`), as `LEFT JOIN LATERAL (...) g ON true`.
+LATEST_GRANT = (
+    "SELECT period FROM funded_interval WHERE product_id = p.id"
+    " ORDER BY lower(period) DESC, authorized_at DESC,"
+    " supersedes_interval_id IS NULL, id DESC LIMIT 1"
+)
+
+
+def status(conn, product, account, today):
+    """The product's effective status alone: `view(...)["status"]` without its other reads."""
+    return effective_state(product, account, latest_grant(conn, product["id"]), today)[0]
+
+
 def latest_grant(conn, product_id):
     return fetch_one(
         conn,

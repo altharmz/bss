@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 
 import psycopg
 
+from app.billing import entitlement
 from app.billing import lifecycle as plan
 from app.billing.lifecycle import Settings, funded_state, is_payg
 from app.clock import Clock
@@ -29,13 +30,47 @@ from app.worker.runs import ensure_ownership
 log = logging.getLogger("app.worker")
 
 # A semi-join, not DISTINCT over a join: no aggregate over every open line (#332, 210 -> 151 ms
-# on 100k accounts). The full pass runs once per business date; its two scans are intended.
+# on 100k accounts).
 ACCOUNTS = (
     "SELECT a.id FROM billing_account a"
     " WHERE a.rating_type = 'prepaid' AND a.state = 'Active'"
     " AND EXISTS (SELECT FROM product p WHERE p.billing_account_id = a.id"
     " AND p.status NOT IN ('terminated', 'cancelled', 'aborted') AND p.termination_date IS NULL"
     " AND p.parent_product_id IS NULL)"
+)
+
+# The full pass (#404) evaluates only the accounts where `_account` can change something, in
+# its terms (`funded_state`, `_due`): a line funded again while the lifecycle has it suspended
+# (resume), or an unfunded line whose suspension (not suspended: `grace_days` after its first
+# unfunded day) or deactivation (suspended: `grace_days + suspension_days` after it) is due;
+# and a pay-as-you-go account whose zero-balance date must be set or cleared. A plan is funded
+# while its latest grant covers today or starts later, or when it has none; it is unfunded
+# from the end of that grant. A pay-as-you-go line is funded while its account's balance is
+# above zero (%(funded)s, read before this query) and unfunded `payg_zero_balance_days` after
+# the balance reached zero. An operator's pause is left alone. Any other account is funded or
+# not yet due and evaluating it changes nothing. `_account` still decides under the lock.
+DUE = (
+    " AND EXISTS (SELECT FROM product p"  # noqa: S608 - LATEST_GRANT is code
+    " LEFT JOIN LATERAL (" + entitlement.LATEST_GRANT + ") g ON true"
+    " WHERE p.billing_account_id = a.id AND p.parent_product_id IS NULL"
+    " AND p.status NOT IN ('terminated', 'cancelled', 'aborted') AND p.termination_date IS NULL"
+    " AND NOT (coalesce(p.manually_suspended, false)"
+    " AND NOT coalesce(p.lifecycle_suspended, false))"
+    " AND CASE WHEN p.grantless THEN CASE WHEN a.id = ANY(%(funded)s::uuid[])"
+    " THEN coalesce(p.lifecycle_suspended, false) OR a.balance_zero_since IS NOT NULL"
+    " ELSE a.balance_zero_since IS NULL OR a.balance_zero_since + %(payg)s::int + %(grace)s::int"
+    " + CASE WHEN p.lifecycle_suspended THEN %(suspension)s::int ELSE 0 END <= %(today)s END"
+    " WHEN g.period IS NULL OR lower(g.period) > %(today)s OR %(today)s < upper(g.period)"
+    " THEN coalesce(p.lifecycle_suspended, false)"
+    " ELSE upper(g.period) + %(grace)s::int"
+    " + CASE WHEN p.lifecycle_suspended THEN %(suspension)s::int ELSE 0 END <= %(today)s END)"
+)
+
+# The accounts with a pay-as-you-go line: the full pass reads their balances for `DUE`.
+PAYG = (
+    ACCOUNTS + " AND EXISTS (SELECT FROM product p"
+    " WHERE p.billing_account_id = a.id AND p.parent_product_id IS NULL AND p.grantless"
+    " AND p.status NOT IN ('terminated', 'cancelled', 'aborted') AND p.termination_date IS NULL)"
 )
 
 
@@ -56,12 +91,12 @@ def process_lifecycle(
     limits the pass to those accounts (app/repository/account_review.py); None: all."""
     ensure_ownership(conn)
     acted: list[UUID] = []
+    # once per pass (#305): a change of the settings applies from the next pass
+    settings = repo.settings(conn)
     if accounts is None:
-        rows = fetch_all(conn, ACCOUNTS + " ORDER BY a.id")
+        rows = _due_accounts(conn, settings, clock.now().astimezone(tz).date())
     else:
         rows = fetch_all(conn, ACCOUNTS + " AND a.id = ANY(%s) ORDER BY a.id", (accounts,))
-    # once per pass (#305): a change of the settings applies from the next pass
-    settings = repo.settings(conn) if rows else None
     for row in rows:
         if checkpoint is not None and checkpoint():
             break
@@ -72,6 +107,20 @@ def process_lifecycle(
         if heartbeat is not None:
             heartbeat()
     return acted
+
+
+def _due_accounts(conn: psycopg.Connection, settings: Settings, today: date) -> list[Row]:
+    """The accounts of a full pass (`DUE`), in three statements whatever their number."""
+    payg = [row["id"] for row in fetch_all(conn, PAYG)]
+    funded = [a for a, spendable in funding.spendable_many(conn, payg).items() if spendable > 0]
+    params = {
+        "funded": funded,
+        "today": today,
+        "grace": settings.grace_days,
+        "suspension": settings.suspension_days,
+        "payg": settings.payg_zero_balance_days,
+    }
+    return fetch_all(conn, ACCOUNTS + DUE + " ORDER BY a.id", params)
 
 
 def _in_flight(conn: psycopg.Connection, product_id: UUID) -> bool:

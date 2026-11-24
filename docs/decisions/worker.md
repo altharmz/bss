@@ -189,8 +189,9 @@ that wakes every minute. The design was approved by the human on 2026-11-09:
   passes, the tick deletes the marks at the versions it read. A change made during the tick
   has a newer version and is evaluated on the next one, so "at most one tick later". A tick
   stopped by SIGTERM deletes nothing and records no sweep.
-- **The passes keep their rules.** Only the set of accounts they look at changes.
-  `accounts=None` (tests and direct calls) still means every account.
+- **The passes keep their rules.** Only the set of accounts they look at changes (a full
+  review in set-based statements since #404, below).
+  `accounts=None` (tests and direct calls) still means a full review of every account.
 
 ## Stored run counts (2026-11-11, #284)
 
@@ -321,3 +322,38 @@ changes; only repeated reads go.
   (`record_outcome`, #284), not a statement of its own. The usage feed stores a batch of
   500 records in about 12 statements (`ingest_batch`, #281/#329). The one-record
   `ingest` stays for TMF635 POST, one record per request.
+
+## Full review in set-based statements (2026-11-24, #404)
+
+On the 100k load-test dataset the first wake-up of every business date took 26 to 30
+minutes after #340, nearly all of it the full review of #292 (above): lifecycle,
+entitlements and the low-balance/grace detector each locked and evaluated every prepaid
+account, about 5, 3 and 7 statements an account, 1.5M statements in all, to change almost
+nothing. The usage feed and every notification waited for it.
+
+- **A full pass first finds, in a few statements, the accounts where it can change
+  something, and evaluates only those** under their locks with the per-account code as
+  before. The finding queries restate the per-account rules in SQL and may only find more
+  accounts than the rules act on, never fewer; the per-account code still decides. A
+  marked account (a tick that is not a full review) is evaluated as before: its money or
+  products just changed.
+- **Lifecycle** (`DUE` in app/worker/lifecycle.py): a line the lifecycle suspended that is
+  funded again (resume); an unfunded line whose suspension (`grace_days` after its first
+  unfunded day) or, once suspended, deactivation (`grace_days + suspension_days`) is due;
+  a pay-as-you-go account whose zero-balance date must be set or cleared. The
+  pay-as-you-go balances are read first in one statement (`funding.spendable_many`). An
+  unfunded line in grace, or suspended and waiting for its deactivation date, is not
+  evaluated on those days: nothing is due for it.
+- **Entitlements** (`_STALE_STATUS` in app/worker/prepaid.py): the accounts with a product
+  whose effective status is not its stored one. `entitlement.EFFECTIVE_STATUS` is
+  `effective_state` in SQL; a test compares the two on every combination of the inputs
+  that decide it. The per-product check reads only the status (`entitlement.status`), not
+  the shortfall `view` adds.
+- **Low balance and grace** (`_UNTOLD` in app/notify/events.py): the accounts with an event
+  not told yet, by the same dedupe keys: below the threshold with no message for the
+  latest credit, or a line in grace with no message for its first unfunded day. The
+  balances are read in one statement. This is the "fetch only what is new" of the other
+  detectors (#340); `existing_events` stays the guard.
+- **Accepted:** the finding queries read balances without the account locks, as #340's
+  date-only retry does. A payment that lands after them marks the account, and the next
+  tick evaluates it.

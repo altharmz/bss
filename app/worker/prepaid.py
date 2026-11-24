@@ -437,12 +437,25 @@ def _complete_transfer(conn, cmd, action_id, now, tz) -> None:
     commands.complete(conn, cmd["id"], result, now=now)
 
 
-def _entitlement_accounts(conn, accounts) -> list[Row]:
-    """The prepaid accounts of an entitlement pass, read once per pass (#332)."""
+# The prepaid accounts with a product whose effective status is not its stored one, at the
+# business date %(today)s: the only accounts where a full entitlement pass changes anything
+# (#404). The pass decides again per product under the locks.
+_STALE_STATUS = (
+    "SELECT a.id FROM billing_account a WHERE a.rating_type = 'prepaid'"  # noqa: S608 - fixed SQL
+    " AND EXISTS (SELECT FROM product p"
+    " LEFT JOIN LATERAL (" + entitlement.LATEST_GRANT + ") g ON true"
+    " WHERE p.billing_account_id = a.id"
+    " AND p.status NOT IN ('terminated', 'cancelled', 'aborted')"
+    " AND p.status::text IS DISTINCT FROM " + entitlement.EFFECTIVE_STATUS + ")"
+    " ORDER BY a.id"
+)
+
+
+def _entitlement_accounts(conn, accounts, today) -> list[Row]:
+    """The prepaid accounts of an entitlement pass, read once per pass (#332): a full pass
+    only those with a status to change (#404)."""
     if accounts is None:
-        return fetch_all(
-            conn, "SELECT id FROM billing_account WHERE rating_type = 'prepaid' ORDER BY id"
-        )
+        return fetch_all(conn, _STALE_STATUS, {"today": today})
     return fetch_all(
         conn,
         "SELECT id FROM billing_account WHERE rating_type = 'prepaid' AND id = ANY(%s) ORDER BY id",
@@ -454,7 +467,7 @@ def observe_entitlements(conn, *, clock, tz, checkpoint=None, heartbeat=None, ac
     """Persist observed entitlement transitions once, under account/product locks.
     `accounts` limits the pass to those accounts (app/repository/account_review.py)."""
     ensure_ownership(conn)
-    for account in _entitlement_accounts(conn, accounts):
+    for account in _entitlement_accounts(conn, accounts, clock.now().astimezone(tz).date()):
         if checkpoint is not None and checkpoint():
             break
         with conn.transaction():
@@ -468,7 +481,7 @@ def observe_entitlements(conn, *, clock, tz, checkpoint=None, heartbeat=None, ac
             now = clock.now()
             today = now.astimezone(tz).date()
             for product in rows:
-                state = entitlement.view(conn, product, account, today)["status"]
+                state = entitlement.status(conn, product, account, today)
                 if state != product["status"]:
                     conn.execute(
                         "UPDATE product SET status = %s WHERE id = %s", (state, product["id"])
