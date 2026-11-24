@@ -7,7 +7,8 @@
     "why each dependency": {
       "react, react-dom": "the UI library",
       "qrcode-generator": "the eSIM activation code as a QR (dependency-free, runs in the browser)",
-      "@fontsource/golos-text, @fontsource/jetbrains-mono": "self-hosted fonts (no Google Fonts at runtime)",
+      "@fontsource/newsreader, @fontsource/schibsted-grotesk, @fontsource/geist-mono": "Tidewell's self-hosted fonts (no Google Fonts at runtime)",
+      "lucide-react": "Tidewell's icon set, bundled behind the Icon primitive (no CDN at runtime); 0.460.0 is the version the handoff names",
       "vite, @vitejs/plugin-react": "dev server with the /tmf-api and /internal proxy, production build",
       "typescript, @types/react, @types/react-dom, @types/node": "type checking (5.x: openapi-typescript and typescript-eslint require it; @types/node for vite.config.ts)",
       "openapi-typescript": "types generated from spec/*.yaml, never from /openapi.json",
@@ -28,8 +29,10 @@
     "test:timezone": "TZ=America/New_York vitest run"
   },
   "dependencies": {
-    "@fontsource/golos-text": "5.3.0",
-    "@fontsource/jetbrains-mono": "5.3.0",
+    "@fontsource/geist-mono": "5.3.0",
+    "@fontsource/newsreader": "5.3.0",
+    "@fontsource/schibsted-grotesk": "5.3.0",
+    "lucide-react": "0.460.0",
     "qrcode-generator": "1.4.4",
     "react": "19.3.0",
     "react-dom": "19.3.0"

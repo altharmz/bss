@@ -1,10 +1,12 @@
 @import './tokens.css';
-/* Self-hosted fonts: only the weights the design uses (README "Type"). */
-@import '@fontsource/golos-text/400.css';
-@import '@fontsource/golos-text/500.css';
-@import '@fontsource/golos-text/600.css';
-@import '@fontsource/jetbrains-mono/400.css';
-@import '@fontsource/jetbrains-mono/500.css';
+/* Self-hosted fonts (Tidewell T3): only the faces the design uses (README "Type"). */
+@import '@fontsource/newsreader/400.css';
+@import '@fontsource/newsreader/400-italic.css';
+@import '@fontsource/schibsted-grotesk/400.css';
+@import '@fontsource/schibsted-grotesk/500.css';
+@import '@fontsource/schibsted-grotesk/600.css';
+@import '@fontsource/geist-mono/400.css';
+@import '@fontsource/geist-mono/500.css';
 
 *,
 *::before,
@@ -20,9 +22,14 @@ body {
 body {
   min-width: 1280px;
   min-height: 100vh;
-  background: var(--color-bg);
+  background: var(--color-page);
   color: var(--color-ink-1);
   font: var(--type-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--color-selection);
 }
 
 /* Identifiers, amounts, dates and counts: mono with tabular figures. */

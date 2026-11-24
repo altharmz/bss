@@ -834,7 +834,8 @@ items:
   - {id: ui.system.billingStatus, area: ui, stage: 5, title: "GET /billing-status as key/value"}
   - {id: ui.system.schema, area: ui, stage: 5, title: "Link to the BssBillingAccount JSON Schema"}
   - {id: ui.shell.section.system, area: ui, stage: 5, title: "Sidebar System section"}
-  - {id: ui.kit, area: ui, stage: 5, title: "Ledger primitive gallery with success toast and dialog write-state previews"}
+  - {id: ui.kit, area: ui, stage: 5, title: "Primitive gallery with success toast and dialog write-state previews"}
+  - {id: ui.uikit.icons, area: ui, stage: 5, title: "UI kit Icon gallery: every registered Lucide icon by name"}
   - {id: ui.uikit.combobox, area: ui, stage: 5, title: "UI kit Combobox gallery: empty, selected and disabled"}
 
   - {id: ui.subscriber.tabs, area: ui, stage: 5, title: "Subscriber section tabs"}

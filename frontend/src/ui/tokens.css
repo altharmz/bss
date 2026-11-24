@@ -1,158 +1,240 @@
-/* Ledger design tokens — BSS Admin v2.
-   Source of truth: artboards/Foundations.dc.html. Every value used in the
-   artboards maps to one of these. Light is the default; dark is opt-in via
-   [data-theme="dark"] or the OS preference. */
+/* Tidewell design tokens (#452), replacing Ledger v2.
+   Source of truth: design-ref/design_handoff_tidewell/ (tokens/*.css, README "Visual
+   foundations", guidelines/*.card.html). The palette and Tidewell's roles come first; the
+   Ledger role names below them stay as aliases until every screen is restyled (T2).
+   Light is the default; dark (T8, derived: Tidewell has none) is opt-in via
+   [data-theme="dark"] or the OS preference. Nothing outside this file names a colour or
+   a font family. */
 
 :root {
-  /* Fonts (self-hosted via @fontsource/golos-text, @fontsource/jetbrains-mono) */
-  --font-ui: 'Golos Text', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  /* Palette (tokens/colors.css) */
+  --sand-0: #fffefb;
+  --sand-50: #fbfaf6;
+  --sand-100: #f4f1ea;
+  --sand-200: #ebe7dc;
+  --sand-300: #dcd7c9;
+  --sand-400: #bfbaab;
+  --sand-500: #8c8d84;
+  --sand-600: #62645c;
+  --sand-700: #3f423d;
+  --sand-800: #262926;
+  --sand-900: #1b1e1c;
+  --sand-950: #121413;
+  --tide-50: #ecf5f2;
+  --tide-100: #d6ebe5;
+  --tide-200: #a9d3c7;
+  --tide-400: #3f9a87;
+  --tide-500: #17796a;
+  --tide-600: #0f6b5e;
+  --tide-700: #0b574c;
+  --tide-800: #08443c;
+  --ember-100: #fbe4d6;
+  --ember-500: #d9622b;
+  --ember-700: #a6461b;
+  --green-100: #dcefe1;
+  --green-600: #2f7d4f;
+  --amber-100: #f7ead0;
+  --amber-300: #e2bd73; /* derived: the warning border Tidewell does not define */
+  --amber-600: #9a6410;
+  --red-100: #f8dfda;
+  --red-600: #bf3b28;
+  --red-700: #9c2f20; /* derived: the destructive hover Tidewell does not define */
+  /* Derived text shades: Tidewell's 600s on their 100 tints are below AA (4.2:1). */
+  --red-650: #ad3424;
+  --green-650: #28704a;
+  --amber-650: #87570b;
+  --blue-100: #dde8f5;
+  --blue-600: #2c62a3;
+  --plum-100: #ece2f0;
+  --plum-600: #7a4a8c;
 
-  /* Type scale: size / line-height / weight */
-  --type-page: 600 20px/28px var(--font-ui);        /* letter-spacing: -0.01em */
+  /* Fonts (T3: self-hosted via @fontsource, no Google Fonts at runtime) */
+  --font-display: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --font-ui: 'Schibsted Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Type scale: weight size/line-height family. T5: serif titles, sans UI, mono figures;
+     T6: the 13 px body stays for admin density. */
+  --type-page: 400 28px/32px var(--font-display); /* page titles, sign-in */
+  --type-title: 400 22px/28px var(--font-display); /* dialog titles, empty states */
   --type-section: 600 15px/20px var(--font-ui);
   --type-body: 400 13px/20px var(--font-ui);
   --type-body-strong: 500 13px/20px var(--font-ui);
-  --type-label: 500 12px/16px var(--font-ui);
-  --type-micro: 600 11px/14px var(--font-ui);       /* uppercase, letter-spacing: 0.06em */
-  --type-figure: 500 24px/32px var(--font-mono);    /* letter-spacing: -0.01em */
-  --type-num: 400 13px/20px var(--font-mono);       /* font-variant-numeric: tabular-nums */
+  --type-label: 600 12px/16px var(--font-ui);
+  --type-micro: 500 11px/14px var(--font-mono); /* uppercase eyebrows, tracking 0.08em */
+  --type-figure: 500 24px/32px var(--font-mono);
+  --type-num: 400 13px/20px var(--font-mono); /* font-variant-numeric: tabular-nums */
   --type-code: 400 12px/16px var(--font-mono);
-
-  /* Spacing */
-  --space-2xs: 2px;
-  --space-xs: 4px;
-  --space-sm: 8px;
-  --space-md: 12px;
-  --space-lg: 16px;
-  --space-xl: 24px;   /* page gutter */
-  --space-2xl: 32px;  /* between sections */
-  --space-8: var(--space-2xl); /* dialog viewport gutter */
-  --space-3xl: 48px;
-
-  /* Radii */
-  --radius-xs: 2px;   /* checkbox, bars */
-  --radius-sm: 4px;   /* buttons, inputs, pills */
-  --radius-md: 6px;   /* panels, menus, toasts */
-  --radius-lg: 8px;   /* dialogs only */
-
-  /* Layout */
-  --sidebar-width: 216px;
-  --topbar-height: 48px;
-  --inspector-width: 400px;   /* shown at viewport >= 1536px */
-  --row-height: 36px;
-  --row-height-compact: 32px;
-  --header-row-height: 32px;
-  --control-height: 32px;
-  --control-height-sm: 28px;
-
-  /* Colour roles — light */
-  --color-bg: #FFFFFF;
-  --color-bg-subtle: #F7F7F5;
-  --color-bg-sunken: #EFEFEC;
-  --color-bg-hover: #F4F4F1;
-  --color-bg-selected: #EEF2FC;
-  --color-border: #E4E4DF;
-  --color-border-strong: #CDCDC6;
-  --color-rule: #16171A;
-  --color-ink-1: #16171A;
-  --color-ink-2: #464A51;
-  --color-ink-3: #696E76;
-  --color-ink-4: #A2A6AD;
-  --color-primary: #2349B5;
-  --color-primary-hover: #1B3B98;
-  --color-primary-tint: #EBF0FC;
-  --color-on-primary: #FFFFFF;
-  --color-negative: #B3261E;
-  --color-negative-hover: #951E18;
-  --color-negative-tint: #FCECEA;
-  --color-positive: #1E7445;
-  --color-positive-tint: #E7F3EC;
-  --color-warning: #8A5300;
-  --color-warning-border: #E8B45C;
-  --color-warning-tint: #FDF2DB;
-  --color-info: #1D5C96;
-  --color-info-tint: #E8F0F8;
-
-  /* Elevation */
-  --elev-popover: 0 1px 2px rgba(22, 23, 26, 0.06), 0 6px 16px rgba(22, 23, 26, 0.10);
-  --elev-dialog: 0 16px 40px rgba(22, 23, 26, 0.18), 0 0 0 1px rgba(22, 23, 26, 0.08);
-  --scrim: rgba(22, 23, 26, 0.36);
-
-  /* Focus */
-  --focus-ring: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-primary);
-  --focus-halo: 0 0 0 3px var(--color-primary-tint);   /* inputs, with primary border */
-}
-
-
-:root {
-  --tracking-page: -0.01em;
-  --tracking-micro: 0.06em;
+  --tracking-page: -0.02em;
+  --tracking-title: -0.015em;
+  --tracking-micro: 0.08em;
   --tracking-figure: -0.01em;
-  --row-height-dense: 28px;
-  --color-on-primary-dim: rgba(255, 255, 255, 0.35);
   /* Font sizes for rules that set only the size (the --type-* shorthands set all of it). */
   --size-micro: 11px;
   --size-label: 12px;
   --size-body: 13px;
   --size-section: 15px;
-  --size-page: 20px;
+  --size-page: 28px;
+
+  /* Spacing (4 px base) */
+  --space-2xs: 2px;
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px; /* page gutter */
+  --space-2xl: 32px; /* between sections */
+  --space-8: var(--space-2xl); /* dialog viewport gutter */
+  --space-3xl: 48px;
+
+  /* Radii (tokens/spacing.css) */
+  --radius-xs: 4px; /* checkboxes, bars */
+  --radius-tag: 6px; /* tags, small controls, tooltips */
+  --radius-sm: 10px; /* buttons, inputs */
+  --radius-md: 14px; /* cards, panels, menus, toasts */
+  --radius-lg: 20px; /* dialogs */
+  --radius-pill: 9999px; /* badges, status pills, avatars */
+
+  /* Layout. T6: the 216 px sidebar, 32 px controls and table rows stay for density. */
+  --sidebar-width: 216px;
+  --topbar-height: 48px;
+  --inspector-width: 400px; /* shown at viewport >= 1536px */
+  --row-height: 36px;
+  --row-height-compact: 32px;
+  --row-height-dense: 28px;
+  --header-row-height: 32px;
+  --control-height: 32px;
+  --control-height-sm: 28px;
+
+  /* Motion (tokens/effects.css) */
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+  --blur-overlay: 3px;
+
+  /* Colour roles: light. Ledger names, Tidewell values (T2, T7). */
+  --color-page: var(--sand-50);
+  --color-bg: var(--sand-0);
+  --color-bg-subtle: var(--sand-100);
+  --color-bg-sunken: var(--sand-200);
+  --color-bg-hover: var(--sand-100);
+  --color-bg-selected: var(--tide-50);
+  --color-border: var(--sand-200);
+  --color-border-strong: var(--sand-300);
+  --color-rule: var(--sand-900);
+  --color-ink-1: var(--sand-900);
+  --color-ink-2: var(--sand-700);
+  --color-ink-3: var(--sand-600);
+  --color-ink-4: var(--sand-500);
+  --color-primary: var(--tide-600);
+  --color-primary-hover: var(--tide-700);
+  --color-primary-tint: var(--tide-50);
+  --color-on-primary: var(--sand-0);
+  --color-on-primary-dim: rgba(255, 254, 251, 0.35);
+  --color-highlight: var(--ember-500);
+  --color-highlight-tint: var(--ember-100);
+  --color-negative: var(--red-650);
+  --color-negative-hover: var(--red-700);
+  --color-negative-tint: var(--red-100);
+  --color-positive: var(--green-650);
+  --color-positive-tint: var(--green-100);
+  --color-warning: var(--amber-650);
+  --color-warning-border: var(--amber-300);
+  --color-warning-tint: var(--amber-100);
+  --color-info: var(--blue-600);
+  --color-info-tint: var(--blue-100);
+  --color-link-underline: var(--tide-200);
+  --color-selection: var(--tide-100);
+
+  /* Elevation: hairlines first, shadows only on floating layers, warm ink, never black */
+  --elev-popover: 0 1px 2px rgba(27, 30, 28, 0.06), 0 10px 28px -8px rgba(27, 30, 28, 0.18);
+  --elev-dialog: 0 2px 4px rgba(27, 30, 28, 0.06), 0 24px 64px -12px rgba(27, 30, 28, 0.28);
+  --scrim: rgba(27, 30, 28, 0.36);
+
+  /* Focus: a 3 px tide ring at 28 %; inputs also switch to a tide border */
+  --focus-ring-colour: rgba(15, 107, 94, 0.28);
+  --focus-ring: 0 0 0 3px var(--focus-ring-colour);
+  --focus-halo: 0 0 0 3px var(--focus-ring-colour);
 }
 
+/* Dark (T8): derived from the sand and tide scales; every text/background pair is AA. */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --color-bg: #121315;
-    --color-bg-subtle: #18191C;
-    --color-bg-sunken: #202226;
-    --color-bg-hover: #1D1F23;
-    --color-bg-selected: #1B2643;
-    --color-border: #2A2D33;
-    --color-border-strong: #3B3F47;
-    --color-rule: #ECEDEF;
-    --color-ink-1: #ECEDEF;
-    --color-ink-2: #B6BAC1;
-    --color-ink-3: #8E939B;
-    --color-ink-4: #5E636B;
-    --color-primary: #7E9CF2;
-    --color-primary-hover: #9BB3F5;
-    --color-primary-tint: #1B2643;
-    --color-on-primary: #121315;
-    --color-on-primary-dim: rgba(18, 19, 21, 0.35);
-    --color-negative: #F08A80;
-    --color-negative-tint: #3A1B19;
-    --color-positive: #6FCB96;
-    --color-positive-tint: #15301F;
-    --color-warning: #E8B45C;
-    --color-warning-tint: #33280F;
-    --color-info: #82B5E8;
-    --color-info-tint: #15283B;
+  :root:not([data-theme='light']) {
+    --color-page: var(--sand-950);
+    --color-bg: var(--sand-900);
+    --color-bg-subtle: var(--sand-800);
+    --color-bg-sunken: #2e312d;
+    --color-bg-hover: #242724;
+    --color-bg-selected: #13342e;
+    --color-border: #2e312d;
+    --color-border-strong: var(--sand-700);
+    --color-rule: var(--sand-100);
+    --color-ink-1: var(--sand-100);
+    --color-ink-2: var(--sand-300);
+    --color-ink-3: var(--sand-400);
+    --color-ink-4: var(--sand-500);
+    --color-primary: #4aa691;
+    --color-primary-hover: #66b9a6;
+    --color-primary-tint: #13342e;
+    --color-on-primary: var(--sand-950);
+    --color-on-primary-dim: rgba(18, 20, 19, 0.35);
+    --color-highlight: #ec8a5c;
+    --color-highlight-tint: #3a2216;
+    --color-negative: #ef8b77;
+    --color-negative-hover: #f4a797;
+    --color-negative-tint: #3a1d17;
+    --color-positive: #72c595;
+    --color-positive-tint: #163020;
+    --color-warning: #e3b45c;
+    --color-warning-border: #8a6a2a;
+    --color-warning-tint: #33280f;
+    --color-info: #88b3e6;
+    --color-info-tint: #172a3d;
+    --color-link-underline: var(--tide-500);
+    --color-selection: #1d4a41;
+    --elev-popover: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 28px -8px rgba(0, 0, 0, 0.6);
+    --elev-dialog: 0 2px 4px rgba(0, 0, 0, 0.3), 0 24px 64px -12px rgba(0, 0, 0, 0.7);
+    --scrim: rgba(18, 20, 19, 0.6);
+    --focus-ring-colour: rgba(63, 154, 135, 0.45);
   }
 }
 
-:root[data-theme="dark"] {
-  --color-bg: #121315;
-  --color-bg-subtle: #18191C;
-  --color-bg-sunken: #202226;
-  --color-bg-hover: #1D1F23;
-  --color-bg-selected: #1B2643;
-  --color-border: #2A2D33;
-  --color-border-strong: #3B3F47;
-  --color-rule: #ECEDEF;
-  --color-ink-1: #ECEDEF;
-  --color-ink-2: #B6BAC1;
-  --color-ink-3: #8E939B;
-  --color-ink-4: #5E636B;
-  --color-primary: #7E9CF2;
-  --color-primary-hover: #9BB3F5;
-  --color-primary-tint: #1B2643;
-  --color-on-primary: #121315;
-  --color-on-primary-dim: rgba(18, 19, 21, 0.35);
-  --color-negative: #F08A80;
-  --color-negative-tint: #3A1B19;
-  --color-positive: #6FCB96;
-  --color-positive-tint: #15301F;
-  --color-warning: #E8B45C;
-  --color-warning-tint: #33280F;
-  --color-info: #82B5E8;
-  --color-info-tint: #15283B;
+:root[data-theme='dark'] {
+  --color-page: var(--sand-950);
+  --color-bg: var(--sand-900);
+  --color-bg-subtle: var(--sand-800);
+  --color-bg-sunken: #2e312d;
+  --color-bg-hover: #242724;
+  --color-bg-selected: #13342e;
+  --color-border: #2e312d;
+  --color-border-strong: var(--sand-700);
+  --color-rule: var(--sand-100);
+  --color-ink-1: var(--sand-100);
+  --color-ink-2: var(--sand-300);
+  --color-ink-3: var(--sand-400);
+  --color-ink-4: var(--sand-500);
+  --color-primary: #4aa691;
+  --color-primary-hover: #66b9a6;
+  --color-primary-tint: #13342e;
+  --color-on-primary: var(--sand-950);
+  --color-on-primary-dim: rgba(18, 20, 19, 0.35);
+  --color-highlight: #ec8a5c;
+  --color-highlight-tint: #3a2216;
+  --color-negative: #ef8b77;
+  --color-negative-hover: #f4a797;
+  --color-negative-tint: #3a1d17;
+  --color-positive: #72c595;
+  --color-positive-tint: #163020;
+  --color-warning: #e3b45c;
+  --color-warning-border: #8a6a2a;
+  --color-warning-tint: #33280f;
+  --color-info: #88b3e6;
+  --color-info-tint: #172a3d;
+  --color-link-underline: var(--tide-500);
+  --color-selection: #1d4a41;
+  --elev-popover: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 28px -8px rgba(0, 0, 0, 0.6);
+  --elev-dialog: 0 2px 4px rgba(0, 0, 0, 0.3), 0 24px 64px -12px rgba(0, 0, 0, 0.7);
+  --scrim: rgba(18, 20, 19, 0.6);
+  --focus-ring-colour: rgba(63, 154, 135, 0.45);
 }
