@@ -119,7 +119,7 @@ function SubscriberInspector({
 }
 
 export function SubscribersScreen() {
-  useSetCrumbs([{ label: 'Subscribers' }], 'subscribers');
+  useSetCrumbs([{ label: 'Billing accounts' }], 'subscribers');
   const { navigate } = useRouter();
   const [query, setQuery] = useState('');
   const q = useSettled(query);
@@ -202,10 +202,10 @@ export function SubscribersScreen() {
         />
       )}
       <PageHeader
-        title="Subscribers"
+        title="Billing accounts"
         actions={
           <Button variant="primary" onClick={() => setCreating(true)}>
-            New subscriber
+            New billing account
           </Button>
         }
         filters={
@@ -214,7 +214,7 @@ export function SubscribersScreen() {
               <Icon name="search" size={14} />
               <TextInput
                 placeholder="Name, BA id or subscriber no. (starts with)"
-                aria-label="Search subscribers"
+                aria-label="Search billing accounts"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
               />
@@ -249,13 +249,16 @@ export function SubscribersScreen() {
         }
       />
       <div className="bss-with-inspector bss-subscribers-body">
-        <div role="table" aria-label="Subscribers" className="bss-subscribers-table">
+        <div role="table" aria-label="Billing accounts" className="bss-subscribers-table">
           <TableHead columns={columns} />
           <ListState
             resource={subscribers}
             columns={columns}
-            errorTitle="Failed to load subscribers"
-            empty={{ title: 'No subscribers yet', text: 'Create one with New subscriber.' }}
+            errorTitle="Failed to load billing accounts"
+            empty={{
+              title: 'No billing accounts yet',
+              text: 'Create one with New billing account.',
+            }}
             // filtered on the server: an empty filtered page is "no matches", not an empty system
             count={(data) => (filtered ? 1 : data.items.length)}
             rows={(data) => data.items}

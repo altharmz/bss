@@ -1,7 +1,7 @@
 # Admin UI (stage 5)
 
 Operators can open **Self-care login** on a subscriber card to check the customer's login,
-send an invitation, or disable access. Under **Customers → Signups**, filter by state and
+send an invitation, or disable access. Under **Customers → Online signups**, filter by state and
 open a signup to inspect its plan and identity result. A signup in identity review offers
 Approve and Reject actions.
 
@@ -43,7 +43,7 @@ Tested means a passing component test saw the marker on screen (`expectUi`, see 
 
 | Part | Where | What |
 |---|---|---|
-| Routing | `frontend/src/app/router.tsx` | a minimal History-API router: `/subscribers`, `/subscribers/{accountId}`, `/catalog`, `/billing-runs` (not `/billing`, so it can never be confused with the app's `/billing-status`); `/` redirects to `/subscribers`; anything else is the not-found page. Deep links work because Caddy answers unknown paths with `index.html` |
+| Routing | `frontend/src/app/router.tsx` | a minimal History-API router: `/billing-accounts`, `/billing-accounts/{accountId}`, `/catalog`, `/billing-runs` (not `/billing`, so it can never be confused with the app's `/billing-status`); `/` and the old `/subscribers` and `/subscribers/{accountId}` are replaced by the billing account paths (no history entry); anything else is the not-found page. Deep links work because Caddy answers unknown paths with `index.html` |
 | Shell | `frontend/src/app/Shell.tsx` | sidebar (brand, environment tag, navigation "Main" in seven sections from `app/nav.ts`, operator), top bar (breadcrumbs, business date, time zone) |
 | System context | `frontend/src/app/context.tsx` | loads `GET /internal/v1/context` before any screen: no date can be shown without the business date and zone |
 | API client | `frontend/src/api/client.ts`, `bss.ts` | fetch wrapper; every failure is an `ApiError` whose message is the call ("GET /path -> 503 Service Unavailable"); `getAll` pages by 100; `useResource` = loading / error / ok + retry; `usePolled` = the same, refreshed in the background every few seconds while a predicate on the data holds (a failed refresh keeps the data and stops) |
@@ -82,10 +82,11 @@ API: `GET /internal/v1/context`, `GET /internal/v1/billingRun?limit=1` (the late
 status).
 
 The sidebar is one `<nav aria-label="Main">` rendered from the data in `app/nav.ts`, with seven
-labelled sections in TMF / ODA domain order (`ui.shell.section.<key>`, #414):
+labelled sections in TMF / ODA domain order (`ui.shell.section.<key>`, #414, #457):
 
-- **Customers:** Subscribers, Parties, Financial accounts
-- **Products:** Product catalog, Orders, Products
+- **Customers**, down the account hierarchy: Parties, Financial accounts, Customers, Billing
+  accounts, Products, Orders, then Online signups
+- **Catalog:** Product catalog
 - **Resources:** Numbers, SIMs, Port requests
 - **Billing:** Billing runs (failed badge), Bills, Payments, Billing settings
 - **Prepaid:** Balances, Prepaid commands (failed badge), Prepaid lifecycle
@@ -95,7 +96,8 @@ labelled sections in TMF / ODA domain order (`ui.shell.section.<key>`, #414):
 Each item's `title` names its TMF API and resource, or "internal". No item has a count or a
 count request (G8; it replaces epic D6's counts). `nav.test.ts` fails when a navigable route
 has no nav item or has two. Design and the per-item TMF/DB mapping:
-[frontend.md](decisions/frontend.md#sidebar-by-tmf-domain-and-db-area-2026-11-20-issue-414).
+[frontend.md](decisions/frontend.md#sidebar-by-tmf-domain-and-db-area-2026-11-20-issue-414),
+reordered by [the account hierarchy](decisions/frontend.md#sidebar-by-the-account-hierarchy-2026-11-25-issue-457).
 
 ### Logging settings
 
@@ -136,9 +138,10 @@ identities. The ordinary seed still creates no users. Credentials live only in i
 and removes that file. The browser exercises forced password change, admin forms,
 ordinary-user denial and sign-out as well as the existing billing screens.
 
-### Subscribers list (`ui.subscribers.list`) - `screens/Subscribers.tsx`
+### Billing accounts list (`ui.subscribers.list`) - `screens/Subscribers.tsx`
 
-Ledger v2 slice 5: PageHeader shows the filtered count and New subscriber action. The
+Route `/billing-accounts` (#457; "Subscribers" before, the internal ids keep the old name).
+Ledger v2 slice 5: PageHeader shows the filtered count and New billing account action. The
 300 px search (Name, BA id or subscriber no.) has an icon and `/` focus shortcut outside
 editable fields. Account state and mode filters retain counts; Reset filters appears when
 active. Negative balance N stays at the right. The page table shows Name, copyable BA Id,
@@ -660,10 +663,11 @@ Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use
 
 Ledger v2: separate party and customer StatusPill kinds.
 
-Route `/parties`, sidebar **Customers > Parties** (no count request). Three tabs: Individuals,
-Organizations (name, status, number of customers, linked subscribers) and Customers (name,
-status, engaged party, billing accounts), each with a name search and a status filter, so a party
-or customer without a billing account is reachable. **New individual** and **New organization**
+Route `/parties`, sidebar **Customers > Parties** (no count request). Two tabs: Individuals and
+Organizations (name, status, number of customers, linked billing accounts). Route `/customers`,
+sidebar **Customers > Customers** (`ui.customers`, `screens/Customers.tsx`, #457): the customers
+(name, status, engaged party, billing accounts) and the same customer dialog. Each list has a name
+search and a status filter, so a party or customer without a billing account is reachable. **New individual** and **New organization**
 create a party with its type-specific status, optional birth date and email/phone/postal contact
 media. Subscriber links go to the card. A row opens the record read with GET
 (`ui.parties.individual|organization|customer`). **Edit** (`ui.parties.edit`) patches changed

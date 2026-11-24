@@ -230,7 +230,7 @@ export function OrdersScreen() {
     <div className="bss-screen" data-ui="ui.orders">
       <PageHeader
         title="Orders"
-        meta="Orders across all subscribers. A subscriber's own orders: the Orders link on their card."
+        meta="Orders across all billing accounts. A billing account's own orders: the Orders link on its card."
         filters={
           <>
             <Segmented

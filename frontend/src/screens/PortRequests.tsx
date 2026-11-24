@@ -14,7 +14,7 @@ import { explain } from '../api/client';
 import { businessDate } from '../format/dates';
 import { useResource } from '../api/useResource';
 import { useSetCrumbs, useSystemContext } from '../app/context';
-import { Link } from '../app/router';
+import { hrefOf, Link } from '../app/router';
 import {
   Button,
   Dialog,
@@ -273,7 +273,9 @@ function PortDetail({
         )}
         {port?.billingAccount && (
           <p>
-            <Link href={`/subscribers/${port.billingAccount.id}`}>Open subscriber</Link>
+            <Link href={hrefOf({ name: 'subscriber', accountId: port.billingAccount.id })}>
+              Open billing account
+            </Link>
           </p>
         )}
         {port?.state === 'rejected' && !correcting && port.direction === 'in' && (

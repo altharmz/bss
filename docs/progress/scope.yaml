@@ -491,7 +491,7 @@ items:
   - {id: ui.users.denied, area: ui, stage: 5, title: "Users: not allowed for non-administrators"}
   - {id: ui.logging.settings, area: ui, stage: 5, title: "Logging settings: base level and temporary debug"}
   - {id: ui.shell, area: ui, stage: 5, title: "Shell: sidebar, top bar with business date and zone"}
-  - {id: ui.subscribers.list, area: ui, stage: 5, title: "Subscribers list"}
+  - {id: ui.subscribers.list, area: ui, stage: 5, title: "Billing accounts list (was Subscribers, #457)"}
   - {id: ui.subscribers.previous, area: ui, stage: 5, title: "Subscribers: previous page"}
   - {id: ui.subscribers.next, area: ui, stage: 5, title: "Subscribers: next page"}
   - {id: ui.subscribers.prepaid, area: ui, stage: 5, title: "Subscribers prepaid account mode"}
@@ -717,12 +717,13 @@ items:
   - {id: ui.catalog.job, area: ui, stage: 5, title: "Import or export job detail"}
   - {id: ui.catalog.errorLog, area: ui, stage: 5, title: "Full error log of a failed job"}
   - {id: ui.catalog.deleteJob, area: ui, stage: 5, title: "Delete a job record"}
-  - {id: ui.parties, area: ui, stage: 5, title: "Parties screen (Customers > Parties): individuals, organizations, customers"}
+  - {id: ui.parties, area: ui, stage: 5, title: "Parties screen (Customers > Parties): individuals, organizations"}
+  - {id: ui.customers, area: ui, stage: 5, title: "Customers screen (Customers > Customers, #457): TMF629 customers with engaged party and billing accounts"}
   - {id: ui.parties.previous, area: ui, stage: 5, title: "Parties: previous page"}
   - {id: ui.parties.next, area: ui, stage: 5, title: "Parties: next page"}
   - {id: ui.parties.individuals, area: ui, stage: 5, title: "Parties tab: individuals with customers and subscribers"}
   - {id: ui.parties.organizations, area: ui, stage: 5, title: "Parties tab: organizations with customers and subscribers"}
-  - {id: ui.parties.customers, area: ui, stage: 5, title: "Parties tab: customers with engaged party and billing accounts"}
+  - {id: ui.parties.customers, area: ui, stage: 5, title: "Customers list: customers with engaged party and billing accounts"}
   - {id: ui.parties.individual, area: ui, stage: 5, title: "Individual detail and party edit"}
   - {id: ui.parties.organization, area: ui, stage: 5, title: "Organization detail and party edit"}
   - {id: ui.parties.customer, area: ui, stage: 5, title: "Customer detail, name and status edit"}
@@ -757,7 +758,7 @@ items:
   - {id: ui.prepaidCommands.retry, area: ui, stage: 5, title: "Retry a failedTechnical command"}
   - {id: ui.subscriber.prepaid.commands, area: ui, stage: 5, title: "Commands link in the prepaid KPI area"}
   - {id: ui.shell.section.customers, area: ui, stage: 5, title: "Sidebar section: Customers"}
-  - {id: ui.shell.section.products, area: ui, stage: 5, title: "Sidebar section: Products"}
+  - {id: ui.shell.section.catalog, area: ui, stage: 5, title: "Sidebar section: Catalog (product catalog alone, #457)"}
   - {id: ui.shell.section.billing, area: ui, stage: 5, title: "Sidebar section: Billing"}
   - {id: ui.shell.section.resources, area: ui, stage: 5, title: "Sidebar section: Resources (TMF639 numbers, SIMs, port requests, #414)"}
   - {id: ui.shell.section.prepaid, area: ui, stage: 5, title: "Sidebar section: Prepaid (balances, prepaid commands, prepaid lifecycle, #414)"}

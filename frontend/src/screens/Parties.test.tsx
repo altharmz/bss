@@ -149,6 +149,15 @@ async function open() {
 }
 
 const tab = (name: string) => fireEvent.click(screen.getByRole('button', { name }));
+// TEST-CHANGE (#457): Customers is its own screen, opened from the sidebar, not a Parties tab
+const customers = async () => {
+  fireEvent.click(
+    within(screen.getByRole('navigation', { name: 'Main' })).getByRole('link', {
+      name: 'Customers',
+    }),
+  );
+  return screen.findByRole('heading', { name: 'Customers' });
+};
 const rowOf = (name: RegExp) =>
   screen.getAllByRole('row').find((row) => name.test(row.textContent ?? ''));
 const writes = (fetchMock: ReturnType<typeof stubFetch>['fetchMock']) =>
@@ -168,7 +177,7 @@ describe('parties list', () => {
     const link = within(rowOf(/Ivan Petrov/) as HTMLElement).getByRole('link', {
       name: 'Ivan main',
     });
-    expect(link.getAttribute('href')).toBe(`/subscribers/${A1}`);
+    expect(link.getAttribute('href')).toBe(`/billing-accounts/${A1}`);
     // a person without a customer or an account is reachable too
     expect(rowOf(/Olga/)?.textContent).toContain('Initialized');
     // party kind: initialized is Draft, validated is Live
@@ -184,9 +193,9 @@ describe('parties list', () => {
       within(rowOf(/Romashka LLC/) as HTMLElement)
         .getByRole('link', { name: 'Romashka HQ' })
         .getAttribute('href'),
-    ).toBe(`/subscribers/${A3}`);
+    ).toBe(`/billing-accounts/${A3}`);
 
-    tab('Customers');
+    await customers();
     expect(await screen.findByText('Ivan Second')).toBeTruthy();
     expectUi('ui.parties.customers');
     expect(rowOf(/Ivan Petrov/)?.textContent).toContain('Ivan Petrov');
@@ -241,6 +250,43 @@ describe('parties list', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     expect(await screen.findByText('Org 50')).toBeTruthy();
     expect(screen.getByText(/^Showing 51–51/)).toBeTruthy();
+  });
+
+  it('opens Customers at /customers, out of the Parties tabs, with its own filters', async () => {
+    const { calls } = backend();
+    await open();
+    await screen.findByText('Olga Kuznetsova');
+    expect(
+      within(screen.getByRole('group', { name: 'Party sections' }))
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['Individuals', 'Organizations']);
+    await customers();
+    expect(window.location.pathname).toBe('/customers');
+    expectUi('ui.customers');
+    expect(await screen.findByText('Ivan Second')).toBeTruthy();
+    const crumbs = screen.getByRole('navigation', { name: 'Breadcrumbs' });
+    expect(within(crumbs).getByText('Customers')).toBeTruthy();
+    const nav = screen.getByRole('navigation', { name: 'Main' });
+    const link = within(nav).getByRole('link', { name: 'Customers' });
+    expect(link.getAttribute('aria-current')).toBe('page');
+    expect(link.getAttribute('title')).toBe('TMF629 customer');
+    expect(
+      within(rowOf(/Ivan Petrov/) as HTMLElement)
+        .getByRole('link')
+        .getAttribute('href'),
+    ).toBe(`/billing-accounts/${A1}`);
+    expect(
+      within(screen.getByRole('group', { name: 'Status' }))
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['All', 'Created', 'Active', 'Inactive']);
+    fireEvent.change(screen.getByLabelText('Search customers'), { target: { value: 'ivan' } });
+    await waitFor(() => expect(calls).toContain(`GET ${SEARCH_CUSTOMERS}?q=ivan&${PAGE}`));
+    fireEvent.click(screen.getByRole('button', { name: 'Created' }));
+    await waitFor(() =>
+      expect(calls).toContain(`GET ${SEARCH_CUSTOMERS}?q=ivan&status=Created&${PAGE}`),
+    );
   });
 
   it('is in the sidebar under Customers and shows a load failure', async () => {
@@ -438,7 +484,7 @@ describe('party and customer dialogs', () => {
         ]),
     });
     await open();
-    tab('Customers');
+    await customers();
     fireEvent.click(await screen.findByText('Ivan Second'));
     const dialog = await screen.findByRole('dialog', { name: 'Ivan Second' });
     await within(dialog).findByText('Engaged party');
@@ -525,7 +571,7 @@ describe('party and customer dialogs', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
     await screen.findByText('Lone Ltd saved');
 
-    tab('Customers');
+    await customers();
     fireEvent.click(await screen.findByText('Ivan Second'));
     dialog = await screen.findByRole('dialog', { name: 'Ivan Second' });
     expectUi('ui.parties.customer');
@@ -577,7 +623,7 @@ describe('party and customer dialogs', () => {
     expect(within(dialog).getByText(/It owns accounts/)).toBeTruthy();
     fireEvent.click(within(dialog).getAllByRole('button', { name: 'Close' })[1] as HTMLElement);
     // a customer with a billing account
-    tab('Customers');
+    await customers();
     fireEvent.click((await screen.findAllByText('Ivan Petrov'))[0] as HTMLElement);
     dialog = await screen.findByRole('dialog', { name: 'Ivan Petrov' });
     // only the account's own Delete is there; the customer's waits for the accounts to go
@@ -604,7 +650,7 @@ describe('party and customer dialogs', () => {
     expect(await within(dialog).findByRole('alert')).toBeTruthy();
     expect(within(dialog).getByRole('alert').textContent).toContain('409');
     fireEvent.click(within(dialog).getAllByRole('button', { name: 'Close' })[1] as HTMLElement);
-    tab('Customers');
+    await customers();
     fireEvent.click(await screen.findByText('Ivan Second'));
     dialog = await screen.findByRole('dialog', { name: 'Ivan Second' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
@@ -621,7 +667,7 @@ describe('billing accounts of a customer', () => {
   const ACCOUNT_URL = `${ACCOUNTS}/billingAccount/${A1}`;
   const customerDialog = async () => {
     await open();
-    tab('Customers');
+    await customers();
     fireEvent.click((await screen.findAllByText('Ivan Petrov'))[0] as HTMLElement);
     return screen.findByRole('dialog', { name: 'Ivan Petrov' });
   };
@@ -718,7 +764,7 @@ describe('billing accounts of a customer', () => {
       [`GET ${CUSTOMERS}/${C_ORPHAN}`]: () => json(CUSTOMER_ROWS[1]),
     });
     await open();
-    tab('Customers');
+    await customers();
     fireEvent.click(await screen.findByText('Ivan Second'));
     const dialog = await screen.findByRole('dialog', { name: 'Ivan Second' });
     expect(within(dialog).getByRole('button', { name: 'Delete' })).toBeTruthy();

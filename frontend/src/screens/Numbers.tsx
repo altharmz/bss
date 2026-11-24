@@ -20,7 +20,7 @@ import {
 import { explain } from '../api/client';
 import { useResource } from '../api/useResource';
 import { useSetCrumbs } from '../app/context';
-import { Link } from '../app/router';
+import { hrefOf, Link } from '../app/router';
 import {
   Button,
   Dialog,
@@ -367,7 +367,10 @@ function NumberDetail({
                 {p.billingAccount?.id && (
                   <>
                     {' '}
-                    · <Link href={`/subscribers/${p.billingAccount.id}`}>Open subscriber</Link>
+                    ·{' '}
+                    <Link href={hrefOf({ name: 'subscriber', accountId: p.billingAccount.id })}>
+                      Open billing account
+                    </Link>
                   </>
                 )}
               </p>

@@ -26,15 +26,15 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
   await page.goto('/');
   await signIn(page);
   const problems = watch(page);
-  await expect(page).toHaveURL(/\/subscribers$/);
+  await expect(page).toHaveURL(/\/billing-accounts$/);
   const context = (await (await page.request.get('/internal/v1/context')).json()) as {
     businessDate: string;
   };
-  await expect(page.getByRole('heading', { name: 'Subscribers' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Billing accounts' })).toBeVisible();
   // G8 (#51): the sidebar shows no item counts
   const subscribersLink = page
     .getByRole('navigation', { name: 'Main' })
-    .getByRole('link', { name: 'Subscribers', exact: true });
+    .getByRole('link', { name: 'Billing accounts', exact: true });
   await expect(subscribersLink).toBeVisible();
   await expect(subscribersLink.locator('.count')).toHaveCount(0);
   await expect(
@@ -43,8 +43,8 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
       .getByRole('link', { name: 'Financial accounts', exact: true }),
   ).toBeVisible();
   // New subscriber opens and cancels (read-only: nothing is created)
-  await page.getByRole('button', { name: 'New subscriber', exact: true }).click();
-  const create = page.getByRole('dialog', { name: 'New subscriber' });
+  await page.getByRole('button', { name: 'New billing account', exact: true }).click();
+  const create = page.getByRole('dialog', { name: 'New billing account' });
   await expect(create.getByText('Given name')).toBeVisible();
   await create.getByRole('button', { name: 'Cancel' }).click();
   await expect(create).toBeHidden();
@@ -93,7 +93,7 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
   await page.getByRole('tab', { name: 'Overview', exact: true }).click();
   // Edit loads the subscriber's party, customer and account; cancelled, nothing is saved
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
-  const edit = page.getByRole('dialog', { name: 'Edit subscriber' });
+  const edit = page.getByRole('dialog', { name: 'Edit billing account' });
   await expect(edit.getByLabel('Account name')).not.toHaveValue(''); // loaded, any name
   await edit.getByRole('button', { name: 'Cancel' }).click();
   await expect(edit).toBeHidden();
@@ -178,9 +178,9 @@ async function pickFreeNumber(dialog: Locator) {
 test('prepaid: Robert Taylor tops up and orders, Linda Harris waits for funds, commands list', async ({
   page,
 }) => {
-  await page.goto('/subscribers');
+  await page.goto('/billing-accounts');
   await signIn(page);
-  await expect(page.getByRole('heading', { name: 'Subscribers', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Billing accounts', exact: true })).toBeVisible();
   const problems = watch(page);
 
   // 1. the card: KPIs and balance action rows, one detail
@@ -243,7 +243,7 @@ test('prepaid: Robert Taylor tops up and orders, Linda Harris waits for funds, c
   ).toBeVisible();
 
   // 4. Linda Harris: the unpaid renewal has progressed to lifecycle suspension.
-  await page.goto('/subscribers');
+  await page.goto('/billing-accounts');
   await page.getByRole('row').filter({ hasText: 'Linda Harris' }).click();
   await expect(page.getByRole('heading', { name: /Linda Harris/ })).toBeVisible();
   await expect(page.locator('[data-ui="ui.subscriber.lifecycleSuspension"]')).toBeVisible();
@@ -268,9 +268,9 @@ test('prepaid: Robert Taylor tops up and orders, Linda Harris waits for funds, c
 test('refund dialog opens on an account with unused credit without recording a payout', async ({
   page,
 }) => {
-  await page.goto('/subscribers');
+  await page.goto('/billing-accounts');
   await signIn(page);
-  await expect(page.getByRole('heading', { name: 'Subscribers', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Billing accounts', exact: true })).toBeVisible();
   const problems = watch(page);
   const response = await page.request.get('/tmf-api/accountManagement/v5/billingAccount?limit=100');
   expect(response.ok()).toBe(true);
@@ -292,7 +292,7 @@ test('refund dialog opens on an account with unused credit without recording a p
     }
   }
   expect(eligible, 'the seed includes an account with refundable credit').toBeTruthy();
-  await page.goto(`/subscribers/${eligible}`);
+  await page.goto(`/billing-accounts/${eligible}`);
   await page.getByRole('tab', { name: 'Account', exact: true }).click();
   await page.getByRole('button', { name: 'Refund unused credit' }).click();
   const dialog = page.getByRole('dialog', { name: 'Record refund' });

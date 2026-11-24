@@ -11,6 +11,7 @@ import { PaymentsScreen } from '../screens/Payments';
 import { DunningScreen } from '../screens/Dunning';
 import { BalancesScreen } from '../screens/Balances';
 import { BillsScreen } from '../screens/GlobalBills';
+import { CustomersScreen } from '../screens/Customers';
 import { PartiesScreen } from '../screens/Parties';
 import { BillingSettingsScreen } from '../screens/BillingSettings';
 import { FinancialAccountsScreen } from '../screens/FinancialAccounts';
@@ -80,6 +81,8 @@ function Screen() {
       return <FinancialAccountsScreen />;
     case 'parties':
       return <PartiesScreen />;
+    case 'customers':
+      return <CustomersScreen />;
     case 'billingSettings':
       return <BillingSettingsScreen />;
     case 'logging':

@@ -11,7 +11,6 @@ import {
   deleteCustomer,
   deleteParty,
   loadCustomerDetail,
-  loadCustomerPage,
   loadPartyDetail,
   loadPartyPage,
   PARTY_PAGE,
@@ -52,32 +51,25 @@ import { AccountPinField, AuditLog } from './SecurityTab';
 import { uncertain } from './submissionKey';
 import './screens.css';
 
-// Individuals, organizations and customers, whether or not they have a billing account.
-// Parties and customers can be created here. A party row opens the record (GET) with its
-// subscriber links and an edit for its identity, status and documents; Delete is offered
+// Individuals and organizations, whether or not they have a billing account. Parties and
+// their customers can be created here. A party row opens the record (GET) with its billing
+// account links and an edit for its identity, status and documents; Delete is offered
 // unless the loaded data already shows a dependency, and the server's 409 still shows.
+// The customer list is its own screen (Customers.tsx, #457) and shares the customer dialog.
 // Design: docs/ui.md.
 
-type Tab = 'individuals' | 'organizations' | 'customers';
+type Tab = 'individuals' | 'organizations';
 
 const PARTY_COLUMNS: Column[] = [
   { key: 'name', label: 'Name', width: '1fr' },
   { key: 'status', label: 'Status', width: '130px' },
   { key: 'customers', label: 'Customers', width: '110px', align: 'right', mono: true },
-  { key: 'subscribers', label: 'Subscribers', width: '1fr' },
-];
-const CUSTOMER_COLUMNS: Column[] = [
-  { key: 'name', label: 'Name', width: '1fr' },
-  { key: 'status', label: 'Status', width: '110px' },
-  { key: 'party', label: 'Engaged party', width: '1fr' },
-  { key: 'accounts', label: 'Billing accounts', width: '1.4fr' },
+  { key: 'accounts', label: 'Billing accounts', width: '1fr' },
 ];
 
 const dash = <span className="bss-dash">—</span>;
 
-type Open = { party: PartyRow } | { customer: PartyCustomer };
-
-function AccountLinks({ links }: { links: { id: string; name: string }[] }) {
+export function AccountLinks({ links }: { links: { id: string; name: string }[] }) {
   if (links.length === 0) return dash;
   return (
     <div className="ellipsis" onClick={(event) => event.stopPropagation()}>
@@ -101,13 +93,10 @@ export function PartiesScreen() {
   const [query, setQuery] = useState('');
   const q = useSettled(query);
   const [status, setStatus] = useState('All');
-  const [open, setOpen] = useState<Open | null>(null);
+  const [open, setOpen] = useState<PartyRow | null>(null);
   const [creating, setCreating] = useState<'Individual' | 'Organization' | null>(null);
 
-  const customers = tab === 'customers';
-  const statuses = customers
-    ? ['Created', 'Active', 'Inactive']
-    : PARTY_STATUSES[tab === 'individuals' ? 'Individual' : 'Organization'];
+  const statuses = PARTY_STATUSES[tab === 'individuals' ? 'Individual' : 'Organization'];
   const filter = { q, status: status === 'All' ? null : status };
   const filterKey = `${tab}:${q}:${status}:${version}`;
   const [offset, setOffset] = usePageOffset(filterKey);
@@ -131,7 +120,7 @@ export function PartiesScreen() {
   return (
     <div className="bss-screen" data-ui="ui.parties">
       <PageHeader
-        title={customers ? 'Customers' : 'Parties'}
+        title="Parties"
         actions={
           <>
             <Button
@@ -158,7 +147,6 @@ export function PartiesScreen() {
               options={[
                 { key: 'individuals', label: 'Individuals' },
                 { key: 'organizations', label: 'Organizations' },
-                { key: 'customers', label: 'Customers' },
               ]}
             />
             <TextInput
@@ -179,19 +167,15 @@ export function PartiesScreen() {
       />
       <div role="table" aria-label="Parties" className="bss-page-table">
         <div data-ui={`ui.parties.${tab}`}>
-          {customers ? (
-            <CustomersList {...paging} onOpen={(customer) => setOpen({ customer })} />
-          ) : (
-            <PartiesList
-              {...paging}
-              kind={tab === 'individuals' ? 'Individual' : 'Organization'}
-              tab={tab}
-              onOpen={(party) => setOpen({ party })}
-            />
-          )}
+          <PartiesList
+            {...paging}
+            kind={tab === 'individuals' ? 'Individual' : 'Organization'}
+            tab={tab}
+            onOpen={setOpen}
+          />
         </div>
       </div>
-      {open !== null && <RecordModal open={open} onClose={() => setOpen(null)} onDone={done} />}
+      {open !== null && <PartyModal party={open} onClose={() => setOpen(null)} onDone={done} />}
       {creating !== null && (
         <NewPartyModal kind={creating} onClose={() => setCreating(null)} onDone={done} />
       )}
@@ -199,7 +183,7 @@ export function PartiesScreen() {
   );
 }
 
-interface Paging {
+export interface Paging {
   filterKey: string;
   offset: number;
   setOffset: (offset: number) => void;
@@ -229,7 +213,7 @@ function PartiesList({
         resource={resource}
         columns={PARTY_COLUMNS}
         errorTitle="Failed to load parties"
-        empty={{ title: `No ${tab} yet`, text: 'Subscribers create their party.' }}
+        empty={{ title: `No ${tab} yet`, text: 'A new billing account creates its party.' }}
         // filtered on the server: an empty filtered page is "no matches"
         count={(d) => (filtered ? 1 : d.items.length)}
         rows={(d) => d.items}
@@ -251,7 +235,7 @@ function PartiesList({
                       {party.customers.length}
                     </span>
                   ),
-                  subscribers: <AccountLinks links={party.accounts} />,
+                  accounts: <AccountLinks links={party.accounts} />,
                 }}
               />
             ))}
@@ -269,80 +253,6 @@ function PartiesList({
       </ListState>
     </>
   );
-}
-
-function CustomersList({
-  filterKey,
-  offset,
-  setOffset,
-  filter,
-  filtered,
-  reset,
-  onOpen,
-}: Paging & { onOpen: (customer: PartyCustomer) => void }) {
-  const resource = useResource(`party-customers:${filterKey}:${offset}`, (signal) =>
-    loadCustomerPage(filter, offset, signal),
-  );
-  return (
-    <>
-      <TableHead columns={CUSTOMER_COLUMNS} />
-      <ListState
-        resource={resource}
-        columns={CUSTOMER_COLUMNS}
-        errorTitle="Failed to load customers"
-        empty={{ title: 'No customers yet', text: 'Subscribers create their customer.' }}
-        count={(d) => (filtered ? 1 : d.items.length)}
-        rows={(d) => d.items}
-        query={filter.q || undefined}
-        onResetFilters={reset}
-      >
-        {(rows, d) => (
-          <>
-            {rows.map((customer) => (
-              <TableRow
-                key={customer.id}
-                columns={CUSTOMER_COLUMNS}
-                onClick={() => onOpen(customer)}
-                cells={{
-                  name: <span className="bss-name ellipsis">{customer.name}</span>,
-                  status: <StatusPill kind="customer" status={customer.status} />,
-                  party: (
-                    <div className="ellipsis">
-                      {customer.partyName || shortId(customer.partyId)}
-                      <span className="bss-secondary"> · {customer.partyKind}</span>
-                    </div>
-                  ),
-                  accounts: <AccountLinks links={customer.accounts} />,
-                }}
-              />
-            ))}
-            <PageFooter
-              offset={d.offset}
-              shown={rows.length}
-              more={d.more}
-              size={PARTY_PAGE}
-              onOffset={setOffset}
-              ui="ui.parties"
-              note="a customer without billing accounts can be deleted"
-            />
-          </>
-        )}
-      </ListState>
-    </>
-  );
-}
-
-function RecordModal({
-  open,
-  onClose,
-  onDone,
-}: {
-  open: Open;
-  onClose: () => void;
-  onDone: (message: string) => void;
-}) {
-  if ('party' in open) return <PartyModal party={open.party} onClose={onClose} onDone={onDone} />;
-  return <CustomerModal customer={open.customer} onClose={onClose} onDone={onDone} />;
 }
 
 function Facts({ rows }: { rows: [string, ReactNode][] }) {
@@ -804,7 +714,7 @@ function PartyModal({
           ['Email', before.email || dash],
           ['Phone', before.phone || dash],
           ['Customers', own.length ? own.map((c) => c.name).join(', ') : dash],
-          ['Subscribers', <AccountLinks key="s" links={accounts} />],
+          ['Billing accounts', <AccountLinks key="s" links={accounts} />],
         ]}
       />
     );
@@ -966,7 +876,7 @@ function CustomerAccountRow({
   );
 }
 
-function CustomerModal({
+export function CustomerModal({
   customer,
   onClose,
   onDone,

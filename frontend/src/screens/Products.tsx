@@ -122,7 +122,7 @@ export function ProductsScreen() {
     <div className="bss-screen" data-ui="ui.products">
       <PageHeader
         title="Products"
-        meta="Products across all subscribers. A subscriber's products are on their card."
+        meta="Products across all billing accounts. A billing account's products are on its card."
         filters={
           <>
             <SelectField

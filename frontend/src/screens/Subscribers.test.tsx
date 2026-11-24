@@ -108,9 +108,9 @@ function backend(list: Handler = subscribers(ROWS), extra: Record<string, Handle
 }
 
 async function open() {
-  window.history.replaceState(null, '', '/subscribers');
+  window.history.replaceState(null, '', '/billing-accounts');
   render(<App />);
-  return screen.findByRole('heading', { name: 'Subscribers' });
+  return screen.findByRole('heading', { name: 'Billing accounts' });
 }
 
 const dataRows = () =>
@@ -145,7 +145,7 @@ describe('subscribers list', () => {
     expect(
       within(rowOf(/Anna Smirnova/) as HTMLElement).getAllByRole('cell')[6]?.textContent,
     ).toContain('USD');
-    fireEvent.change(screen.getByRole('textbox', { name: 'Search subscribers' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search billing accounts' }), {
       target: { value: 'Ivan' },
     });
     expect(await screen.findByRole('columnheader', { name: 'Balance EUR' })).toBeTruthy();
@@ -257,7 +257,7 @@ describe('subscribers list', () => {
     const { fetchMock } = backend();
     await open();
     await screen.findByText('Ivan Petrov');
-    const search = screen.getByRole('textbox', { name: 'Search subscribers' });
+    const search = screen.getByRole('textbox', { name: 'Search billing accounts' });
     fireEvent.change(search, { target: { value: 'anna' } });
     await screen.findByText('Showing 1–1 · amounts in billing account currency');
     expect(names()).toEqual(['Anna Smirnova']);
@@ -276,7 +276,7 @@ describe('subscribers list', () => {
     const { fetchMock } = backend();
     await open();
     await screen.findByText('Ivan Petrov');
-    const search = screen.getByRole('textbox', { name: 'Search subscribers' });
+    const search = screen.getByRole('textbox', { name: 'Search billing accounts' });
     for (const value of ['r', 'ro', 'rom']) fireEvent.change(search, { target: { value } });
     await screen.findByText('Showing 1–2 · amounts in billing account currency');
     expect(requested(fetchMock).filter((url) => url.includes('q='))).toEqual([
@@ -342,7 +342,7 @@ describe('subscribers list', () => {
     backend();
     await open();
     await screen.findByText('Ivan Petrov'); // the list has loaded: the search input is final
-    const search = screen.getByRole('textbox', { name: 'Search subscribers' });
+    const search = screen.getByRole('textbox', { name: 'Search billing accounts' });
     fireEvent.keyDown(document.body, { key: '/' });
     expect(document.activeElement).toBe(search);
     const input = document.createElement('input');
@@ -358,7 +358,7 @@ describe('subscribers list', () => {
     backend();
     await open();
     await screen.findByText('Ivan Petrov');
-    const heading = screen.getByRole('heading', { name: 'Subscribers' })
+    const heading = screen.getByRole('heading', { name: 'Billing accounts' })
       .parentElement as HTMLElement;
     expect(heading.querySelector('.count')).toBeNull();
     fireEvent.click(
@@ -371,7 +371,7 @@ describe('subscribers list', () => {
         name: 'Prepaid',
       }),
     );
-    fireEvent.change(screen.getByRole('textbox', { name: 'Search subscribers' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search billing accounts' }), {
       target: { value: 'nobody' },
     });
     expect(await screen.findByText('Nothing matches “nobody”')).toBeTruthy();
@@ -388,14 +388,14 @@ describe('subscribers list', () => {
     await open();
     await screen.findByText('Ivan Petrov');
     fireEvent.click(rowOf(/Ivan Petrov/) as HTMLElement);
-    expect(window.location.pathname).toBe(`/subscribers/${A1}`);
+    expect(window.location.pathname).toBe(`/billing-accounts/${A1}`);
   });
 
   it('shows the failing call, and the empty state', async () => {
     backend(() => tmfError(503, 'Service Unavailable'));
     await open();
     const alert = await screen.findByRole('alert');
-    expect(within(alert).getByText('Failed to load subscribers')).toBeTruthy();
+    expect(within(alert).getByText('Failed to load billing accounts')).toBeTruthy();
     expect(
       within(alert).getByText(`GET ${LIST}?offset=0&limit=50 → 503 Service Unavailable`),
     ).toBeTruthy();
@@ -404,8 +404,8 @@ describe('subscribers list', () => {
   it('explains an empty system', async () => {
     backend(() => json([]));
     await open();
-    expect(await screen.findByText('No subscribers yet')).toBeTruthy();
-    expect(screen.getByText('Create one with New subscriber.')).toBeTruthy();
+    expect(await screen.findByText('No billing accounts yet')).toBeTruthy();
+    expect(screen.getByText('Create one with New billing account.')).toBeTruthy();
   });
 });
 
@@ -426,7 +426,7 @@ describe('new subscriber', () => {
   it('explains when the initial product asks for a subscriber number', async () => {
     backend();
     await open();
-    fireEvent.click(screen.getByRole('button', { name: 'New subscriber' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New billing account' }));
     expect(
       await screen.findByText(
         'After creating the account, add a product. Offerings that need a subscriber number ask for one.',
@@ -442,21 +442,21 @@ describe('new subscriber', () => {
       [`GET ${ACCOUNTS}/${NEW_ACCOUNT}`]: () => tmfError(503, 'Unavailable'),
     });
     await open();
-    fireEvent.click(screen.getByRole('button', { name: 'New subscriber' }));
-    const dialog = await screen.findByRole('dialog', { name: 'New subscriber' });
+    fireEvent.click(screen.getByRole('button', { name: 'New billing account' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New billing account' });
     fireEvent.change(within(dialog).getByLabelText('Given name'), { target: { value: 'Olga' } });
     fireEvent.change(within(dialog).getByLabelText('Family name'), { target: { value: 'K' } });
     fireEvent.click(within(dialog).getByRole('checkbox'));
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Create subscriber' }));
-    const next = await screen.findByRole('dialog', { name: 'Subscriber created' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create billing account' }));
+    const next = await screen.findByRole('dialog', { name: 'Billing account created' });
     expect(await within(next).findByText('Failed to load the created account')).toBeTruthy();
     fireEvent.click(within(next).getByText('Retry'));
     expect(await within(next).findByText('Failed to load the created account')).toBeTruthy();
     expect(bodies(fetchMock)).toHaveLength(3);
-    expect(screen.queryByRole('button', { name: 'Create subscriber' })).toBeNull();
-    fireEvent.click(within(next).getByText('Open subscriber'));
+    expect(screen.queryByRole('button', { name: 'Create billing account' })).toBeNull();
+    fireEvent.click(within(next).getByText('Open billing account'));
     expect(await screen.findByRole('status')).toHaveProperty('textContent', 'Olga K created');
-    expect(window.location.pathname).toBe(`/subscribers/${NEW_ACCOUNT}`);
+    expect(window.location.pathname).toBe(`/billing-accounts/${NEW_ACCOUNT}`);
     expect(bodies(fetchMock)).toHaveLength(3);
   });
 
@@ -468,8 +468,8 @@ describe('new subscriber', () => {
       [`GET ${ACCOUNTS}/${NEW_ACCOUNT}`]: pending,
     });
     await open();
-    fireEvent.click(screen.getByRole('button', { name: 'New subscriber' }));
-    const dialog = await screen.findByRole('dialog', { name: 'New subscriber' });
+    fireEvent.click(screen.getByRole('button', { name: 'New billing account' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New billing account' });
     fireEvent.change(within(dialog).getByLabelText('Given name'), { target: { value: 'Olga' } });
     fireEvent.change(within(dialog).getByLabelText('Family name'), { target: { value: 'K' } });
     fireEvent.change(within(dialog).getByLabelText('Email'), {
@@ -479,7 +479,7 @@ describe('new subscriber', () => {
       target: { value: ' +1 555 0100 ' },
     });
     expectUi('ui.subscribers.contactMedia');
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Create subscriber' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create billing account' }));
     await screen.findByRole('status');
     expect(bodies(fetchMock)[0]).toEqual([
       `${PARTY}/individual`,
@@ -499,10 +499,10 @@ describe('new subscriber', () => {
       [`GET ${ACCOUNTS}/${NEW_ACCOUNT}`]: pending, // the card it opens
     });
     await open();
-    fireEvent.click(screen.getByRole('button', { name: 'New subscriber' }));
-    const dialog = await screen.findByRole('dialog', { name: 'New subscriber' });
+    fireEvent.click(screen.getByRole('button', { name: 'New billing account' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New billing account' });
     expectUi('ui.subscribers.new');
-    const create = within(dialog).getByRole('button', { name: 'Create subscriber' });
+    const create = within(dialog).getByRole('button', { name: 'Create billing account' });
     expect((create as HTMLButtonElement).disabled).toBe(true); // no name yet
     fireEvent.change(within(dialog).getByLabelText('Given name'), { target: { value: 'Olga' } });
     fireEvent.change(within(dialog).getByLabelText('Family name'), {
@@ -524,7 +524,7 @@ describe('new subscriber', () => {
       'textContent',
       'Olga Kuznetsova created',
     );
-    expect(window.location.pathname).toBe(`/subscribers/${NEW_ACCOUNT}`);
+    expect(window.location.pathname).toBe(`/billing-accounts/${NEW_ACCOUNT}`);
     expect(bodies(fetchMock)).toEqual([
       [
         `${PARTY}/individual`,
@@ -554,8 +554,8 @@ describe('new subscriber', () => {
       [`GET ${ACCOUNTS}/${NEW_ACCOUNT}`]: pending,
     });
     await open();
-    fireEvent.click(screen.getByRole('button', { name: 'New subscriber' }));
-    const dialog = await screen.findByRole('dialog', { name: 'New subscriber' });
+    fireEvent.click(screen.getByRole('button', { name: 'New billing account' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New billing account' });
     fireEvent.change(within(dialog).getByLabelText('Given name'), { target: { value: 'Olga' } });
     fireEvent.change(within(dialog).getByLabelText('Family name'), { target: { value: 'K' } });
     fireEvent.change(within(dialog).getByLabelText('Credit limit, USD (optional)'), {
@@ -564,7 +564,7 @@ describe('new subscriber', () => {
     fireEvent.click(within(dialog).getByRole('radio', { name: 'Prepaid' }));
     expect(within(dialog).queryByLabelText('Credit limit, USD (optional)')).toBeNull();
     expect(within(dialog).queryByLabelText('Billing cycle day (1-28)')).toBeNull();
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Create subscriber' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create billing account' }));
     await screen.findByRole('status');
     const account = bodies(fetchMock)[2];
     expect(account?.[1]).toBe(
@@ -583,14 +583,14 @@ describe('new subscriber', () => {
       [`GET ${ACCOUNTS}/${NEW_ACCOUNT}`]: pending,
     });
     await open();
-    fireEvent.click(screen.getByRole('button', { name: 'New subscriber' }));
-    const dialog = await screen.findByRole('dialog', { name: 'New subscriber' });
+    fireEvent.click(screen.getByRole('button', { name: 'New billing account' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New billing account' });
     fireEvent.click(within(dialog).getByRole('radio', { name: 'Organization' }));
     fireEvent.change(within(dialog).getByLabelText('Organization name'), {
       target: { value: 'Vasilek LLC' },
     });
     fireEvent.change(within(dialog).getByLabelText('Account name'), { target: { value: 'HQ' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Create subscriber' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create billing account' }));
     await screen.findByRole('status');
     const [party, , account] = bodies(fetchMock);
     expect(party).toEqual([
@@ -603,11 +603,11 @@ describe('new subscriber', () => {
 
   const fillOlga = async () => {
     await open();
-    fireEvent.click(screen.getByRole('button', { name: 'New subscriber' }));
-    const dialog = await screen.findByRole('dialog', { name: 'New subscriber' });
+    fireEvent.click(screen.getByRole('button', { name: 'New billing account' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New billing account' });
     fireEvent.change(within(dialog).getByLabelText('Given name'), { target: { value: 'Olga' } });
     fireEvent.change(within(dialog).getByLabelText('Family name'), { target: { value: 'K' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Create subscriber' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create billing account' }));
     return dialog;
   };
   const deletes = (fetchMock: ReturnType<typeof stubFetch>['fetchMock']) =>
@@ -633,7 +633,7 @@ describe('new subscriber', () => {
       [CUSTOMER_URL, null],
       [PARTY_URL, null],
     ]);
-    expect(window.location.pathname).toBe('/subscribers');
+    expect(window.location.pathname).toBe('/billing-accounts');
   });
 
   it('deletes the party when the customer step fails', async () => {
@@ -687,7 +687,7 @@ describe('subscribers inspector (>= 1536 px)', () => {
     await open();
     await screen.findByText('Ivan Petrov');
     fireEvent.click(rowOf(/Ivan Petrov/) as HTMLElement);
-    expect(window.location.pathname).toBe(`/subscribers/${A1}`);
+    expect(window.location.pathname).toBe(`/billing-accounts/${A1}`);
     expect(document.querySelector('[data-ui="ui.subscribers.inspector"]')).toBeNull();
   });
 
@@ -698,7 +698,7 @@ describe('subscribers inspector (>= 1536 px)', () => {
     await screen.findByText('Ivan Petrov');
     const before = fetchMock.mock.calls.length;
     fireEvent.click(rowOf(/Ivan Petrov/) as HTMLElement);
-    expect(window.location.pathname).toBe('/subscribers');
+    expect(window.location.pathname).toBe('/billing-accounts');
     expect(rowOf(/Ivan Petrov/)?.getAttribute('aria-selected')).toBe('true');
     const inspector = expectUi('ui.subscribers.inspector');
     expect(within(inspector).getByRole('heading', { name: 'Ivan Petrov' })).toBeTruthy();
@@ -717,12 +717,12 @@ describe('subscribers inspector (>= 1536 px)', () => {
     await screen.findByText('Ivan Petrov');
     const ivan = rowOf(/Ivan Petrov/) as HTMLElement;
     fireEvent.keyDown(ivan, { key: 'Enter' });
-    expect(window.location.pathname).toBe(`/subscribers/${A1}`);
-    window.history.replaceState(null, '', '/subscribers');
+    expect(window.location.pathname).toBe(`/billing-accounts/${A1}`);
+    window.history.replaceState(null, '', '/billing-accounts');
     window.dispatchEvent(new PopStateEvent('popstate'));
-    await screen.findByRole('heading', { name: 'Subscribers' });
+    await screen.findByRole('heading', { name: 'Billing accounts' });
     fireEvent.doubleClick(rowOf(/Anna Smirnova/) as HTMLElement);
-    expect(window.location.pathname).toBe(`/subscribers/${A2}`);
+    expect(window.location.pathname).toBe(`/billing-accounts/${A2}`);
   });
 
   it('opens the card from Open account', async () => {
@@ -734,7 +734,7 @@ describe('subscribers inspector (>= 1536 px)', () => {
     fireEvent.click(
       within(expectUi('ui.subscribers.inspector')).getByRole('button', { name: 'Open account' }),
     );
-    expect(window.location.pathname).toBe(`/subscribers/${A1}`);
+    expect(window.location.pathname).toBe(`/billing-accounts/${A1}`);
   });
 
   it('closes on Escape', async () => {

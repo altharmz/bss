@@ -72,7 +72,7 @@ describe('session boundary', () => {
       stubFetch({ [`GET ${SESSION}`]: () => json(admin) });
       start(`/sign-in?next=${encodeURIComponent(next)}`);
       await screen.findByText('Protected content');
-      await waitFor(() => expect(window.location.pathname).toBe('/subscribers'));
+      await waitFor(() => expect(window.location.pathname).toBe('/billing-accounts'));
     },
   );
 
