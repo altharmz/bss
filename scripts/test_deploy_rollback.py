@@ -17,6 +17,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -503,6 +504,19 @@ FAIL_POINTS = [
     "oauth-smoke",
 ]
 REMOVE_ONEOFFS = r"label=com\.docker\.compose\.oneoff=True.*docker rm -f"
+
+
+class EdgeSmoke(DeployHarness):
+    def test_web_smoke_defaults_to_the_mcp_host_that_resolves(self):
+        # vpn2811.duckdns.org stopped resolving (NXDOMAIN) and failed the fd7ee52 deploy
+        # (#453); bss2811 reaches the same Caddy through the host's SNI router on 443.
+        env = {k: v for k, v in CLEAN_ENV.items() if k not in ("WEB_URL", "MCP_URL")}
+        with unittest.mock.patch.dict(CLEAN_ENV, env, clear=True):
+            rules = self.deployed_rules(self.base_rules())
+            self.assertEqual(self.run_deploy(rules), 0, self.out)
+        self.assertCalled(rf"web-smoke\.sh https://bss2811\.duckdns\.org {NEW}$")
+        self.assertCalled(r"mcp-smoke\.sh https://bss2811\.duckdns\.org caddy")
+        self.assertNotIn("vpn2811", "\n".join(self.calls) + self.out)
 
 
 class Drills(DeployHarness):

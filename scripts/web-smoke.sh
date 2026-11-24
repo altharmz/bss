@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The admin UI and its API routes through the shared Caddy, as a browser sees them.
 # Usage: BSS_SMOKE_SECRET=<hex> scripts/web-smoke.sh <base url> <expected build>
-#   e.g. scripts/web-smoke.sh https://vpn2811.duckdns.org:8445 1a02efa
+#   e.g. scripts/web-smoke.sh https://bss2811.duckdns.org 1a02efa
 #
 # Caddy asks for no login (vps-infra U11); the app is the only boundary
 # (docs/decisions/users.md). The smoke secret goes to it as X-Bss-Service, read-only
