@@ -1,4 +1,5 @@
-"""GitHub facts per task for effectiveness analysis: PR size, labels, epic, follow-ups.
+"""GitHub facts per task for effectiveness analysis: PR size, labels, priority, epic,
+follow-ups.
 
 Content-free: numbers, counts, label names and timestamps only. No titles, bodies or
 diffs leave GitHub's answer. Facts are GitHub's current view, so a refresh replaces the
@@ -15,6 +16,7 @@ import re
 import subprocess
 import sys
 
+from task_board import PRIORITIES, PROJECT
 from task_telemetry import literal, sql
 
 REPO = "altharmz/bss"
@@ -23,6 +25,9 @@ LABEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9 _.:/+-]{0,49}")
 REFERENCES = """query($number: Int!) { repository(owner: "altharmz", name: "bss") {
   issue(number: $number) {
     parent { number }
+    projectItems(first: 20) { nodes { project { id }
+      fieldValueByName(name: "Priority") { ... on ProjectV2ItemFieldSingleSelectValue { name } }
+    } }
     timelineItems(itemTypes: [CROSS_REFERENCED_EVENT], first: 100) { nodes {
       ... on CrossReferencedEvent { source {
         __typename
@@ -40,6 +45,15 @@ def gh(*args):
 def labels(nodes):
     names = sorted({n["name"] for n in nodes if isinstance(n, dict) and "name" in n})
     return [name for name in names if LABEL.fullmatch(name)]
+
+
+def board_priority(graph):
+    """The issue's Priority field on the BSS board, or None when empty or not on it."""
+    for item in (graph.get("projectItems") or {}).get("nodes") or []:
+        if ((item or {}).get("project") or {}).get("id") == PROJECT:
+            name = (item.get("fieldValueByName") or {}).get("name")
+            return name if name in PRIORITIES else None
+    return None
 
 
 def facts(task, fetch=gh):
@@ -95,6 +109,7 @@ def facts(task, fetch=gh):
         "changed_files": int(pr["changedFiles"]),
         "commits": len(pr["commits"]),
         "labels": labels(issue_data.get("labels", [])),
+        "priority": board_priority(graph),
         "epic": int(parent["number"]) if parent.get("number") else None,
         "merged_at": pr["mergedAt"],
         "followups": sorted(followups, key=lambda f: f["number"]),
@@ -114,10 +129,13 @@ def facts_sql(task, data):
         raise ValueError("invalid merge time")
     if type(data["reverted"]) is not bool:
         raise ValueError("invalid revert flag")
+    if data["priority"] is not None and data["priority"] not in PRIORITIES:
+        raise ValueError("invalid priority")
     values = {
         **{k: str(data[k]) for k in ("pr_number", "additions", "deletions", "changed_files")},
         "commits": str(data["commits"]),
         "labels": literal(json.dumps(data["labels"])) + "::jsonb",
+        "priority": "NULL" if data["priority"] is None else literal(data["priority"]),
         "epic": "NULL" if data["epic"] is None else str(data["epic"]),
         "merged_at": literal(data["merged_at"]) + "::timestamptz",
         "followups": literal(json.dumps(data["followups"])) + "::jsonb",

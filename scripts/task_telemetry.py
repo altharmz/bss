@@ -370,7 +370,7 @@ def main():
         if args.action in {"up", "migrate", "prices"}:
             load_prices()
         if args.action == "health":
-            sql("SELECT 1 / count(*) FROM schema_versions WHERE version = 5;")
+            sql("SELECT 1 / count(*) FROM schema_versions WHERE version = 6;")
     except (OSError, RuntimeError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
         print(
             "telemetry: management failed; check local Docker and telemetry schema", file=sys.stderr

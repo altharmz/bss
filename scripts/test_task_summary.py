@@ -20,6 +20,7 @@ def task(issue, tokens, cost, complete=True, priced=True, model="claude-opus-5-5
         "friction": {"commit": 1, "create-pr": 2},
         "facts": {
             "labels": ["P1", "agent:claude", *labels],
+            "priority": "P2",
             "epic": 182,
             "additions": 90,
             "deletions": 10,
@@ -35,6 +36,7 @@ class SummaryTests(unittest.TestCase):
     def test_row_keeps_area_labels_and_counts_friction_and_bugs(self):
         r = task_summary.row(task(185, 1000, "2.00", labels=("mvno",)))
         self.assertEqual(r["labels"], ["mvno"])
+        self.assertEqual(r["priority"], "P2")
         self.assertEqual(r["failed_attempts"], 3)
         self.assertEqual(r["followup_bugs"], 1)
 
@@ -64,6 +66,7 @@ class SummaryTests(unittest.TestCase):
         text = task_summary.table(summary)
         self.assertIn("~0.0M", text)
         self.assertIn("partial", text)
+        self.assertIn("#3     P2", text)
 
 
 if __name__ == "__main__":

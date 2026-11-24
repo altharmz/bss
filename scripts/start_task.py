@@ -19,18 +19,22 @@ import unicodedata
 import task_testmon
 from task_board import (
     DOING,
+    PRIORITIES,
     PROJECT,
     READY,
     add_to_board,
+    board_item,
     nodes,
     ownership,
     pages,
+    priority,
     query,
     set_status,
     settled_snapshot,
     snapshot,
     status,
     wait_for_board_item,
+    write_priority,
 )
 from task_repo import (
     StartupError,
@@ -121,12 +125,9 @@ def select_issue(items, represented, requested=None):
             continue
         if any(n["state"] == "OPEN" for n in nodes(issue["closedByPullRequestsReferences"])):
             continue
-        priority = labels & {"P0", "P1", "P2", "P3"} or {"P3"}
-        if len(priority) != 1:
-            raise StartupError(
-                f"ambiguous priority for Ready issue #{issue['number']}: need one P0–P3"
-            )
-        choices.append((int(next(iter(priority))[1]), position, dict(issue, item_id=item["id"])))
+        # The Priority field; an empty one counts as P3.
+        rank = list(PRIORITIES).index(priority(item) or "P3")
+        choices.append((rank, position, dict(issue, item_id=item["id"])))
     if not choices:
         if requested is not None:
             raise StartupError(
@@ -211,9 +212,7 @@ def new_task_request():
         )
     )
     if any(
-        re.fullmatch(r"P[0-3]", label)
-        or label.startswith("agent:")
-        or label in {"blocked", "needs-human"}
+        label in PRIORITIES or label.startswith("agent:") or label in {"blocked", "needs-human"}
         for label in labels
     ):
         raise StartupError("new-priority-task LABELS cannot set priority, ownership or gates")
@@ -221,7 +220,7 @@ def new_task_request():
 
 
 def prioritize(number, url, title):
-    """Put an existing P0 issue on the board as the first Ready item."""
+    """Give the issue Priority P0 and put it on the board as the first Ready item."""
     try:
         created = wait_for_board_item(number, float(os.environ.get("BSS_BOARD_ADD_WAIT", "20")))
         if created is None:
@@ -234,7 +233,8 @@ def prioritize(number, url, title):
             created = wait_for_board_item(number, 5)
         if created is None:
             raise StartupError("new issue did not appear on the BSS board")
-        set_status(dict(created, item_id=created["id"]), READY)
+        write_priority({"item_id": created["id"]}, "P0")
+        set_status({"item_id": created["id"]}, READY)
         query(
             """mutation($project: ID!, $item: ID!) {
               updateProjectV2ItemPosition(input: {projectId: $project, itemId: $item}) {
@@ -250,6 +250,7 @@ def prioritize(number, url, title):
             or items[0]["id"] != created["id"]
             or status(items[0]) != "Ready"
             or items[0]["content"]["number"] != number
+            or priority(items[0]) != "P0"
         ):
             raise StartupError("new issue is not first in Ready after prioritization")
         return {
@@ -267,7 +268,8 @@ def prioritize(number, url, title):
 
 
 def existing_priority_issue(number):
-    """A preserved issue to finish: open, P0, unclaimed (never someone's active work)."""
+    """A preserved issue to finish: open, unclaimed (never someone's active work), with
+    Priority P0 or still empty (creation stopped before the field was set)."""
     data = json.loads(
         run(
             "gh",
@@ -281,10 +283,13 @@ def existing_priority_issue(number):
         ).stdout
     )
     labels = {label["name"] for label in data["labels"]}
-    if data["number"] != number or data["state"] != "OPEN" or "P0" not in labels:
-        raise StartupError(f"#{number} is not an open P0 issue")
+    if data["number"] != number or data["state"] != "OPEN":
+        raise StartupError(f"#{number} is not an open issue")
     if any(label.startswith("agent:") for label in labels):
         raise StartupError(f"#{number} is already claimed by an agent")
+    item = board_item(number)
+    if item is not None and priority(item) not in (None, "P0"):
+        raise StartupError(f"#{number} has Priority {priority(item)}, not P0")
     return data["url"], data["title"]
 
 
@@ -303,8 +308,6 @@ def create_priority_task(request):
         title,
         "--body",
         body,
-        "--label",
-        "P0",
     ]
     for label in labels:
         args.extend(["--label", label])

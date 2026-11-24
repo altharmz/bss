@@ -10,7 +10,7 @@ TASK = "issue-185-payment-gateway"
 PRIVATE = "private title or body text"
 
 
-def fake(prs, labels=(), references=(), parent=None):
+def fake(prs, labels=(), references=(), parent=None, items=()):
     def fetch(*args):
         if args[:2] == ("pr", "list"):
             return prs
@@ -21,6 +21,7 @@ def fake(prs, labels=(), references=(), parent=None):
                 "repository": {
                     "issue": {
                         "parent": parent,
+                        "projectItems": {"nodes": list(items)},
                         "timelineItems": {"nodes": [{"source": r} for r in references]},
                     }
                 }
@@ -70,7 +71,11 @@ class FactsTests(unittest.TestCase):
                 "title": "self",
             },
         ]
-        data = task_facts.facts(TASK, fake([PR], ["mvno", "P1"], references, {"number": 182}))
+        items = [
+            {"project": {"id": "PVT_other"}, "fieldValueByName": {"name": "P3"}},
+            {"project": {"id": task_facts.PROJECT}, "fieldValueByName": {"name": "P1"}},
+        ]
+        data = task_facts.facts(TASK, fake([PR], ["mvno"], references, {"number": 182}, items))
         self.assertEqual(
             data,
             {
@@ -79,7 +84,8 @@ class FactsTests(unittest.TestCase):
                 "deletions": 20,
                 "changed_files": 47,
                 "commits": 2,
-                "labels": ["P1", "mvno"],
+                "labels": ["mvno"],
+                "priority": "P1",
                 "epic": 182,
                 "merged_at": "2026-11-05T19:51:32Z",
                 "followups": [
@@ -93,6 +99,18 @@ class FactsTests(unittest.TestCase):
         self.assertNotIn(PRIVATE, statement)
         self.assertNotIn("Revert", statement)
         self.assertIn("ON CONFLICT (task_id) DO UPDATE", statement)
+        self.assertIn("'P1'", statement)
+
+    def test_priority_is_none_when_empty_or_off_the_board(self):
+        for items in (
+            [],
+            [{"project": {"id": "PVT_other"}, "fieldValueByName": {"name": "P0"}}],
+            [{"project": {"id": task_facts.PROJECT}, "fieldValueByName": None}],
+        ):
+            with self.subTest(items=items):
+                data = task_facts.facts(TASK, fake([PR], items=items))
+                self.assertIsNone(data["priority"])
+                self.assertIn("NULL", task_facts.facts_sql(TASK, data))
 
     def test_unmerged_task_has_no_facts(self):
         self.assertIsNone(task_facts.facts(TASK, fake([])))
@@ -107,6 +125,7 @@ class FactsTests(unittest.TestCase):
             {"epic": "1; DROP"},
             {"merged_at": "yesterday'"},
             {"reverted": "yes"},
+            {"priority": "P1'; DROP"},
         ):
             with self.subTest(change=change), self.assertRaises(ValueError):
                 task_facts.facts_sql(TASK, {**good, **change})

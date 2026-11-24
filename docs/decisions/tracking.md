@@ -1,4 +1,4 @@
-# Tracking: progress tracker and UI/MCP parity
+# Tracking: progress tracker, UI/MCP parity and board priority
 
 Index: [README.md](README.md).
 
@@ -47,3 +47,26 @@ entry. A path taken from a variable at run time is declared next to the call as
 (orders alone), detail reads that list rows already carry, and probes without a screen
 (`healthz`, `billing_status`, `extension_schema`). The scan matches method and path
 template, not query parameters or bodies.
+
+## Board priority
+
+**The board's Priority field is the one source of priority** (2026-11-24, #468). Priority
+was a `P0`-`P3` label; nothing stopped an issue from carrying two or none, labels neither
+sort nor group on the board, and they crowded the label list. The project's single-select
+**Priority** field (P0-P3, IDs in [board.md](../board.md)) holds exactly one value per
+item and is what the board shows, so it replaced the labels: the field was re-synced from
+the labels for every open item, then the labels were removed from the issues and deleted
+from the repository.
+
+- `make start-task` ranks eligible Ready items by the field (P0 first; empty counts as P3),
+  then by board order. A value outside P0-P3 stops selection instead of guessing.
+- `make set-priority` (still behind `HUMAN_APPROVAL=<issue>`), `make add-task PRIORITY=`
+  and `make new-priority-task` (always P0) write the field and confirm it by reading the
+  board again; `LABELS=` refuses `P0`-`P3` so a stale habit cannot recreate a label.
+  `make new-priority-task ISSUE=<n>` finishes a preserved issue whose field is P0 or
+  still empty (creation stopped before the field was set), never one with another value.
+- `make board` shows each item's field value, and task facts record it (`priority` in
+  `task_facts`, telemetry schema 6), so `make telemetry-summary` shows it per issue.
+  Facts captured earlier keep their `P0`-`P3` labels and an empty `priority`.
+- The nightly CI report cannot write the owner's project with the run's token, so its
+  issue arrives with an empty field and triage sets it.
