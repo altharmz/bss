@@ -6,7 +6,8 @@ TMF678 bills carry `paymentDueDate` and a state only, and TMF has no dunning API
   change applies to the steps not yet taken.
 - `GET /internal/v1/dunning/accounts`: the accounts in dunning, oldest O first, with the amount
   past due, the last step and, once suspended, whether the account is a deactivation candidate
-  (suspended more than 60 days: postpaid lines are never ended automatically).
+  (suspended more than 60 days: postpaid lines are never ended automatically). Filters: `step`,
+  `deactivationCandidate=true` and `billingAccount.id` (#466, the bill list's name).
 - `GET/PATCH /internal/v1/billingAccount/{id}/dunning`: the account's dunning state (O, the
   steps taken, the next step and its date) and its exemption, set with an audit row.
 """
@@ -14,6 +15,7 @@ TMF678 bills carry `paymentDueDate` and a state only, and TMF has no dunning API
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Annotated, Any
+from uuid import UUID
 
 import psycopg
 from fastapi import APIRouter, Request
@@ -133,6 +135,16 @@ def _one(request: Request, name: str, allowed: tuple[str, ...]) -> str | None:
     return given[0] if given else None
 
 
+def _account_filter(request: Request) -> UUID | None:
+    given = request.query_params.getlist("billingAccount.id")
+    if len(given) > 1:
+        raise bad_request("billingAccount.id given more than once")
+    try:
+        return UUID(given[0]) if given else None
+    except ValueError:
+        raise bad_request("billingAccount.id must be a UUID") from None
+
+
 def _candidate(suspended_since: date | None, today: date) -> bool:
     return (
         suspended_since is not None and (today - suspended_since).days > DEACTIVATION_CANDIDATE_DAYS
@@ -141,15 +153,25 @@ def _candidate(suspended_since: date | None, today: date) -> bool:
 
 @router.get("/dunning/accounts")
 def list_dunning_accounts(request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
-    offset, limit = parse_page(request, extra=("step", "deactivationCandidate"))
+    offset, limit = parse_page(
+        request, extra=("step", "deactivationCandidate", "billingAccount.id")
+    )
     step = _one(request, "step", LAST_STEPS)
+    account = _account_filter(request)
     candidates = _one(request, "deactivationCandidate", ("true",)) is not None
     today = clock.today()
     with tx() as conn:
         minimum = repo.get_row(conn)["minimum_overdue"]
         by = today - timedelta(days=DEACTIVATION_CANDIDATE_DAYS + 1) if candidates else None
         rows, more = repo.page(
-            conn, today, minimum, step=step, suspended_by=by, offset=offset, limit=limit
+            conn,
+            today,
+            minimum,
+            step=step,
+            suspended_by=by,
+            account_id=account,
+            offset=offset,
+            limit=limit,
         )
     items = [
         {

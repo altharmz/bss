@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { App } from '../app/App';
+import { accountSearchRoute, searchAccount } from '../test/accountSearch';
 import { expectUi } from '../test/expectUi';
 import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, type Handler } from '../test/fetch';
 
@@ -180,6 +181,40 @@ describe('balances screen', () => {
     fireEvent.click(screen.getByLabelText('Remove the account filter'));
     expect(await screen.findByText('Jan Petrov')).toBeTruthy();
     expect(calls).toContain(`GET ${BUCKETS}?${LIST}`);
+  });
+
+  it('searches a billing account on every tab, back on the first page, and clears it', async () => {
+    // #466: the search sets ?account= and the chip; a filter change resets paging
+    const many = Array.from({ length: 51 }, (_, i) => bucket(`b${i}`, OLGA, 'active', i));
+    const { calls } = backend({
+      [`GET ${BUCKETS}?${LIST}`]: () => json(many.slice(0, 50), { more: true }),
+      [`GET ${BUCKETS}?offset=50&limit=50`]: () => json(many.slice(50)),
+      [`GET ${BUCKETS}?partyAccount.id=${A2}&${LIST}`]: () => json([B_JAN]),
+      [`GET ${ACC}?partyAccount.id=${A2}&${LIST}`]: () => json([AB_JAN]),
+      [`GET ${PREPAY}/topupBalance?partyAccount.id=${A2}&${LIST}`]: () =>
+        json([{ ...topup, partyAccount: JAN }]),
+      [`GET ${PREPAY}/topupBalance?${LIST}`]: () => json([topup]),
+      ...accountSearchRoute('jan', A2, 'Jan Petrov'),
+    });
+    open('/balances');
+    expect(await screen.findByText('Showing 1–50')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(await screen.findByText('Showing 51–51')).toBeTruthy();
+    await searchAccount('ui.balances', 'jan', 'Jan Petrov');
+    expect(window.location.search).toBe(`?account=${A2}`);
+    expect(await screen.findByText('Showing 1–1')).toBeTruthy();
+    expect(calls).toContain(`GET ${BUCKETS}?partyAccount.id=${A2}&${LIST}`);
+    tab('Account totals');
+    await waitFor(() => expect(calls).toContain(`GET ${ACC}?partyAccount.id=${A2}&${LIST}`));
+    tab('Top-ups');
+    await waitFor(() =>
+      expect(calls).toContain(`GET ${PREPAY}/topupBalance?partyAccount.id=${A2}&${LIST}`),
+    );
+    const chip = expectUi('ui.balances.accountChip');
+    fireEvent.click(within(chip).getByRole('button', { name: 'Remove the account filter' }));
+    expect(await screen.findByText('Olga Kuznetsova')).toBeTruthy();
+    expect(calls).toContain(`GET ${PREPAY}/topupBalance?${LIST}`);
+    expect(window.location.search).toBe('');
   });
 
   it('pages buckets and totals with Previous and Next', async () => {

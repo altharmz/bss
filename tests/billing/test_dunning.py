@@ -461,6 +461,12 @@ def test_the_dunning_list_shows_the_accounts_with_their_last_step_and_candidates
     assert all(r["overdueSince"] == OVERDUE.isoformat() for r in rows)
     assert api.get(f"{LIST}?step=suspend").json() == []
     assert api.get(f"{LIST}?step=bogus").status_code == 400
+    # #466: one account's row, by the bill list's filter name
+    only = api.get(f"{LIST}?billingAccount.id={second['id']}").json()
+    assert [r["billingAccount"]["id"] for r in only] == [second["id"]]
+    assert api.get(f"{LIST}?billingAccount.id=nope").status_code == 400
+    one = f"billingAccount.id={first['id']}"
+    assert api.get(f"{LIST}?{one}&{one}").status_code == 400
     page = api.get(f"{LIST}?limit=1")
     assert len(page.json()) == 1 and 'rel="next"' in page.headers.get("Link", "")
     day(api, worker, OVERDUE + timedelta(days=14))

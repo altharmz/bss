@@ -53,6 +53,8 @@ export function saveDunningSettings(change: DunningChange): Promise<DunningSetti
 export interface DunningFilter {
   step: LastStep | null;
   candidates: boolean;
+  /** one billing account (#466) */
+  account: string | null;
 }
 
 /** One page of the accounts in dunning, oldest O first (the server's order). */
@@ -64,6 +66,7 @@ export async function loadDunningAccounts(
   const query = new URLSearchParams();
   if (filter.step !== null) query.set('step', filter.step);
   if (filter.candidates) query.set('deactivationCandidate', 'true');
+  if (filter.account !== null) query.set('billingAccount.id', filter.account);
   query.set('offset', String(offset));
   query.set('limit', String(DUNNING_PAGE));
   return { ...(await getPage<DunningAccount>(`${DUNNING_ACCOUNTS}?${query}`, signal)), offset };

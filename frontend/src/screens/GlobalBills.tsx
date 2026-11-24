@@ -16,13 +16,14 @@ import { formatInt, toCents } from '../format/money';
 import { Amount } from '../ui/Amount';
 import { runTriggerLabel } from '../format/labels';
 import { statusPresentation } from '../ui/status';
-import { Coded, PageHeader, Panel, StatusPill, Segmented, DateField, IconButton } from '../ui/kit';
+import { Coded, PageHeader, Panel, StatusPill, Segmented, DateField } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import { PageFooter, usePageOffset } from '../ui/paging';
 import { BillDialog } from './Bills';
 import { CycleDialog } from './BillLinks';
 import './screens.css';
+import { AccountFilter, useAccountFilter } from './AccountFilter';
 
 // Global bills and bill cycles (docs/ui.md): TMF678 reads, plus
 // the existing bill dialog (hold/release PATCH). Bills page on the server, newest first,
@@ -47,20 +48,14 @@ const CYCLE_COLUMNS: Column[] = [
 type Tab = 'bills' | 'cycles';
 type StateFilter = BillStateFilter | 'all';
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function accountFromUrl(): string | null {
-  const value = new URLSearchParams(window.location.search).get('account');
-  return value !== null && UUID.test(value) ? value.toLowerCase() : null;
-}
-
 /** The global Bills screen: Bills and Bill cycles tabs. */
 export function BillsScreen() {
   useSetCrumbs([{ label: 'Bills' }], 'bills');
   const { timeZone } = useSystemContext();
   const [tab, setTab] = useState<Tab>('bills');
   const [state, setState] = useState<StateFilter>('all');
-  const [account, setAccount] = useState<string | null>(accountFromUrl);
+  const accountFilter = useAccountFilter('/bills');
+  const { account } = accountFilter;
   const [date, setDate] = useState('');
   const [version, setVersion] = useState(0);
   const [openBill, setOpenBill] = useState<BillRow | null>(null);
@@ -73,14 +68,10 @@ export function BillsScreen() {
   );
   const cycles = useResource('bill-cycles', (signal) => loadBillCycles(signal));
 
-  const dropAccount = () => {
-    window.history.replaceState(null, '', '/bills');
-    setAccount(null);
-  };
   const reset = () => {
     setState('all');
     setDate('');
-    if (account !== null) dropAccount();
+    if (account !== null) accountFilter.drop();
   };
   const name =
     bills.status === 'ok'
@@ -135,12 +126,7 @@ export function BillsScreen() {
             />
           </>
         )}
-        {tab === 'bills' && account !== null && (
-          <span className="bss-run-tag" data-ui="ui.bills.accountChip">
-            Account {name ?? <Id id={account} prefix="BA-" />}{' '}
-            <IconButton icon="x" small label="Remove the account filter" onClick={dropAccount} />
-          </span>
-        )}
+        {tab === 'bills' && <AccountFilter ui="ui.bills" filter={accountFilter} name={name} />}
       </div>
       <Panel>
         {tab === 'bills' ? (

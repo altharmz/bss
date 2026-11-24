@@ -653,7 +653,8 @@ Ledger v2: command StatusPill uses the `command` kind mapping (Queued, Completed
 Route `/prepaid-commands`, sidebar Prepaid > Prepaid commands with a red badge while any command is
 `failedTechnical`. Lists the internal prepaid command journal (id, kind, account, state, due date,
 attempts, next retry, result), 50 per page, filtered by state and by `?account=<id>` (a removable
-chip; the card's "Commands" link, `ui.subscriber.prepaid.commands`, sets it). A row opens every
+chip; the card's "Commands" link, `ui.subscriber.prepaid.commands`, sets it, and so does the account
+search `ui.prepaidCommands.accountSearch`, #466). A row opens every
 field and the `needs_topup` block (`ui.prepaidCommands.needsTopup`); **Retry** appears only for
 `failedTechnical` (POST `.../retry`, no body; a 409 is shown).
 
@@ -764,7 +765,7 @@ Ledger v2: bill StatusPill; hold actions use quiet negative buttons.
 Reads plus the existing bill dialog. Route `/bills`, sidebar Billing > Bills (no count): tabs **Bills** |
 **Bill cycles**. Bills: bill no., subscriber (link), billing date, state, total, kind (`runType`:
 onCycle/offCycle); filters: state (server), account chip (`?account=<id>`, sent as `billingAccount.id`,
-`ui.bills.accountChip`) and a billing date applied client side. A row opens the bill dialog (hold/release as
+`ui.bills.accountChip`; the account search `ui.bills.accountSearch` sets it, #466) and a billing date applied client side. A row opens the bill dialog (hold/release as
 on the card), whose **Related** section (`ui.bills.links`) has **Bill cycle** (`GET billCycle/{id}`,
 `ui.bills.cycleDetail`) and **Rates** (`GET appliedCustomerBillingRate?bill.id=`; a row opens
 `ui.bills.rateDetail`, the raw GET). The Bill cycles tab lists `GET billCycle` (name, billing date, payment
@@ -788,7 +789,9 @@ tabs **In dunning** (a **Last step** filter on the server: No step yet, First re
 reminder, Suspended) and **Deactivation candidates** (suspended more than 60 days; ended by an
 operator). Columns: subscriber (link to the card's Bills tab), overdue since (O), past due, last
 step (with a Candidate tag), suspended since; oldest O first, paged with Previous/Next
-(`ui.dunning.previous|next`). API: `GET /internal/v1/dunning/accounts?step=&deactivationCandidate=true`.
+(`ui.dunning.previous|next`). Both tabs take an account filter (#466): the account search
+(`ui.dunning.accountSearch`) or a `?account=<id>` link sets the removable chip (`ui.dunning.accountChip`).
+API: `GET /internal/v1/dunning/accounts?step=&deactivationCandidate=true&billingAccount.id=`.
 
 Billing settings has a **Dunning** tab (`ui.billingSettings.dunning`): the days after O of the
 first reminder, the second reminder and the suspension, the minimum past due (in the system
@@ -818,7 +821,7 @@ above Recorded refunds; a row opens the payment read with `GET /payment/{id}`
 (`ui.payments.detail`: total, net, tax, method, references, and the bills it paid). Route
 `/payments`, sidebar Billing > Payments (no count): tabs **Payments** | **Refunds**, a status filter
 (`done`, the only status), an account chip (`?account=<id>`, sent as `account.id`,
-`ui.payments.accountChip`) and From/To dates applied client side to the loaded rows (business dates).
+`ui.payments.accountChip`; the account search `ui.payments.accountSearch` sets it, #466) and From/To dates applied client side to the loaded rows (business dates).
 Subscribers link to their cards. API: `GET .../payment/v4/payment|refund?account.id=&status=` (paged
 100 at a time), `GET .../payment/{id}`.
 
@@ -835,7 +838,7 @@ in a KeyValue detail; both show the returned currency. The account filter applie
 they have no status filter. The other tabs each have a status filter
 (`ui.balances.status`; buckets: active, suspended, expired; actions: created, completed,
 cancelled, failed) and an account chip (`?account=<id>`, `ui.balances.accountChip`, sent as
-`partyAccount.id`). Buckets: `GET bucket` joined with `GET accumulatedBalance` by account
+`partyAccount.id`; the account search `ui.balances.accountSearch` sets it on every tab, #466). Buckets: `GET bucket` joined with `GET accumulatedBalance` by account
 (Subscriber, Remaining, Reserved, Total, Status); a row opens the bucket detail
 (`ui.balances.bucketDetail`: `GET bucket/{id}` and `GET accumulatedBalance/{id}`). The action tabs
 list `topupBalance`, `adjustBalance`, `reserveBalance`, `transferBalance` (a transfer's receiver is

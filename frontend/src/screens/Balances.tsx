@@ -1,4 +1,4 @@
-import { submitDialogPrimary, IconButton } from '../ui/kit';
+import { submitDialogPrimary } from '../ui/kit';
 import { useState } from 'react';
 import {
   loadBucketDetail,
@@ -30,6 +30,7 @@ import { TableHead, TableRow, type Column } from '../ui/Table';
 import { PageFooter, usePageOffset } from '../ui/paging';
 import { actionLabel, ActionDialog, statusLabel } from './PrepaidHistory';
 import './screens.css';
+import { AccountFilter, useAccountFilter } from './AccountFilter';
 
 // The global Balances screen (docs/decisions/frontend.md, slice 22): TMF654 reads only.
 // Buckets are joined with the accumulated balance of their account; the four action tabs
@@ -70,13 +71,6 @@ const TOTAL_COLUMNS: Column[] = [
   { key: 'total', label: 'Total', width: '180px', align: 'right', mono: true },
 ];
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function accountFromUrl(): string | null {
-  const value = new URLSearchParams(window.location.search).get('account');
-  return value !== null && UUID.test(value) ? value.toLowerCase() : null;
-}
-
 function stamp(instant: string, timeZone: string): string {
   return `${businessDate(instant, timeZone)} ${clockTime(instant, timeZone).slice(0, 5)}`;
 }
@@ -107,7 +101,8 @@ export function BalancesScreen() {
   const { timeZone } = useSystemContext();
   const [tab, setTab] = useState<Tab>('buckets');
   const [status, setStatus] = useState('');
-  const [account, setAccount] = useState<string | null>(accountFromUrl);
+  const accountFilter = useAccountFilter('/balances');
+  const { account } = accountFilter;
   const [version, setVersion] = useState(0);
   const [openBucket, setOpenBucket] = useState<BucketRow | null>(null);
   const [openTotal, setOpenTotal] = useState<string | null>(null);
@@ -130,13 +125,9 @@ export function BalancesScreen() {
     tab === 'totals' ? loadAccountTotalPage(account, offset, signal) : Promise.resolve(none),
   );
 
-  const dropAccount = () => {
-    window.history.replaceState(null, '', '/balances');
-    setAccount(null);
-  };
   const reset = () => {
     setStatus('');
-    if (account !== null) dropAccount();
+    if (account !== null) accountFilter.drop();
   };
   const changeTab = (next: Tab) => {
     setTab(next);
@@ -191,12 +182,7 @@ export function BalancesScreen() {
             ))}
           </SelectField>
         )}
-        {account !== null && (
-          <span className="bss-run-tag" data-ui="ui.balances.accountChip">
-            Account {name ?? <Id id={account} prefix="BA-" />}{' '}
-            <IconButton icon="x" small label="Remove the account filter" onClick={dropAccount} />
-          </span>
-        )}
+        <AccountFilter ui="ui.balances" filter={accountFilter} name={name} />
       </div>
       <Panel>
         {tab === 'totals' ? (

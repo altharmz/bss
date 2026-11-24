@@ -35,6 +35,7 @@ import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 import { Footer, useWrite } from './FinancialForms';
 import './screens.css';
+import { AccountFilter, useAccountFilter } from './AccountFilter';
 
 // Postpaid dunning (#386, docs/decisions/dunning.md): the Dunning screen under Billing (the
 // accounts in dunning with a step filter, and the deactivation candidates) and the subscriber
@@ -55,15 +56,27 @@ export function DunningScreen() {
   useSetCrumbs([{ label: 'Dunning' }], 'dunning');
   const [tab, setTab] = useState<Tab>('dunning');
   const [step, setStep] = useState<StepFilter>('all');
+  const accountFilter = useAccountFilter('/dunning');
+  const { account } = accountFilter;
   const filter = {
     step: tab === 'dunning' && step !== 'all' ? step : null,
     candidates: tab === 'candidates',
+    account,
   };
-  const filterKey = `${tab}:${filter.step ?? ''}`;
+  const filterKey = `${tab}:${filter.step ?? ''}:${account ?? ''}`;
   const [offset, setOffset] = usePageOffset(filterKey);
   const accounts = useResource(`dunning:${filterKey}:${offset}`, (signal) =>
     loadDunningAccounts(filter, offset, signal),
   );
+  const name =
+    accounts.status === 'ok'
+      ? (accounts.data.items.find((r) => r.billingAccount.id === account)?.billingAccount.name ??
+        null)
+      : null;
+  const reset = () => {
+    setStep('all');
+    if (account !== null) accountFilter.drop();
+  };
   return (
     <div className="bss-screen" data-ui="ui.dunning">
       <div className="bss-title-row">
@@ -91,6 +104,7 @@ export function DunningScreen() {
             ]}
           />
         )}
+        <AccountFilter ui="ui.dunning" filter={accountFilter} name={name} />
       </div>
       <Panel>
         {tab === 'candidates' && (
@@ -116,9 +130,9 @@ export function DunningScreen() {
                 }
           }
           // filtered on the server: an empty filtered page is "no matches"
-          count={(data) => (filter.step !== null ? 1 : data.items.length)}
+          count={(data) => (filter.step !== null || account !== null ? 1 : data.items.length)}
           rows={(data) => data.items}
-          onResetFilters={() => setStep('all')}
+          onResetFilters={reset}
         >
           {(rows, data) => (
             <>

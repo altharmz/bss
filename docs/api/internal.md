@@ -37,7 +37,7 @@
 | GET | `/internal/v1/customerBill/{bill_id}` | path: `bill_id` | - | 200 `BillDetail` | [`app/main.py`](../../app/main.py) |
 | GET | `/internal/v1/device` | query: `product.id` (required) | - | 200 `array of ProductDevice` | [`app/internal/devices.py`](../../app/internal/devices.py) |
 | GET | `/internal/v1/device/check` | query: `imei` (required) | - | 200 `DeviceCheck` | [`app/internal/devices.py`](../../app/internal/devices.py) |
-| GET | `/internal/v1/dunning/accounts` | query: `offset`, `limit`, `step`, `deactivationCandidate` | - | 200 `array of DunningAccount` | [`app/internal/dunning.py`](../../app/internal/dunning.py) |
+| GET | `/internal/v1/dunning/accounts` | query: `offset`, `limit`, `step`, `deactivationCandidate`, `billingAccount.id` | - | 200 `array of DunningAccount` | [`app/internal/dunning.py`](../../app/internal/dunning.py) |
 | GET | `/internal/v1/dunning/settings` | - | - | 200 `DunningSettings` | [`app/internal/dunning.py`](../../app/internal/dunning.py) |
 | PATCH | `/internal/v1/dunning/settings` | body: `application/merge-patch+json` | `object` | 200 `DunningSettings` | [`app/internal/dunning.py`](../../app/internal/dunning.py) |
 | GET | `/internal/v1/eventSubscription` | query: `offset`, `limit`, `api` | - | 200 `array of EventSubscription` | [`app/main.py`](../../app/main.py) |

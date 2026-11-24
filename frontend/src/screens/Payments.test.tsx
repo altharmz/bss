@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { App } from '../app/App';
+import { accountSearchRoute, searchAccount } from '../test/accountSearch';
 import { expectUi } from '../test/expectUi';
 import { accountBody, billsUrl, NO_SETTLEMENT } from '../test/fixtures';
 import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } from '../test/fetch';
@@ -147,6 +148,34 @@ describe('payments screen', () => {
     await waitFor(() => expect(calls).toContain(`GET ${PAYMENT}?status=done&${LIST}`));
     expect(await screen.findByText('Olga Kuznetsova')).toBeTruthy();
     expect(window.location.search).toBe('');
+  });
+
+  it('searches a billing account on both tabs, back on the first page, and clears it', async () => {
+    // #466: the search sets ?account= and the chip; a filter change resets paging
+    const { calls } = backend({
+      [`GET ${PAYMENT}?${LIST}`]: () => json([PAY2], { more: true }),
+      [`GET ${PAYMENT}?offset=50&limit=50`]: () => json([PAY1]),
+      [`GET ${PAYMENT}?account.id=${A1}&${LIST}`]: () => json([PAY1]),
+      [`GET ${REFUND}?account.id=${A1}&${LIST}`]: () => json([REFUND1]),
+      [`GET ${REFUND}?${LIST}`]: () => json([REFUND1]),
+      ...accountSearchRoute('ivan', A1, 'Ivan Ivanov'),
+    });
+    open('/payments');
+    await screen.findByText('Olga Kuznetsova');
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    await screen.findByText('Showing 51–51');
+    await searchAccount('ui.payments', 'ivan', 'Ivan Ivanov');
+    expect(window.location.search).toBe(`?account=${A1}`);
+    await waitFor(() => expect(calls).toContain(`GET ${PAYMENT}?account.id=${A1}&${LIST}`));
+    expect(await screen.findByText('Showing 1–1')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Refunds' }));
+    expect(await screen.findByText('Returned deposit')).toBeTruthy();
+    expect(calls).toContain(`GET ${REFUND}?account.id=${A1}&${LIST}`);
+    const chip = expectUi('ui.payments.accountChip');
+    fireEvent.click(within(chip).getByRole('button', { name: 'Remove the account filter' }));
+    await waitFor(() => expect(calls).toContain(`GET ${REFUND}?${LIST}`));
+    expect(window.location.search).toBe('');
+    expect(screen.queryByText(/Account Ivan/)).toBeNull();
   });
 
   it('pages with Previous and Next', async () => {
