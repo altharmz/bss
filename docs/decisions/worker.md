@@ -357,3 +357,8 @@ nothing. The usage feed and every notification waited for it.
 - **Accepted:** the finding queries read balances without the account locks, as #340's
   date-only retry does. A payment that lands after them marks the account, and the next
   tick evaluates it.
+- **Measured** on the 100k dataset, the first wake-up of a business date, old and new code
+  on the same restored dump: 28.6 min / 1.50M statements before, 6.7 min / 0.20M after
+  (8.7 min on the next date with the default command budget); the three passes 24 min ->
+  3.9 min. Products, lifecycle attempts, zero-balance dates and messages hash the same
+  ([loadtest-results.md](../loadtest-results.md#midnight-full-review-404)).
