@@ -220,7 +220,7 @@ describe('subscriber card', () => {
     backend({}, ACCOUNT);
     await open();
     const link = expectUi('ui.subscriber.orders');
-    expect(link.getAttribute('href')).toBe(`/orders?account=${ACCOUNT.id}`);
+    expect(link.getAttribute('href')).toBe(`/orders?account=${ACCOUNT.id}&state=all`);
   });
 
   it('links the account to its financial account', async () => {
@@ -678,7 +678,9 @@ describe('add product', () => {
 
     const toast = await screen.findByRole('status');
     expect(toast.textContent).toBe('Draft saved · Open in Orders');
-    expect(within(toast).getByRole('link').getAttribute('href')).toBe(`/orders?account=${A}`);
+    expect(within(toast).getByRole('link').getAttribute('href')).toBe(
+      `/orders?account=${A}&state=all`,
+    );
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(
       await within(expectUi('ui.subscriber.unfinishedOrders')).findByRole('button', {

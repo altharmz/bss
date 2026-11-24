@@ -758,12 +758,17 @@ def _order_body(page: OrderPage, row: Row) -> dict[str, Any]:
     ) | meta_body(row)
 
 
+# `state=a,b` lists orders in any of them (#455: the Orders screen opens on the unfinished
+# ones); every member must be a TMF622 ProductOrderStateType.
+ORDER_STATES = listing.AnyOf(frozenset(specschema.schemas(API)["ProductOrderStateType"]["enum"]))
+
+
 @router.get("/productOrder")
 def list_orders(request: Request, tx: Tx) -> TmfJSONResponse:
     query = listing.parse_list_query(
         request,
         filters={
-            "state": ("state", listing.as_str),
+            "state": ("state", ORDER_STATES),
             "billingAccount.id": ("billing_account_id", listing.as_uuid),
         },
         attributes=ATTRIBUTES,

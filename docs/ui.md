@@ -605,7 +605,8 @@ Ledger v2: explicit product StatusPill.
 R12: PageHeader with filters; `PRD-` and `ORD-` Ids; M detail Dialog with KeyValue and a compact order-items table.
 
 Route `/products` (sidebar Products). TMF637 `product` over every status: server filters status and
-`?account=` chip, client filters offering and number. Columns: product, offering, subscriber, status,
+`?account=` chip, client filters offering and number. The subscriber search (`ui.products.subscriberSearch`,
+#455) sets the chip; the caption says the page is cross-subscriber. Columns: product, offering, subscriber, status,
 start, end, number. A row opens the detail (`GET product/{id}`): dates, order items with a link to
 Orders, the realizing resource. Read-only; orders alone change products. Slice 21.
 
@@ -618,7 +619,10 @@ Ledger v2: explicit order StatusPill.
 R12: PageHeader with the state filter; `ORD-` Id; L detail Dialog with KeyValue, compact items (PRD- Ids, Amount prices) and cancellations tables; details and cancel forms use Field.
 
 Route `/orders`. The list is read-only, the dialog writes (slice 10, below). TMF622 `productOrder` pages of 50, newest first as the app serves them (#312), Next while `Link: rel="next"` follows; no total is shown. Existing rows stay mounted during paging; only the first load shows a skeleton. After a write only the changed order is read again (deleted rows are removed), alongside the existing navigation count refresh. State
-filter, `?account=<id>` chip (the card's "Orders" link `ui.subscriber.orders`). Columns: order id,
+filter, opening on **Unfinished** (`ui.orders.unfinished`, #455: draft, acknowledged, inProgress, failed;
+`?state=all` or `?state=<state>` in the URL), `?account=<id>` chip (the card's "Orders" link
+`ui.subscriber.orders`, with `state=all`, or the subscriber search `ui.orders.subscriberSearch`); the
+caption says the page is cross-subscriber. Columns: order id,
 subscriber (links to the card), state, item actions, requested start, created, completed or
 cancelled. A row opens the dialog: header fields, items (action, offering, product, state,
 tax-included price), `productOrderErrorMessage`, the order's `cancelProductOrder` rows, and for an

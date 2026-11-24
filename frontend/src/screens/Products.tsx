@@ -1,5 +1,6 @@
 import { submitDialogPrimary, IconButton } from '../ui/kit';
 import { NetworkCommands } from './NetworkCommands';
+import { SubscriberSearch } from './SubscriberSearch';
 import { characteristicOf } from '../api/devices';
 import { Note } from '../ui/Note';
 import { useState } from 'react';
@@ -67,6 +68,8 @@ export function ProductsScreen() {
   const context = useSystemContext();
   const [status, setStatus] = useState('');
   const [account, setAccount] = useState<string | null>(accountFromUrl);
+  // the name of the subscriber chosen in the search, for the chip before rows load
+  const [chosenName, setChosenName] = useState<string | null>(null);
   const [number, setNumber] = useState('');
   const settledNumber = useSettled(number).replace(/\D/g, '');
   const [open, setOpen] = useState<InventoryProduct | null>(null);
@@ -93,15 +96,21 @@ export function ProductsScreen() {
     return numbers.data[id] || shortId(id);
   };
 
+  const chooseAccount = (chosen: { id: string; name: string }) => {
+    window.history.replaceState(null, '', `/products?account=${chosen.id}`);
+    setAccount(chosen.id);
+    setChosenName(chosen.name);
+  };
   const dropAccount = () => {
     window.history.replaceState(null, '', '/products');
     setAccount(null);
+    setChosenName(null);
   };
   const name =
     list.status === 'ok'
       ? (list.data.items.find((p) => p.billingAccount?.id === account)?.billingAccount?.name ??
-        null)
-      : null;
+        chosenName)
+      : chosenName;
   const filtered = status !== '' || account !== null || number !== '';
   const reset = () => {
     setStatus('');
@@ -113,7 +122,7 @@ export function ProductsScreen() {
     <div className="bss-screen" data-ui="ui.products">
       <PageHeader
         title="Products"
-        meta="Every product, in every status"
+        meta="Products across all subscribers. A subscriber's products are on their card."
         filters={
           <>
             <SelectField
@@ -135,6 +144,7 @@ export function ProductsScreen() {
               value={number}
               onChange={(e) => setNumber(e.target.value)}
             />
+            <SubscriberSearch ui="ui.products.subscriberSearch" onChoose={chooseAccount} />
             {account !== null && (
               <span className="bss-run-tag" data-ui="ui.products.accountChip">
                 Account {name ?? accountLabel(account)}{' '}
@@ -279,7 +289,9 @@ function ProductDetail({ product, onClose }: { product: InventoryProduct; onClos
                   order: item.orderId !== undefined ? <Id prefix="ORD-" id={item.orderId} /> : '—',
                   open:
                     p.billingAccount?.id !== undefined ? (
-                      <Link href={`/orders?account=${p.billingAccount.id}`}>Open in Orders</Link>
+                      <Link href={`/orders?account=${p.billingAccount.id}&state=all`}>
+                        Open in Orders
+                      </Link>
                     ) : (
                       ''
                     ),

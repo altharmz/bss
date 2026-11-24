@@ -110,7 +110,7 @@ describe('products screen', () => {
     expectUi('ui.products.resource');
     expect(calls).toContain(`GET ${PRODUCTS}/${P1}`);
     expect(within(detail).getByRole('link', { name: 'Open in Orders' }).getAttribute('href')).toBe(
-      `/orders?account=${A1}`,
+      `/orders?account=${A1}&state=all`,
     );
   });
 
@@ -207,6 +207,50 @@ describe('products screen', () => {
     fireEvent.click(screen.getByLabelText('Remove the account filter'));
     expect(await screen.findByText('Plus 20')).toBeTruthy();
     expect(calls).toContain(`GET ${PRODUCTS}?${PAGE}`);
+  });
+
+  it('says what it is for and finds a subscriber to filter by their account', async () => {
+    // #455: the Subscribers list's own search; choosing a row sets ?account= and the chip
+    const search = `GET /internal/v1/subscriber?q=olga&offset=0&limit=50`;
+    const { calls } = backend({
+      [`GET ${PRODUCTS}?${PAGE}`]: () => json([first, second]),
+      [search]: () =>
+        json([
+          {
+            id: A1,
+            name: 'Olga main',
+            state: 'Active',
+            ratingType: 'postpaid',
+            customer: { id: 'p1', name: 'Olga Kuznetsova' },
+            currency: 'USD',
+            balance: { unit: 'USD', value: 0 },
+            creditLimit: null,
+            cycleDay: 1,
+            financialAccount: null,
+            activeProducts: 1,
+            customerAccounts: 1,
+          },
+        ]),
+      [`GET ${PRODUCTS}?billingAccount.id=${A1}&${PAGE}`]: () => json([first]),
+    });
+    open('/products');
+    await screen.findByText('Plus 20');
+    expect(
+      screen.getByText(
+        "Products across all subscribers. A subscriber's products are on their card.",
+      ),
+    ).toBeTruthy();
+    const input = expectUi('ui.products.subscriberSearch').querySelector('input') as HTMLElement;
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: 'olga' } });
+    fireEvent.click(await screen.findByRole('option', { name: /Olga Kuznetsova · Olga main/ }));
+    await screen.findByText(/Account Olga main/, {
+      selector: '[data-ui="ui.products.accountChip"]',
+    });
+    expect(window.location.search).toBe(`?account=${A1}`);
+    await waitFor(() => expect(screen.queryByText('Plus 20')).toBeNull());
+    expect(calls).toContain(search);
+    expect(calls).toContain(`GET ${PRODUCTS}?billingAccount.id=${A1}&${PAGE}`);
   });
 
   it('offers retry on a failed read', async () => {

@@ -2264,6 +2264,32 @@ def test_orders_screen_reads_as_the_ui_makes_them(api):
     product = api.get(f"/tmf-api/productInventory/v5/product/{product_id}")
     assert product.status_code == 200 and product.json()["name"]
     assert api.get(f"{ORDER}?state=rejected&offset=0&limit=50").json() == []
+    # #455: the screen opens on the unfinished orders, one comma-separated state (OR)
+    unfinished = "state=draft,acknowledged,inProgress,failed&offset=0&limit=50"
+    assert api.get(f"{ORDER}?{unfinished}").json() == []
+    assert api.get(f"{ORDER}?billingAccount.id={account['id']}&{unfinished}").json() == []
+    draft = api.post(
+        ORDER,
+        {
+            "@type": "ProductOrder",
+            "requestedInitialState": "draft",
+            "billingAccount": {"id": account["id"], "@type": "BillingAccountRef"},
+            "productOrderItem": [
+                {
+                    "@type": "ProductOrderItem",
+                    "id": "1",
+                    "action": "add",
+                    "productOffering": {"id": offering["id"], "@type": "ProductOfferingRef"},
+                }
+            ],
+        },
+    ).json()
+    page = api.get(f"{ORDER}?billingAccount.id={account['id']}&{unfinished}")
+    assert [o["id"] for o in page.json()] == [draft["id"]]
+    # the subscriber search of Orders and Products (SubscriberSearch.tsx): the Subscribers
+    # list's own search, first page of 50
+    found = api.get(f"/internal/v1/subscriber?q={account['name'][:4]}&offset=0&limit=50")
+    assert found.status_code == 200 and account["id"] in [r["id"] for r in found.json()]
     cancels = api.get(
         "/tmf-api/productOrderingManagement/v5/cancelProductOrder"
         f"?productOrder.id={added['id']}&offset=0&limit=100"

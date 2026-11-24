@@ -499,6 +499,7 @@ items:
   - {id: ui.products, area: ui, stage: 5, title: "Products screen: every status, filters, rows"}
   - {id: ui.products.status, area: ui, stage: 5, title: "Products status filter"}
   - {id: ui.products.accountChip, area: ui, stage: 5, title: "Products account filter chip"}
+  - {id: ui.products.subscriberSearch, area: ui, stage: 5, title: "Products: subscriber search sets the account filter"}
   - {id: ui.products.detail, area: ui, stage: 5, title: "Product detail dialog"}
   - {id: ui.products.orderItems, area: ui, stage: 5, title: "Product order items with Orders link"}
   - {id: ui.products.resource, area: ui, stage: 5, title: "Product realizing resource"}
@@ -764,6 +765,8 @@ items:
   - {id: ui.orders, area: ui, stage: 5, title: "Orders screen: newest-first tail paging, state filter and one-row write refresh"}
   - {id: ui.orders.detailsSaved, area: ui, stage: 5, title: "Order details saved in the open dialog footer"}
   - {id: ui.orders.accountChip, area: ui, stage: 5, title: "Orders account filter chip"}
+  - {id: ui.orders.unfinished, area: ui, stage: 5, title: "Orders opens on the unfinished orders (comma-separated state)"}
+  - {id: ui.orders.subscriberSearch, area: ui, stage: 5, title: "Orders: subscriber search sets the account filter"}
   - {id: ui.orders.detail, area: ui, stage: 5, title: "Order dialog"}
   - {id: ui.orders.items, area: ui, stage: 5, title: "Order dialog items table"}
   - {id: ui.orders.cancellations, area: ui, stage: 5, title: "Order dialog cancellations"}

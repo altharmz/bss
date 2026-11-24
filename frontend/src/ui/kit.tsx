@@ -284,6 +284,8 @@ export interface SegmentOption<K extends string> {
   /** The raw API code, kept for the tooltip when the label is a human one. */
   title?: string | undefined;
   count?: number;
+  /** The progress tracker's marker (docs/progress/scope.yaml) on this option's button. */
+  ui?: string | undefined;
 }
 
 export function Segmented<K extends string>({
@@ -309,6 +311,7 @@ export function Segmented<K extends string>({
           aria-checked={as === 'radio' ? option.key === value : undefined}
           aria-pressed={as === 'filter' ? option.key === value : undefined}
           title={option.title}
+          data-ui={option.ui}
           onClick={() => onChange(option.key)}
         >
           {option.label}
