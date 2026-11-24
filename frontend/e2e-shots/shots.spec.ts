@@ -37,6 +37,18 @@ test('capture the admin pages at both design widths', async ({ page }) => {
       'users',
       'ui-kit',
     ]) {
+      await page.unroute('**/internal/**/settlement');
+      if (name === 'card-postpaid')
+        // The seeded postpaid account's credit is used up as the business date moves on;
+        // unspent credit keeps Record refund enabled for its dialog capture.
+        await page.route('**/internal/**/settlement', async (route) => {
+          const response = await route.fetch();
+          const body = await response.json();
+          await route.fulfill({
+            response,
+            json: { ...body, unallocatedCredit: { ...body.unallocatedCredit, value: 25 } },
+          });
+        });
       await page.goto(name.startsWith('card-') ? '/subscribers' : `/${name}`);
       await page.waitForLoadState('networkidle');
       if (name.startsWith('card-')) {
@@ -299,8 +311,15 @@ test('capture the admin pages at both design widths', async ({ page }) => {
         await actions.click();
         await page.getByRole('menuitem', { name: 'Subscriber number', exact: true }).click();
         const number = page.getByRole('dialog', { name: 'Subscriber number' });
+        // Loaded, for a product with or without a number requirement: the local seed's
+        // first prepaid offering became numbered (#154) after this capture was written.
+        await expect(number.getByText('Loading number…')).toHaveCount(0);
         await expect(
-          number.getByText(/This product's offering does not use subscriber numbers/),
+          number
+            .getByText(
+              /This product's offering does not use subscriber numbers|This product has no subscriber number\.|Changes take effect today/,
+            )
+            .first(),
         ).toBeVisible();
         await page.screenshot({ path: `/web/.shots/dialog-product-number-${name}-${width}.png` });
         await number.getByRole('button', { name: 'Close', exact: true }).last().click();
@@ -396,8 +415,9 @@ test('capture the admin pages at both design widths', async ({ page }) => {
           await expect(transfer.locator('.money-recipient')).toContainText('Anna Kask');
           await page.screenshot({ path: `/web/.shots/dialog-transfer-recipient-${width}.png` });
           await transfer.getByRole('button', { name: 'Next', exact: true }).click();
-          // Within the seeded account's available balance, so the review step is reachable.
-          await transfer.getByLabel('Amount', { exact: true }).fill('1.00');
+          // Within the seeded account's available balance, so the review step is reachable;
+          // that balance falls as the business date moves on (0.92 on 2026-11-24).
+          await transfer.getByLabel('Amount', { exact: true }).fill('0.10');
           await transfer
             .getByLabel('Reason', { exact: true })
             .fill('Subscriber requested transfer');

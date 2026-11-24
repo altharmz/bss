@@ -1,8 +1,11 @@
 import { createPortal } from 'react-dom';
 import { statusPresentation, type StatusKind } from './status';
 import { useInspectorFit } from './inspectorFit';
+import { Icon } from './Icon';
 export { Menu, Tabs, TabPanel } from './navigation';
 export { Note } from './Note';
+export { Icon, ICON_NAMES } from './Icon';
+export type { IconName } from './Icon';
 export { KeyValue, MoneyStrip, PageHeader } from './summaries';
 export type { MenuItem, TabOption } from './navigation';
 import {
@@ -164,10 +167,7 @@ export function DateField(props: Omit<InputHTMLAttributes<HTMLInputElement>, 'wi
   return (
     <span className="bss-date-wrap">
       <TextInput {...props} mono />
-      <svg className="date-icon" aria-hidden="true" width="14" height="14" viewBox="0 0 14 14">
-        <rect x="1.5" y="2.5" width="11" height="10" rx="1" />
-        <path d="M1.5 5.5h11M4.5 1v3M9.5 1v3" />
-      </svg>
+      <Icon name="calendar" size={14} className="date-icon" />
     </span>
   );
 }

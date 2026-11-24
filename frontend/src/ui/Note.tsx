@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
+import { Icon } from './Icon';
 
-/** Inline verdicts from the Ledger Components artboard. */
+/** Inline verdicts: info, warning and negative, each with its Lucide glyph. */
 export function Note({
   tone,
   lead,
@@ -22,21 +23,10 @@ export function Note({
       role={tone === 'negative' ? 'alert' : 'note'}
       data-ui={ui}
     >
-      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14">
-        {tone === 'info' ? (
-          <>
-            <circle cx="7" cy="7" r="6" />
-            <path d="M7 6v4M7 4v.01" />
-          </>
-        ) : tone === 'warning' ? (
-          <>
-            <path d="M7 1.5l6 11H1z" />
-            <path d="M7 6v3M7 10.8v.01" />
-          </>
-        ) : (
-          <rect x="3" y="3" width="8" height="8" rx="1" transform="rotate(45 7 7)" />
-        )}
-      </svg>
+      <Icon
+        name={tone === 'info' ? 'info' : tone === 'warning' ? 'triangle-alert' : 'octagon-alert'}
+        size={14}
+      />
       <div>
         {lead && (
           <>

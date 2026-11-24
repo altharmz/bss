@@ -63,7 +63,63 @@ at 1280/1600 confirm visible actions and no horizontal overflow.
 
 - G1a (B4, B5): all Menu lists now portal to document.body with fixed trigger placement, flip-up and scroll/resize dismissal; keyboard, outside click and focus return stay. Subscribers derives its header currency from all loaded accounts and Amount displays each row's currency. MoneyField requires an explicit currency; a TypeScript AST guard rejects currency literals outside tests/gallery. New component coverage and menu screenshot assertions pin these behaviours; make web-shots passed and Subscribers, prepaid/postpaid menus (including the single-product card) and UI kit were reviewed at 1280/1600 with no horizontal overflow. Requests and markers unchanged. G1 splits by ID: all B2 dialog/Enter/e2e work remains in G1b. The prescribed targeted container test command was rejected by guard.sh; verification uses make targets and the commit hook.
 
-## Ledger v2: visual redesign (designed 2026-10-26)
+## Tidewell: visual redesign (designed 2026-11-24, #452)
+
+Tidewell replaces Ledger v2 as the UI's design system. The source is the human's handoff
+"Design system integration guide.zip" (top folder `tidewell-handoff/`; the human vendors it
+read-only into `design-ref/`, which agents cannot write). Like Ledger it is **visual
+only**: no request, body, route or polling changes, and `tests/internal/test_ui_requests.py`
+is untouched. The handoff's own `CLAUDE.md` snippet, `tidewell-design` skill and `HANDOFF.md`
+steps (Vite app, `design-system/` folder, Google Fonts, CDN icons) are not installed; these
+decisions replace them.
+
+- **T1** Our TypeScript primitives in `src/ui/` keep their behaviour, markers and tests and
+  are restyled; Tidewell's `.jsx` components are the visual spec, not imported. Only `Icon`
+  (and later `Avatar`) are added.
+- **T2** `tokens.css` holds Tidewell's palette (sand, tide, ember, green, amber, red, blue,
+  plum) and its values behind the existing Ledger role names, which stay as aliases until
+  every screen is restyled; unused aliases go in the last slice.
+- **T3** Fonts are self-hosted, pinned `@fontsource/newsreader`, `schibsted-grotesk` and
+  `geist-mono` 5.3.0. No font family is named outside `tokens.css` (style guard).
+- **T4** Icons: pinned `lucide-react` 0.460.0 (the handoff's version) behind `Icon` with the
+  handoff's `name` prop, in `currentColor`, bundled. `Icon.tsx` registers each Lucide icon
+  used, so the bundle carries only those; nothing else imports `lucide-react` (style guard).
+- **T5** Type: page titles (28/32), dialog titles and empty-state lines (22/28) are
+  Newsreader 400 with negative tracking; UI text is Schibsted Grotesk (labels 600, body
+  400); eyebrows, ids, amounts and counts are Geist Mono, eyebrows uppercase at 0.08em.
+- **T6** Admin density over Tidewell's board spacing: the 216 px sidebar (Tidewell 248),
+  32/28 px controls (Tidewell 36/30), table rows and the 13 px body stay, so every column
+  fits at 1280 px. Radii are Tidewell's: 4 checkboxes, 6 tags and ids, 10 controls, 14
+  cards, panels, menus and toasts, 20 dialogs, pill status pills and badges.
+- **T7** One tide accent (primary button, focus ring, checked controls, active tab
+  underline). D4 families map to green (positive), amber (warning), red (negative), blue
+  (info), sand (neutral), tide (in progress). Ember is the one highlight, plum is for data.
+  Tidewell's 600 shades on their 100 tints are 4.2:1, so status text uses derived 650
+  shades (`--red-650`, `--green-650`, `--amber-650`) that reach AA.
+- **T8** Dark theme, derived (Tidewell has none): `--sand-950` page, `--sand-900` surfaces,
+  sand-100/300/400 ink, accent `#4aa691` with `--sand-950` on it; every text/background
+  pair is AA. The `[data-theme]` / `prefers-color-scheme` mechanism and the Theme control
+  are unchanged.
+- **T9** The brand stays BSS (Tidewell is the handoff's fictional product).
+- **T10** Tidewell voice where it changes no behaviour or tested name: sentence case,
+  verb-first buttons, no exclamation marks or emoji.
+- **T11** The care portal shares `tokens.css` and loads Schibsted Grotesk itself.
+- **T12** Ledger's binding rules stay: Rule 1, D4, D9, D11 and the R15 inspector.
+
+Progress:
+- Built slice 1 (#452): tokens (palette, roles, radii, type, motion), derived dark theme,
+  self-hosted fonts, `Icon` (Note and DateField glyphs moved to it; `/ui-kit` Icons section,
+  `ui.uikit.icons`), serif page and dialog titles, Tidewell radii on status pills, tags,
+  flags, ids and the run tag; style guard: font families only in `tokens.css`,
+  `lucide-react` only in `Icon.tsx`. Every screen is already re-tinted through the aliases.
+  `make web-shots` passes again: three captures had drifted from the seed as the business
+  date moved on (the first prepaid offering became numbered, the prepaid balance fell
+  below 1.00, the postpaid credit was used up). The number dialog accepts any loaded state,
+  the transfer uses 0.10 and the postpaid card gets a settlement fixture with credit.
+  Remaining slices (primitives and shell, screens, release review, alias cleanup,
+  CLAUDE.md) are #460; the handoff in `design-ref/` is #459 (human).
+
+## Ledger v2: visual redesign (designed 2026-10-26) (superseded by Tidewell)
 
 - Built R16 (#64): every `make web-shots` PNG (light and dark, 1280 and 1600) reviewed against the artboards rendered from the handoff, or against D1-D13 and Components/States where no artboard exists; evidence in [ui-redesign-release.md](../ui-redesign-release.md). CSS fixes: the card's "Next charge" caption wraps inside Since; Billing runs outcome names are sans 500 ink-1; the inspector's Prices table spans the details grid; Bills' Kind does not wrap; a checkbox in `.bss-form` stays one row; long Add product offering names ellipsize after the specification note has given way; `.bss-write-fields.bss-modal-body` keeps the 20 px body padding; a cell's `span.ellipsis` clips (inline-block, so it still lets the row click through). `make web-e2e` green: selectors follow the design ("Financial accounts", "Cash", `/^Top up/`, merged name/code cell, paged "Showing a–b of n", R15 double click / Enter at ≥ 1536 px) and the prepaid smoke picks a free number for the numbered seed offering; no assertion weakened. The shots wait for skeletons on catalog tabs and add `subscribers-inspector-1600`. Deviation: the card's Charges and Transactions Date columns widen from 92 to 108 px in their TSX column lists, because a grid track is set there, not in CSS. Behaviour and wording defects found on the way are #178.
 - Built R15 (#62): `useMediaQuery(WIDE_QUERY)` (>= 1536 px; false without `matchMedia`) switches Subscribers and Catalog to a 400 px inspector. Subscribers: a click selects the row, Enter or a double click (`TableRow onActivate`) opens the card, Escape closes; content comes only from the loaded list. Catalog: `Dialog inspector` renders the same `OfferingModal` body, requests and header menu in place (`ui.catalog.inspector`), its lifecycle actions stay in the panel footer. Deviations: the Subscribers Products line is "N active" without offering names, because the loaded product list requests only `fields=billingAccount` and a wider field list would change the pinned request; the Catalog actions stay in the footer, not the header. `make web-shots` not run in this slice.

@@ -6,6 +6,8 @@ import { Id, ID_PREFIXES } from '../ui/Id';
 import { STATUS_MAP, type StatusKind } from '../ui/status';
 import { useState } from 'react';
 import {
+  Icon,
+  ICON_NAMES,
   Menu,
   Note,
   Tabs,
@@ -221,6 +223,17 @@ export function UiKitScreen() {
         <Panel>
           <Note tone="info">A panel without a title is only a box.</Note>
         </Panel>
+      </section>
+      <section data-ui="ui.uikit.icons">
+        <h2>Icons</h2>
+        <div className="ui-kit-icons">
+          {ICON_NAMES.map((name) => (
+            <span key={name} className="ui-kit-icon">
+              <Icon name={name} />
+              <code>{name}</code>
+            </span>
+          ))}
+        </div>
       </section>
       <section>
         <h2>Inline notes</h2>

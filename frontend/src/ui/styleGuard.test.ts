@@ -69,6 +69,13 @@ function checkStyles(file: string, source: string): string[] {
       problems.push('px font size');
     }
     if (/font-weight\s*:\s*700\b/.test(line)) problems.push('weight 700');
+    if (
+      basename(file) !== 'tokens.css' &&
+      ((/\bfont-family\s*:/.test(line) && !/var\(--font-/.test(line)) ||
+        /\b(?:serif|sans-serif|monospace|system-ui|ui-monospace|ui-sans-serif)\b/.test(line))
+    ) {
+      problems.push('font family literal');
+    }
     return problems.map((problem) => `${file}:${index + 1}: ${problem}`);
   });
 }
@@ -97,7 +104,7 @@ function inlineStyles(file: string, source: string): string[] {
 
 const src = join(process.cwd(), 'src');
 
-describe('Ledger style guard', () => {
+describe('Tidewell style guard', () => {
   it('detects currency literals in strings, templates and JSX text without matching identifiers or comments', () => {
     expect(
       currencyLiterals(
@@ -153,6 +160,22 @@ describe('Ledger style guard', () => {
         ),
     ).toEqual([]);
   });
+  it('reports a font family named outside tokens.css (Tidewell T3)', () => {
+    expect(
+      checkStyles(
+        'fixture.css',
+        "a {\n font-family: 'Inter';\n font-family: var(--font-mono);\n font:\n 100%/1.5 system-ui,\n sans-serif;\n}",
+      ),
+    ).toEqual([
+      'fixture.css:2: font family literal',
+      'fixture.css:5: font family literal',
+      'fixture.css:6: font family literal',
+    ]);
+    expect(
+      checkStyles('tokens.css', ":root { --font-ui: 'Schibsted Grotesk', system-ui, sans-serif; }"),
+    ).toEqual([]);
+  });
+
   it('reports literal colours, px fonts and weight 700 with file and line', () => {
     expect(
       checkStyles(
@@ -163,6 +186,7 @@ describe('Ledger style guard', () => {
       'fixture.css:2: colour literal',
       'fixture.css:3: px font size',
       'fixture.css:4: px font size',
+      'fixture.css:4: font family literal',
       'fixture.css:5: weight 700',
     ]);
     expect(
@@ -224,6 +248,17 @@ describe('Ledger style guard', () => {
       files(src)
         .filter((file) => /\.(css|tsx)$/.test(file) && !file.includes('.test.'))
         .flatMap((file) => undefinedVariables(file, readFileSync(file, 'utf8'), defined, runtime)),
+    ).toEqual([]);
+  });
+
+  it('draws icons only through the Icon primitive (Tidewell T4)', () => {
+    expect(
+      files(src)
+        .filter(
+          (file) =>
+            /\.tsx?$/.test(file) && !file.includes('.test.') && basename(file) !== 'Icon.tsx',
+        )
+        .filter((file) => /from 'lucide-react'/.test(readFileSync(file, 'utf8'))),
     ).toEqual([]);
   });
 

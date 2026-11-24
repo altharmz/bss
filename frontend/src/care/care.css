@@ -1,9 +1,12 @@
 @import '../ui/tokens.css';
+/* Tidewell's UI face, self-hosted like the admin's (T3). */
+@import '@fontsource/schibsted-grotesk/400.css';
+@import '@fontsource/schibsted-grotesk/600.css';
 
 :root {
-  font:
-    100%/1.5 system-ui,
-    sans-serif;
+  font-family: var(--font-ui);
+  font-size: 100%;
+  line-height: 1.5;
   color: var(--color-ink-1);
   background: var(--color-bg-subtle);
 }
