@@ -610,7 +610,8 @@ paths:
         bills (held bills never count): O, the amount past due, the last step taken for that
         O (`none` before the first) and the suspension's date. `step` keeps those whose last
         step it is; `deactivationCandidate=true` those suspended more than 60 days (postpaid
-        lines are never ended automatically: an operator ends them).
+        lines are never ended automatically: an operator ends them); `billingAccount.id` that
+        one account (issue 466).
       parameters:
         - {$ref: '#/components/parameters/Offset'}
         - {$ref: '#/components/parameters/Limit'}
@@ -620,6 +621,9 @@ paths:
         - name: deactivationCandidate
           in: query
           schema: {type: string, enum: ['true']}
+        - name: billingAccount.id
+          in: query
+          schema: {type: string, format: uuid}
       responses:
         '200':
           description: OK

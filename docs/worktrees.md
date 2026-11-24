@@ -65,7 +65,12 @@ does not know and lists the ones it accepts.
    `make test` (the full suite but the `migration_history` and `slow` tests; `make test-all`
    runs everything) before a PR touching billing, migrations or the API. A pass
    on a clean tree is recorded, and `check-pr` reports it as `full_suite`: a resumed session
-   reads it there instead of running the suite again.
+   reads it there instead of running the suite again. Before `make commit`, run `make format`
+   again after any edit, including a fix made after a hook failure. If the change touches a
+   shared test builder or factory (`tests/builders/**`, `tests/factories.py`), find every test
+   file that imports it (`grep -rl`) and run them with `make test-files TESTS=...`: migration
+   tests call those builders on schemas older than head, so a builder must not name a new
+   column unconditionally (in #456 one did, and the hook found it only after 21 minutes).
 4. **PR.** `make create-pr` publishes the branch and opens (or reuses) the PR with
    `Fixes #N`. `make check-pr WAIT=600` reports readiness and waits for pending checks.
 5. **Merge.** `make merge-task` when ready. A human-gated PR stays blocked until the human

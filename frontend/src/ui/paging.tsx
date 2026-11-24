@@ -17,9 +17,13 @@ export function useSettled(value: string, ms = 250): string {
   return settled;
 }
 
-/** The page offset for `filterKey`: 0 again whenever the key changes. */
+/** The page offset for `filterKey`: 0 again whenever the key changes, also back to an
+ * earlier key (#466: clearing a filter returns to the first page, not the one it was on). */
 export function usePageOffset(filterKey: string): [number, (offset: number) => void] {
   const [paging, setPaging] = useState({ key: filterKey, offset: 0 });
+  // forget the old key's offset on the render that sees the new key (a state update during
+  // render, React's pattern for state derived from a changed input)
+  if (paging.key !== filterKey) setPaging({ key: filterKey, offset: 0 });
   const offset = paging.key === filterKey ? paging.offset : 0;
   return [offset, (next: number) => setPaging({ key: filterKey, offset: Math.max(0, next) })];
 }

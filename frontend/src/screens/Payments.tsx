@@ -1,4 +1,4 @@
-import { submitDialogPrimary, IconButton } from '../ui/kit';
+import { submitDialogPrimary } from '../ui/kit';
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   loadPayment,
@@ -26,6 +26,7 @@ import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 import { PageFooter, usePageOffset } from '../ui/paging';
 import './screens.css';
+import { AccountFilter, useAccountFilter } from './AccountFilter';
 import { PaymentRefundModal } from './AccountActions';
 
 // Payments and refunds history (docs/ui.md): TMF676 reads only.
@@ -57,13 +58,6 @@ const REFUND_COLUMNS: Column[] = [
 
 type Tab = 'payments' | 'refunds';
 type StatusFilter = PaymentStatus | 'all';
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function accountFromUrl(): string | null {
-  const value = new URLSearchParams(window.location.search).get('account');
-  return value !== null && UUID.test(value) ? value.toLowerCase() : null;
-}
 
 function money(value: { value: number; unit: string }, { signed = false, negate = false } = {}) {
   const cents = toCents(value.value);
@@ -280,7 +274,8 @@ export function PaymentsScreen() {
   const { timeZone } = useSystemContext();
   const [tab, setTab] = useState<Tab>('payments');
   const [status, setStatus] = useState<StatusFilter>('all');
-  const [account, setAccount] = useState<string | null>(accountFromUrl);
+  const accountFilter = useAccountFilter('/payments');
+  const { account } = accountFilter;
   const [open, setOpen] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
   const filter = { account, status: status === 'all' ? null : status };
@@ -296,13 +291,9 @@ export function PaymentsScreen() {
   );
   const filtered = status !== 'all' || account !== null;
 
-  const dropAccount = () => {
-    window.history.replaceState(null, '', '/payments');
-    setAccount(null);
-  };
   const reset = () => {
     setStatus('all');
-    if (account !== null) dropAccount();
+    if (account !== null) accountFilter.drop();
   };
   const name =
     payments.status === 'ok'
@@ -334,12 +325,7 @@ export function PaymentsScreen() {
             ...PAYMENT_STATUSES.map((s) => ({ key: s, label: s })),
           ]}
         />
-        {account !== null && (
-          <span className="bss-run-tag" data-ui="ui.payments.accountChip">
-            Account {name ?? <Id id={account} prefix="BA-" />}{' '}
-            <IconButton icon="x" small label="Remove the account filter" onClick={dropAccount} />
-          </span>
-        )}
+        <AccountFilter ui="ui.payments" filter={accountFilter} name={name} />
       </div>
       <Panel>
         {tab === 'payments' ? (

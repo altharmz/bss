@@ -1227,6 +1227,28 @@ own orders and products are on the card.
 - **Markers:** `ui.orders.unfinished` (a `Segmented` option now takes a `ui` marker),
   `ui.orders.subscriberSearch`, `ui.products.subscriberSearch`.
 
+## Account search on the money screens (2026-11-25, issue #466)
+
+Bills, Payments (both tabs), Dunning, Prepaid → Balances (all tabs) and Prepaid commands could
+filter by billing account only through a card's `?account=` link; Dunning had no account filter.
+
+- **One shared filter** (`screens/AccountFilter.tsx`): `useAccountFilter(path)` reads
+  `?account=`, and `<AccountFilter>` shows the search box (`<screen>.accountSearch`) and, while
+  filtered, the removable chip (`<screen>.accountChip`). Picking a row sets `?account=` with
+  `replaceState`; removing the chip drops it. The chip shows the account's name from the loaded
+  rows, else the name picked in the search, else the `BA-` id.
+- **The lookup is the #455 subscriber search** (`SubscriberSearch.tsx`, the Billing accounts
+  list's `GET /internal/v1/subscriber?q=`), which already matches a name, a `BA-` short id or a
+  number. No new search endpoint.
+- **Dunning filters on the server:** `GET /internal/v1/dunning/accounts` takes
+  `billingAccount.id` (the bill list's name; a non-UUID or a repeat is a 400), also an MCP
+  argument of `list_dunning_accounts`.
+- **A filter change resets paging, also back to an earlier filter:** `usePageOffset` forgets
+  the old key's offset when the key changes. It used to keep it, so clearing a filter returned
+  to the page the unfiltered list was on before.
+- Orders and Products keep their own copy of the search and chip (#455); they can move to
+  `AccountFilter` when next changed.
+
 ## Sidebar by the account hierarchy (2026-11-25, issue #457)
 
 Supersedes the Customers and Products sections of the #414 sidebar. Customers held Signups,

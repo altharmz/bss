@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { describe, expect, it } from 'vitest';
 import { App } from '../app/App';
 import { expectUi } from '../test/expectUi';
+import { accountSearchRoute, searchAccount } from '../test/accountSearch';
 import { billBody } from '../test/fixtures';
 import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } from '../test/fetch';
 
@@ -141,6 +142,30 @@ describe('bills screen', () => {
     fireEvent.click(within(chip).getByRole('button', { name: 'Remove the account filter' }));
     await waitFor(() => expect(calls).toContain(`GET ${BILL}?state=partiallyPaid&${LIST}`));
     expect(window.location.search).toBe('');
+  });
+
+  it('searches a billing account to filter by, back on the first page, and clears it', async () => {
+    // #466: the search sets ?account= and the chip; a filter change resets paging
+    const { calls } = backend({
+      [`GET ${BILL}?${LIST}`]: () => json([BILL1], { more: true }),
+      [`GET ${BILL}?offset=50&limit=50`]: () => json([BILL2]),
+      [`GET ${BILL}?billingAccount.id=${A2}&${LIST}`]: () => json([BILL2]),
+      ...accountSearchRoute('BA-A0000002', A2, 'Olga Kuznetsova'),
+    });
+    open('/bills');
+    await screen.findByText('Ivan Ivanov');
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    await screen.findByText('Showing 51–51');
+    const chip = await searchAccount('ui.bills', 'BA-A0000002', 'Olga Kuznetsova');
+    expect(window.location.search).toBe(`?account=${A2}`);
+    await waitFor(() => expect(calls).toContain(`GET ${BILL}?billingAccount.id=${A2}&${LIST}`));
+    expect(await screen.findByText('Showing 1–1')).toBeTruthy();
+    fireEvent.click(within(chip).getByRole('button', { name: 'Remove the account filter' }));
+    // the unfiltered first page again, not the page it was on before the search
+    expect(await screen.findByText('Ivan Ivanov')).toBeTruthy();
+    expect(screen.getByText('Showing 1–1')).toBeTruthy();
+    expect(window.location.search).toBe('');
+    expect(screen.queryByText(/Account Olga/)).toBeNull();
   });
 
   it('pages bills with Previous and Next', async () => {

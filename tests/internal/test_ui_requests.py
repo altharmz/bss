@@ -138,6 +138,17 @@ def test_ui_dunning_exemption(api):
     assert api.get(path).json()["exempt"] is False
 
 
+def test_ui_dunning_account_filter(api):
+    """The account-filtered dunning list pinned by Dunning.test.tsx (#466)."""
+    account = apidata.account(api)
+    path = "/internal/v1/dunning/accounts"
+    response = api.get(f"{path}?billingAccount.id={account['id']}&offset=0&limit=50")
+    assert response.status_code == 200, response.text
+    assert response.json() == []
+    stepped = api.get(f"{path}?step=reminder1&billingAccount.id={account['id']}&offset=0&limit=50")
+    assert stepped.status_code == 200, stepped.text
+
+
 def test_ui_logging_settings(api):
     """The three PUT bodies pinned by LoggingSettings.test.tsx: base level (and null), the
     three debug durations, and Stop (0)."""

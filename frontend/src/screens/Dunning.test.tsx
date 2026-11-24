@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { App } from '../app/App';
+import { accountSearchRoute, searchAccount } from '../test/accountSearch';
 import { expectUi } from '../test/expectUi';
 import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } from '../test/fetch';
 
@@ -40,8 +41,8 @@ function backend(extra: Record<string, Handler> = {}) {
   });
 }
 
-async function open() {
-  window.history.replaceState(null, '', '/dunning');
+async function open(path = '/dunning') {
+  window.history.replaceState(null, '', path);
   render(<App />);
   await screen.findByRole('heading', { name: /^Dunning/ });
 }
@@ -90,6 +91,47 @@ describe('dunning screen', () => {
     await screen.findByText('Olga Kuznetsova');
     expect(calls).toContain(`GET ${LIST}?step=reminder1&${PAGE}`);
     expect(calls).toContain(`GET ${LIST}?step=none&${PAGE}`);
+  });
+
+  it('searches a billing account to filter by, back on the first page, and clears it', async () => {
+    // #466: billingAccount.id on the server; the search sets ?account= and the chip
+    const { calls } = backend({
+      [`GET ${LIST}?${PAGE}`]: () => json([IVAN], { more: true }),
+      [`GET ${LIST}?offset=50&limit=50`]: () => json([OLGA]),
+      [`GET ${LIST}?billingAccount.id=${A1}&${PAGE}`]: () => json([OLGA]),
+      [`GET ${LIST}?step=suspend&billingAccount.id=${A1}&${PAGE}`]: () => json([OLGA]),
+      [`GET ${LIST}?step=suspend&${PAGE}`]: () => json([OLGA]),
+      ...accountSearchRoute('olga', A1, 'Olga Kuznetsova'),
+    });
+    await open();
+    await screen.findByText('Ivan Ivanov');
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    await screen.findByText('Showing 51–51');
+    await searchAccount('ui.dunning', 'olga', 'Olga Kuznetsova');
+    expect(window.location.search).toBe(`?account=${A1}`);
+    await waitFor(() => expect(calls).toContain(`GET ${LIST}?billingAccount.id=${A1}&${PAGE}`));
+    expect(await screen.findByText('Showing 1–1')).toBeTruthy();
+    const steps = within(screen.getByRole('group', { name: 'Last step' }));
+    fireEvent.click(steps.getByRole('button', { name: 'Suspended' }));
+    await waitFor(() =>
+      expect(calls).toContain(`GET ${LIST}?step=suspend&billingAccount.id=${A1}&${PAGE}`),
+    );
+    const chip = expectUi('ui.dunning.accountChip');
+    fireEvent.click(within(chip).getByRole('button', { name: 'Remove the account filter' }));
+    await waitFor(() => expect(calls).toContain(`GET ${LIST}?step=suspend&${PAGE}`));
+    expect(window.location.search).toBe('');
+    expect(screen.queryByText(/Account Olga/)).toBeNull();
+  });
+
+  it('filters by the account a link asks for (?account=)', async () => {
+    backend({ [`GET ${LIST}?billingAccount.id=${A2}&${PAGE}`]: () => json([IVAN]) });
+    await open(`/dunning?account=${A2}`);
+    expect(
+      await screen.findByText(/Account Ivan Ivanov/, {
+        selector: '[data-ui="ui.dunning.accountChip"]',
+      }),
+    ).toBeTruthy();
+    expect(screen.queryByText('Olga Kuznetsova')).toBeNull();
   });
 
   it('lists the deactivation candidates on their own tab', async () => {

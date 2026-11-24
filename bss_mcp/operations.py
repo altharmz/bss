@@ -1079,6 +1079,7 @@ OPERATIONS: dict[str, Op] = {
         extra={
             "step": {"type": "string", "enum": list(DUNNING_STEPS)},
             "deactivationCandidate": {"type": "string", "enum": ["true"]},
+            "billingAccount.id": UUID_ARG,
         },
     ),
     "get_account_dunning": Op(

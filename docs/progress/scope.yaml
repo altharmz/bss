@@ -628,6 +628,7 @@ items:
   - {id: ui.bills.previous, area: ui, stage: 5, title: "Bills: previous page of newer bills"}
   - {id: ui.bills.next, area: ui, stage: 5, title: "Bills: next page of older bills"}
   - {id: ui.bills.accountChip, area: ui, stage: 5, title: "Bills screen account filter chip"}
+  - {id: ui.bills.accountSearch, area: ui, stage: 5, title: "Bills: billing account search (name or BA id) sets the account filter (issue 466)"}
   - {id: ui.bills.links, area: ui, stage: 5, title: "Bill dialog links: bill cycle and rates"}
   - {id: ui.bills.cycleDetail, area: ui, stage: 5, title: "Bill cycle detail dialog"}
   - {id: ui.bills.rateDetail, area: ui, stage: 5, title: "Applied billing rate detail dialog"}
@@ -639,6 +640,8 @@ items:
   - {id: ui.dunning, area: ui, stage: 5, title: "Dunning screen (/dunning, under Billing): accounts in dunning with a last-step filter, and the deactivation candidates (issue 386)"}
   - {id: ui.dunning.previous, area: ui, stage: 5, title: "Dunning: previous page"}
   - {id: ui.dunning.next, area: ui, stage: 5, title: "Dunning: next page"}
+  - {id: ui.dunning.accountChip, area: ui, stage: 5, title: "Dunning account filter chip (issue 466)"}
+  - {id: ui.dunning.accountSearch, area: ui, stage: 5, title: "Dunning: billing account search (name or BA id) sets the account filter (issue 466)"}
   - {id: ui.subscriber.dunning, area: ui, stage: 5, title: "Postpaid subscriber card: the dunning panel with O, the amount past due, steps taken and next step (issue 386)"}
   - {id: ui.subscriber.dunning.exempt, area: ui, stage: 5, title: "Exempt from dunning toggle on the postpaid card (issue 386)"}
   - {id: ui.subscriber.dunning.exemptConfirm, area: ui, stage: 5, title: "Confirm a dunning exemption or its end, with an optional audited reason (issue 386)"}
@@ -646,11 +649,13 @@ items:
   - {id: ui.payments.previous, area: ui, stage: 5, title: "Payments: previous page of newer rows"}
   - {id: ui.payments.next, area: ui, stage: 5, title: "Payments: next page of older rows"}
   - {id: ui.payments.accountChip, area: ui, stage: 5, title: "Payments screen account filter chip"}
+  - {id: ui.payments.accountSearch, area: ui, stage: 5, title: "Payments (both tabs): billing account search (name or BA id) sets the account filter (issue 466)"}
   - {id: ui.balances, area: ui, stage: 5, title: "Balances screen: buckets, top-ups, adjustments, holds and transfers (TMF654 reads)"}
   - {id: ui.balances.previous, area: ui, stage: 5, title: "Balances buckets and totals: previous page"}
   - {id: ui.balances.next, area: ui, stage: 5, title: "Balances buckets and totals: next page"}
   - {id: ui.balances.status, area: ui, stage: 5, title: "Balances screen status filter"}
   - {id: ui.balances.accountChip, area: ui, stage: 5, title: "Balances screen account filter chip"}
+  - {id: ui.balances.accountSearch, area: ui, stage: 5, title: "Balances (all tabs): billing account search (name or BA id) sets the account filter (issue 466)"}
   - {id: ui.balances.buckets, area: ui, stage: 5, title: "Balances buckets tab: bucket list joined with accumulated balances"}
   - {id: ui.balances.totals, area: ui, stage: 5, title: "Account totals list of accumulated balances"}
   - {id: ui.balances.totalDetail, area: ui, stage: 5, title: "Fresh accumulated balance detail"}
@@ -753,6 +758,7 @@ items:
   - {id: ui.billingRuns.outcomes, area: ui, stage: 5, title: "Selected billing run inline outcomes"}
   - {id: ui.prepaidCommands, area: ui, stage: 5, title: "Prepaid commands screen: list, state filter, paging, nav badge"}
   - {id: ui.prepaidCommands.accountChip, area: ui, stage: 5, title: "Prepaid commands account filter chip"}
+  - {id: ui.prepaidCommands.accountSearch, area: ui, stage: 5, title: "Prepaid commands: billing account search (name or BA id) sets the account filter (issue 466)"}
   - {id: ui.prepaidCommands.detail, area: ui, stage: 5, title: "Prepaid command detail dialog"}
   - {id: ui.prepaidCommands.needsTopup, area: ui, stage: 5, title: "Command needs-top-up block"}
   - {id: ui.prepaidCommands.retry, area: ui, stage: 5, title: "Retry a failedTechnical command"}
@@ -816,7 +822,7 @@ items:
   - {id: db.dunning_step, area: db, stage: 5, table: dunning_step, title: "The dunning steps taken per account and first overdue date: once each, read by the notifications (#385)"}
   - {id: api.internal.dunning.settings.get, area: api, stage: 5, method: GET, path: /internal/v1/dunning/settings, title: "Get the postpaid dunning steps"}
   - {id: api.internal.dunning.settings.patch, area: api, stage: 5, method: PATCH, path: /internal/v1/dunning/settings, title: "Change the postpaid dunning steps"}
-  - {id: api.internal.dunning.accounts, area: api, stage: 5, method: GET, path: /internal/v1/dunning/accounts, title: "The accounts in dunning with the amount past due, last step and deactivation candidates"}
+  - {id: api.internal.dunning.accounts, area: api, stage: 5, method: GET, path: /internal/v1/dunning/accounts, title: "The accounts in dunning with the amount past due, last step and deactivation candidates; filters step, deactivationCandidate, billingAccount.id"}
   - {id: api.internal.dunning.account.get, area: api, stage: 5, method: GET, path: "/internal/v1/billingAccount/{account_id}/dunning", title: "An account's dunning state: O, steps taken, next step"}
   - {id: api.internal.dunning.account.patch, area: api, stage: 5, method: PATCH, path: "/internal/v1/billingAccount/{account_id}/dunning", title: "Exempt an account from dunning (audited)"}
   - {id: worker.multiLineDiscounts, area: worker, stage: 5, title: "Multi-line discount tiers on a plan offering (discount price in lines): each plan line's purchase, renewal and offering change is quoted net of the tier for the account's live plan lines (#196)"}

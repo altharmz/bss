@@ -1,4 +1,4 @@
-import { submitDialogPrimary, IconButton } from '../ui/kit';
+import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { useState } from 'react';
 import {
@@ -22,6 +22,7 @@ import { Id } from '../ui/Id';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import './screens.css';
+import { AccountFilter, useAccountFilter } from './AccountFilter';
 
 // The prepaid command journal (docs/decisions/frontend.md, docs/ui.md):
 // the worker's queue behind prepaid orders, renewals and transfers, read from the
@@ -61,20 +62,13 @@ function resultOf(command: PrepaidCommand): string {
   return '';
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/** The account the link from the subscriber card asks for (?account=<id>). */
-function accountFromUrl(): string | null {
-  const value = new URLSearchParams(window.location.search).get('account');
-  return value !== null && UUID.test(value) ? value.toLowerCase() : null;
-}
-
 export function PrepaidCommandsScreen() {
   useSetCrumbs([{ label: 'Prepaid commands' }], 'prepaidCommands');
   const context = useSystemContext();
   const [state, setState] = useState<StateFilter>('all');
-  const [account, setAccount] = useState<string | null>(accountFromUrl);
   const [offset, setOffset] = useState(0);
+  const accountFilter = useAccountFilter('/prepaid-commands', () => setOffset(0));
+  const { account } = accountFilter;
   const [open, setOpen] = useState<PrepaidCommand | null>(null);
   const filter = { state: state === 'all' ? null : state, account };
   const list = useResource(`prepaid-commands:${state}:${account ?? ''}:${offset}`, (signal) =>
@@ -86,18 +80,13 @@ export function PrepaidCommandsScreen() {
     setState(next);
     setOffset(0);
   };
-  const dropAccount = () => {
-    window.history.replaceState(null, '', '/prepaid-commands');
-    setAccount(null);
-    setOffset(0);
-  };
   const name =
     list.status === 'ok'
       ? (list.data.items.find((c) => c.billingAccount.id === account)?.billingAccount.name ?? null)
       : null;
   const reset = () => {
     setState('all');
-    if (account !== null) dropAccount();
+    if (account !== null) accountFilter.drop();
     setOffset(0);
   };
 
@@ -119,12 +108,7 @@ export function PrepaidCommandsScreen() {
             label: STATE_LABEL[key],
           }))}
         />
-        {account !== null && (
-          <span className="bss-run-tag" data-ui="ui.prepaidCommands.accountChip">
-            Account {name ?? <Id id={account} prefix="BA-" />}{' '}
-            <IconButton icon="x" small label="Remove the account filter" onClick={dropAccount} />
-          </span>
-        )}
+        <AccountFilter ui="ui.prepaidCommands" filter={accountFilter} name={name} />
       </div>
       <Panel>
         <TableHead columns={COLUMNS} density="dense" />
