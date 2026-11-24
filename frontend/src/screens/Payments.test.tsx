@@ -99,7 +99,7 @@ describe('payments screen', () => {
     );
     const row = rows.find((r) => within(r).queryByText('Ivan Ivanov')) as HTMLElement;
     expect(within(row).getByRole('link', { name: 'Ivan Ivanov' }).getAttribute('href')).toBe(
-      `/subscribers/${A1}`,
+      `/billing-accounts/${A1}`,
     );
     expect(within(row).getByText('+100.00')).toBeTruthy();
     expect(within(row).getByText('USD')).toBeTruthy();
@@ -113,7 +113,7 @@ describe('payments screen', () => {
       .getAllByRole('row')
       .find((r) => within(r).queryByText('Returned deposit')) as HTMLElement;
     expect(within(refund).getByRole('link', { name: 'Account' }).getAttribute('href')).toBe(
-      `/subscribers/${A1}`,
+      `/billing-accounts/${A1}`,
     );
     expect(within(refund).getByText('BA-')).toBeTruthy();
     expect(within(refund).getByText('A0000001')).toBeTruthy();
@@ -222,7 +222,7 @@ describe('payments panel on the subscriber card', () => {
       [`GET ${PAYMENT}?account.id=${A1}&${PAGE}`]: () => json([PAY1], { total: 1 }),
       [`GET ${PAYMENT}/${P1}`]: () => json(PAY1),
     });
-    open(`/subscribers/${A1}`);
+    open(`/billing-accounts/${A1}`);
     await screen.findByRole('heading', { name: /Ivan Ivanov/ });
     fireEvent.click(screen.getByRole('tab', { name: /^Payments/ }));
     const card = expectUi('ui.subscriber.payments');
@@ -276,7 +276,7 @@ describe('account-level refunds from payments', () => {
       if (entry === 'global payment') {
         open('/payments');
       } else {
-        open(`/subscribers/${A1}`);
+        open(`/billing-accounts/${A1}`);
         await screen.findByRole('heading', { name: /Ivan Ivanov/ });
         fireEvent.click(screen.getByRole('tab', { name: /^Payments/ }));
       }

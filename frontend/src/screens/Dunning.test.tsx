@@ -57,7 +57,7 @@ describe('dunning screen', () => {
     expectUi('ui.dunning');
     const olga = rowOf('Olga Kuznetsova');
     expect(within(olga).getByRole('link', { name: 'Olga Kuznetsova' }).getAttribute('href')).toBe(
-      `/subscribers/${A1}#bills`,
+      `/billing-accounts/${A1}#bills`,
     );
     expect(within(olga).getByText('2026-07-01')).toBeTruthy();
     expect(within(olga).getByText('1,290.50')).toBeTruthy();

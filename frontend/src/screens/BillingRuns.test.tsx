@@ -771,7 +771,7 @@ describe('billing runs: one run and its accounts', () => {
     ).toBeTruthy();
     expect(
       within(dialog).getByRole('link', { name: 'Olga Kuznetsova main' }).getAttribute('href'),
-    ).toBe(`/subscribers/${A1}`);
+    ).toBe(`/billing-accounts/${A1}`);
     expect(within(dialog).getByRole('button', { name: `Copy ${A1}` })).toBeTruthy();
     expect(within(dialog).getByText('3 · ok 1 · failed 1 · blocked 1')).toBeTruthy();
     fireEvent.click(within(dialog).getByText('Run details'));

@@ -1,7 +1,8 @@
 import type { Route } from './router';
 
-// The sidebar as data (#414): sections follow the TMF Open API / ODA domains and the DB
-// areas (docs/db/README.md, docs/decisions/frontend.md). Every navigable route sits in
+// The sidebar as data (#414, #457): sections follow the TMF Open API / ODA domains;
+// Customers runs down the account hierarchy (party, financial account, customer, billing
+// account, its products and orders; docs/decisions/frontend.md). Every navigable route sits in
 // exactly one item (nav.test.ts); `tmf` is the item's title attribute.
 
 export type RouteName = Route['name'];
@@ -30,22 +31,10 @@ export const NAV: NavSection[] = [
     label: 'Customers',
     items: [
       {
-        label: 'Subscribers',
-        href: '/subscribers',
-        routes: ['subscribers', 'subscriber'],
-        tmf: 'TMF666 billingAccount',
-      },
-      {
-        label: 'Signups',
-        href: '/signups',
-        routes: ['careSignups'],
-        tmf: 'internal (online signups)',
-      },
-      {
         label: 'Parties',
         href: '/parties',
         routes: ['parties'],
-        tmf: 'TMF632 individual/organization, TMF629 customer',
+        tmf: 'TMF632 individual/organization',
       },
       {
         label: 'Financial accounts',
@@ -53,11 +42,28 @@ export const NAV: NavSection[] = [
         routes: ['financialAccounts'],
         tmf: 'TMF666 financialAccount',
       },
+      { label: 'Customers', href: '/customers', routes: ['customers'], tmf: 'TMF629 customer' },
+      {
+        label: 'Billing accounts',
+        href: '/billing-accounts',
+        routes: ['subscribers', 'subscriber'],
+        tmf: 'TMF666 billingAccount',
+      },
+      { label: 'Products', href: '/products', routes: ['products'], tmf: 'TMF637 product' },
+      { label: 'Orders', href: '/orders', routes: ['orders'], tmf: 'TMF622 productOrder' },
+      {
+        // not under System (#457 decision 4): System becomes admin-only (#467) and every
+        // operator works the signups
+        label: 'Online signups',
+        href: '/signups',
+        routes: ['careSignups'],
+        tmf: 'internal (online signups)',
+      },
     ],
   },
   {
-    key: 'products',
-    label: 'Products',
+    key: 'catalog',
+    label: 'Catalog',
     items: [
       {
         label: 'Product catalog',
@@ -65,8 +71,6 @@ export const NAV: NavSection[] = [
         routes: ['catalog'],
         tmf: 'TMF620 offering, specification, category, catalog',
       },
-      { label: 'Orders', href: '/orders', routes: ['orders'], tmf: 'TMF622 productOrder' },
-      { label: 'Products', href: '/products', routes: ['products'], tmf: 'TMF637 product' },
     ],
   },
   {
@@ -174,7 +178,7 @@ export const NAV: NavSection[] = [
 ];
 
 /** Routes that are reached without the sidebar: the session pages, the kit, not-found and
- * the subscriber card (under Subscribers). */
+ * the billing account card (under Billing accounts). */
 export const OFF_NAV: RouteName[] = ['signIn', 'password', 'uiKit', 'notFound', 'subscriber'];
 
 /** The sections an operator sees: admin-only items only for an admin; empty sections go. */

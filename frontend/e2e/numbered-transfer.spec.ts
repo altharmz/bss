@@ -115,7 +115,7 @@ test('numbered prepaid subscribers complete a transfer by subscriber number', as
       resourceSpecification: { id: 'msisdn', '@type': 'ResourceSpecificationRef' },
     });
     accounts.push(account.id);
-    await page.goto(`/subscribers/${account.id}`);
+    await page.goto(`/billing-accounts/${account.id}`);
     await page.getByRole('button', { name: 'Top up', exact: true }).first().click();
     const topup = page.getByRole('dialog', { name: 'Top up' });
     await topup.getByLabel('Amount').fill('20.00');
@@ -148,7 +148,7 @@ test('numbered prepaid subscribers complete a transfer by subscriber number', as
       .toBe('completed');
     expect(offering.id).toBeTruthy();
   }
-  await page.goto(`/subscribers/${accounts[0]}`);
+  await page.goto(`/billing-accounts/${accounts[0]}`);
   await page.getByRole('button', { name: 'Transfer', exact: true }).click();
   const transfer = page.getByRole('dialog', { name: 'Transfer funds' });
   await expect(transfer.getByRole('button', { name: digits[0] ?? '', exact: true })).toBeVisible();

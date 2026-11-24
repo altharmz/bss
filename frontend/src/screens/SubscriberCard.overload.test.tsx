@@ -88,7 +88,7 @@ function fakeTimers() {
   vi.spyOn(Math, 'random').mockReturnValue(0);
 }
 async function openFaked() {
-  window.history.replaceState(null, '', `/subscribers/${A}`);
+  window.history.replaceState(null, '', `/billing-accounts/${A}`);
   render(<App />);
   await until(() => screen.getByRole('heading', { name: /Olga Kuznetsova/ }));
 }
@@ -194,7 +194,7 @@ describe('prepaid card under the request bound (#412)', () => {
     await openFaked();
     await until(() => expect([buckets.calls, products.calls]).toEqual([1, 1]));
     await act(async () => {
-      window.history.pushState(null, '', `/subscribers/${B}`);
+      window.history.pushState(null, '', `/billing-accounts/${B}`);
       window.dispatchEvent(new PopStateEvent('popstate'));
     });
     await until(() => screen.getByRole('heading', { name: /Boris Orlov/ }));

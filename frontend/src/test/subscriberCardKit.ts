@@ -199,7 +199,7 @@ export function backend(routes: Record<string, Handler> = {}, account: object = 
 }
 
 export async function open(hash = '') {
-  window.history.replaceState(null, '', `/subscribers/${A}${hash}`);
+  window.history.replaceState(null, '', `/billing-accounts/${A}${hash}`);
   render(createElement(App));
   await screen.findByRole('heading', { name: /Olga Kuznetsova/ });
 }
@@ -295,7 +295,7 @@ export function editBackend(routes: Record<string, Handler> = {}, account: objec
 export async function openEdit() {
   await open();
   fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-  const dialog = await screen.findByRole('dialog', { name: 'Edit subscriber' });
+  const dialog = await screen.findByRole('dialog', { name: 'Edit billing account' });
   await within(dialog).findByDisplayValue('Kuznetsova');
   return dialog;
 }

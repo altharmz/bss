@@ -104,7 +104,7 @@ describe('bills screen', () => {
     );
     const row = rows.find((r) => within(r).queryByText('Olga Kuznetsova')) as HTMLElement;
     expect(within(row).getByRole('link', { name: 'Olga Kuznetsova' }).getAttribute('href')).toBe(
-      `/subscribers/${A2}`,
+      `/billing-accounts/${A2}`,
     );
     expect(within(row).getByText('BL-B2000002')).toBeTruthy();
     expect(within(row).getByText('2026-10-01')).toBeTruthy();

@@ -9,11 +9,11 @@ for (const viewport of [
     page,
   }) => {
     await page.setViewportSize(viewport);
-    await page.goto('/subscribers');
+    await page.goto('/billing-accounts');
     await signIn(page);
     await page.getByRole('row').filter({ hasText: 'Sarah Johnson' }).dblclick();
     await page.getByRole('button', { name: 'Edit', exact: true }).click();
-    const edit = page.getByRole('dialog', { name: 'Edit subscriber' });
+    const edit = page.getByRole('dialog', { name: 'Edit billing account' });
     await expect(edit.getByLabel('Account name')).not.toHaveValue('');
     await expect(edit.getByRole('group', { name: 'Presentation media' })).toBeAttached();
     const check = async (dialog: Locator, primary: Locator) => {

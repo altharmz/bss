@@ -218,7 +218,7 @@ export function NewSubscriberModal({
   return (
     <Dialog
       onSubmit={submitDialogPrimary}
-      title="New subscriber"
+      title="New billing account"
       size="M"
       onClose={onClose}
       ui="ui.subscribers.new"
@@ -228,7 +228,7 @@ export function NewSubscriberModal({
           {problem !== null && <StepProblem {...problem} />}
           <Button onClick={onClose}>Cancel</Button>
           <Button variant="primary" disabled={!valid || busy} onClick={() => void submit()}>
-            Create subscriber
+            Create billing account
           </Button>
         </>
       }
@@ -380,10 +380,10 @@ function InitialProduct({ accountId, onDone }: { accountId: string; onDone: () =
   return (
     <Dialog
       onSubmit={submitDialogPrimary}
-      title="Subscriber created"
+      title="Billing account created"
       size="M"
       onClose={onDone}
-      footer={<Button onClick={onDone}>Open subscriber</Button>}
+      footer={<Button onClick={onDone}>Open billing account</Button>}
     >
       <>
         <p>The account was created. Add its initial product next.</p>
@@ -415,7 +415,7 @@ export function EditSubscriberModal({
   return (
     <Dialog
       onSubmit={submitDialogPrimary}
-      title="Edit subscriber"
+      title="Edit billing account"
       size="M"
       onClose={onClose}
       ui="ui.subscriber.edit"
@@ -429,7 +429,7 @@ export function EditSubscriberModal({
       {profile.status === 'error' && (
         <>
           <ErrorBlock
-            title="Failed to load the subscriber"
+            title="Failed to load the billing account"
             error={profile.error}
             onRetry={profile.retry}
           />

@@ -186,7 +186,7 @@ it('opens invoice details, filters discrepancies and sorts paged margins on the 
   fireEvent.click(invoiceLink);
   expectUi('ui.wholesale.detail');
   const link = await screen.findByRole('link', { name: 'Line account' });
-  expect(link.getAttribute('href')).toBe(`/subscribers/${ACCOUNT}`);
+  expect(link.getAttribute('href')).toBe(`/billing-accounts/${ACCOUNT}`);
   expect(screen.getByText('Line count')).toBeTruthy();
   const discrepancies = within(expectUi('ui.wholesale.discrepancies'));
   fireEvent.change(discrepancies.getByLabelText('Discrepancy kind'), {

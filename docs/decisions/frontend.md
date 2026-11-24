@@ -844,9 +844,10 @@ self-hosted (`@fontsource`), no CDN at runtime. Every dependency needs a stated 
 - **The UI's write requests are pinned on both sides**: component tests assert the exact
   bodies, and `tests/internal/test_ui_requests.py` replays the same bodies against the real API.
   Change both together.
-- **Routes:** `/subscribers`, `/subscribers/{accountId}`, `/catalog`, `/billing-runs`
+- **Routes:** `/billing-accounts`, `/billing-accounts/{accountId}` (#457; the old
+  `/subscribers` paths are replaced by them), `/catalog`, `/billing-runs`
   (not `/billing`: never confusable with the app's `/billing-status`, which Caddy routes
-  to the backend); `/` redirects to `/subscribers`; anything else is a not-found page.
+  to the backend); `/` redirects to `/billing-accounts`; anything else is a not-found page.
 - **Component tests stub every request** (`src/test/fetch.ts`): an unmatched one fails
   the test after it ends (`src/test/setup.ts`), not just renders a network error. The
   old behaviour made App.test "recovers on Retry" flaky (2 of 5 on master, 7 of 10 in
@@ -1050,6 +1051,8 @@ refused, and the card showed both as final panel errors.
 
 ## Sidebar by TMF domain and DB area (2026-11-20, issue #414)
 
+Its Customers and Products sections are superseded by
+[the account hierarchy](#sidebar-by-the-account-hierarchy-2026-11-25-issue-457).
 Supersedes the 2026-10-21 sidebar table. Items were added one at a time to that
 three-section menu, which by then had five sections and 18 items. Products mixed TMF620/622/637
 commerce with TMF639 resources, Billing mixed TMF678, TMF676, TMF654, TMF666 and internal items,
@@ -1223,3 +1226,38 @@ own orders and products are on the card.
   Products, not "No orders".
 - **Markers:** `ui.orders.unfinished` (a `Segmented` option now takes a `ui` marker),
   `ui.orders.subscriberSearch`, `ui.products.subscriberSearch`.
+
+## Sidebar by the account hierarchy (2026-11-25, issue #457)
+
+Supersedes the Customers and Products sections of the #414 sidebar. Customers held Signups,
+which are not customers, and Subscribers, which is the TMF666 billing account list (one row per
+billing account). TMF629 customers were only a Parties tab, and TMF637 products, which belong to a
+billing account, sat next to the catalog.
+
+- **Customers runs down the account hierarchy:** Parties (TMF632), Financial accounts (TMF666
+  financialAccount), Customers (TMF629), Billing accounts (TMF666 billingAccount), Products
+  (TMF637), Orders (TMF622), then Online signups. **Catalog** (`ui.shell.section.catalog`, was
+  `products`) holds Product catalog alone. Resources, Billing, Prepaid, Reports and System are
+  unchanged. Sign-in still lands on the billing account list.
+- **Online signups stays in Customers, not System** (the issue's decision 4 is dropped). #467
+  makes System admin-only, and every operator works the signup queue. The route `/signups` and
+  the `ui.careSignups.*` markers are unchanged; the label is "Online signups".
+- **"Subscribers" is "Billing accounts"** in the sidebar, the page title, breadcrumbs, the
+  card's back link and crumb, the create/edit dialogs ("New billing account", "Edit billing
+  account"), the links from Numbers, SIMs and Port requests ("Open billing account") and the
+  Orders and Products captions. "Subscriber number" (the MSISDN) keeps its name, and so do the
+  column headers that name the person on other lists. Internal ids stay: route names
+  (`subscribers`, `subscriber`), `data-ui="ui.subscriber*"`, `/internal/v1/subscriber`.
+  Renaming them would only churn tests and the UI/MCP parity check.
+- **Routes:** `/billing-accounts` and `/billing-accounts/{id}`. `/subscribers` and
+  `/subscribers/{id}` still parse; `currentPath` replaces them in the address bar
+  (`replaceState`, keeping the query and hash, no history entry), so bookmarks and the
+  MCP/notification links keep working. Every link builds the path with `hrefOf`.
+- **Customers is its own screen** (`/customers`, `screens/Customers.tsx`, `ui.customers`): the
+  former Parties tab's list, name search, status filter and customer dialog, with the same
+  request. The inner markers stay `ui.parties.customers`, `ui.parties.customer` and the rest.
+  A customer is still created from its party (Parties, New customer). Parties keeps
+  Individuals and Organizations; its column and dialog say "Billing accounts".
+- **Tests:** `nav.test.ts` pins the Customers and Catalog items; `App.test.tsx` the full
+  sidebar order, the new routes and the replaced old paths; `Parties.test.tsx` the Customers
+  screen, its filters and that Parties has no Customers tab.

@@ -109,7 +109,7 @@ describe('financial accounts', () => {
     );
     expect(within(group).getByText('EUR')).toBeTruthy();
     const link = within(group).getByRole('link', { name: 'Main account' });
-    expect(link.getAttribute('href')).toBe(`/subscribers/${B1}`);
+    expect(link.getAttribute('href')).toBe(`/billing-accounts/${B1}`);
     expect(within(group).getByText('(billing)')).toBeTruthy();
     // settlement and party accounts have no screen: named, not linked
     expect(within(group).getByText('Partner payouts').closest('a')).toBeNull();

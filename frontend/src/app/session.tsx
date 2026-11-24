@@ -19,7 +19,7 @@ function returnPath() {
     !/[\\\s]/.test(path) &&
     !/^\/(sign-in|change-password)([/?#]|$)/.test(path)
     ? path
-    : '/subscribers';
+    : '/billing-accounts';
 }
 
 function signInPath() {
@@ -94,7 +94,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
           actions={
             <>
               {!session.mustChangePassword && (
-                <Button onClick={() => navigate('/subscribers')}>Cancel</Button>
+                <Button onClick={() => navigate('/billing-accounts')}>Cancel</Button>
               )}
               <SignOut />
             </>

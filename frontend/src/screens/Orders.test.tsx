@@ -255,7 +255,7 @@ describe('orders list', () => {
       .getAllByRole('row')
       .find((r) => within(r).queryByText('C0000001')) as HTMLElement;
     expect(within(row).getByRole('link', { name: 'Ivan Ivanov' }).getAttribute('href')).toBe(
-      `/subscribers/${A1}`,
+      `/billing-accounts/${A1}`,
     );
     expect(within(row).getByText('Completed').classList.contains('pill-live')).toBe(true);
     expect(within(row).getByText('ORD-')).toBeTruthy();
@@ -316,7 +316,7 @@ describe('orders list', () => {
     expect(preset.getAttribute('title')).toBe('draft, acknowledged, inProgress, failed');
     expect(
       screen.getByText(
-        "Orders across all subscribers. A subscriber's own orders: the Orders link on their card.",
+        "Orders across all billing accounts. A billing account's own orders: the Orders link on its card.",
       ),
     ).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'All' }));

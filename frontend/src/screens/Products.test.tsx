@@ -237,7 +237,7 @@ describe('products screen', () => {
     await screen.findByText('Plus 20');
     expect(
       screen.getByText(
-        "Products across all subscribers. A subscriber's products are on their card.",
+        "Products across all billing accounts. A billing account's products are on its card.",
       ),
     ).toBeTruthy();
     const input = expectUi('ui.products.subscriberSearch').querySelector('input') as HTMLElement;

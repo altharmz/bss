@@ -25,6 +25,7 @@ const ALL_ROUTES: Record<RouteName, true> = {
   financialAccounts: true,
   careSignups: true,
   parties: true,
+  customers: true,
   billingSettings: true,
   payments: true,
   dunning: true,
@@ -65,13 +66,29 @@ describe('sidebar navigation data', () => {
   it('has the TMF-domain sections in order', () => {
     expect(NAV.map((section) => section.label)).toEqual([
       'Customers',
-      'Products',
+      'Catalog',
       'Resources',
       'Billing',
       'Prepaid',
       'Reports',
       'System',
     ]);
+  });
+
+  // TEST-CHANGE (#457): the Customers section follows the account hierarchy
+  it('lists Customers down the account hierarchy and Catalog alone', () => {
+    const labels = (key: string) =>
+      NAV.find((section) => section.key === key)?.items.map((item) => [item.label, item.href]);
+    expect(labels('customers')).toEqual([
+      ['Parties', '/parties'],
+      ['Financial accounts', '/financial-accounts'],
+      ['Customers', '/customers'],
+      ['Billing accounts', '/billing-accounts'],
+      ['Products', '/products'],
+      ['Orders', '/orders'],
+      ['Online signups', '/signups'],
+    ]);
+    expect(labels('catalog')).toEqual([['Product catalog', '/catalog']]);
   });
 
   it('shows Users and Logging only to an admin', () => {
@@ -81,5 +98,6 @@ describe('sidebar navigation data', () => {
     expect(labels(false)).not.toContain('Users');
     expect(labels(false)).not.toContain('Logging');
     expect(labels(false)).toContain('Integrations');
+    expect(labels(false)).toContain('Online signups');
   });
 });

@@ -347,7 +347,7 @@ describe('delete a billing account', () => {
       'Deletes the billing account. Its customer and party stay (delete them under Parties).',
     );
     fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
-    await waitFor(() => expect(window.location.pathname).toBe('/subscribers'));
+    await waitFor(() => expect(window.location.pathname).toBe('/billing-accounts'));
     expect(deletes(calls)).toEqual([DELETE_KEY]);
     const call = fetchMock.mock.calls.find(([, init]) => init?.method === 'DELETE');
     expect(call?.[1]?.body).toBeUndefined();
@@ -373,7 +373,7 @@ describe('delete a billing account', () => {
       target: { value: '1500.50' },
     });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add billing account' }));
-    await waitFor(() => expect(window.location.pathname).toBe(`/subscribers/${NEW}`));
+    await waitFor(() => expect(window.location.pathname).toBe(`/billing-accounts/${NEW}`));
     const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
     expect(String(post?.[1]?.body)).toBe(
       '{"@type":"BssBillingAccount","name":"Olga Kuznetsova main","billCycleDay":15,' +
@@ -440,7 +440,7 @@ describe('delete a billing account', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
     const alert = await within(dialog).findByRole('alert');
     expect(alert.textContent).toContain('close it instead');
-    expect(window.location.pathname).toBe(`/subscribers/${A}`);
+    expect(window.location.pathname).toBe(`/billing-accounts/${A}`);
   });
 });
 
