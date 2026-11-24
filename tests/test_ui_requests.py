@@ -110,6 +110,34 @@ def test_ui_lifecycle_settings(api):
     assert saved["updatedAt"] is not None
 
 
+def test_ui_dunning_settings(api):
+    """The exact PATCH body pinned by BillingSettings.test.tsx (#386): only the changed
+    fields, zero days and the minimum as an exact number token."""
+    path = "/internal/v1/dunning/settings"
+    before = api.get(path).json()
+    response = api.patch_raw(path, '{"reminder1Days":0,"minimumOverdue":7.50}')
+    assert response.status_code == 200, response.text
+    saved = decimals(api.get(path))
+    assert saved["reminder1Days"] == 0
+    assert saved["minimumOverdue"] == Decimal("7.50")
+    assert saved["reminder2Days"] == before["reminder2Days"]
+    assert saved["suspendDays"] == before["suspendDays"]
+    assert saved["updatedAt"] is not None
+
+
+def test_ui_dunning_exemption(api):
+    """The two PATCH bodies pinned by Bills.test.tsx (#386): exempt with a trimmed reason,
+    and the end of the exemption without one."""
+    account = apidata.account(api)
+    path = f"/internal/v1/billingAccount/{account['id']}/dunning"
+    exempt = api.patch(path, {"exempt": True, "reason": "Hardship plan agreed"})
+    assert exempt.status_code == 200, exempt.text
+    assert exempt.json()["exempt"] is True
+    ended = api.patch(path, {"exempt": False})
+    assert ended.status_code == 200, ended.text
+    assert api.get(path).json()["exempt"] is False
+
+
 def test_ui_logging_settings(api):
     """The three PUT bodies pinned by LoggingSettings.test.tsx: base level (and null), the
     three debug durations, and Stop (0)."""

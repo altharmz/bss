@@ -12,6 +12,7 @@ the bill's PDF in `attachment` by its url (docs/decisions/bills.md).
 """
 
 from typing import Any
+from uuid import UUID
 
 import psycopg
 from fastapi import APIRouter, Request
@@ -212,6 +213,13 @@ def _channel(raw: str) -> str:
     raise ValueError(raw)
 
 
+def _bill_attachment(raw: str) -> UUID:
+    """The bill of a bill email's attachment id `{bill id}-pdf` (see `_attachments`)."""
+    if not raw.endswith("-pdf"):
+        raise ValueError(raw)
+    return UUID(raw.removesuffix("-pdf"))
+
+
 FILTERS = {
     "id": ("id", listing.as_uuid),
     "state": ("state", listing.as_str),
@@ -219,6 +227,9 @@ FILTERS = {
     "receiver.party.id": ("customer_id", listing.as_uuid),
     "billingAccount.id": ("billing_account_id", listing.as_uuid),
     "product.id": ("product_id", listing.as_uuid),
+    # a bill email by the id of the PDF it carries, `{bill id}-pdf` (#386: the bill dialog's
+    # delivery line, sent with billingAccount.id so the account index narrows the scan)
+    "attachment.id": ("customer_bill_id", lambda raw: _bill_attachment(raw)),
 }
 
 

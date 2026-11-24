@@ -22,6 +22,7 @@ _COLUMNS = {
     "customer_id": "customer_id",
     "billing_account_id": "billing_account_id",
     "product_id": "product_id",
+    "customer_bill_id": "customer_bill_id",
 }
 
 

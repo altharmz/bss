@@ -942,7 +942,8 @@ OPERATIONS: dict[str, Op] = {
         "The customer messages (SMS and email) the system sent or queued, newest first: state"
         " (initial, inProgress, completed, cancelled, failed), the event and template in the"
         " characteristics, receiver, attempts and last error. Filter by state, messageType (SMS,"
-        " Email), receiver.party.id (customer), billingAccount.id, product.id or id.",
+        " Email), receiver.party.id (customer), billingAccount.id, product.id, id or attachment.id"
+        " ({bill id}-pdf: the emails that carried that bill).",
         query=LIST,
     ),
     "get_communication_message": Op(

@@ -11,7 +11,7 @@
 
 | Method | Path | Parameters | Request schema | Success | Code |
 |---|---|---|---|---|---|
-| GET | `/tmf-api/communicationManagement/v4/communicationMessage` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `billingAccount.id`, `id`, `messageType`, `product.id`, `receiver.party.id`, `state` | - | 200 `array of CommunicationMessage` | [`app/api/communication.py`](../../app/api/communication.py) |
+| GET | `/tmf-api/communicationManagement/v4/communicationMessage` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `attachment.id`, `billingAccount.id`, `id`, `messageType`, `product.id`, `receiver.party.id`, `state` | - | 200 `array of CommunicationMessage` | [`app/api/communication.py`](../../app/api/communication.py) |
 | POST | `/tmf-api/communicationManagement/v4/communicationMessage` | query: `fields`; body: `application/json` | `CommunicationMessage_Create` | 201 `CommunicationMessage` | [`app/api/communication.py`](../../app/api/communication.py) |
 | GET | `/tmf-api/communicationManagement/v4/communicationMessage/{message_id}` | path: `message_id`; query: `fields` | - | 200 `CommunicationMessage` | [`app/api/communication.py`](../../app/api/communication.py) |
 | PATCH | `/tmf-api/communicationManagement/v4/communicationMessage/{message_id}` | path: `message_id`; query: `fields`; body: `application/merge-patch+json` | `CommunicationMessage_Update` | 200 `CommunicationMessage` | [`app/api/communication.py`](../../app/api/communication.py) |

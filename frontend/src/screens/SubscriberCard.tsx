@@ -57,6 +57,7 @@ import { NumberModal } from './ProductNumber';
 import { TransferPinDialog } from './TransferPin';
 import { DeviceDialog } from './ProductDevice';
 import { E911Dialog, E911Line, offersE911Edit } from './E911Address';
+import { SubscriberDunningPanel } from './Dunning';
 import { e911Text } from '../api/e911';
 import { BillDialog, RecordPaymentModal, useBills } from './Bills';
 import { ActionDialog, BalanceActions } from './PrepaidHistory';
@@ -700,6 +701,9 @@ function Card({
       {pane(
         'bills',
         <>
+          {account.ratingType === 'postpaid' && (
+            <SubscriberDunningPanel accountId={account.id} version={version} />
+          )}
           <Button onClick={() => setPaying(true)} disabled={bills.status !== 'ok'}>
             Record payment
           </Button>

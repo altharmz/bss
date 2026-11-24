@@ -119,6 +119,23 @@ export async function loadMessages(customerId: string, offset: number, signal: A
   return { items: page.items.map(toMessage), more: page.more };
 }
 
+/** The emails that carried a bill's PDF, newest first (#386: the bill dialog's delivery
+ * line). The account narrows the server's scan; the PDF's attachment id names the bill. */
+export async function loadBillDelivery(
+  accountId: string,
+  billId: string,
+  signal: AbortSignal,
+): Promise<Message[]> {
+  const query = new URLSearchParams({
+    'billingAccount.id': accountId,
+    'attachment.id': `${billId}-pdf`,
+    offset: '0',
+    limit: '5',
+  });
+  const page = await getPage<MessageBody>(`${MESSAGES}?${query}`, signal);
+  return page.items.map(toMessage);
+}
+
 export async function loadMessage(id: string, signal: AbortSignal): Promise<Message> {
   return toMessage(await getJson<MessageBody>(`${MESSAGES}/${encodeURIComponent(id)}`, signal));
 }

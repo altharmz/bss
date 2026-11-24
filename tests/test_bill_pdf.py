@@ -195,6 +195,21 @@ def test_a_legacy_bill_and_an_unknown_bill_have_no_pdf(api, worker, db_conn):
     assert api.client.get(f"{apidata.BILL}/{uuid4()}/document.pdf").status_code == 404
 
 
+def test_the_bill_dialog_reads_the_pdf_link_or_null(api, worker, db_conn):
+    """#386: the internal bill detail carries the billDocument PDF's url and size, or null."""
+    account = billed_account(api)
+    run(worker, api, DEC1)
+    [bill] = bills_of(api, account)
+    [document] = [d for d in bill["billDocument"] if d["mimeType"] == "application/pdf"]
+    detail = api.get(f"/internal/v1/customerBill/{bill['id']}").json()
+    assert detail["pdf"] == {"url": document["url"], "size": document["size"]["amount"]}
+    db_conn.execute("ALTER TABLE customer_bill_document DISABLE TRIGGER USER")
+    db_conn.execute("DELETE FROM customer_bill_document")
+    db_conn.execute("ALTER TABLE customer_bill_document ENABLE TRIGGER USER")
+    db_conn.commit()
+    assert api.get(f"/internal/v1/customerBill/{bill['id']}").json()["pdf"] is None
+
+
 def test_the_pdf_needs_authentication(api, worker):
     account = billed_account(api)
     run(worker, api, DEC1)
@@ -282,6 +297,27 @@ def test_a_resent_bill_email_carries_the_pdf_again(api, worker, db_conn, log_sen
     process_notifications(worker, clock=api.clock, tz=TZ)
     first, again = bill_emails(log_sender)
     assert again.attachments == first.attachments and again.key != first.key
+
+
+@pytest.mark.capability("worker.billEmail")
+def test_the_emails_of_one_bill_are_listed_by_its_attachment(api, worker, db_conn, log_sender):
+    """#386: the bill dialog's delivery line lists the emails that carried the bill's PDF
+    (`attachment.id` = `{bill id}-pdf`), its resend too; another bill's id lists none."""
+    account = billed_account(api, media=[email_media(api)])
+    email_contact(db_conn, account)
+    run(worker, api, DEC1)
+    process_notifications(worker, clock=api.clock, tz=TZ)
+    [bill] = bills_of(api, account)
+    url = "/tmf-api/communicationManagement/v4/communicationMessage"
+    [first] = api.get(f"{url}?billingAccount.id={account['id']}").json()
+    again = api.post(f"/internal/v1/notification/message/{first['id']}/resend", {}).json()
+    query = f"{url}?billingAccount.id={account['id']}&attachment.id={bill['id']}-pdf"
+    both = {again["id"], first["id"]}  # one instant under the test clock: no order to pin
+    assert {m["id"] for m in api.get(query).json()} == both
+    assert {m["id"] for m in api.get(f"{url}?attachment.id={bill['id']}-pdf").json()} == both
+    assert api.get(f"{url}?attachment.id={uuid4()}-pdf").json() == []
+    for bad in (bill["id"], f"{bill['id']}-json", "x-pdf"):
+        assert api.get(f"{url}?attachment.id={bad}").status_code == 400
 
 
 # --- rendering cost ---

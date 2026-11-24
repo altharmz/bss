@@ -97,6 +97,32 @@ function networkDefault(key: string): Handler | undefined {
   return undefined;
 }
 
+// The postpaid subscriber card's dunning panel and the bill dialog's delivery line (#386)
+// load with the card and the dialog; a test that is not about them gets "not in dunning" and
+// "not emailed".
+function dunningDefault(key: string): Handler | undefined {
+  const account = /^GET \/internal\/v1\/billingAccount\/([^/]+)\/dunning$/.exec(key);
+  if (account)
+    return () =>
+      json({
+        billingAccount: { id: account[1], name: 'Account' },
+        exempt: false,
+        inDunning: false,
+        overdueSince: null,
+        overdueAmount: null,
+        stepsTaken: [],
+        nextStep: null,
+        suspendedProducts: [],
+      });
+  if (
+    /^GET \/tmf-api\/communicationManagement\/v4\/communicationMessage\?billingAccount\.id=[^&]+&attachment\.id=[^&]+-pdf&offset=0&limit=5$/.test(
+      key,
+    )
+  )
+    return () => json([], { total: 0 });
+  return undefined;
+}
+
 export function stubFetch(routes: Record<string, Handler>) {
   const calls: string[] = [];
   routes = { [NAV_COMMANDS]: noCommands, ...routes };
@@ -111,7 +137,8 @@ export function stubFetch(routes: Record<string, Handler>) {
       routes[key] ??
       (prefix ? routes[prefix] : undefined) ??
       paymentPanelDefault(key) ??
-      networkDefault(key);
+      networkDefault(key) ??
+      dunningDefault(key);
     if (!handler) {
       unexpected.push(key);
       throw new Error(`unexpected request in test: ${key}`);

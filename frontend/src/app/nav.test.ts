@@ -27,6 +27,7 @@ const ALL_ROUTES: Record<RouteName, true> = {
   parties: true,
   billingSettings: true,
   payments: true,
+  dunning: true,
   bills: true,
   wholesale: true,
   balances: true,

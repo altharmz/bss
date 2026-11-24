@@ -12,12 +12,13 @@ import {
   type BillState,
 } from '../api/bss';
 import { explain } from '../api/client';
+import { loadBillDelivery, type Message } from '../api/messages';
 import { useResource, type ResourceWithRetry } from '../api/useResource';
 import { useSystemContext } from '../app/context';
 import { clockTime, businessDate, lastDay } from '../format/dates';
 import { formatCents, parseAmount, positiveAmountError, toCents } from '../format/money';
 import { Amount } from '../ui/Amount';
-import { eventTypeLabel, PAYMENT_METHOD_OPTIONS } from '../format/labels';
+import { eventTypeLabel, PAYMENT_METHOD_OPTIONS, plural } from '../format/labels';
 import {
   Segmented,
   Button,
@@ -178,12 +179,81 @@ export function BillDialog({
         )}
         {detail.status === 'ok' && (
           <>
+            <BillDocument bill={detail.data} timeZone={context.timeZone} />
             <BillBody bill={detail.data} timeZone={context.timeZone} onChanged={onChanged} />
             <BillLinks billId={billId} cycleId={cycleId} />
           </>
         )}
       </div>
     </Dialog>
+  );
+}
+
+const DELIVERY_STATE: Record<string, string> = {
+  initial: 'queued',
+  inProgress: 'sending',
+  completed: 'sent',
+  failed: 'failed',
+  cancelled: 'cancelled',
+};
+
+/** The PDF link (#202's billDocument url, in a new tab) and whether the bill was emailed:
+ * the newest email that carried its PDF, with its state from the message list (#386). */
+function BillDocument({ bill, timeZone }: { bill: BillDetail; timeZone: string }) {
+  const delivery = useResource(`bill-delivery:${bill.id}`, (signal) =>
+    loadBillDelivery(bill.billingAccount.id, bill.id, signal),
+  );
+  const when = (instant: string) =>
+    `${businessDate(instant, timeZone)} ${clockTime(instant, timeZone).slice(0, 5)}`;
+  return (
+    <section className="bss-bill-document">
+      <div className="bss-line">
+        <span>
+          {bill.pdf === null ? (
+            <span className="bss-secondary">No PDF (issued before bill documents)</span>
+          ) : (
+            <a
+              className="bss-link"
+              data-ui="ui.bills.pdf"
+              href={bill.pdf.url}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              PDF ({Math.max(1, Math.round(bill.pdf.size / 1024))} KB)
+            </a>
+          )}
+        </span>
+        <span data-ui="ui.bills.delivery" className="bss-secondary">
+          {delivery.status === 'loading' && 'Delivery…'}
+          {delivery.status === 'error' && (
+            <>
+              Delivery unknown ({delivery.error.message}){' '}
+              <Button small onClick={delivery.retry}>
+                Retry
+              </Button>
+            </>
+          )}
+          {delivery.status === 'ok' && <DeliveryLine messages={delivery.data} when={when} />}
+        </span>
+      </div>
+    </section>
+  );
+}
+
+function DeliveryLine({ messages, when }: { messages: Message[]; when: (at: string) => string }) {
+  const latest = messages[0];
+  if (latest === undefined) return <>Not emailed</>;
+  const state = DELIVERY_STATE[latest.state] ?? latest.state;
+  const to = latest.receiver.address === null ? '' : ` to ${latest.receiver.address}`;
+  const at = latest.sendTimeComplete ?? latest.sendTime;
+  const reason = latest.stateReason ?? latest.lastError;
+  return (
+    <>
+      Email{to}: {state}
+      {at !== null && ` · ${when(at)}`}
+      {reason !== null && ` (${reason})`}
+      {messages.length > 1 && ` · ${plural(messages.length, 'email')}`}
+    </>
   );
 }
 
