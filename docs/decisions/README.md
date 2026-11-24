@@ -25,7 +25,7 @@ changing it, and record a new decision in it.
 | [notifications.md](notifications.md) | Customer SMS and email: TMF681 message log, triggers, consent, quiet hours, retries (2026-11-06, issue #192) |
 | [taxes.md](taxes.md) | Tax engine adapter (Avalara-style placeholder) and the service address of prepaid charges (2026-11-05, issue #184) |
 | [payments.md](payments.md) | Payment gateway adapter (Stripe-style placeholder): saved cards (TMF670), card top-ups, auto top-up (2026-11-05, issue #185) |
-| [worker.md](worker.md) | Billing worker (stage 4): slices b-h, Q1-Q14 and D-W decisions as recorded; resolved questions (stale runs, `APP_ENV`) |
+| [worker.md](worker.md) | Billing worker (stage 4): slices b-h, Q1-Q14 and D-W decisions as recorded; resolved questions (stale runs, `APP_ENV`); account review and its set-based full review (#292, #404) |
 | [bills.md](bills.md) | Bill lifecycle (option C): slices 1-4, migration 0006, settlement; bill PDFs and email delivery (#202) |
 | [dunning.md](dunning.md) | Postpaid dunning: reminders, suspension and restoration through internal orders from the first overdue date, exemption (2026-11-23, issue #385) |
 | [internal-api.md](internal-api.md) | Internal API (stage 5): endpoints, `X-Remote-User` trust |

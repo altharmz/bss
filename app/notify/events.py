@@ -101,14 +101,69 @@ def _account_ids(conn: psycopg.Connection, only: list[UUID] | None) -> list[UUID
     ]
 
 
+# The account's latest credit, which names its low-balance event: a completed top-up or a
+# done payment, the latest first. `{a}` is the account's id (an SQL expression).
+_LAST_CREDIT = (
+    "SELECT id::text AS id FROM (SELECT id, confirmed_at AS at FROM balance_action"
+    " WHERE kind = 'topup' AND status = 'completed' AND billing_account_id = {a}"
+    " UNION ALL SELECT id, received_at FROM payment"
+    " WHERE billing_account_id = {a} AND status = 'done') x"
+    " ORDER BY at DESC NULLS LAST LIMIT 1"
+)
+
+# Of the accounts %(ids)s, those where `_low_balance` or `_grace` can find an event not told
+# yet (#404): below the threshold (%(low)s) with no message for the latest credit, or a line
+# that is not suspended and is unfunded today, with no message for its first unfunded day. A
+# plan is unfunded once its latest grant has ended; a pay-as-you-go line when its balance is
+# not above zero (%(empty)s), `paygZeroBalanceDays` after it reached zero. The same dedupe
+# keys as the two detectors, which still decide under the account lock.
+_UNTOLD = (
+    "SELECT a.id FROM billing_account a WHERE a.id = ANY(%(ids)s::uuid[]) AND ("  # noqa: S608 - fixed SQL
+    "(a.id = ANY(%(low)s::uuid[]) AND NOT EXISTS (SELECT FROM notification_message m"
+    " WHERE m.dedupe_key = 'low_balance:' || a.id || ':'"
+    " || coalesce((" + _LAST_CREDIT.format(a="a.id") + "), 'start')))"
+    " OR EXISTS (SELECT FROM product p LEFT JOIN LATERAL (" + entitlement.LATEST_GRANT + ") g"
+    " ON true WHERE p.billing_account_id = a.id AND p.parent_product_id IS NULL"
+    " AND p.status NOT IN ('terminated', 'cancelled', 'aborted') AND p.termination_date IS NULL"
+    " AND NOT coalesce(p.lifecycle_suspended, false) AND NOT coalesce(p.manually_suspended, false)"
+    " AND CASE WHEN p.grantless"
+    " THEN a.id = ANY(%(empty)s::uuid[]) AND a.balance_zero_since + %(payg)s::int <= %(today)s"
+    " AND NOT EXISTS (SELECT FROM notification_message m WHERE m.dedupe_key = 'grace:' || p.id"
+    " || ':' || to_char(a.balance_zero_since + %(payg)s::int, 'YYYY-MM-DD'))"
+    " ELSE lower(g.period) <= %(today)s AND upper(g.period) <= %(today)s"
+    " AND NOT EXISTS (SELECT FROM notification_message m WHERE m.dedupe_key = 'grace:' || p.id"
+    " || ':' || to_char(upper(g.period), 'YYYY-MM-DD')) END))"
+    " ORDER BY a.id"
+)
+
+
+def _untold_account_ids(conn: psycopg.Connection, today: date, settings_row: plan.Settings):
+    """The accounts of a full pass: `_UNTOLD`, in three statements whatever their number."""
+    ids = _account_ids(conn, None)
+    spendable = funding.spendable_many(conn, ids)
+    threshold = settings.notify_low_balance
+    low = [a for a in ids if threshold > 0 and spendable[a] < threshold]
+    empty = [a for a in ids if spendable[a] <= 0]
+    params = {
+        "ids": ids,
+        "low": low,
+        "empty": empty,
+        "today": today,
+        "payg": settings_row.payg_zero_balance_days,
+    }
+    return [row["id"] for row in fetch_all(conn, _UNTOLD, params)]
+
+
 def _accounts(conn: psycopg.Connection, today: date, only: list[UUID] | None) -> list[Event]:
-    """Low balance and grace: both need the account's funding, read under its lock."""
+    """Low balance and grace: both need the account's funding, read under its lock. A full
+    pass (`only` None) looks only at the accounts with an event not told yet (#404)."""
     events: list[Event] = []
-    ids = _account_ids(conn, only)
-    if not ids:
-        return events
     # once per pass (#305): a change of the settings applies from the next pass
     lifecycle_settings = lifecycle_repo.settings(conn)
+    if only is None:
+        ids = _untold_account_ids(conn, today, lifecycle_settings)
+    else:
+        ids = _account_ids(conn, only)
     for account_id in ids:
         with conn.transaction():
             account = billing.load_account_row(conn, account_id)
@@ -122,15 +177,7 @@ def _low_balance(conn: psycopg.Connection, account: Row, spendable: Decimal) -> 
     threshold = settings.notify_low_balance
     if threshold <= 0 or spendable >= threshold:
         return []
-    last = fetch_one(
-        conn,
-        "SELECT id::text AS id FROM (SELECT id, confirmed_at AS at FROM balance_action"
-        " WHERE kind = 'topup' AND status = 'completed' AND billing_account_id = %(a)s"
-        " UNION ALL SELECT id, received_at FROM payment"
-        " WHERE billing_account_id = %(a)s AND status = 'done') x"
-        " ORDER BY at DESC NULLS LAST LIMIT 1",
-        {"a": account["id"]},
-    )
+    last = fetch_one(conn, _LAST_CREDIT.format(a="%(a)s"), {"a": account["id"]})
     currency = account["currency"]
     return [
         Event(

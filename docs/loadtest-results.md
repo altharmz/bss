@@ -3,7 +3,8 @@
 How the runs are made: [loadtest.md](loadtest.md#the-k6-scenarios-281). Each scenario's
 full report is `loadtest/out/<scenario>-<time>/report.md` on the workstation (not
 committed); this page keeps the numbers. Run dates: 13 and 14 November 2026; the
-midnight retry on 19 November; the request bound (#341) on 20 November.
+midnight retry on 19 November; the request bound (#341) on 20 November; the midnight full
+review (#404) on 24 November.
 
 ## Summary
 
@@ -15,6 +16,7 @@ midnight retry on 19 November; the request bound (#341) on 20 November.
 | `soak` (1x, 3 h) | targets held; 2 flags | 603,439 requests, no errors, worst p99 147 ms; flagged: the worker's memory grew 73 % (26 MiB an hour), and k6 dropped 6 of 474,951 arrivals |
 | `billing-night` | pass | the daily run of 100,000 accounts in 22.4 min with 20 % of the mix; API p99 under 110 ms during it |
 | midnight retry (#340, 19 November) | pass | the retry of unfunded renewals in 72 s instead of 81 min; the midnight wake-up as a whole is still 26 to 30 min (the daily full review) |
+| midnight full review (#404, 24 November) | pass | the first wake-up of a business date in 6.7 to 8.7 min instead of 26 to 29; 1.50M statements down to 0.20M; the same outcome |
 | `prod-shaped` | fails, as expected | at today's production limits the app serves about 16 requests/s of the 47 offered and is killed for memory after 103 s |
 | `prod-shaped` with the request bound (#341, 20 November) | thresholds fail; the app stays up | refuses the excess with 503 at once: memory flat at 228 MiB of 384, about 26 requests/s answered, read p95 499 ms; without the bound the same dump OOM-kills it after 85 s |
 
@@ -437,9 +439,48 @@ statements.
   about 1.5M statements, in the same order on both dates, so it is the daily cost and not
   catch-up. Only 200 notifications were sent in each run; the statements are the
   per-account review, not the detectors (which now leave told events out in SQL and no
-  longer grow with them). Left open: #404.
+  longer grow with them). Fixed by #404 ([below](#midnight-full-review-404)).
 - The worker's memory peaked at 143 to 146 MiB in a wake-up of 1.6M statements. Memory
   over hours was not measured again here (no soak run).
+
+### midnight full review (#404)
+
+The first wake-up of a business date after #404, on `seed100k-settled-20261124` (the
+`seed100k-settled-20261120` dump restored, then its catch-up wake-up at the real date,
+56 min, saved as a new dump). One worker wake-up run by hand with the clock moved one day
+ahead, no k6 traffic, the old code (`master` at c3c3f50) and the new one alternated on the
+same restored dump. `COMMAND_BUDGET` was 0 in the A/B runs, so both attempt the same one
+account's commands and their outcomes can be compared; the last run uses the default 60 s.
+Phases are seconds / statements. The scripts and JSON results are in
+`~/projects/bss-agents/worker2/state/issue404-plans/` on the workstation.
+
+| Phase | Old, 25 Nov | Old again, 25 Nov | New, 25 Nov | New, 26 Nov (default budget) |
+|---|---|---|---|---|
+| `produce_renewals` | 130.4 / 15,208 | 104.5 / 15,208 | 137.1 / 15,208 | 223.1 / 15,912 |
+| `process_lifecycle` | 532.8 / 478,710 | 459.5 / 478,710 | **126.2 / 113,005** | **105.2 / 113,024** |
+| `process_commands` | 16.1 / 64 | 15.6 / 64 | 17.6 / 64 | 80.8 / 48,241 |
+| `observe_entitlements` | 367.0 / 304,646 | 353.2 / 304,646 | **19.6 / 12,557** | **18.2 / 13,144** |
+| `process_dunning` | 4.9 / 3,801 | 4.7 / 3,801 | 6.1 / 3,801 | 7.6 / 5,595 |
+| `process_notifications` | 665.8 / 699,909 | 630.2 / 699,909 | **92.3 / 58,985** | **84.4 / 65,869** |
+| Whole wake-up | 1,717.5 s (28.6 min) / 1,502,364 | 1,568.2 s (26.1 min) / 1,502,365 | **399.6 s (6.7 min) / 203,646** | **519.8 s (8.7 min) / 261,812** |
+| Worker peak RSS | 153.4 MiB | | 158.4 MiB | 158.8 MiB |
+
+- **The three passes take 3.9 min instead of 24.** Each full pass now finds, in a few
+  set-based statements, the accounts where it can change something and evaluates only
+  those ([worker.md](decisions/worker.md#full-review-in-set-based-statements-2026-11-24-404)).
+  What remains of the lifecycle pass is real work: the date's suspension and
+  deactivation orders (2,651 lines on 25 November).
+- **The same outcome.** After the old and the new run of 25 November the products
+  (status, suspension flags, termination date), the lifecycle attempts, the accounts'
+  zero-balance dates and the notification messages (type, product, customer, channel,
+  content) hash the same. The messages' dedupe keys differ between any two runs: some
+  name rows the wake-up itself creates (`lifecycle:<event id>`), whose ids are new each
+  time. The worker logged the same 3,079 lines (messages sent, orders placed) in both.
+- The host's load moved the same code by 9 % between the two old runs; the statements
+  do not move.
+- **What is left of the wake-up** is the renewal producer (1.7 to 3.7 min, not this
+  issue's) and `process_commands` within its 60 s budget. The usage feed now runs 4.4 to
+  5.5 minutes into the first wake-up of a date instead of about 11.
 
 ### prod-shaped
 
@@ -544,11 +585,9 @@ and wrote no summary (the runner reports such a run as failed, with its groups m
 
 ## Found and left open
 
-- **The first wake-up of a business date takes 26 to 30 minutes.** Unfunded prepaid
-  renewals no longer hold it (#340 took the retry from 81 min to 72 s, see
-  [midnight retry](#midnight-retry-340)); the once-a-date full review of every prepaid
-  account by lifecycle, entitlements and notifications does, and the feed and the
-  notifications wait for it. Issue #404.
+- **The first wake-up of a business date took 26 to 30 minutes** after #340: the
+  once-a-date full review of every prepaid account. Fixed by #404: 6.7 to 8.7 min
+  ([results](#midnight-full-review-404)).
 - **The app did not bound the requests it holds.** Under overload its memory grew with
   the queue until the limit: 1,421 of 1,536 MiB at 5x, and the kill at 384 MiB in
   prod-shaped. Fixed by #341 ([results](#prod-shaped-with-the-request-bound-341)); stress
