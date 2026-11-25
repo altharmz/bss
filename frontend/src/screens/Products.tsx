@@ -1,13 +1,8 @@
-import { submitDialogPrimary, IconButton } from '../ui/kit';
-import { NetworkCommands } from './NetworkCommands';
+import { IconButton } from '../ui/kit';
 import { SubscriberSearch } from './SubscriberSearch';
-import { characteristicOf } from '../api/devices';
-import { Note } from '../ui/Note';
-import { iccidOf, kindOf, loadRealizingNumbers, numberHref } from '../api/numbers';
 import { useState } from 'react';
 import {
   loadNumberValues,
-  loadProduct,
   loadProductPage,
   PRODUCT_PAGE,
   PRODUCT_STATES,
@@ -16,25 +11,18 @@ import {
 import { PageFooter, usePageOffset, useSettled } from '../ui/paging';
 import { useResource } from '../api/useResource';
 import { useSetCrumbs, useSystemContext } from '../app/context';
-import { hrefOf, Link } from '../app/router';
+import { hrefOf, Link, useRouter } from '../app/router';
 import { businessDate } from '../format/dates';
 import { accountLabel, shortId } from '../format/ids';
 import { Id } from '../ui/Id';
-import {
-  Button,
-  Dialog,
-  KeyValue,
-  PageHeader,
-  SelectField,
-  StatusPill,
-  TextInput,
-} from '../ui/kit';
-import { ErrorBlock, ListState } from '../ui/states';
+import { PageHeader, SelectField, StatusPill, TextInput } from '../ui/kit';
+import { ListState } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 import './screens.css';
 
 // The global Products list (docs/decisions/frontend.md, slice 21): TMF637 reads only.
-// Products are added and ended by orders alone, so nothing here writes.
+// Products are added and ended by orders alone, so nothing here writes. A row opens the
+// product's page (#458).
 
 const COLUMNS: Column[] = [
   { key: 'id', label: 'Product', width: '120px' },
@@ -44,12 +32,6 @@ const COLUMNS: Column[] = [
   { key: 'start', label: 'Start', width: '104px', mono: true },
   { key: 'end', label: 'End', width: '104px', mono: true },
   { key: 'number', label: 'Number', width: '140px', mono: true },
-];
-
-const ITEM_COLUMNS: Column[] = [
-  { key: 'item', label: 'Item', width: 'minmax(0, 1fr)' },
-  { key: 'order', label: 'Order', width: '120px' },
-  { key: 'open', label: '', width: '120px' },
 ];
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -73,7 +55,7 @@ export function ProductsScreen() {
   const [chosenName, setChosenName] = useState<string | null>(null);
   const [number, setNumber] = useState('');
   const settledNumber = useSettled(number).replace(/\D/g, '');
-  const [open, setOpen] = useState<InventoryProduct | null>(null);
+  const { navigate } = useRouter();
   const filterKey = `${status}:${account ?? ''}:${settledNumber}`;
   const [offset, setOffset] = usePageOffset(filterKey);
   const list = useResource(`products:${filterKey}:${offset}`, (signal) =>
@@ -181,7 +163,9 @@ export function ProductsScreen() {
                 <TableRow
                   key={p.id}
                   columns={COLUMNS}
-                  onClick={() => setOpen(p)}
+                  onClick={() => {
+                    if (p.id !== undefined) navigate(hrefOf({ name: 'product', productId: p.id }));
+                  }}
                   cells={{
                     id: p.id !== undefined ? <Id prefix="PRD-" id={p.id} /> : '—',
                     offering: p.productOffering?.name ?? p.name ?? '—',
@@ -217,149 +201,6 @@ export function ProductsScreen() {
           )}
         </ListState>
       </div>
-      {open !== null && <ProductDetail product={open} onClose={() => setOpen(null)} />}
     </div>
-  );
-}
-
-function ProductDetail({ product, onClose }: { product: InventoryProduct; onClose: () => void }) {
-  const context = useSystemContext();
-  const id = product.id ?? '';
-  const loaded = useResource(`product:${id}`, (signal) => loadProduct(id, signal));
-  const p = loaded.status === 'ok' ? loaded.data : product;
-  const orders = p.productOrderItem ?? [];
-  const resources = p.realizingResource ?? [];
-  // the digits of the numbers and IMSIs it holds, each linking to the Numbers list (#477)
-  const resourceIds = resources.map((r) => r.id ?? '').filter(Boolean);
-  const numbers = useResource(`product-resources:${resourceIds.join(',')}`, (signal) =>
-    loadRealizingNumbers(resourceIds, signal),
-  );
-  return (
-    <Dialog
-      onSubmit={submitDialogPrimary}
-      title={`Product ${shortId(id)}`}
-      context={
-        <>
-          {id !== '' && <Id prefix="PRD-" id={id} />} {p.productOffering?.name ?? p.name}
-        </>
-      }
-      size="M"
-      onClose={onClose}
-      ui="ui.products.detail"
-      footer={<Button onClick={onClose}>Close</Button>}
-    >
-      {loaded.status === 'error' && (
-        <ErrorBlock
-          title="Failed to load the product"
-          error={loaded.error}
-          onRetry={loaded.retry}
-        />
-      )}
-      {loaded.status === 'loading' && <p>Loading…</p>}
-      <KeyValue
-        items={[
-          ['Status', <StatusPill key="s" kind="product" status={p.status ?? ''} />],
-          ['Starts', day(p.startDate, context.timeZone)],
-          ['Ends', day(p.terminationDate, context.timeZone)],
-          ['Ordered', day(p.orderDate, context.timeZone)],
-          ['Created', day(p.creationDate, context.timeZone)],
-          ...(p.productSpecification?.name !== undefined
-            ? [['Specification', p.productSpecification.name] as [string, string]]
-            : []),
-          [
-            'Subscriber',
-            p.billingAccount?.id !== undefined ? (
-              <Link href={hrefOf({ name: 'subscriber', accountId: p.billingAccount.id })}>
-                {p.billingAccount.name ?? accountLabel(p.billingAccount.id)}
-              </Link>
-            ) : (
-              '—'
-            ),
-          ],
-        ]}
-      />
-      <section className="bss-dialog-section" data-ui="ui.products.orderItems">
-        <h3>Order items</h3>
-        {orders.length === 0 ? (
-          <p>None.</p>
-        ) : (
-          <div role="table" aria-label="Order items">
-            <TableHead columns={ITEM_COLUMNS} density="compact" />
-            {orders.map((item) => (
-              <TableRow
-                key={`${item.orderId}:${item.orderItemId}`}
-                columns={ITEM_COLUMNS}
-                density="compact"
-                cells={{
-                  item: `${item.role} · ${item.orderItemAction}`,
-                  order: item.orderId !== undefined ? <Id prefix="ORD-" id={item.orderId} /> : '—',
-                  open:
-                    p.billingAccount?.id !== undefined ? (
-                      <Link href={`/orders?account=${p.billingAccount.id}&state=all`}>
-                        Open in Orders
-                      </Link>
-                    ) : (
-                      ''
-                    ),
-                }}
-              />
-            ))}
-          </div>
-        )}
-      </section>
-      {id !== '' && <NetworkCommands owner={{ productId: id }} />}
-      {characteristicOf(p, 'imei') !== undefined && (
-        <section className="bss-dialog-section" data-ui="ui.products.device">
-          <h3>Device</h3>
-          <p>
-            IMEI <span className="bss-mono">{characteristicOf(p, 'imei')}</span> ·{' '}
-            {characteristicOf(p, 'deviceCompatibility') === 'compatible'
-              ? 'works on the network'
-              : 'not confirmed by the network'}
-          </p>
-          {characteristicOf(p, 'deviceReasons') !== undefined && (
-            <Note tone="warning">{characteristicOf(p, 'deviceReasons')}</Note>
-          )}
-        </section>
-      )}
-      <section className="bss-dialog-section" data-ui="ui.products.resource">
-        <h3>Realizing resource</h3>
-        {resources.length === 0 && <p>None.</p>}
-        {resources.length > 0 && numbers.status === 'loading' && <p>Loading numbers…</p>}
-        {numbers.status === 'error' && (
-          <ErrorBlock
-            title="Failed to load the product's numbers"
-            error={numbers.error}
-            onRetry={numbers.retry}
-          />
-        )}
-        {numbers.status === 'ok' &&
-          resources.map((r) => {
-            const n = r.id !== undefined ? numbers.data[r.id] : null;
-            if (!n) {
-              return (
-                <p key={r.id}>
-                  {r['@referredType'] ?? 'Resource'} {r.id !== undefined ? shortId(r.id) : ''}
-                </p>
-              );
-            }
-            const iccid = iccidOf(n);
-            return (
-              <p key={r.id}>
-                {kindOf(n) === 'imsi' ? 'IMSI' : 'MSISDN'}{' '}
-                <Link className="bss-mono" href={numberHref(n)}>
-                  {n.value}
-                </Link>
-                {iccid !== undefined && (
-                  <>
-                    {' '}
-                    · SIM (ICCID) <span className="bss-mono">{iccid}</span>
-                  </>
-                )}
-              </p>
-            );
-          })}
-      </section>
-    </Dialog>
   );
 }

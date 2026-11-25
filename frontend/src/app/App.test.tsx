@@ -120,6 +120,9 @@ describe('routes', () => {
     ['/reports', { name: 'reports' }],
     ['/orders', { name: 'orders' }],
     ['/products', { name: 'products' }],
+    [`/products/${ID.toUpperCase()}`, { name: 'product', productId: ID }],
+    [`/products/${ID}/`, { name: 'product', productId: ID }],
+    ['/products/nope', { name: 'notFound', path: '/products/nope' }],
     ['/billing', { name: 'notFound', path: '/billing' }], // not /billing: /billing-status
     ['/subscribers/nope', { name: 'notFound', path: '/subscribers/nope' }],
     ['/billing-accounts/nope', { name: 'notFound', path: '/billing-accounts/nope' }],

@@ -604,7 +604,7 @@ Issue #384, the UI of the E911 address of Wi-Fi calling lines (#201). Decision:
   `tests/resources/test_e911.py::test_e911_address_orders_as_the_ui_sends_them` and
   `tests/internal/test_ui_requests.py::test_network_profile_and_narrowing_as_the_ui_sends_them`.
 
-### Products (`ui.products`, `ui.products.status`, `ui.products.accountChip`, `ui.products.detail`, `ui.products.orderItems`, `ui.products.resource`) - `screens/Products.tsx`
+### Products (`ui.products`, `ui.products.status`, `ui.products.accountChip`) - `screens/Products.tsx`
 
 Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
 
@@ -615,10 +615,38 @@ R12: PageHeader with filters; `PRD-` and `ORD-` Ids; M detail Dialog with KeyVal
 Route `/products` (sidebar Products). TMF637 `product` over every status: server filters status and
 `?account=` chip, client filters offering and number. The subscriber search (`ui.products.subscriberSearch`,
 #455) sets the chip; the caption says the page is cross-subscriber. Columns: product, offering, subscriber, status,
-start, end, number. A row opens the detail (`GET product/{id}`): dates, order items with a link to
-Orders, the realizing resource: each held number as `MSISDN`/`IMSI` digits (and the SIM's ICCID)
-linking to `/numbers?value=…&kind=…` (#477; Numbers opens filtered by those parameters), any other
-resource as type and short id. Read-only; orders alone change products. Slice 21.
+start, end, number. A row opens the product page (#458, below), which replaced the detail
+dialog. Read-only; orders alone change products. Slice 21.
+
+### Product page (`ui.product`, `ui.product.header`, `ui.product.overview`, `ui.product.charges`, `ui.product.usage`, `ui.product.history`) - `screens/ProductPage.tsx`
+
+Route `/products/{id}` (#458), off the sidebar with Products active; a Products row and the product
+name on the billing account card (`ui.subscriber.productLink`) open it. Crumbs: Products › offering.
+Reads `GET product/{id}` (TMF637), the billing account and the card's
+`GET /internal/v1/billingAccount/{id}/products` (this product's price, identities, pending changes,
+plan and add-ons; an ended product is not among them and shows no actions).
+
+- **Header:** offering name, `PRD-` id, the line's MSISDN ("—" without one), status pill, start and
+  end dates, the billing account link, and the card row's ⋯ menu (`productMenuExtra` in
+  `ProductActions.tsx`, shared with the card) opening the card's dialogs with their requests:
+  change offering, suspend/resume (and its Undo), end on a date, deactivate, subscriber number
+  (also the SIM swap), Number Transfer PIN, device, E911 address. Add-on purchase and top-up stay
+  on the card: they need the account's balance.
+- **Overview** (`ui.product.overview`): price today, next charge, paid through (prepaid), specification,
+  ordered and created dates, the plan facts and renewal history (prepaid), pending changes
+  (`ui.product.pendingChange`), the plan of an add-on or the add-on packs of a plan
+  (`ui.product.related`), the numbers and SIM (`ui.products.resource`, digits linking to Numbers,
+  #477), the device (`ui.products.device`) and the network commands.
+- **Charges** (`ui.product.charges`): `GET appliedCustomerBillingRate?product.id=` read whole (one
+  product's rows), newest first, 25 a page; a billed charge's bill number opens the bill dialog
+  (`ui.product.charges.bill`).
+- **Usage** (`ui.product.usage`): the card Usage tab's allowance summary and usage records for this line.
+- **History** (`ui.product.history`): the TMF637 order items with Open in Orders
+  (`ui.products.orderItems`), then `GET /internal/v1/product/{id}/history`: status changes with
+  their cause, offering changes and number and SIM assignments with their dates and order, 20 a page.
+- No balance: money stays on the billing account. Tabs other than Overview load on first open.
+  Reads are pinned in `ProductPage.test.tsx` and replayed by
+  `tests/internal/test_ui_requests.py::test_product_page_reads_as_the_ui_makes_them`.
 
 ### Orders (`ui.orders`, `ui.orders.accountChip`, `ui.orders.detail`, `ui.orders.items`, `ui.orders.cancellations`, `ui.orders.command`, `ui.orders.errors`) - `screens/Orders.tsx`
 
@@ -984,7 +1012,7 @@ with the network's reasons and an unconfirmed device is accepted with the warnin
 Add product, for a prepaid line with a SIM, has an optional **Device IMEI** field (the add item's
 `imei` characteristic, kept in a draft); the same warning follows the order. Both inputs check
 15 digits and the Luhn digit before enabling the buttons; the server checks again
-(`invalidImei`). The Products detail shows the current device from the TMF637 characteristics.
+(`invalidImei`). The product page shows the current device from the TMF637 characteristics.
 Requests are pinned in `ProductDevice.test.tsx` and `SubscriberCard.prepaid.test.tsx` and
 replayed in `tests/resources/test_device.py`.
 

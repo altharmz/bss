@@ -750,6 +750,34 @@ paths:
                 items: {$ref: '#/components/schemas/ProductDevice'}
         '400': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
+  /product/{id}/history:
+    get:
+      summary: What happened to one product, newest first (issue 458).
+      description: >-
+        One list of typed entries for the product page's History tab: statusChange (the
+        status set from date, with its cause: manual, lifecycle or dunning),
+        offeringChange (the offering from date) and numberAssignment (a subscriber number
+        or SIM IMSI claimed from date until the exclusive endDate, null while held).
+        Ordered by date, newest first; entries of one date by when they were recorded,
+        newest first. Every entry links the order that made it. The product's order items
+        are on TMF637 product.productOrderItem. Read-only.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - {$ref: '#/components/parameters/Offset'}
+        - {$ref: '#/components/parameters/Limit'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/ProductHistoryEntry'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
   /device/check:
     get:
       summary: Ask the network whether a device works (issue 194).
@@ -3437,6 +3465,51 @@ components:
           required: [id]
           properties:
             id: {type: string, format: uuid}
+    ProductHistoryEntry:
+      type: object
+      additionalProperties: false
+      required: [kind, date, endDate, status, cause, productOffering, resource, productOrder]
+      properties:
+        kind: {type: string, enum: [statusChange, offeringChange, numberAssignment]}
+        date: {type: string, format: date, description: The first day the entry is in effect.}
+        endDate:
+          type: string
+          format: date
+          nullable: true
+          description: numberAssignment only, exclusive (half-open); null while the number is held.
+        status:
+          type: string
+          nullable: true
+          enum: [suspended, active, null]
+          description: statusChange only.
+        cause:
+          type: string
+          nullable: true
+          enum: [manual, lifecycle, dunning, null]
+          description: statusChange only.
+        productOffering:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [id, href, name]
+          description: offeringChange only.
+          properties:
+            id: {type: string, format: uuid}
+            href: {type: string}
+            name: {type: string}
+        resource:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [id, href, kind, value, iccid]
+          description: numberAssignment only.
+          properties:
+            id: {type: string, format: uuid}
+            href: {type: string}
+            kind: {type: string, enum: [msisdn, imsi]}
+            value: {type: string}
+            iccid: {type: string, nullable: true}
+        productOrder: {$ref: '#/components/schemas/Link'}
     DeviceCheck:
       type: object
       additionalProperties: false

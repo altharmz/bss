@@ -126,6 +126,7 @@ INTERNAL: dict[str, str] = {
     "/logging": "LogSettings",
     "/service/log-level": "ServiceLogLevel",
     "/device": "ProductDevice",
+    "/product/{id}/history": "ProductHistoryEntry",
     "/device/check": "DeviceCheck",
     "/network/command": "NetworkCommand",
     "/network/command/{id}": "NetworkCommand",

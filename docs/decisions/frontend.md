@@ -1328,3 +1328,48 @@ an operator had to open the ⋯ → Subscriber number dialog to see.
   Number column after Account shows the first number with "+N" for the others, and a native
   `title` tooltip lists the three (the kit has no tooltip). The list shows no IMSI/SIM.
 - **Markers:** `ui.subscribers.number` and `ui.subscriber.productNumber`.
+
+## Product page (2026-11-25, issue #458)
+
+Much of what an operator needs hangs off the product, not the billing account, and it was
+spread over the card's product row and its ⋯ menu, the card's Usage tab and the Products
+detail dialog.
+
+- **One page per product** at `/products/{id}` (`screens/ProductPage.tsx`, `ui.product`), off
+  the sidebar with Products active (`nav.ts` `OFF_NAV`). A Products row and the product name on
+  the card (`ui.subscriber.productLink`) open it. **The Products detail dialog is gone**: its
+  order items, numbers and SIM, device and network commands moved to the page, with their
+  markers (`ui.products.orderItems`, `ui.products.resource`, `ui.products.device`).
+  `ui.products.detail` left the scope.
+- **The card's actions, not a copy:** the page reads the card's
+  `GET /internal/v1/billingAccount/{id}/products` and finds this product in it. The ⋯ items
+  besides the status and offering changes come from `productMenuExtra` (`ProductActions.tsx`),
+  which the card row now uses too, and they open the same dialogs with the same requests. An
+  item without a handler is left out: the page offers no Buy add-on or Top up, because they
+  need the account's balance and money forms. An ended product is not in that list and shows
+  no actions. No action gained a new caller, so the UI/MCP parity allowlist is unchanged.
+- **Money stays on the billing account:** the page shows what the product was charged and
+  used, never a balance, bills list, payments or buckets.
+- **Charges:** `GET appliedCustomerBillingRate?product.id=` (TMF678). The list is oldest first
+  on the server for every caller, so the page reads the product's rates whole (`getAll`, one
+  owner's rows: `getAllCallers.test.ts`), reverses them and pages 25 at a time locally.
+  Reordering the TMF678 list for all its callers was not worth it for one screen. A billed
+  rate's bill number opens the existing bill dialog.
+- **Usage:** the card Usage tab's summary and records for this line (`ProductUsage` in
+  `UsageTab.tsx`), with the same requests.
+- **History:** the TMF637 `productOrderItem[]`, then one new internal read,
+  `GET /internal/v1/product/{id}/history` (`app/internal/products.py`,
+  `app/repository/product_history.py`). No existing read returned status changes, offering
+  changes or number assignments of one product. It is one `UNION ALL` over
+  `product_status_change`, `product_offering_change` and `number_assignment` (cancelled
+  versions left out: audit of a voided order), each branch reading its table by product id.
+  Typed entries (`statusChange` with its cause, `offeringChange`, `numberAssignment` with the
+  exclusive `endDate`), newest effective date first, ties newest recorded first, each with the
+  order that made it, paged with offset and limit. Unknown product: 404. A perf guard checks
+  that no branch scans its table. MCP tool `list_product_history`. Device changes are left out:
+  their orders are in the order items, and the device dialog lists them.
+- **Tests:** `tests/internal/test_product_history.py` (each entry type, order, paging, empty,
+  errors, plan), `test_ui_requests.py::test_product_page_reads_as_the_ui_makes_them`,
+  `ProductPage.test.tsx` (header, each tab, actions with the pinned suspend body, retry),
+  `Products.test.tsx` (the row opens the page; the dialog tests moved, TEST-CHANGE),
+  `App.test.tsx` and `nav.test.ts` (the route).

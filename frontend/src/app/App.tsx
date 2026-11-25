@@ -5,6 +5,7 @@ import { useResource } from '../api/useResource';
 import { BillingRunsScreen } from '../screens/BillingRuns';
 import { OrdersScreen } from '../screens/Orders';
 import { ProductsScreen } from '../screens/Products';
+import { ProductPageScreen } from '../screens/ProductPage';
 import { PrepaidCommandsScreen } from '../screens/PrepaidCommands';
 import { CatalogScreen } from '../screens/Catalog';
 import { PaymentsScreen } from '../screens/Payments';
@@ -85,6 +86,8 @@ function Screen() {
       return <Signups />;
     case 'subscriber':
       return <SubscriberCardScreen key={route.accountId} accountId={route.accountId} />;
+    case 'product':
+      return <ProductPageScreen key={route.productId} productId={route.productId} />;
     case 'catalog':
       return <CatalogScreen />;
     case 'orders':

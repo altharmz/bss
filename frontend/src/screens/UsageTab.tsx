@@ -379,3 +379,37 @@ export function UsageTab({ products, version }: { products: AccountProduct[]; ve
     </section>
   );
 }
+
+/** One line's usage on its product page (#458): the same summary and records as the card's
+ * Usage tab, for this product only. */
+export function ProductUsage({ productId }: { productId: string }) {
+  const context = useSystemContext();
+  const summary = useResource(
+    `usage-summary:${productId}`,
+    (signal) => loadUsageSummary(productId, signal),
+    true,
+  );
+  return (
+    <section data-ui="ui.product.usage">
+      <Panel
+        title="Allowance"
+        subtitle={
+          summary.status === 'ok' && summary.data.period
+            ? `${summary.data.period.startDate} – ${summary.data.period.endDate} (end excluded)`
+            : undefined
+        }
+      >
+        {summary.status === 'loading' && <p className="bss-secondary">Loading usage…</p>}
+        {summary.status === 'error' && (
+          <ErrorBlock
+            title="Failed to load the usage summary"
+            error={summary.error}
+            onRetry={summary.retry}
+          />
+        )}
+        {summary.status === 'ok' && <Summary summary={summary.data} />}
+      </Panel>
+      <Records product={productId} timeZone={context.timeZone} />
+    </section>
+  );
+}

@@ -14,6 +14,7 @@ const SOURCES = import.meta.glob<string>(['./*.ts', '!./*.test.ts', '!./client.t
 const ALLOWED: Record<string, string> = {
   // one owner's rows
   'balances.ts:loadAccountTotals': "one account's accumulated balance",
+  'bills.ts:loadProductRates': "one product's rates",
   'bills.ts:loadRates': "one bill's rates",
   'bss.ts:loadBillDemands': "one account's bill demands",
   'bss.ts:loadBills': "one account's bills",

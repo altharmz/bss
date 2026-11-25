@@ -49,7 +49,12 @@ export const NAV: NavSection[] = [
         routes: ['subscribers', 'subscriber'],
         tmf: 'TMF666 billingAccount',
       },
-      { label: 'Products', href: '/products', routes: ['products'], tmf: 'TMF637 product' },
+      {
+        label: 'Products',
+        href: '/products',
+        routes: ['products', 'product'],
+        tmf: 'TMF637 product',
+      },
       { label: 'Orders', href: '/orders', routes: ['orders'], tmf: 'TMF622 productOrder' },
       {
         // not under System (#457 decision 4): System becomes admin-only (#467) and every
@@ -180,9 +185,16 @@ export const NAV: NavSection[] = [
   },
 ];
 
-/** Routes that are reached without the sidebar: the session pages, the kit, not-found and
- * the billing account card (under Billing accounts). */
-export const OFF_NAV: RouteName[] = ['signIn', 'password', 'uiKit', 'notFound', 'subscriber'];
+/** Routes that are reached without the sidebar: the session pages, the kit, not-found, the
+ * billing account card (under Billing accounts) and the product page (under Products). */
+export const OFF_NAV: RouteName[] = [
+  'signIn',
+  'password',
+  'uiKit',
+  'notFound',
+  'subscriber',
+  'product',
+];
 
 /** The routes only an admin may open: a `user` gets "not allowed" (App.tsx). */
 export function isAdminRoute(name: RouteName): boolean {

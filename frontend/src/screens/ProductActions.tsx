@@ -25,6 +25,8 @@ import { formatCents, toCents } from '../format/money';
 import { Button, Menu, Dialog, DateField, TextInput, type MenuItem } from '../ui/kit';
 import { ErrorBlock, SkeletonRows } from '../ui/states';
 import { Preview } from './AddProduct';
+import { offersE911Edit } from './E911Address';
+import { canBuyAddOn } from './PrepaidPlans';
 import { uncertain } from './submissionKey';
 
 // Product actions of the subscriber card: suspend, resume and end on a date, as TMF622 orders
@@ -76,6 +78,73 @@ export function offeredChanges(
   }
   if (product.terminationDate === null && product.status !== 'pendingTerminate') items.push('end');
   return items;
+}
+
+/** What the product menu's own items open; an item without its handler is left out (the
+ * product page offers no add-on purchase or top-up: they need the card's balance). */
+export interface ProductMenuHandlers {
+  onNumber: () => void;
+  onTransferPin: () => void;
+  onDevice: () => void;
+  onE911?: () => void;
+  onBuyAddOn?: () => void;
+  onTopUp?: (amount: string) => void;
+  onDeactivate: () => void;
+}
+
+/** The items of a product's menu besides the status and offering changes: the same on the
+ * billing account card's row and on the product page (#458). */
+export function productMenuExtra(
+  product: AccountProduct,
+  ratingType: Account['ratingType'],
+  today: string,
+  handlers: ProductMenuHandlers,
+): MenuItem[] {
+  const { onE911, onBuyAddOn, onTopUp } = handlers;
+  const prepaid = ratingType === 'prepaid';
+  const fundingWait =
+    prepaid &&
+    product.status === 'suspended' &&
+    product.suspensionCause === 'funding' &&
+    product.needs_topup
+      ? product.needs_topup
+      : null;
+  return [
+    { label: 'Subscriber number', onClick: handlers.onNumber },
+    ...(product.status === 'active' || product.status === 'suspended'
+      ? [
+          {
+            label: 'Number Transfer PIN…',
+            ui: 'ui.subscriber.transferPinItem',
+            onClick: handlers.onTransferPin,
+          },
+        ]
+      : []),
+    ...(prepaid
+      ? [{ label: 'Device…', ui: 'ui.subscriber.deviceItem', onClick: handlers.onDevice }]
+      : []),
+    ...(onE911 !== undefined && offersE911Edit(product, prepaid)
+      ? [{ label: 'Edit E911 address…', ui: 'ui.subscriber.e911.edit', onClick: onE911 }]
+      : []),
+    ...(onBuyAddOn !== undefined && canBuyAddOn(product, today)
+      ? [{ label: 'Buy add-on…', ui: 'ui.subscriber.buyAddOnItem', onClick: onBuyAddOn }]
+      : []),
+    ...(onTopUp !== undefined && fundingWait !== null
+      ? [
+          {
+            label: 'Top up',
+            ui: 'ui.subscriber.topUpProduct',
+            onClick: () => onTopUp(formatCents(toCents(fundingWait.shortfall)).replace(/,/g, '')),
+          },
+        ]
+      : []),
+    {
+      label: 'Deactivate',
+      tone: 'negative' as const,
+      ui: 'ui.subscriber.deactivate',
+      onClick: handlers.onDeactivate,
+    },
+  ];
 }
 
 export function ProductActionsMenu({

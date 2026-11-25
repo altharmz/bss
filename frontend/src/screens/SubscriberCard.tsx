@@ -57,7 +57,7 @@ import {
 import { NumberModal } from './ProductNumber';
 import { TransferPinDialog } from './TransferPin';
 import { DeviceDialog } from './ProductDevice';
-import { E911Dialog, E911Line, offersE911Edit } from './E911Address';
+import { E911Dialog, E911Line } from './E911Address';
 import { SubscriberDunningPanel } from './Dunning';
 import { e911Text } from '../api/e911';
 import { BillDialog, RecordPaymentModal, useBills } from './Bills';
@@ -67,10 +67,11 @@ import {
   offeredChanges,
   ProductActionsMenu,
   ProductChangeDialog,
+  productMenuExtra,
   type ProductAction,
 } from './ProductActions';
 import { PaymentMethodsPanel } from './PaymentMethods';
-import { BuyAddOnDialog, canBuyAddOn, LivePasses, PlanFacts, RenewalHistory } from './PrepaidPlans';
+import { BuyAddOnDialog, LivePasses, PlanFacts, RenewalHistory } from './PrepaidPlans';
 import { PrepaidMoneyModal, type MoneyForm } from './PrepaidMoney';
 import { FailedCommands, OrderWatch } from './PrepaidOrderWatch';
 import { PrepaidTransferModal, TransferWatch } from './PrepaidTransfer';
@@ -1395,7 +1396,13 @@ function ProductRow({
         cells={{
           offering: (
             <div>
-              <span className="bss-name">{name}</span>
+              <Link
+                className="bss-name bss-link"
+                data-ui="ui.subscriber.productLink"
+                href={hrefOf({ name: 'product', productId: product.id })}
+              >
+                {name}
+              </Link>
               <div className="bss-code">{code}</div>
               <PlanFacts product={product} />
               <E911Line product={product} prepaid={account.ratingType === 'prepaid'} />
@@ -1470,55 +1477,15 @@ function ProductRow({
               }}
               items={offeredChanges(product, account.ratingType)}
               onPick={(change) => onPick(change, false)}
-              extra={[
-                { label: 'Subscriber number', onClick: onNumber },
-                ...(product.status === 'active' || product.status === 'suspended'
-                  ? [
-                      {
-                        label: 'Number Transfer PIN…',
-                        ui: 'ui.subscriber.transferPinItem',
-                        onClick: onTransferPin,
-                      },
-                    ]
-                  : []),
-                ...(account.ratingType === 'prepaid'
-                  ? [{ label: 'Device…', ui: 'ui.subscriber.deviceItem', onClick: onDevice }]
-                  : []),
-                ...(offersE911Edit(product, account.ratingType === 'prepaid')
-                  ? [
-                      {
-                        label: 'Edit E911 address…',
-                        ui: 'ui.subscriber.e911.edit',
-                        onClick: onE911,
-                      },
-                    ]
-                  : []),
-                ...(canBuyAddOn(product, context.businessDate)
-                  ? [
-                      {
-                        label: 'Buy add-on…',
-                        ui: 'ui.subscriber.buyAddOnItem',
-                        onClick: onBuyAddOn,
-                      },
-                    ]
-                  : []),
-                ...(fundingWait !== null
-                  ? [
-                      {
-                        label: 'Top up',
-                        ui: 'ui.subscriber.topUpProduct',
-                        onClick: () =>
-                          onTopUp(formatCents(toCents(fundingWait.shortfall)).replace(/,/g, '')),
-                      },
-                    ]
-                  : []),
-                {
-                  label: 'Deactivate',
-                  tone: 'negative',
-                  ui: 'ui.subscriber.deactivate',
-                  onClick: () => onPick('end', true),
-                },
-              ]}
+              extra={productMenuExtra(product, account.ratingType, context.businessDate, {
+                onNumber,
+                onTransferPin,
+                onDevice,
+                onE911,
+                onBuyAddOn,
+                onTopUp,
+                onDeactivate: () => onPick('end', true),
+              })}
             />
           ) : (
             <Menu
