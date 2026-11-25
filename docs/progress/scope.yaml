@@ -229,7 +229,10 @@ items:
   - {id: ui.accounts.settlement.delete, area: ui, stage: 5, title: "Delete a settlement account"}
   - {id: ui.accounts.settlement.confirmDelete, area: ui, stage: 5, title: "Confirm deleting a settlement account"}
   - {id: ui.accounts.settlement.financialLink, area: ui, stage: 5, title: "Link or unlink a financial account on a settlement account"}
-  - {id: ui.billingSettings.lifecycle, area: ui, stage: 5, title: "Prepaid lifecycle screen (/prepaid-lifecycle, under Prepaid since #414): the lifecycle durations"}
+  - {id: ui.settings.tab.billing, area: ui, stage: 5, title: "Settings (System, admin-only, #467): Billing settings tab at /settings/billing (/billing-settings redirects)"}
+  - {id: ui.settings.tab.prepaidLifecycle, area: ui, stage: 5, title: "Settings (System, admin-only, #467): Prepaid lifecycle tab at /settings/prepaid-lifecycle (/prepaid-lifecycle redirects)"}
+  - {id: ui.settings.tab.dunning, area: ui, stage: 5, title: "Settings (System, admin-only, #467): Dunning settings tab at /settings/dunning"}
+  - {id: ui.billingSettings.lifecycle, area: ui, stage: 5, title: "Settings: Prepaid lifecycle tab (#467; a screen under Prepaid from #414): the lifecycle durations"}
   - {id: ui.billingSettings.lifecycle.form, area: ui, stage: 5, title: "Edit prepaid lifecycle durations"}
   - {id: ui.subscriber.productLifecycle, area: ui, stage: 5, title: "Product lifecycle state and next transition"}
   - {id: ui.subscriber.productNumber, area: ui, stage: 5, title: "Card products table: the line number, IMSI and SIM live today"}
@@ -252,7 +255,7 @@ items:
   - {id: ui.billingSettings.media.edit, area: ui, stage: 5, title: "Edit a presentation medium"}
   - {id: ui.billingSettings.media.delete, area: ui, stage: 5, title: "Delete a presentation medium no loaded account uses"}
   - {id: ui.billingSettings.media.confirmDelete, area: ui, stage: 5, title: "Confirm deleting a presentation medium"}
-  - {id: ui.billingSettings.dunning, area: ui, stage: 5, title: "Billing settings: Dunning tab with the reminder and suspension days and the minimum past due (issue 386)"}
+  - {id: ui.billingSettings.dunning, area: ui, stage: 5, title: "Settings: Dunning settings tab (#467) with the reminder and suspension days and the minimum past due (issue 386)"}
   - {id: ui.billingSettings.dunning.form, area: ui, stage: 5, title: "Edit dunning settings: errors at the field, only changed fields sent, the minimum as an exact amount (issue 386)"}
   - {id: ui.subscriber.billingGroup, area: ui, stage: 5, title: "Billing group of the subscriber Edit form (billStructure)"}
   - {id: ui.subscriber.cycleSpecification, area: ui, stage: 5, title: "Select a billing cycle specification in the subscriber Edit form"}
@@ -490,6 +493,7 @@ items:
   - {id: ui.shell.theme, area: ui, stage: 5, title: "Theme choice (System / Light / Dark) in the operator menu"}
   - {id: ui.notFound, area: ui, stage: 5, title: "Page not found: heading, a sentence and a link to Subscribers"}
   - {id: ui.users.denied, area: ui, stage: 5, title: "Users: not allowed for non-administrators"}
+  - {id: ui.system.denied, area: ui, stage: 5, title: "System screens (Integrations, Wholesale, Settings, Logging): not allowed for non-administrators (#467)"}
   - {id: ui.logging.settings, area: ui, stage: 5, title: "Logging settings: base level and temporary debug"}
   - {id: ui.shell, area: ui, stage: 5, title: "Shell: sidebar, top bar with business date and zone"}
   - {id: ui.subscribers.list, area: ui, stage: 5, title: "Billing accounts list (was Subscribers, #457)"}

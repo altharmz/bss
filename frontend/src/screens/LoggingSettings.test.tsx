@@ -109,8 +109,19 @@ describe('logging settings', () => {
     expect(screen.getByRole('button', { name: 'Stop debug' })).toBeTruthy();
   });
 
-  it('shows the standard error state when the API refuses a user', async () => {
-    backend('user', {
+  // TEST-CHANGE (#467): a System screen opened by a user says "not allowed" before any request
+  // (it showed the API's 403 before); the API still refuses
+  it('tells a user it is not allowed, without asking the API', async () => {
+    const { calls } = backend('user', {});
+    window.history.replaceState(null, '', '/settings/logging');
+    render(<App />);
+    await screen.findByRole('heading', { name: 'Not allowed' });
+    expect(calls).not.toContain(`GET ${PATH}`);
+    expect(screen.queryByRole('button', { name: 'Debug 15 min' })).toBeNull();
+  });
+
+  it('shows the standard error state when the API refuses', async () => {
+    backend('admin', {
       [`GET ${PATH}`]: () => tmfError(403, 'administrator role required'),
     });
     await open();
@@ -126,8 +137,10 @@ describe('logging settings', () => {
   });
 
   it('hides Logging from a user', async () => {
-    backend('user', { [`GET ${PATH}`]: () => tmfError(403, 'administrator role required') });
-    await open();
+    backend('user', {});
+    window.history.replaceState(null, '', '/settings/logging');
+    render(<App />);
+    await screen.findByRole('heading', { name: 'Not allowed' });
     const nav = screen.getByRole('navigation', { name: 'Main' });
     expect(within(nav).queryByRole('link', { name: 'Logging' })).toBeNull();
   });

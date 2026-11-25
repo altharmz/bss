@@ -88,27 +88,32 @@ labelled sections in TMF / ODA domain order (`ui.shell.section.<key>`, #414, #45
   accounts, Products, Orders, then Online signups
 - **Catalog:** Product catalog
 - **Resources:** Numbers, SIMs, Port requests
-- **Billing:** Billing runs (failed badge), Bills, Payments, Billing settings
-- **Prepaid:** Balances, Prepaid commands (failed badge), Prepaid lifecycle
+- **Billing:** Billing runs (failed badge), Bills, Payments, Dunning
+- **Prepaid:** Balances, Prepaid commands (failed badge)
 - **Reports:** Prepaid KPIs
-- **System:** Integrations, and Users and Logging for an admin
+- **System**, for an admin only (#467): Integrations, Wholesale, Settings, Users, Logging
+
+A `user` sees no System section; opening one of its URLs shows "Not allowed"
+(`ui.system.denied`; Users keeps its own `ui.users.denied`) without a request, and the server
+refuses the endpoints behind them with 403 ([users.md](decisions/users.md) U4).
 
 Each item's `title` names its TMF API and resource, or "internal". No item has a count or a
 count request (G8; it replaces epic D6's counts). `nav.test.ts` fails when a navigable route
 has no nav item or has two. Design and the per-item TMF/DB mapping:
 [frontend.md](decisions/frontend.md#sidebar-by-tmf-domain-and-db-area-2026-11-20-issue-414),
-reordered by [the account hierarchy](decisions/frontend.md#sidebar-by-the-account-hierarchy-2026-11-25-issue-457).
+reordered by [the account hierarchy](decisions/frontend.md#sidebar-by-the-account-hierarchy-2026-11-25-issue-457),
+with [System admin-only](decisions/frontend.md#system-admin-only-with-wholesale-and-settings-2026-11-25-issue-467).
 
 ### Logging settings
 
-`/settings/logging` (System, admin only in the navigation) shows the effective log level (badge), the base
+`/settings/logging` (System, admin only) shows the effective log level (badge), the base
 level (`WARNING`, `INFO` or "Default (`<envLevel>`)"), the debug state ("Debug until 14:35:00, 23 min left"
 or "off") and the last change (`updatedBy`, time in the business zone), from `GET /internal/v1/logging`.
 The base level is a select (Default, INFO, WARNING) with Save, sent as `PUT {baseLevel}` (`null` for Default).
 "Debug 15 min", "Debug 30 min" and "Debug 60 min" send `PUT {debugMinutes: n}`; "Stop debug" (shown only while
 debug is active) sends `{debugMinutes: 0}`. The time left counts down locally (display only); the screen
-re-reads every 30 s and after each PUT. There is no client-side role guard: a `user` opening the route gets the
-API's refusal in the usual error state. The PUT bodies are pinned in `LoggingSettings.test.tsx` and
+re-reads every 30 s and after each PUT. A `user` opening the route gets "Not allowed" (#467); an API
+refusal shows in the usual error state. The PUT bodies are pinned in `LoggingSettings.test.tsx` and
 `tests/internal/test_ui_requests.py`; the operations are excluded from the MCP parity check.
 
 ### Sign-in, operator menu and users
@@ -721,8 +726,9 @@ and its next transition action and business date. Null or absent lifecycle proje
 no lifecycle detail. Lifecycle-caused suspension has an explicit label. Dates and actions
 come from `GET /internal/v1/billingAccount/{id}/products`; the browser derives no policy.
 
-Route `/prepaid-lifecycle`, sidebar Prepaid > Prepaid lifecycle (`ui.billingSettings.lifecycle`,
-the marker kept its name when the Billing settings tab became a screen in #414), loaded from
+Route `/settings/prepaid-lifecycle`, the **Prepaid lifecycle** tab of System > Settings (#467;
+`/prepaid-lifecycle` is replaced by it; `ui.billingSettings.lifecycle`, the marker kept its
+name when the Billing settings tab became a screen in #414 and a Settings tab in #467), loaded from
 `GET /internal/v1/lifecycle/settings`. Edit changes grace days (0–365), suspension days
 (0–3650), number aging days (0–3650), and pay-as-you-go zero-balance days (0–365).
 Save sends only changed integer durations in a JSON PUT to the same endpoint. Zero is valid.
@@ -740,7 +746,8 @@ Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use
 
 Ledger v2: built-in settings use an attribute Tag; destructive actions use quiet negative buttons.
 
-Route `/billing-settings`, sidebar Billing > Billing settings, three tabs: **Cycle specifications**,
+Route `/settings/billing` (also `/settings`; `/billing-settings` is replaced by it), the
+**Billing settings** tab of System > Settings (#467, admin only), three inner tabs: **Cycle specifications**,
 **Bill formats**, **Presentation media**. Each lists name, description and how many loaded billing
 accounts use it, with **+ New ...**, row **Edit** and **Delete**. Delete is hidden while a loaded
 account names the setting; the server's 409 still shows in the dialog. The built-in `monthly`
@@ -793,7 +800,8 @@ step (with a Candidate tag), suspended since; oldest O first, paged with Previou
 (`ui.dunning.accountSearch`) or a `?account=<id>` link sets the removable chip (`ui.dunning.accountChip`).
 API: `GET /internal/v1/dunning/accounts?step=&deactivationCandidate=true&billingAccount.id=`.
 
-Billing settings has a **Dunning** tab (`ui.billingSettings.dunning`): the days after O of the
+Settings has a **Dunning settings** tab (`/settings/dunning`, `ui.billingSettings.dunning`; an inner
+Billing settings tab before #467): the days after O of the
 first reminder, the second reminder and the suspension, the minimum past due (in the system
 currency) and when they last changed. **Edit dunning settings** (`.form`) shows its errors at
 the field (whole days 0-365, each step later than the one before, an amount of 0 or more with
@@ -852,7 +860,7 @@ Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use
 
 Ledger v2: delivery and health StatusPill use their actual states.
 
-Route `/integrations`, sidebar System > Integrations, visible to every role. Lists the live hubs
+Route `/integrations`, sidebar System > Integrations, admin only (#467). Lists the live hubs
 from `GET /internal/v1/eventSubscription` (API, callback, events, subscribed, last delivery,
 failed count). New subscription: API (all ten), callback URL, event checkboxes of that API
 (`api/hubs.ts`, checked against the server's list); it POSTs `{callback, query?}` to the API's

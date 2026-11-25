@@ -18,7 +18,7 @@ from typing import Annotated, Any
 from uuid import UUID
 
 import psycopg
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from pydantic import Field, field_validator
 
 from app.api.common import CENT, TmfModel, money, parse, parse_id, utc
@@ -26,6 +26,7 @@ from app.api.deps import ClockDep, MergePatchBody, Tx
 from app.api.errors import bad_request, not_found, unprocessable
 from app.api.guards import actor_of
 from app.api.listing import page_response, parse_page
+from app.api.roles import require_admin_or_service
 from app.api.tmfjson import TmfJSONResponse
 from app.billing import dunning as plan
 from app.internal.context import no_query
@@ -81,14 +82,15 @@ def settings_body(row: Row) -> dict[str, Any]:
     }
 
 
-@router.get("/dunning/settings")
+# the dunning steps are a Settings tab, admin-only (#467); the accounts list stays open
+@router.get("/dunning/settings", dependencies=[Depends(require_admin_or_service)])
 def get_dunning_settings(request: Request, tx: Tx) -> TmfJSONResponse:
     no_query(request)
     with tx() as conn:
         return TmfJSONResponse(settings_body(repo.get_row(conn)))
 
 
-@router.patch("/dunning/settings")
+@router.patch("/dunning/settings", dependencies=[Depends(require_admin_or_service)])
 def patch_dunning_settings(
     body: MergePatchBody, request: Request, tx: Tx, clock: ClockDep
 ) -> TmfJSONResponse:

@@ -113,13 +113,15 @@ describe('Integrations', () => {
     expect(screen.getByText('HTTP 503')).toBeTruthy();
   });
 
-  it('hides Users from a non-admin but shows Integrations', async () => {
-    backend({}, 'user');
+  // TEST-CHANGE (#467): System, Integrations with it, is admin-only; the hub endpoints refuse a user
+  it('refuses Integrations to a non-admin and hides it', async () => {
+    const { calls } = backend({}, 'user');
     open();
-    await screen.findByText('https://example.org/pay');
+    await screen.findByRole('heading', { name: 'Not allowed' });
     const nav = screen.getByRole('navigation', { name: 'Main' });
     expect(within(nav).queryByRole('link', { name: 'Users' })).toBeNull();
-    expect(within(nav).getByRole('link', { name: 'Integrations' })).toBeTruthy();
+    expect(within(nav).queryByRole('link', { name: 'Integrations' })).toBeNull();
+    expect(calls.some((call) => call.includes('eventSubscription'))).toBe(false);
   });
 
   it('creates a v4 hub with a choice of events and a v5 hub for every event', async () => {

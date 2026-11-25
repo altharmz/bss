@@ -1,11 +1,10 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   loadLifecycleSettings,
   saveLifecycleSettings,
   type LifecycleSettings,
 } from '../api/lifecycle';
 import { useResource } from '../api/useResource';
-import { useSetCrumbs } from '../app/context';
 import {
   Button,
   Dialog,
@@ -30,11 +29,10 @@ const DURATIONS = [
 ] as const;
 
 // Prepaid lifecycle (docs/ui.md): the grace, suspension, number aging and pay-as-you-go
-// durations. Its own screen under Prepaid since #414 (was a Billing settings tab); the
-// data-ui marker keeps its old name.
+// durations. A Settings tab (#467; a screen under Prepaid from #414, a Billing settings tab
+// before); the data-ui marker keeps its old name.
 
-export function LifecycleSettingsScreen() {
-  useSetCrumbs([{ label: 'Prepaid lifecycle' }], 'prepaidLifecycle');
+export function LifecycleSettingsTab({ tabs }: { tabs: ReactNode }) {
   const settings = useResource('lifecycle-settings', loadLifecycleSettings);
   const [editing, setEditing] = useState(false);
   const toast = useToast();
@@ -46,7 +44,7 @@ export function LifecycleSettingsScreen() {
   return (
     <div className="bss-screen" data-ui="ui.billingSettings.lifecycle">
       <div className="bss-title-row">
-        <PageHeader title="Prepaid lifecycle" />
+        <PageHeader title="Settings" />
         <Button
           variant="primary"
           disabled={settings.status !== 'ok'}
@@ -55,6 +53,7 @@ export function LifecycleSettingsScreen() {
           Edit lifecycle settings
         </Button>
       </div>
+      {tabs}
       <Panel>
         <Note tone="info">
           Unfunded lines enter grace, then network suspension, then deactivation. Changes apply to

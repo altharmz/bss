@@ -15,7 +15,7 @@ the function names and must be unique.
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import Field
 
 from app.api import listing
@@ -30,6 +30,7 @@ from app.api.common import (
 )
 from app.api.deps import ClockDep, JsonBody, Tx
 from app.api.errors import bad_request, not_found, unprocessable
+from app.api.roles import require_admin_or_service
 from app.api.tmfjson import TmfJSONResponse
 from app.events import callbacks
 from app.events.types import BASES, EVENT_TYPES, V4_APIS
@@ -144,7 +145,12 @@ HUB_APIS = (
     ("TMF683", "interaction"),
     ("TMF621", "ticket"),
 )
-_routers = {api: APIRouter(prefix=BASES[api]) for api, _ in HUB_APIS}
+# Registering a hub sends the API's events (customer data) to a callback of the caller's
+# choice: admin-only, like the Integrations screen (#467, docs/decisions/users.md U4)
+_routers = {
+    api: APIRouter(prefix=BASES[api], dependencies=[Depends(require_admin_or_service)])
+    for api, _ in HUB_APIS
+}
 ROUTERS = list(_routers.values())
 READ_ONLY = ("id", "href")
 HUB = {"response_class": TmfJSONResponse, "status_code": 201}

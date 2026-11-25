@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Depends, Request, Response
 from psycopg.errors import UniqueViolation
 from pydantic import Field
 
@@ -26,6 +26,7 @@ from app.api.common import (
 from app.api.deletes import delete_row, refuse_if_referenced
 from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
 from app.api.errors import conflict, not_found
+from app.api.roles import require_admin_or_service
 from app.api.tmfjson import TmfJSONResponse
 from app.events import emit
 from app.repository import presentation as repo
@@ -34,6 +35,8 @@ from app.repository._sql import count_references
 API = "TMF666"
 BASE = "/tmf-api/accountManagement/v5"
 router = APIRouter(prefix=BASE)
+# billing settings writes are admin-only (#467); the reads feed the account Edit form
+ADMIN = [Depends(require_admin_or_service)]
 ATTRIBUTES = ("name", "description")
 
 
@@ -166,7 +169,7 @@ def get_bill_format(format_id: str, request: Request, tx: Tx) -> TmfJSONResponse
     return TmfJSONResponse(listing.select_fields(resource_body(row, "billFormat"), fields))
 
 
-@router.post("/billFormat")
+@router.post("/billFormat", dependencies=ADMIN)
 def create_bill_format(
     body: JsonBody, request: Request, tx: Tx, clock: ClockDep
 ) -> TmfJSONResponse:
@@ -179,7 +182,7 @@ def create_bill_format(
     return created(listing.select_fields(new, fields))
 
 
-@router.patch("/billFormat/{format_id}")
+@router.patch("/billFormat/{format_id}", dependencies=ADMIN)
 def patch_bill_format(
     format_id: str, body: MergePatchBody, request: Request, tx: Tx, clock: ClockDep
 ) -> TmfJSONResponse:
@@ -222,7 +225,7 @@ def get_bill_media(media_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
     )
 
 
-@router.post("/billPresentationMedia")
+@router.post("/billPresentationMedia", dependencies=ADMIN)
 def create_bill_media(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, ATTRIBUTES)
     check_type(body, "BillPresentationMedia")
@@ -240,7 +243,7 @@ def create_bill_media(body: JsonBody, request: Request, tx: Tx, clock: ClockDep)
     return created(listing.select_fields(new, fields))
 
 
-@router.patch("/billPresentationMedia/{media_id}")
+@router.patch("/billPresentationMedia/{media_id}", dependencies=ADMIN)
 def patch_bill_media(
     media_id: str, body: MergePatchBody, request: Request, tx: Tx, clock: ClockDep
 ) -> TmfJSONResponse:
@@ -274,7 +277,9 @@ def _delete(
     return Response(status_code=204)
 
 
-@router.delete("/billFormat/{format_id}", status_code=204, response_class=Response)
+@router.delete(
+    "/billFormat/{format_id}", status_code=204, response_class=Response, dependencies=ADMIN
+)
 def delete_bill_format(format_id: str, request: Request, tx: Tx, clock: ClockDep) -> Response:
     return _delete(
         request,
@@ -287,7 +292,12 @@ def delete_bill_format(format_id: str, request: Request, tx: Tx, clock: ClockDep
     )
 
 
-@router.delete("/billPresentationMedia/{media_id}", status_code=204, response_class=Response)
+@router.delete(
+    "/billPresentationMedia/{media_id}",
+    status_code=204,
+    response_class=Response,
+    dependencies=ADMIN,
+)
 def delete_bill_media(media_id: str, request: Request, tx: Tx, clock: ClockDep) -> Response:
     return _delete(
         request,

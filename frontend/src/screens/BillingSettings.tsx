@@ -14,7 +14,6 @@ import {
   type SettingKind,
 } from '../api/billing';
 import { useResource } from '../api/useResource';
-import { useSetCrumbs } from '../app/context';
 import { formatInt } from '../format/money';
 import {
   SelectField,
@@ -31,14 +30,12 @@ import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import { Footer, useWrite } from './FinancialForms';
 import { Field } from './SubscriberForms';
-import { DunningSettingsTab } from './DunningSettings';
 import './screens.css';
 
-// Billing settings (docs/ui.md): the cycle specifications, bill
+// The Billing settings tab of Settings (#467, docs/ui.md): the cycle specifications, bill
 // formats and presentation media a billing account may name in its billStructure. The
-// prepaid lifecycle has its own screen under Prepaid (#414); the Dunning tab (#386) holds the
-// postpaid dunning steps (screens/DunningSettings.tsx). The
-// subscriber Edit form selects them. The server decides: its 409/422 text is shown in the
+// prepaid lifecycle and the dunning steps are Settings tabs of their own (screens/Settings.tsx).
+// The subscriber Edit form selects them. The server decides: its 409/422 text is shown in the
 // dialog and the entered values stay.
 
 interface Tab {
@@ -75,26 +72,24 @@ const COLUMNS: Column[] = [
   { key: 'actions', label: '', width: '150px', align: 'right' },
 ];
 
-export function BillingSettingsScreen() {
-  useSetCrumbs([{ label: 'Billing settings' }], 'billingSettings');
-  const [tab, setTab] = useState<SettingKind | 'dunning'>('cycles');
+export function BillingSettingsTab({ tabs: pageTabs }: { tabs: React.ReactNode }) {
+  const [tab, setTab] = useState<SettingKind>('cycles');
   const tabs = (
-    <div className="bss-toolbar">
-      <Segmented
-        label="Billing settings sections"
-        value={tab}
-        onChange={setTab}
-        options={[
-          ...(Object.keys(TABS) as SettingKind[]).map((key) => ({
+    <>
+      {pageTabs}
+      <div className="bss-toolbar">
+        <Segmented
+          label="Billing settings sections"
+          value={tab}
+          onChange={setTab}
+          options={(Object.keys(TABS) as SettingKind[]).map((key) => ({
             key,
             label: TABS[key].title,
-          })),
-          { key: 'dunning' as const, label: 'Dunning' },
-        ]}
-      />
-    </div>
+          }))}
+        />
+      </div>
+    </>
   );
-  if (tab === 'dunning') return <DunningSettingsTab tabs={tabs} />;
   return <SettingsTab key={tab} kind={tab} tabs={tabs} />;
 }
 
@@ -118,7 +113,7 @@ function SettingsTab({ kind, tabs }: { kind: SettingKind; tabs: React.ReactNode 
     <div className="bss-screen" data-ui={marker}>
       <div className="bss-title-row">
         <PageHeader
-          title="Billing settings"
+          title="Settings"
           count={rows.status === 'ok' ? formatInt(rows.data.length) : undefined}
         />
         <Button

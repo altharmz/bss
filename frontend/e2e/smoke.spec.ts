@@ -128,14 +128,22 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
   await page.goto('/catalog');
   await expect(page.getByRole('heading', { name: 'Product catalog' })).toBeVisible();
 
-  // #414: the prepaid lifecycle is its own screen under Prepaid (read-only here)
-  const lifecycleLink = page
+  // #467: the prepaid lifecycle is a tab of System > Settings (read-only here); the old
+  // path is replaced by the tab
+  await page
     .getByRole('navigation', { name: 'Main' })
-    .getByRole('link', { name: 'Prepaid lifecycle', exact: true });
-  await expect(lifecycleLink).toHaveAttribute('title', 'internal');
-  await lifecycleLink.click();
-  await expect(page).toHaveURL(/\/prepaid-lifecycle$/);
-  await expect(page.getByRole('heading', { name: 'Prepaid lifecycle' })).toBeVisible();
+    .getByRole('link', { name: 'Settings', exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/settings$/);
+  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+  await page
+    .getByRole('group', { name: 'Settings tabs' })
+    .getByRole('button', { name: 'Prepaid lifecycle' })
+    .click();
+  await expect(page).toHaveURL(/\/settings\/prepaid-lifecycle$/);
+  await expect(page.getByText('Grace days')).toBeVisible();
+  await page.goto('/prepaid-lifecycle');
+  await expect(page).toHaveURL(/\/settings\/prepaid-lifecycle$/);
   await expect(page.getByText('Grace days')).toBeVisible();
 
   // billing runs: the seed billed every day, so there is a latest run and a history.
@@ -345,13 +353,26 @@ test('user changes the initial password, signs in again and cannot manage users'
   await page.goto('/users');
   await expect(page.getByRole('heading', { name: 'Not allowed' })).toBeVisible();
   expect((await page.request.get('/internal/v1/users')).status()).toBe(403);
-  // no Logging entry for a user; the route itself shows the API's refusal (no client-side guard)
+  // #467: no System section for a user; its URLs say "not allowed" and the API refuses
   await expect(
     page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Logging' }),
   ).toHaveCount(0);
-  await page.goto('/settings/logging');
-  await expect(page.getByText('Failed to load the log level')).toBeVisible();
-  expect((await page.request.get('/internal/v1/logging')).status()).toBe(403);
+  await expect(
+    page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Wholesale' }),
+  ).toHaveCount(0);
+  for (const path of ['/settings/logging', '/settings/billing', '/wholesale', '/integrations']) {
+    await page.goto(path);
+    await expect(page.getByRole('heading', { name: 'Not allowed' })).toBeVisible();
+  }
+  for (const path of [
+    '/internal/v1/logging',
+    '/internal/v1/lifecycle/settings',
+    '/internal/v1/dunning/settings',
+    '/internal/v1/wholesale/invoice',
+    '/internal/v1/eventSubscription',
+  ]) {
+    expect((await page.request.get(path)).status(), path).toBe(403);
+  }
   await page.locator('.bss-operator summary').click();
   await expect(page.getByRole('link', { name: 'Users', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Sign out' }).click();

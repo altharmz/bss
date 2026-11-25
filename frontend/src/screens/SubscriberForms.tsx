@@ -654,7 +654,7 @@ function EditForm({
           <fieldset aria-label="Presentation media" data-ui="ui.subscriber.presentationMedia">
             <legend className="label">Presentation media</legend>
             {media.status === 'ok' && media.data.length === 0 && (
-              <span className="caption">None defined yet (Billing settings).</span>
+              <span className="caption">None defined yet (Settings, under System).</span>
             )}
             {media.status === 'ok' &&
               media.data.map((choice) => (
@@ -690,7 +690,8 @@ function EditForm({
             </Note>
           )}
           <div className="caption">
-            Cycle specifications, formats and media are managed under Billing settings.
+            Cycle specifications, formats and media are managed in Settings under System
+            (administrators).
           </div>
         </section>
       </>

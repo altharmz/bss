@@ -54,8 +54,25 @@ or a user could do over `/tmf-api` what the UI denies.
   a role that may not. Writes with a session cookie also need a custom request header
   the UI always sends (CSRF, with `SameSite=Strict`); it is pinned on both sides like
   every UI write.
-- **U4 Roles.** `admin`: everything, plus `/internal/v1/users*`. `user`: everything else
-  (all UI operations, the TMF APIs). Guards: the last active admin cannot be disabled or
+- **U4 Roles.** `admin`: everything, plus `/internal/v1/users*` and the System screens'
+  endpoints below. `user`: everything else (all other UI operations, the TMF APIs).
+  **System screens (#467):** the UI's System section (Integrations, Wholesale, Settings,
+  Users, Logging) is admin-only, and the server enforces it: `require_admin_or_service`
+  (`app/api/roles.py`) answers 403 to a `user` session on the billing settings writes (TMF666
+  `billingCycleSpecification`, `billFormat`, `billPresentationMedia` POST/PATCH/DELETE; their
+  reads stay open, the billing account Edit form selects them), `/internal/v1/lifecycle/settings`,
+  `/internal/v1/dunning/settings` (the dunning accounts list stays open), `/internal/v1/eventSubscription`,
+  `/internal/v1/wholesale/*` and every API's TMF630 `/hub` (POST, DELETE, GET). Users and
+  Logging keep `require_admin`. *MCP checked:* the connector calls the dunning settings,
+  wholesale, event subscription, hub and billing settings operations as tools (the lifecycle
+  settings and the wholesale import are excluded), always with the service credential (role
+  `service`), so the gate lets a service principal through: an `mcp` user is created by an
+  administrator and its tools are unchanged. The read-only smoke credential passes the same
+  way (GET only). The UI/MCP parity check is unaffected: it pairs operations with screens, not
+  roles. *TMF630 hub registration* is admin-only for UI-role API clients too: a hub sends the
+  API's events (customer data) to a callback of the caller's choice, which is an integration
+  decision; an external system registers through an administrator or the MCP connector.
+  Tests: `tests/internal/test_system_admin.py`. Guards: the last active admin cannot be disabled or
   demoted; nobody disables themselves. **`mcp`** (issue #173, migration `0051`): the MCP
   connector's OAuth login only - no UI sign-in (the same 401 as a wrong password, and the
   session check refuses the role too) - and the only role MCP accepts

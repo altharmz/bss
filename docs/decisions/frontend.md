@@ -1284,6 +1284,29 @@ billing account, sat next to the catalog.
   sidebar order, the new routes and the replaced old paths; `Parties.test.tsx` the Customers
   screen, its filters and that Parties has no Customers tab.
 
+## System admin-only, with Wholesale and Settings (2026-11-25, issue #467)
+
+Configuration screens were spread over Billing and Prepaid and open to every operator.
+
+- **System holds Integrations, Wholesale, Settings, Users, Logging**, in that order, each
+  `admin: true` in `nav.ts`; a `user` sees no System section. Wholesale keeps its route and
+  screen. Online signups stays in Customers (#457).
+- **Settings** (`/settings`, `screens/Settings.tsx`) has three tabs at their own URLs:
+  **Billing settings** (`/settings/billing`, the default: cycle specifications, bill formats,
+  presentation media as inner tabs), **Prepaid lifecycle** (`/settings/prepaid-lifecycle`) and
+  **Dunning settings** (`/settings/dunning`, an inner Billing settings tab before). The screens
+  moved as they were (requests and `ui.billingSettings.*` markers unchanged); each tab's title
+  is "Settings" with the tab bar (`ui.settings.tab.<tab>`) under it, and the crumb names the
+  tab. `/billing-settings` and `/prepaid-lifecycle` are replaced by their tab in `currentPath`
+  (`replaceState`, no history entry), like `/subscribers`. `/settings/logging` stays Logging's.
+- **Direct URLs:** `App.tsx` answers an admin-only route (`isAdminRoute`, derived from `nav.ts`)
+  opened by a non-admin with "Not allowed" (`ui.system.denied`) before the screen mounts, so no
+  request goes out; Users keeps its own message. The server refuses the endpoints anyway
+  ([users.md](users.md) U4).
+- **Tests:** `nav.test.ts` (System order, every item and only those admin-only,
+  `isAdminRoute`), `App.test.tsx` (sidebar, routes, replaced paths, Settings tabs, a user's
+  sidebar and refused URLs), the moved screens' tests (TEST-CHANGE), e2e smoke.
+
 ## Subscriber numbers in the lists (2026-11-24, issue #456)
 
 The billing account card's products table and the Billing accounts list (the Subscribers list before #457) show the line numbers that
