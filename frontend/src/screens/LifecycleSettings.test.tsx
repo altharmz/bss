@@ -4,8 +4,9 @@ import { App } from '../app/App';
 import { expectUi } from '../test/expectUi';
 import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } from '../test/fetch';
 
-// The Prepaid lifecycle screen (docs/ui.md). TEST-CHANGE (#414): moved here from the
-// Billing settings tab; the requests and the data-ui markers are unchanged.
+// The Prepaid lifecycle tab of Settings (docs/ui.md). TEST-CHANGE (#414): moved here from the
+// Billing settings tab; TEST-CHANGE (#467): a Settings tab at /settings/prepaid-lifecycle. The
+// requests and the data-ui markers are unchanged.
 
 function backend(extra: Record<string, Handler> = {}) {
   return stubFetch({
@@ -23,9 +24,9 @@ const writes = (fetchMock: ReturnType<typeof stubFetch>['fetchMock']) =>
     .map(([url, init]) => [init?.method, String(url), init?.body ?? null]);
 
 async function open() {
-  window.history.replaceState(null, '', '/prepaid-lifecycle');
+  window.history.replaceState(null, '', '/settings/prepaid-lifecycle');
   render(<App />);
-  await screen.findByRole('heading', { name: /^Prepaid lifecycle/ });
+  await screen.findByRole('heading', { name: /^Settings/ });
 }
 
 describe('prepaid lifecycle', () => {
@@ -110,14 +111,18 @@ describe('prepaid lifecycle', () => {
     },
   );
 
-  it('is the active Prepaid item, with its own breadcrumb', async () => {
+  it('is the active System > Settings item, with its own breadcrumb', async () => {
     backend({ [`GET ${lifecyclePath}`]: () => json(lifecycle) });
     await open();
     const nav = screen.getByRole('navigation', { name: 'Main' });
-    const item = within(nav).getByRole('link', { name: 'Prepaid lifecycle' });
+    expect(within(nav).queryByRole('link', { name: 'Prepaid lifecycle' })).toBeNull();
+    const item = within(nav).getByRole('link', { name: 'Settings' });
     expect(item.getAttribute('aria-current')).toBe('page');
-    expect(item.getAttribute('href')).toBe('/prepaid-lifecycle');
+    expect(item.getAttribute('href')).toBe('/settings');
     const crumbs = screen.getByRole('navigation', { name: 'Breadcrumbs' });
     expect(await within(crumbs).findByText('Prepaid lifecycle')).toBeTruthy();
+    expect(within(crumbs).getByRole('link', { name: 'Settings' }).getAttribute('href')).toBe(
+      '/settings',
+    );
   });
 });

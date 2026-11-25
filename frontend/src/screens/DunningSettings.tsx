@@ -27,7 +27,7 @@ import { ErrorBlock, SkeletonRows } from '../ui/states';
 import { Footer, useWrite } from './FinancialForms';
 import './screens.css';
 
-// The Dunning tab of Billing settings (#386, docs/decisions/dunning.md): the days after O (the
+// The Dunning settings tab of Settings (#386, #467; docs/decisions/dunning.md): the days after O (the
 // first overdue date) of the two reminders and the suspension, and the smallest amount past
 // due that counts. Field errors show at the field; the server's 422 still shows in the footer.
 
@@ -52,7 +52,7 @@ export function DunningSettingsTab({ tabs }: { tabs: ReactNode }) {
   return (
     <div className="bss-screen" data-ui="ui.billingSettings.dunning">
       <div className="bss-title-row">
-        <PageHeader title="Billing settings" />
+        <PageHeader title="Settings" />
         <Button
           variant="primary"
           disabled={settings.status !== 'ok'}

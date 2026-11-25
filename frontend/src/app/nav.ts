@@ -104,7 +104,6 @@ export const NAV: NavSection[] = [
         badge: 'runs',
       },
       { label: 'Bills', href: '/bills', routes: ['bills'], tmf: 'TMF678 customerBill' },
-      { label: 'Wholesale', href: '/wholesale', routes: ['wholesale'], tmf: 'internal' },
       {
         label: 'Payments',
         href: '/payments',
@@ -116,12 +115,6 @@ export const NAV: NavSection[] = [
         href: '/dunning',
         routes: ['dunning'],
         tmf: 'internal (postpaid dunning)',
-      },
-      {
-        label: 'Billing settings',
-        href: '/billing-settings',
-        routes: ['billingSettings'],
-        tmf: 'TMF678 billingCycleSpecification, billFormat, billPresentationMedia',
       },
     ],
   },
@@ -142,12 +135,6 @@ export const NAV: NavSection[] = [
         tmf: 'internal',
         badge: 'commands',
       },
-      {
-        label: 'Prepaid lifecycle',
-        href: '/prepaid-lifecycle',
-        routes: ['prepaidLifecycle'],
-        tmf: 'internal',
-      },
     ],
   },
   {
@@ -156,6 +143,7 @@ export const NAV: NavSection[] = [
     items: [{ label: 'Prepaid KPIs', href: '/reports', routes: ['reports'], tmf: 'internal' }],
   },
   {
+    // admin-only, every item (#467): the server refuses a `user` on these screens' endpoints
     key: 'system',
     label: 'System',
     items: [
@@ -164,6 +152,21 @@ export const NAV: NavSection[] = [
         href: '/integrations',
         routes: ['integrations'],
         tmf: 'TMF630 hub, event subscriptions',
+        admin: true,
+      },
+      {
+        label: 'Wholesale',
+        href: '/wholesale',
+        routes: ['wholesale'],
+        tmf: 'internal (wholesale reconciliation)',
+        admin: true,
+      },
+      {
+        label: 'Settings',
+        href: '/settings',
+        routes: ['settings'],
+        tmf: 'TMF666 billingCycleSpecification, billFormat, billPresentationMedia; internal (prepaid lifecycle, dunning)',
+        admin: true,
       },
       { label: 'Users', href: '/users', routes: ['users'], tmf: 'internal', admin: true },
       {
@@ -180,6 +183,13 @@ export const NAV: NavSection[] = [
 /** Routes that are reached without the sidebar: the session pages, the kit, not-found and
  * the billing account card (under Billing accounts). */
 export const OFF_NAV: RouteName[] = ['signIn', 'password', 'uiKit', 'notFound', 'subscriber'];
+
+/** The routes only an admin may open: a `user` gets "not allowed" (App.tsx). */
+export function isAdminRoute(name: RouteName): boolean {
+  return NAV.some((section) =>
+    section.items.some((item) => item.admin === true && item.routes.includes(name)),
+  );
+}
 
 /** The sections an operator sees: admin-only items only for an admin; empty sections go. */
 export function visibleNav(isAdmin: boolean): NavSection[] {

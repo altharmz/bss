@@ -5,18 +5,22 @@ Read only: the live hubs of every API, newest first (filter api), with the deliv
 summary the outbox already stores. Creating and deleting stay on each API's /hub.
 """
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 
 from app.api.common import utc
 from app.api.deps import Tx
 from app.api.errors import bad_request
 from app.api.listing import page_response, parse_page
+from app.api.roles import require_admin_or_service
 from app.api.tmfjson import TmfJSONResponse
 from app.events.types import BASES
 from app.repository import hubs
 from app.repository._sql import Row
 
-router = APIRouter(prefix="/internal/v1/eventSubscription")
+# the Integrations screen only, admin-only like it (#467)
+router = APIRouter(
+    prefix="/internal/v1/eventSubscription", dependencies=[Depends(require_admin_or_service)]
+)
 
 API_NAMES = {
     "TMF620": "Product Catalog Management",

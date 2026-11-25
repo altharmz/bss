@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NAV, OFF_NAV, visibleNav, type RouteName } from './nav';
+import { isAdminRoute, NAV, OFF_NAV, visibleNav, type RouteName } from './nav';
 import { parseRoute } from './router';
 
 // The sidebar stays complete (#414): every navigable route has exactly one nav item, and
@@ -26,13 +26,12 @@ const ALL_ROUTES: Record<RouteName, true> = {
   careSignups: true,
   parties: true,
   customers: true,
-  billingSettings: true,
+  settings: true,
   payments: true,
   dunning: true,
   bills: true,
   wholesale: true,
   balances: true,
-  prepaidLifecycle: true,
   reports: true,
   integrations: true,
   notFound: true,
@@ -91,13 +90,40 @@ describe('sidebar navigation data', () => {
     expect(labels('catalog')).toEqual([['Product catalog', '/catalog']]);
   });
 
-  it('shows Users and Logging only to an admin', () => {
+  // TEST-CHANGE (#467): the whole System section is admin-only; Wholesale and Settings
+  // (Billing settings, Prepaid lifecycle) moved there
+  it('lists System in order, every item admin-only', () => {
+    const system = NAV.find((section) => section.key === 'system')?.items ?? [];
+    expect(system.map((item) => [item.label, item.href])).toEqual([
+      ['Integrations', '/integrations'],
+      ['Wholesale', '/wholesale'],
+      ['Settings', '/settings'],
+      ['Users', '/users'],
+      ['Logging', '/settings/logging'],
+    ]);
+    expect(system.every((item) => item.admin === true)).toBe(true);
+    expect(items.filter((item) => item.admin).map((item) => item.label)).toEqual(
+      system.map((item) => item.label),
+    );
+  });
+
+  it('shows the System section only to an admin', () => {
     const labels = (admin: boolean) =>
       visibleNav(admin).flatMap((section) => section.items.map((item) => item.label));
-    expect(labels(true)).toEqual(expect.arrayContaining(['Users', 'Logging']));
-    expect(labels(false)).not.toContain('Users');
-    expect(labels(false)).not.toContain('Logging');
-    expect(labels(false)).toContain('Integrations');
+    const system = ['Integrations', 'Wholesale', 'Settings', 'Users', 'Logging'];
+    expect(labels(true)).toEqual(expect.arrayContaining(system));
+    for (const label of system) expect(labels(false)).not.toContain(label);
+    expect(visibleNav(false).map((section) => section.key)).not.toContain('system');
     expect(labels(false)).toContain('Online signups');
+    expect(labels(false)).toContain('Dunning');
+  });
+
+  it('marks the System routes admin-only and no other', () => {
+    for (const name of ['integrations', 'wholesale', 'settings', 'users', 'logging'] as const) {
+      expect(isAdminRoute(name)).toBe(true);
+    }
+    for (const name of ['careSignups', 'dunning', 'bills', 'subscriber', 'notFound'] as const) {
+      expect(isAdminRoute(name)).toBe(false);
+    }
   });
 });

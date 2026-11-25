@@ -8,17 +8,21 @@ every transition not yet taken; transitions already taken are not undone.
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from pydantic import Field
 
 from app.api.common import TmfModel, parse, utc
 from app.api.deps import ClockDep, JsonBody, Tx
+from app.api.roles import require_admin_or_service
 from app.api.tmfjson import TmfJSONResponse
 from app.internal.context import no_query
 from app.repository import lifecycle as repo
 from app.repository._sql import Row
 
-router = APIRouter(prefix="/internal/v1/lifecycle")
+# the Settings page only, admin-only like it (#467)
+router = APIRouter(
+    prefix="/internal/v1/lifecycle", dependencies=[Depends(require_admin_or_service)]
+)
 
 Days = Annotated[int, Field(ge=0, le=3650, strict=True)]
 

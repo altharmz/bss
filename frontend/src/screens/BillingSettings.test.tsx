@@ -4,7 +4,9 @@ import { App } from '../app/App';
 import { expectUi } from '../test/expectUi';
 import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } from '../test/fetch';
 
-// The Billing settings screen (docs/ui.md).
+// The Billing settings and Dunning settings tabs of Settings (docs/ui.md). TEST-CHANGE (#467):
+// the screen moved into System's Settings page (/settings/billing, /settings/dunning); the
+// requests and the data-ui markers are unchanged.
 
 const ACC = '/tmf-api/accountManagement/v5';
 const PAGE = 'offset=0&limit=100';
@@ -55,9 +57,14 @@ const writes = (fetchMock: ReturnType<typeof stubFetch>['fetchMock']) =>
 type Tab = 'Cycle specifications' | 'Bill formats' | 'Presentation media' | 'Dunning';
 
 async function open(tab: Tab = 'Cycle specifications') {
-  window.history.replaceState(null, '', '/billing-settings');
+  window.history.replaceState(
+    null,
+    '',
+    tab === 'Dunning' ? '/settings/dunning' : '/settings/billing',
+  );
   render(<App />);
-  await screen.findByRole('heading', { name: /^Billing settings/ });
+  await screen.findByRole('heading', { name: /^Settings/ });
+  if (tab === 'Dunning') return;
   fireEvent.click(
     within(screen.getByRole('group', { name: 'Billing settings sections' })).getByRole('button', {
       name: tab,
@@ -74,15 +81,21 @@ describe('billing settings', () => {
   // TEST-CHANGE (#414): the prepaid lifecycle moved to its own screen under Prepaid
   // (LifecycleSettings.test.tsx); Billing settings keeps the three TMF678 tabs.
   // TEST-CHANGE (#386): plus the postpaid Dunning tab
-  it('has the three billing configuration tabs, Dunning, and no lifecycle tab', async () => {
+  // TEST-CHANGE (#467): Dunning settings and Prepaid lifecycle are tabs of the Settings page
+  it('has the three billing configuration tabs under the Settings tabs', async () => {
     backend();
     await open();
+    const page = within(screen.getByRole('group', { name: 'Settings tabs' }));
+    expect(page.getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'Billing settings',
+      'Prepaid lifecycle',
+      'Dunning settings',
+    ]);
     const tabs = within(screen.getByRole('group', { name: 'Billing settings sections' }));
     expect(tabs.getAllByRole('button').map((b) => b.textContent)).toEqual([
       'Cycle specifications',
       'Bill formats',
       'Presentation media',
-      'Dunning',
     ]);
   });
 
@@ -95,8 +108,11 @@ describe('billing settings', () => {
     expect(within(builtIn).getByText('built in')).toBeTruthy();
     expect(within(builtIn).queryByRole('button')).toBeNull();
     expect(screen.getByRole('button', { name: 'Edit Corporate monthly' })).toBeTruthy();
-    // the sidebar links to the screen
-    expect(screen.getByRole('link', { name: /Billing settings/ })).toBeTruthy();
+    // the sidebar links to the page (System > Settings, #467)
+    const nav = screen.getByRole('navigation', { name: 'Main' });
+    expect(within(nav).getByRole('link', { name: 'Settings' }).getAttribute('aria-current')).toBe(
+      'page',
+    );
   });
 
   // TEST-CHANGE (#314): no "used by" count, which read every billing account (#312: no

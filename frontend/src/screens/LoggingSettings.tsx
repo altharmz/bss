@@ -31,7 +31,7 @@ function useNow(everyMs: number): number {
 
 export function LoggingSettingsScreen() {
   useSetCrumbs([{ label: 'Logging' }], 'logging');
-  // The role is not checked here: a user's GET is refused by the API and shown below.
+  // A user never gets here (App.tsx: System is admin-only, #467); the API refuses them too.
   const logging = usePolled('logging', loadLogging, () => true, REFRESH_MS);
   return (
     <div className="bss-screen" data-ui="ui.logging.settings">

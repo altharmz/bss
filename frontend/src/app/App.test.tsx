@@ -17,10 +17,11 @@ const empty = () => json([], { total: 0 });
 function backend(
   context: Handler = () => json(CONTEXT),
   latestRun: Handler = () => json([{ ...RUN, status: 'completed' }], { total: 9 }),
+  role: 'admin' | 'user' = 'admin',
 ) {
   return stubFetch({
     'GET /internal/v1/session': () =>
-      json({ username: 'i.petrova', role: 'admin', mustChangePassword: false }),
+      json({ username: 'i.petrova', role, mustChangePassword: false }),
     'GET /internal/v1/context': context,
     [NAV_RUNS]: latestRun,
     // the billing runs screen: no runs (the screen has its own tests)
@@ -34,6 +35,10 @@ function backend(
     [`GET ${TMF}/productCatalogManagement/v5/productSpecification?offset=0&limit=100`]: empty,
     // a subscriber card: only its breadcrumbs matter here
     [`GET ${TMF}/accountManagement/v5/billingAccount/${ID}`]: pending,
+    // the Settings tabs (#467): only the route and the tab matter here
+    [`GET ${TMF}/accountManagement/v5/billingCycleSpecification?offset=0&limit=100`]: pending,
+    'GET /internal/v1/lifecycle/settings': pending,
+    'GET /internal/v1/dunning/settings': pending,
   });
 }
 
@@ -95,7 +100,15 @@ describe('routes', () => {
     ['/billing-runs', { name: 'billingRuns' }],
     ['/financial-accounts', { name: 'financialAccounts' }],
     ['/parties', { name: 'parties' }],
-    ['/billing-settings', { name: 'billingSettings' }],
+    // TEST-CHANGE (#467): Billing settings and Prepaid lifecycle are Settings tabs; the old
+    // paths no longer parse, currentPath replaces them (below)
+    ['/settings', { name: 'settings', tab: 'billing' }],
+    ['/settings/', { name: 'settings', tab: 'billing' }],
+    ['/settings/billing', { name: 'settings', tab: 'billing' }],
+    ['/settings/prepaid-lifecycle', { name: 'settings', tab: 'prepaidLifecycle' }],
+    ['/settings/dunning/', { name: 'settings', tab: 'dunning' }],
+    ['/settings/nope', { name: 'notFound', path: '/settings/nope' }],
+    ['/billing-settings', { name: 'notFound', path: '/billing-settings' }],
     ['/settings/logging', { name: 'logging' }],
     ['/bills', { name: 'bills' }],
     ['/wholesale', { name: 'wholesale' }],
@@ -105,8 +118,6 @@ describe('routes', () => {
     ['/dunning/', { name: 'dunning' }],
     ['/balances', { name: 'balances' }],
     ['/reports', { name: 'reports' }],
-    ['/prepaid-lifecycle', { name: 'prepaidLifecycle' }],
-    ['/prepaid-lifecycle/', { name: 'prepaidLifecycle' }],
     ['/orders', { name: 'orders' }],
     ['/products', { name: 'products' }],
     ['/billing', { name: 'notFound', path: '/billing' }], // not /billing: /billing-status
@@ -142,6 +153,62 @@ describe('routes', () => {
         .getByRole('link', { name: /Billing accounts/ })
         .getAttribute('aria-current'),
     ).toBe('page');
+  });
+
+  it.each([
+    ['/billing-settings', '/settings/billing', 'Billing settings'],
+    ['/billing-settings/', '/settings/billing', 'Billing settings'],
+    ['/prepaid-lifecycle', '/settings/prepaid-lifecycle', 'Prepaid lifecycle'],
+  ])('replaces the moved %s with the Settings tab %s (#467)', async (from, to, tab) => {
+    backend();
+    window.history.replaceState(null, '', '/catalog');
+    window.history.pushState(null, '', from);
+    const before = window.history.length;
+    render(<App />);
+    const nav = await screen.findByRole('navigation', { name: 'Main' });
+    expect(window.location.pathname).toBe(to);
+    expect(window.history.length).toBe(before);
+    expect(within(nav).getByRole('link', { name: 'Settings' }).getAttribute('aria-current')).toBe(
+      'page',
+    );
+    const tabs = screen.getByRole('group', { name: 'Settings tabs' });
+    expect(within(tabs).getByRole('button', { name: tab }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+  });
+
+  it('opens a Settings tab at its own URL', async () => {
+    backend();
+    start('/settings');
+    const tabs = await screen.findByRole('group', { name: 'Settings tabs' });
+    expect(screen.getByRole('heading', { name: 'Settings' })).toBeTruthy();
+    fireEvent.click(within(tabs).getByRole('button', { name: 'Dunning settings' }));
+    expect(window.location.pathname).toBe('/settings/dunning');
+    expectUi('ui.billingSettings.dunning');
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Settings tabs' })).getByRole('button', {
+        name: 'Prepaid lifecycle',
+      }),
+    );
+    expect(window.location.pathname).toBe('/settings/prepaid-lifecycle');
+    expectUi('ui.billingSettings.lifecycle');
+  });
+
+  it.each([
+    '/integrations',
+    '/wholesale',
+    `/wholesale/${ID}`,
+    '/settings/dunning',
+    '/settings/logging',
+  ])('refuses the System screen %s to a user (#467)', async (path) => {
+    const { calls } = backend(undefined, undefined, 'user');
+    start(path);
+    expect(await screen.findByRole('heading', { name: 'Not allowed' })).toBeTruthy();
+    expectUi('ui.system.denied');
+    // the screen behind it never loads
+    expect(calls.some((call) => /wholesale|eventSubscription|settings|logging/.test(call))).toBe(
+      false,
+    );
   });
 
   it('navigates in place on a nav click and follows the back button', async () => {
@@ -203,19 +270,19 @@ describe('shell', () => {
       '/ports',
       '/billing-runs',
       '/bills',
-      '/wholesale',
       '/payments',
       '/dunning',
-      '/billing-settings',
       '/balances',
       '/prepaid-commands',
-      '/prepaid-lifecycle',
       '/reports',
       '/integrations',
+      '/wholesale',
+      '/settings',
       '/users',
       '/settings/logging',
     ]);
-    // TEST-CHANGE (#457): seven labelled sections in TMF / ODA domain order (#414), Customers
+    // TEST-CHANGE (#467): Wholesale and Settings (Billing settings, Prepaid lifecycle) moved
+    // to System. TEST-CHANGE (#457): seven labelled sections in TMF / ODA domain order (#414), Customers
     // down the account hierarchy and Catalog alone, each item under its label
     const labels = Array.from(nav.children).map((el) =>
       el.classList.contains('section') ? `# ${el.textContent}` : (el.getAttribute('href') ?? ''),
@@ -238,18 +305,17 @@ describe('shell', () => {
       '# Billing',
       '/billing-runs',
       '/bills',
-      '/wholesale',
       '/payments',
       '/dunning',
-      '/billing-settings',
       '# Prepaid',
       '/balances',
       '/prepaid-commands',
-      '/prepaid-lifecycle',
       '# Reports',
       '/reports',
       '# System',
       '/integrations',
+      '/wholesale',
+      '/settings',
       '/users',
       '/settings/logging',
     ]);
@@ -284,6 +350,26 @@ describe('shell', () => {
         .getByRole('link', { name: /Billing accounts/ })
         .getAttribute('aria-current'),
     ).toBe('page');
+  });
+
+  it('shows a user no System section (#467)', async () => {
+    backend(undefined, undefined, 'user');
+    start('/billing-accounts');
+    const nav = await screen.findByRole('navigation', { name: 'Main' });
+    const hrefs = within(nav)
+      .getAllByRole('link')
+      .map((a) => a.getAttribute('href'));
+    for (const href of [
+      '/integrations',
+      '/wholesale',
+      '/settings',
+      '/users',
+      '/settings/logging',
+    ]) {
+      expect(hrefs).not.toContain(href);
+    }
+    expect(within(nav).queryByText('System')).toBeNull();
+    expect(hrefs).toContain('/signups'); // every operator keeps the online signups
   });
 
   it('shows the red "failed" badge when the latest run failed', async () => {

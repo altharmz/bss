@@ -39,7 +39,7 @@ from typing import Any, Literal
 from uuid import UUID
 
 import psycopg
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Depends, Request, Response
 from psycopg.types.json import Jsonb
 from pydantic import Field
 
@@ -88,6 +88,7 @@ from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
 from app.api.errors import bad_request, conflict, not_found, problems_error, unprocessable
 from app.api.guards import authorize_contact
 from app.api.presentation import BillStructure, structure_from
+from app.api.roles import require_admin_or_service
 from app.api.tmfjson import TmfJSONResponse
 from app.billing.engine_tax import service_address_of
 from app.config import settings
@@ -98,6 +99,8 @@ from app.repository._sql import Row, count_references, is_referenced, jsonb, row
 API = "TMF666"
 BASE = "/tmf-api/accountManagement/v5"
 router = APIRouter(prefix=BASE)
+# billing settings writes are admin-only (#467); the reads feed the account Edit form
+ADMIN = [Depends(require_admin_or_service)]
 # Outside the TMF666 resource paths: it is ours, not part of that API.
 schema_router = APIRouter(prefix="/tmf-api/schema")
 
@@ -329,7 +332,7 @@ def get_cycle_specification(specification_id: str, request: Request, tx: Tx) -> 
     return TmfJSONResponse(listing.select_fields(stored_cycle_body(row), fields))
 
 
-@router.post("/billingCycleSpecification")
+@router.post("/billingCycleSpecification", dependencies=ADMIN)
 def create_cycle_specification(
     body: JsonBody, request: Request, tx: Tx, clock: ClockDep
 ) -> TmfJSONResponse:
@@ -352,7 +355,7 @@ def create_cycle_specification(
     return created(listing.select_fields(new, fields))
 
 
-@router.patch("/billingCycleSpecification/{specification_id}")
+@router.patch("/billingCycleSpecification/{specification_id}", dependencies=ADMIN)
 def patch_cycle_specification(
     specification_id: str, body: MergePatchBody, request: Request, tx: Tx, clock: ClockDep
 ) -> TmfJSONResponse:
@@ -382,7 +385,10 @@ def patch_cycle_specification(
 
 
 @router.delete(
-    "/billingCycleSpecification/{specification_id}", status_code=204, response_class=Response
+    "/billingCycleSpecification/{specification_id}",
+    status_code=204,
+    response_class=Response,
+    dependencies=ADMIN,
 )
 def delete_cycle_specification(
     specification_id: str, request: Request, tx: Tx, clock: ClockDep

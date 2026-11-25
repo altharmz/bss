@@ -35,16 +35,31 @@ export type Route =
   | { name: 'careSignups' }
   | { name: 'parties' }
   | { name: 'customers' }
-  | { name: 'billingSettings' }
+  | { name: 'settings'; tab: SettingsTab }
   | { name: 'payments' }
   | { name: 'dunning' }
   | { name: 'bills' }
   | { name: 'wholesale'; invoiceId?: string }
   | { name: 'balances' }
-  | { name: 'prepaidLifecycle' }
   | { name: 'reports' }
   | { name: 'integrations' }
   | { name: 'notFound'; path: string };
+
+/** The Settings page's tabs (#467), each at /settings/<path>; /settings opens the first. */
+export const SETTINGS_TABS = {
+  billing: { path: 'billing', label: 'Billing settings' },
+  prepaidLifecycle: { path: 'prepaid-lifecycle', label: 'Prepaid lifecycle' },
+  dunning: { path: 'dunning', label: 'Dunning settings' },
+} as const;
+export type SettingsTab = keyof typeof SETTINGS_TABS;
+const SETTINGS = /^\/settings(?:\/([a-z-]+))?\/?$/;
+
+// The screens that moved into Settings (#467): the old paths are replaced by their tab
+// without a history entry (currentPath), so bookmarks keep working.
+const MOVED_TO_SETTINGS: Record<string, string> = {
+  '/billing-settings': '/settings/billing',
+  '/prepaid-lifecycle': '/settings/prepaid-lifecycle',
+};
 
 // The billing account list and card (#457, "Subscribers" before): /subscribers and
 // /subscribers/{id} still open them, replaced by the new path without a history entry
@@ -84,10 +99,15 @@ export function parseRoute(path: string): Route {
   }
   if (path === '/parties' || path === '/parties/') return { name: 'parties' };
   if (path === '/customers' || path === '/customers/') return { name: 'customers' };
-  if (path === '/billing-settings' || path === '/billing-settings/') {
-    return { name: 'billingSettings' };
-  }
   if (path === '/settings/logging' || path === '/settings/logging/') return { name: 'logging' };
+  const settings = SETTINGS.exec(path);
+  if (settings) {
+    if (settings[1] === undefined) return { name: 'settings', tab: 'billing' };
+    const tab = (Object.keys(SETTINGS_TABS) as SettingsTab[]).find(
+      (key) => SETTINGS_TABS[key].path === settings[1],
+    );
+    if (tab) return { name: 'settings', tab };
+  }
   if (path === '/payments' || path === '/payments/') return { name: 'payments' };
   if (path === '/dunning' || path === '/dunning/') return { name: 'dunning' };
   if (path === '/bills' || path === '/bills/') return { name: 'bills' };
@@ -96,9 +116,6 @@ export function parseRoute(path: string): Route {
   if (invoice?.[1]) return { name: 'wholesale', invoiceId: invoice[1].toLowerCase() };
   if (path === '/balances' || path === '/balances/') return { name: 'balances' };
   if (path === '/reports' || path === '/reports/') return { name: 'reports' };
-  if (path === '/prepaid-lifecycle' || path === '/prepaid-lifecycle/') {
-    return { name: 'prepaidLifecycle' };
-  }
   return { name: 'notFound', path };
 }
 
@@ -144,8 +161,8 @@ export function hrefOf(route: Exclude<Route, { name: 'notFound' }>): string {
       return '/parties';
     case 'customers':
       return '/customers';
-    case 'billingSettings':
-      return '/billing-settings';
+    case 'settings':
+      return `/settings/${SETTINGS_TABS[route.tab].path}`;
     case 'payments':
       return '/payments';
     case 'dunning':
@@ -158,8 +175,6 @@ export function hrefOf(route: Exclude<Route, { name: 'notFound' }>): string {
       return '/balances';
     case 'reports':
       return '/reports';
-    case 'prepaidLifecycle':
-      return '/prepaid-lifecycle';
   }
 }
 
@@ -176,6 +191,11 @@ function currentPath(): string {
   if (pathname === '/') {
     window.history.replaceState(null, '', '/billing-accounts');
     return '/billing-accounts';
+  }
+  const moved = MOVED_TO_SETTINGS[pathname.replace(/(.)\/$/, '$1')];
+  if (moved !== undefined) {
+    window.history.replaceState(null, '', `${moved}${search}${hash}`);
+    return moved;
   }
   if (LEGACY_SUBSCRIBERS.test(pathname)) {
     const path = pathname.replace(LEGACY_SUBSCRIBERS, '/billing-accounts');

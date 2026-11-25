@@ -13,24 +13,26 @@ import { BalancesScreen } from '../screens/Balances';
 import { BillsScreen } from '../screens/GlobalBills';
 import { CustomersScreen } from '../screens/Customers';
 import { PartiesScreen } from '../screens/Parties';
-import { BillingSettingsScreen } from '../screens/BillingSettings';
+import { SettingsScreen } from '../screens/Settings';
 import { FinancialAccountsScreen } from '../screens/FinancialAccounts';
 import { NotFoundScreen } from '../screens/placeholders';
 import { SubscriberCardScreen } from '../screens/SubscriberCard';
 import { SubscribersScreen } from '../screens/Subscribers';
 import { Signups } from '../screens/CareOperator';
 import { ErrorBlock } from '../ui/states';
-import { Panel, ToastProvider } from '../ui/kit';
+import { PageHeader, Panel, ToastProvider } from '../ui/kit';
 import '../ui/ui.css';
 import {
   CrumbsProvider,
   NavVersionProvider,
   SystemContextProvider,
+  useSetCrumbs,
   type SystemContext,
 } from './context';
 import { RouterProvider, useRouter } from './router';
 import { Shell } from './Shell';
-import { SessionGate } from './session';
+import { isAdminRoute } from './nav';
+import { SessionGate, useSession } from './session';
 import { LoggingSettingsScreen } from '../screens/LoggingSettings';
 import { UsersScreen } from '../screens/Users';
 import { IntegrationsScreen } from '../screens/Integrations';
@@ -38,13 +40,29 @@ import { NumbersScreen } from '../screens/Numbers';
 import { SimsScreen } from '../screens/Sims';
 import { PortRequestsScreen } from '../screens/PortRequests';
 import { ReportsScreen } from '../screens/Reports';
-import { LifecycleSettingsScreen } from '../screens/LifecycleSettings';
 import { WholesaleInvoiceScreen, WholesaleScreen } from '../screens/Wholesale';
 
 const CONTEXT = '/internal/v1/context';
 
+/** A System screen (admin-only in nav.ts, #467) opened by a `user`: the server refuses its
+ * endpoints too (docs/decisions/users.md U4). */
+function NotAllowedScreen() {
+  useSetCrumbs([{ label: 'Not allowed' }], 'notAllowed');
+  return (
+    <div className="bss-screen" data-ui="ui.system.denied">
+      <PageHeader title="Not allowed" />
+      <p className="bss-not-found">Only administrators can open the System screens.</p>
+    </div>
+  );
+}
+
 function Screen() {
   const { route } = useRouter();
+  const session = useSession();
+  // Users says it in its own words (ui.users.denied)
+  if (isAdminRoute(route.name) && route.name !== 'users' && session?.role !== 'admin') {
+    return <NotAllowedScreen />;
+  }
   switch (route.name) {
     case 'uiKit':
       return <UiKitScreen />;
@@ -83,8 +101,8 @@ function Screen() {
       return <PartiesScreen />;
     case 'customers':
       return <CustomersScreen />;
-    case 'billingSettings':
-      return <BillingSettingsScreen />;
+    case 'settings':
+      return <SettingsScreen tab={route.tab} />;
     case 'logging':
       return <LoggingSettingsScreen />;
     case 'payments':
@@ -103,8 +121,6 @@ function Screen() {
       return <BalancesScreen />;
     case 'reports':
       return <ReportsScreen />;
-    case 'prepaidLifecycle':
-      return <LifecycleSettingsScreen />;
     case 'notFound':
       return <NotFoundScreen path={route.path} />;
   }

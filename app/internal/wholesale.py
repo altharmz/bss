@@ -20,6 +20,7 @@ from app.api.common import money, operator_of, parse_id, utc
 from app.api.deps import ClockDep, Tx
 from app.api.errors import TmfError, bad_request, conflict, not_found
 from app.api.listing import page_response, parse_page
+from app.api.roles import require_admin_or_service
 from app.api.tmfjson import TmfJSONResponse
 from app.integrations.network import wholesale as invoice_format
 from app.internal.context import no_query
@@ -27,7 +28,8 @@ from app.repository import wholesale as repo
 from app.repository._sql import Row
 
 BASE = "/internal/v1/wholesale"
-router = APIRouter(prefix=BASE)
+# the Wholesale screen only, admin-only like it (#467)
+router = APIRouter(prefix=BASE, dependencies=[Depends(require_admin_or_service)])
 MAX_BYTES = 64 * 1024 * 1024
 INVOICE_NUMBER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,63}$")
 CENT = Decimal("0.01")
