@@ -147,6 +147,8 @@ def forbidden(path):
                 ".e2e",
                 ".shots",
                 ".progress",
+                ".coverage",
+                ".coverage-report",
                 ".docs",
                 ".testmon",
                 "node_modules",

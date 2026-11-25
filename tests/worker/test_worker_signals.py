@@ -125,15 +125,27 @@ def test_the_worker_refuses_to_start(api, migrated_db_url, tmp_path, env, reason
 # --- signals mid-run ---
 
 
-def test_wait_until_blocked_fails_with_diagnostics_within_its_deadline(migrated_db_url):
+def test_wait_until_blocked_fails_with_diagnostics_within_its_deadline(migrated_db_url, tmp_path):
+    # The child prints, then marks itself ready; the 0.5 s deadline starts only then, so a
+    # slow interpreter start (coverage, a loaded host) cannot lose the output (#480).
+    ready = tmp_path / "ready"
+    child = (
+        "import pathlib, sys, time; print('booting', flush=True); "
+        "pathlib.Path(sys.argv[1]).touch(); time.sleep(60)"
+    )
     never_blocks = subprocess.Popen(  # noqa: S603 - our own interpreter, no outside input
-        [sys.executable, "-c", "import time; print('booting', flush=True); time.sleep(60)"],
+        [sys.executable, "-c", child, str(ready)],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
     )
-    began = time.monotonic()
     try:
+        start_by = time.monotonic() + 60
+        while not ready.exists():
+            assert never_blocks.poll() is None, "child exited before it was ready"
+            assert time.monotonic() < start_by, "child never became ready"
+            time.sleep(0.02)
+        began = time.monotonic()
         with pytest.raises(pytest.fail.Exception) as failure:
             wait_until_blocked(migrated_db_url, never_blocks, deadline=0.5)
     finally:

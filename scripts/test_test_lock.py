@@ -18,6 +18,7 @@ HEAVY = re.compile(
     r"|task-compose run --rm e2e\b|tests\.progress_collect"
 )
 MUST_LOCK = {
+    "coverage",
     "test",
     "test-smoke",
     "test-changed",
@@ -105,7 +106,8 @@ class MakefileTestLockTests(unittest.TestCase):
         missing = sorted(
             target
             for target in MUST_LOCK
-            if not any(line.startswith(LOCKED) for line in found.get(target, []))
+            # make's prefixes (-: carry on after a failure) as in the line check above
+            if not any(line.lstrip("@-+").startswith(LOCKED) for line in found.get(target, []))
         )
         self.assertEqual(missing, [])
 

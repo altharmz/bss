@@ -208,6 +208,23 @@ test-files: ## [test] The listed test files (TESTS=tests/a.py,tests/b.py): the h
 	@test -n "$(TESTS)" || { echo "TESTS=tests/a.py,tests/b.py is required" >&2; exit 2; }
 	$(LOCKED) ./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) oneoff pytest -n auto $(subst $(comma), ,$(TESTS))
 
+# Line coverage of app/, bss_mcp/ and frontend/src/ from one checkout (#480,
+# docs/coverage.md): the whole backend suite (every mark) under coverage.py, then the
+# default Vitest run with the V8 provider, then one report with the weighted total in
+# .coverage-report/. Both suites always run; the target fails after the report when either
+# failed. Not part of make test or the hook.
+.PHONY: coverage
+coverage: | testmon-dir ## [test] Line coverage of the backend and the UI, with the combined percentage, to .coverage-report/ (whole backend suite, ~15 min)
+	rm -rf .testmon/coverage frontend/.coverage .coverage-report
+	mkdir -p .testmon/coverage
+	cp scripts/coverage/coverage.ini scripts/coverage/sitecustomize.py .testmon/coverage/
+	-$(LOCKED) ./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) -e COVERAGE_PROCESS_START=/testmon/coverage/coverage.ini -e PYTHONPATH=/testmon/coverage oneoff sh -c 'pytest -n auto; echo $$? >/testmon/coverage/exit-status; coverage combine --rcfile=/testmon/coverage/coverage.ini && coverage json --rcfile=/testmon/coverage/coverage.ini -o /testmon/coverage/backend.json'
+	-$(LOCKED) $(WEB) sh -c '$(WEB_DEPS) && npm run types && { npx vitest run --coverage; echo $$? >.coverage/exit-status; }'
+	python3 -B scripts/coverage_report.py --commit "$$(git rev-parse HEAD)$$(git diff --quiet HEAD || echo ' (dirty)')" \
+		--backend .testmon/coverage/backend.json --backend-status .testmon/coverage/exit-status \
+		--frontend frontend/.coverage/coverage-final.json --frontend-summary frontend/.coverage/coverage-summary.json \
+		--frontend-status frontend/.coverage/exit-status --out .coverage-report
+
 .PHONY: testmon-dir
 test test-smoke test-changed test-recorded test-files test-marked check-preflight: | testmon-dir
 testmon-dir:

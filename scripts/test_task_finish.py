@@ -30,7 +30,7 @@ class LifecycleFixture(unittest.TestCase):
         ignore.write_text(
             ignore.read_text()
             + "__pycache__/\nfrontend/.shots/\nfrontend/src/api/generated/\nloadtest/out/\n"
-            + ".testmon/\n"
+            + ".testmon/\n.coverage-report/\nfrontend/.coverage/\n"
         )
         self.call(["git", "add", ".gitignore"])
         self.call(["git", "commit", "-m", "ignore generated cache"])
@@ -620,6 +620,8 @@ if a[0] == 'ps' and any(x.startswith('ancestor=') for x in a):
             "frontend/.shots/a.png",
             "frontend/src/api/generated/types.ts",
             "loadtest/out/seed-report.json",
+            ".coverage-report/report.md",
+            "frontend/.coverage/coverage-final.json",
         ):
             (self.work / name).parent.mkdir(parents=True, exist_ok=True)
             (self.work / name).touch()

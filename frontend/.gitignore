@@ -2,3 +2,5 @@ node_modules/
 dist/
 # generated from spec/ by `npm run types` (make web-types); never edited by hand
 src/api/generated/
+# make coverage: the Vitest coverage reports
+.coverage/

@@ -5,7 +5,14 @@ import shutil
 import unittest
 from unittest.mock import patch
 
-from task_quality import changed_paths, check_stages, format_targets, run_stages, web_test
+from task_quality import (
+    changed_paths,
+    check_stages,
+    forbidden,
+    format_targets,
+    run_stages,
+    web_test,
+)
 from test_task_runtime import SCRIPTS, RuntimeTests
 
 
@@ -215,6 +222,11 @@ class QualityTests(unittest.TestCase):
     def test_forbidden_untracked(self):
         (self.work / "backup.pem").touch()
         self.assertNotEqual(self.quality().returncode, 0)
+
+    def test_coverage_reports_are_never_committed(self):
+        for name in (".coverage-report/report.md", "frontend/.coverage/coverage-final.json"):
+            self.assertTrue(forbidden(name), name)
+        self.assertFalse(forbidden("scripts/coverage/coverage.ini"))
 
     def test_force_added_generated_artifact(self):
         with (self.work / ".gitignore").open("a") as output:

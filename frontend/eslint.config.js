@@ -4,7 +4,7 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['.shots', 'dist', 'node_modules', 'src/api/generated'] },
+  { ignores: ['.coverage', '.shots', 'dist', 'node_modules', 'src/api/generated'] },
   js.configs.recommended,
   ...tseslint.configs.strict,
   {

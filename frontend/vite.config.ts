@@ -40,6 +40,19 @@ export default defineConfig({
     // above setup.ts's asyncUtilTimeout (5 s), so a waitFor that misses fails with its
     // own error, not a bare test timeout
     testTimeout: 15000,
+    // make coverage (#480) passes --coverage; the scope matches the #480 baseline
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: [
+        'src/**/*.{test,spec}.{ts,tsx}',
+        'src/test/**',
+        'src/api/generated/**',
+        '**/*.d.ts',
+      ],
+      reporter: ['text', 'json', 'json-summary'],
+      reportsDirectory: '.coverage',
+    },
     // make progress: also list the data-ui ids passing tests saw (expectUi)
     ...(process.env.UI_TESTED_OUT
       ? { reporters: ['default', './scripts/ui-tested-reporter.mjs'] }

@@ -106,6 +106,16 @@ default follows the CPU count.
 tests in `test_order_concurrency.py` and `test_billing_db.py`) can fail under full load: rerun
 once before suspecting a regression.
 
+## Line coverage on demand (2026-11-25, #480)
+
+`make coverage` measures line coverage of `app/`, `bss_mcp/` and `frontend/src/` from one
+checkout and reports the combined percentage from raw line counts
+([coverage.md](../coverage.md)). It is a by-hand measurement, not a gate: no threshold, not
+in `make test`, the hook or CI, because the suite under instrumentation is slower and the
+number says nothing a failing test does not. Exclusions are explicit and listed in the
+report. The worker deadline test's child marks itself ready before the 0.5 s deadline
+starts, so an instrumented (slower) interpreter start cannot lose its output.
+
 ## The guard
 
 `.claude/hooks/guard.py` (PreToolUse on Bash; Codex runs the same file with `--codex`) blocks
