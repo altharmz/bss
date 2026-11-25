@@ -87,6 +87,20 @@ def test_subscriber_number_prefix(api):
     assert api.get(f"{URL}?q=1999").json() == []
 
 
+def test_the_card_products_and_the_list_carry_the_live_number(api):
+    """#456: the card's products table and the Subscribers list show the line's number."""
+    acc = subscriber(api, "Ivan Petrov", "Main")
+    empty = subscriber(api, "Olga Smirnova", "Main")
+    numbered_line(api, acc, "12025550179")
+    products = api.get(f"/internal/v1/billingAccount/{acc['id']}/products")
+    assert products.status_code == 200, products.text
+    [line] = products.json()
+    assert (line["msisdn"], line["imsi"], line["iccid"]) == ("12025550179", None, None)
+    rows = {r["id"]: r for r in api.get(URL).json()}
+    assert (rows[acc["id"]]["msisdns"], rows[acc["id"]]["msisdnCount"]) == (["12025550179"], 1)
+    assert (rows[empty["id"]]["msisdns"], rows[empty["id"]]["msisdnCount"]) == ([], 0)
+
+
 def test_filters_paging_and_page_figures(api):
     ivan = apidata.customer(api, name="Ivan Petrov")
     first = apidata.account(api, ivan, name="Main")
@@ -98,6 +112,7 @@ def test_filters_paging_and_page_figures(api):
     assert "X-Total-Count" not in page.headers
     row = page.json()[0]
     assert row["id"] == first["id"] and row["activeProducts"] == 1
+    assert row["msisdns"] == ["12025550178"] and row["msisdnCount"] == 1
     assert row["customerAccounts"] == 2 and row["customer"]["name"] == "Ivan Petrov"
     assert row["balance"]["unit"] == "USD"
     assert names(api.get(f"{URL}?ratingType=prepaid")) == ["Spare"]

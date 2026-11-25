@@ -35,18 +35,38 @@ import './screens.css';
 // Screen 1. A row is a billing account (D1): a customer with two accounts is two rows.
 // Status is the account's real state. Paged and searched on the server (#314): a prefix
 // of a customer or account name, a subscriber number or a short id; the server computes
-// each row's balance, active products and customer account count for the page. No
-// counts (#312): the filters and the header show none.
+// each row's balance, active products, customer account count and live numbers for the
+// page. No counts (#312): the filters and the header show none.
 
 export const COLUMNS: Column[] = [
   { key: 'name', label: 'Name', width: 'minmax(0, 1.6fr)' },
   { key: 'account', label: 'Account', width: '140px' },
+  // 15 mono digits and a "+N" (#456)
+  { key: 'number', label: 'Number', width: '168px', mono: true },
   { key: 'status', label: 'Status', width: '120px' },
   { key: 'mode', label: 'Mode', width: '96px' },
   { key: 'products', label: 'Products', width: '80px', align: 'right', mono: true },
   { key: 'cycle', label: 'Cycle day', width: '88px', align: 'right', mono: true },
   { key: 'balance', label: 'Balance', width: '180px', align: 'right' },
 ];
+
+/** An account's live numbers (#456): the oldest line's, "+N" for the others, and a
+ * tooltip with the first three. */
+export function Numbers({ values, count }: { values: string[]; count: number }) {
+  const [first] = values;
+  if (first === undefined) return <span className="bss-dash">—</span>;
+  const more = count > values.length ? `\n+${count - values.length} more` : '';
+  return (
+    <span
+      className="ellipsis"
+      data-ui="ui.subscribers.number"
+      title={count > 1 ? values.join('\n') + more : undefined}
+    >
+      {first}
+      {count > 1 && <span className="bss-secondary"> +{count - 1}</span>}
+    </span>
+  );
+}
 
 type StateFilter = 'All' | AccountState;
 const STATES: StateFilter[] = ['All', 'Active', 'Suspended', 'Closed'];
@@ -291,6 +311,7 @@ export function SubscribersScreen() {
                         </div>
                       ),
                       account: <Id prefix="BA-" id={account.id} />,
+                      number: <Numbers values={account.msisdns} count={account.msisdnCount} />,
                       status: <StatusPill kind="account" status={account.state} />,
                       mode: (
                         <span

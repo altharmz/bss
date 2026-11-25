@@ -552,6 +552,7 @@ def open_products(account_id: str, request: Request, tx: Tx, clock: ClockDep) ->
         )
         changes = billing.offering_changes(conn, [p["id"] for p in rows])
         pending = products.pending_changes(conn, [p["id"] for p in rows], today)
+        identities = products.live_identities(conn, [p["id"] for p in rows], today)
         undoable = {p["id"]: undoable_status_change(conn, p, today) for p in rows}
         history = (
             _renewal_history(conn, [p["id"] for p in rows])
@@ -612,6 +613,8 @@ def open_products(account_id: str, request: Request, tx: Tx, clock: ClockDep) ->
                 if p["id"] in prepaid_views
                 else nxt,
                 "undoableStatusChange": undoable[p["id"]],
+                # the line's identities live today (#456): its number and its SIM
+                **identities[p["id"]],
                 # the line's E911 address and whether its offering enables Wi-Fi calling (#201)
                 "e911Address": p.get("e911_address"),
                 "wifiCalling": e911.wifi_calling(

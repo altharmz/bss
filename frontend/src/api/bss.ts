@@ -436,11 +436,15 @@ export async function loadFinancialAccounts(signal: AbortSignal): Promise<Financ
 
 type SubscriberBody = Internal['schemas']['SubscriberRow'];
 
-/** A row of the Subscribers list: the account, its active products and how many accounts
- * its customer has (both computed by the server for the page). */
+/** A row of the Subscribers list: the account, its active products, how many accounts
+ * its customer has and its live numbers (all computed by the server for the page). */
 export interface SubscriberRow extends Account {
   activeProducts: number;
   customerAccounts: number;
+  /** up to 3 numbers live today, oldest line first (#456) */
+  msisdns: string[];
+  /** how many live numbers the account has in all */
+  msisdnCount: number;
 }
 
 export interface SubscriberFilter {
@@ -470,6 +474,8 @@ function toSubscriber(body: SubscriberBody): SubscriberRow {
       : null,
     activeProducts: body.activeProducts,
     customerAccounts: body.customerAccounts,
+    msisdns: body.msisdns,
+    msisdnCount: body.msisdnCount,
   };
 }
 

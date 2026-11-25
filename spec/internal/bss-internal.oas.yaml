@@ -1926,7 +1926,7 @@ components:
       type: object
       additionalProperties: false
       required: [id, name, state, ratingType, customer, currency, balance, creditLimit, cycleDay,
-                 financialAccount, activeProducts, customerAccounts]
+                 financialAccount, activeProducts, customerAccounts, msisdns, msisdnCount]
       properties:
         id: {type: string, format: uuid}
         name: {type: string}
@@ -1953,6 +1953,14 @@ components:
             name: {type: string}
         activeProducts: {type: integer, minimum: 0}
         customerAccounts: {type: integer, minimum: 1}
+        msisdns:
+          description: >-
+            Numbers live today on the account's not-ended products, oldest product start
+            first, at most 3 (issue 456).
+          type: array
+          maxItems: 3
+          items: {type: string}
+        msisdnCount: {type: integer, minimum: 0, description: 'How many such numbers there are.'}
     PartyRow:
       type: object
       additionalProperties: false
@@ -2481,7 +2489,8 @@ components:
       type: object
       additionalProperties: false
       required: [id, href, status, startDate, terminationDate, productOffering,
-                 productSpecification, price, nextChargeDate, pendingChanges]
+                 productSpecification, price, nextChargeDate, pendingChanges, msisdn, imsi,
+                 iccid]
       properties:
         recurringChargePeriod: {type: string, description: 'Charge interval label; absent means month.'}
         id: {type: string, format: uuid}
@@ -2535,6 +2544,20 @@ components:
               required: [id]
               properties:
                 id: {type: string, format: uuid}
+        msisdn:
+          description: >-
+            The value of the product's msisdn claim live today; null without one. A number
+            that starts later (a scheduled change) is not shown until it starts (issue 456).
+          type: string
+          nullable: true
+        imsi:
+          description: The value of the product's imsi claim live today; null without one (issue 456).
+          type: string
+          nullable: true
+        iccid:
+          description: The ICCID of that imsi resource (its SIM); null without one or when not recorded.
+          type: string
+          nullable: true
         pendingChanges:
           description: >-
             Status and offering changes not yet in effect, by date, and E911 address changes

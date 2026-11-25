@@ -1283,3 +1283,25 @@ billing account, sat next to the catalog.
 - **Tests:** `nav.test.ts` pins the Customers and Catalog items; `App.test.tsx` the full
   sidebar order, the new routes and the replaced old paths; `Parties.test.tsx` the Customers
   screen, its filters and that Parties has no Customers tab.
+
+## Subscriber numbers in the lists (2026-11-24, issue #456)
+
+The billing account card's products table and the Billing accounts list (the Subscribers list before #457) show the line numbers that
+an operator had to open the ⋯ → Subscriber number dialog to see.
+
+- **What is live is decided on the server, today:** a claim counts when it is not cancelled
+  and its half-open `valid_for` holds the business date. A number released today is gone,
+  and a scheduled number change shows today's number until the day it starts.
+- **The card's products table:** each item of `GET /internal/v1/billingAccount/{id}/products`
+  gains `msisdn`, `imsi` and `iccid` (null when there is none). They come from one query for
+  the page (`products.live_identities`). The Number column (176 px) shows the number,
+  then `IMSI …` and `SIM …` (the ICCID) on secondary lines, only for a product that has them,
+  and "—" otherwise. The human clarified on the issue that the IMSI/SIM belong in this
+  table too.
+- **The Billing accounts list:** each row of `GET /internal/v1/subscriber` gains `msisdns` (up to
+  3 live numbers of the account's not-ended products, oldest product start first) and
+  `msisdnCount`. They come from one windowed query per page in the request's transaction
+  (`subscribers.live_msisdns`), and a test checks its plan has no sequential scan. The new
+  Number column after Account shows the first number with "+N" for the others, and a native
+  `title` tooltip lists the three (the kit has no tooltip). The list shows no IMSI/SIM.
+- **Markers:** `ui.subscribers.number` and `ui.subscriber.productNumber`.

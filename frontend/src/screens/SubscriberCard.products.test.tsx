@@ -1086,3 +1086,34 @@ describe('change offering', () => {
     expect(screen.getByRole('dialog')).toBe(dialog);
   });
 });
+
+describe('product identities (#456)', () => {
+  const identities = (name: string) =>
+    productRow(name).querySelector('[data-ui="ui.subscriber.productNumber"]');
+
+  it('shows each line number, its IMSI and SIM, and — for a product without them', async () => {
+    const rows = [
+      product(P1, {
+        msisdn: '12025550101',
+        imsi: '310260000000001',
+        iccid: '8901260000000000001',
+      }),
+      product(P2, {
+        msisdn: '12025550102',
+        productOffering: { id: O2, name: 'Fiber 100', code: null },
+      }),
+      product(P3, { productOffering: { id: O2, name: 'No number', code: null } }),
+    ];
+    backend({ [`GET ${INTERNAL}/products`]: () => json(rows, { total: rows.length }) });
+    await open();
+    await waitFor(() => productRow('Mobile L'));
+    expect(screen.getByRole('columnheader', { name: 'Number' })).toBeTruthy();
+
+    const sim = identities('Mobile L');
+    expect(sim?.textContent).toBe('12025550101IMSI 310260000000001SIM 8901260000000000001');
+    expectUi('ui.subscriber.productNumber');
+    expect(identities('Fiber 100')?.textContent).toBe('12025550102');
+    expect(identities('No number')).toBeNull();
+    expect(within(productRow('No number')).getByText('—')).toBeTruthy();
+  });
+});

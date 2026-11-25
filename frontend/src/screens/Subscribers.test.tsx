@@ -39,6 +39,11 @@ const ACTIVE_PRODUCTS = [
   { id: 'p2', billingAccount: { id: A1 } },
   { id: 'p3', billingAccount: { id: A3 } },
 ];
+/** The live numbers the server lists per account (#456): up to 3, and their count. */
+const NUMBERS: Record<string, { msisdns: string[]; msisdnCount: number }> = {
+  [A1]: { msisdns: ['12025550101', '12025550102', '12025550103'], msisdnCount: 4 },
+  [A3]: { msisdns: ['12025550301'], msisdnCount: 1 },
+};
 
 type Body = ReturnType<typeof accountBody>;
 
@@ -65,6 +70,7 @@ function subscriberRow(body: Body, all: Body[]) {
     financialAccount: null,
     activeProducts: ACTIVE_PRODUCTS.filter((p) => p.billingAccount.id === body.id).length,
     customerAccounts: all.filter((other) => customerOf(other).id === customer.id).length,
+    ...(NUMBERS[body.id] ?? { msisdns: [], msisdnCount: 0 }),
   };
 }
 
@@ -114,7 +120,7 @@ async function open() {
 }
 
 const dataRows = () =>
-  screen.getAllByRole('row').filter((row) => within(row).queryAllByRole('cell').length === 7);
+  screen.getAllByRole('row').filter((row) => within(row).queryAllByRole('cell').length === 8);
 const rowOf = (name: RegExp) => dataRows().find((row) => name.test(row.textContent ?? ''));
 
 const LIST = '/internal/v1/subscriber';
@@ -129,7 +135,7 @@ describe('subscribers list', () => {
     await screen.findByText('Ivan Petrov');
     expect(screen.getByRole('columnheader', { name: 'Balance USD' })).toBeTruthy();
     for (const row of dataRows())
-      expect(within(row).getAllByRole('cell')[6]?.textContent).toContain('USD');
+      expect(within(row).getAllByRole('cell')[7]?.textContent).toContain('USD');
   });
 
   // TEST-CHANGE (#314): the search runs on the server, so the header follows the page shown.
@@ -139,11 +145,11 @@ describe('subscribers list', () => {
     await open();
     await screen.findByText('Ivan Petrov');
     expect(screen.getByRole('columnheader', { name: 'Balance' })).toBeTruthy();
-    expect(within(rowOf(/Ivan Petrov/) as HTMLElement).getAllByRole('cell')[6]?.textContent).toBe(
+    expect(within(rowOf(/Ivan Petrov/) as HTMLElement).getAllByRole('cell')[7]?.textContent).toBe(
       '1,250.40EUR',
     );
     expect(
-      within(rowOf(/Anna Smirnova/) as HTMLElement).getAllByRole('cell')[6]?.textContent,
+      within(rowOf(/Anna Smirnova/) as HTMLElement).getAllByRole('cell')[7]?.textContent,
     ).toContain('USD');
     fireEvent.change(screen.getByRole('textbox', { name: 'Search billing accounts' }), {
       target: { value: 'Ivan' },
@@ -163,16 +169,16 @@ describe('subscribers list', () => {
     const cells = within(ivan).getAllByRole('cell');
     expect(cells[1]?.textContent).toBe('BA-11111111');
     expect(within(ivan).getByRole('button', { name: `Copy ${A1}` })).toBeTruthy();
-    expect(cells[2]?.textContent).toBe('Active');
-    expect(cells[6]?.textContent).toBe('1,250.40USD');
-    expect(cells[4]?.textContent).toBe('2');
-    expect(cells[5]?.textContent).toBe('5');
+    expect(cells[3]?.textContent).toBe('Active');
+    expect(cells[7]?.textContent).toBe('1,250.40USD');
+    expect(cells[5]?.textContent).toBe('2');
+    expect(cells[6]?.textContent).toBe('5');
 
     const anna = rowOf(/Anna Smirnova/) as HTMLElement;
     expect(within(anna).getByText('Suspended').className).toContain('pill-paused');
     const negative = within(anna).getByText('−116.13');
     expect(negative.parentElement?.className).toContain('negative');
-    expect(within(anna).getAllByRole('cell')[4]?.firstElementChild?.className).toBe('bss-zero');
+    expect(within(anna).getAllByRole('cell')[5]?.firstElementChild?.className).toBe('bss-zero');
 
     // a customer with two accounts is two rows, told apart by the account name
     expect(rowOf(/Romashka HQ/)).toBeTruthy();
@@ -180,6 +186,27 @@ describe('subscribers list', () => {
     expect(within(rowOf(/Ivan Petrov/) as HTMLElement).queryByText(/·/)).toBeNull();
     expect(screen.getByText('Showing 1–4 · amounts in billing account currency')).toBeTruthy();
     expect(screen.queryByText('Negative balance')).toBeNull();
+  });
+
+  it('shows the oldest line number with +N, the first three in a tooltip, and — without one (#456)', async () => {
+    backend();
+    await open();
+    await screen.findByText('Ivan Petrov');
+    expect(screen.getByRole('columnheader', { name: 'Number' })).toBeTruthy();
+
+    const ivan = within(rowOf(/Ivan Petrov/) as HTMLElement).getAllByRole('cell')[2];
+    expect(ivan?.textContent).toBe('12025550101 +3');
+    const title = (cell: HTMLElement | undefined) =>
+      cell?.querySelector('[data-ui="ui.subscribers.number"]')?.getAttribute('title');
+    expect(title(ivan)).toBe('12025550101\n12025550102\n12025550103\n+1 more');
+    expectUi('ui.subscribers.number');
+
+    const hq = within(rowOf(/Romashka HQ/) as HTMLElement).getAllByRole('cell')[2];
+    expect(hq?.textContent).toBe('12025550301');
+    expect(title(hq)).toBeNull();
+
+    const anna = within(rowOf(/Anna Smirnova/) as HTMLElement).getAllByRole('cell')[2];
+    expect(anna?.textContent).toBe('—');
   });
 
   // TEST-CHANGE (#314): the state filter is a server query and shows no counts (#312).
