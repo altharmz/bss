@@ -543,6 +543,7 @@ items:
   - {id: ui.sims.activationCode, area: ui, stage: 5, title: "eSIM activation code as text and QR"}
   - {id: ui.sims.qr, area: ui, stage: 5, title: "Activation code QR image"}
   - {id: ui.subscriber.number, area: ui, stage: 5, title: "Product number and order-based number change"}
+  - {id: ui.subscriber.numberValues, area: ui, stage: 5, title: "Subscriber number dialog: the held MSISDN/IMSI digits, never the resource id (#477)"}
   - {id: ui.subscribers.new, area: ui, stage: 5, title: "New subscriber: party, customer, billing account"}
   - {id: ui.subscribers.contactMedia, area: ui, stage: 5, title: "New subscriber: optional email and phone contact media"}
   - {id: ui.subscriber.edit, area: ui, stage: 5, title: "Edit subscriber: names, statuses, credit limit"}

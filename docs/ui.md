@@ -616,7 +616,9 @@ Route `/products` (sidebar Products). TMF637 `product` over every status: server
 `?account=` chip, client filters offering and number. The subscriber search (`ui.products.subscriberSearch`,
 #455) sets the chip; the caption says the page is cross-subscriber. Columns: product, offering, subscriber, status,
 start, end, number. A row opens the detail (`GET product/{id}`): dates, order items with a link to
-Orders, the realizing resource. Read-only; orders alone change products. Slice 21.
+Orders, the realizing resource: each held number as `MSISDN`/`IMSI` digits (and the SIM's ICCID)
+linking to `/numbers?value=…&kind=…` (#477; Numbers opens filtered by those parameters), any other
+resource as type and short id. Read-only; orders alone change products. Slice 21.
 
 ### Orders (`ui.orders`, `ui.orders.accountChip`, `ui.orders.detail`, `ui.orders.items`, `ui.orders.cancellations`, `ui.orders.command`, `ui.orders.errors`) - `screens/Orders.tsx`
 
@@ -937,7 +939,9 @@ assignment links, lock/unlock and Delete number (`ui.numbers.delete`, a number n
 server refuses one with history). Add product requires a number when the selected
 offering's specification requires `msisdn`. New subscriber optionally continues to
 this product step after creating the account. A product's Subscriber number dialog
-shows the effective number and submits changes through a modify order. The picker
+shows the effective number's digits (`ui.subscriber.numberValues`, #477) and submits changes
+through a modify order; a product holding a number its specification does not list gets a
+warning instead of "does not use subscriber numbers". The picker
 shows currently available unlocked stock; the server checks dates and quarantine.
 
 Numbers and porting (issue #214, [numbers.md](decisions/numbers.md)): **Request numbers** on

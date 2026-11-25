@@ -281,6 +281,40 @@ describe('number inventory', () => {
     });
   });
 
+  it('opens filtered to the number a link names (#477)', async () => {
+    const { fetchMock } = stubFetch(inventoryOf([stock]));
+    window.history.replaceState(null, '', `/numbers?value=${stock.value}&kind=msisdn`);
+    inventory();
+    expect(await screen.findByRole('button', { name: stock.value })).toBeTruthy();
+    expect((screen.getByLabelText('Search numbers') as HTMLInputElement).value).toBe(stock.value);
+    expect((screen.getByLabelText('Kind') as HTMLSelectElement).value).toBe('msisdn');
+    expect(requested(fetchMock)[0]).toBe(
+      `${NUMBERS}?value=${stock.value}&resourceSpecification.id=msisdn&offset=0&limit=50`,
+    );
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('shows the digits and says why a number held outside an order cannot change (#477)', async () => {
+    stubFetch({
+      [`GET ${PATHS.products}/product`]: () =>
+        json({
+          id: 'product',
+          status: 'active',
+          productSpecification: { id: 'spec' },
+          realizingResource: [{ id: N1, '@referredType': 'LogicalResource' }],
+        }),
+      [`GET ${PATHS.specifications}/spec`]: () => json({ resourceSpecification: [] }),
+      ...inventoryOf([stock]),
+    });
+    render(<ProductNumber accountId="account" productId="product" onDone={() => {}} />);
+    fireEvent.click(screen.getByText('Subscriber number'));
+    expect(await screen.findByText(`MSISDN ${stock.value}`)).toBeTruthy();
+    expect(screen.queryByText(N1)).toBeNull();
+    expect(await screen.findByText(/This product holds a number, but its offering/)).toBeTruthy();
+    expect(screen.queryByText(/does not use subscriber numbers/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Change number' })).toBeNull();
+  });
+
   it('explains why a product without a number requirement cannot acquire one', async () => {
     stubFetch({
       [`GET ${PATHS.products}/product`]: () =>

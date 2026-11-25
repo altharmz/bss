@@ -1,3 +1,4 @@
+import { Note } from '../ui/Note';
 import { Footer } from './FinancialForms';
 import { orderRefusal } from '../api/orderErrors';
 import { submitDialogPrimary } from '../ui/kit';
@@ -182,8 +183,19 @@ export function NumberModal({
           />
         )}
         {product.status === 'ok' && (
-          <p>
-            {refs.map((r) => r.name ?? r.id).join(', ') || 'This product has no subscriber number.'}
+          <p data-ui="ui.subscriber.numberValues">
+            {refs.length === 0
+              ? 'This product has no subscriber number.'
+              : inventory.status === 'ok'
+                ? // the digits, never the resource id (#477)
+                  refs
+                    .map((r) => {
+                      const n = known.find((k) => k.id === r.id);
+                      if (!n) return r.name ?? r.id;
+                      return `${kindOf(n) === 'imsi' ? 'IMSI' : 'MSISDN'} ${n.value}`;
+                    })
+                    .join(' · ')
+                : 'Loading number…'}
           </p>
         )}
         {simDetail && iccidOf(simDetail) && (
@@ -204,12 +216,21 @@ export function NumberModal({
         {product.status === 'ok' &&
           requirement.status === 'ok' &&
           !requirement.data.msisdn &&
-          !requirement.data.imsi && (
+          !requirement.data.imsi &&
+          (refs.length === 0 ? (
             <p>
               This product's offering does not use subscriber numbers. Offerings whose specification
               requires a number ask for one when the product is added.
             </p>
-          )}
+          ) : (
+            // #477: attached outside an order, or the specification changed after the sale
+            <Note tone="warning">
+              This product holds a number, but its offering's specification lists no subscriber
+              number, so the number cannot be changed here. Numbers are attached only by a product
+              order: add the subscriber number (and IMSI) to the specification, then order the
+              product with the number.
+            </Note>
+          ))}
         {simEditable && (
           <>
             <NumberPicker kind="imsi" value={imsiId} onChange={setImsiId} />

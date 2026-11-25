@@ -110,3 +110,30 @@ order cancellation cancelling the port, non-network offerings refused, the PIN n
 listed and replaced by a newer one, PIN expiry, port-out valid (product ended by an order, no
 deactivate, number locked, carrier answered once) / invalid / expired / unknown / used, and an
 unacknowledged answer resent with the same key.
+
+## Numbers are attached only by an order that claims them (2026-11-25, issue #477)
+
+A product's `realizingResource` is a TMF637 document, stored as sent (tmf-api.md, slice 9a);
+for a product whose specification lists `msisdn`/`imsi` it is served from the product's claims
+instead. Two paths stored a number with **no claim**: an add order for an offering whose
+specification lists neither (accepted, the reference kept as a document) and a product PATCH
+(the modify order's `numberNotRequired` even told the caller to "edit this product's unchecked
+resource documents through product inventory", which is what the MCP agent did). The Products
+list then showed the digits while the number stayed free in the inventory and the card, the
+billing account list and its search, which read claims, found nothing.
+
+- **Refused now.** A reference to a subscriber number or IMSI on a product that takes none:
+  an add or modify order is rejected `numberNotRequired`, a PATCH is a 409, both with
+  "add the resourceSpecification to the product specification and order the product with the
+  number" (`NOT_SOLD_WITH_NUMBERS`, `app/ordering/numbers.py`). References to other resources
+  stay ordinary documents. No legacy path is added (an existing product that takes no numbers
+  does not get one: the human cleans the old test data).
+- **Cleanup:** `python -m app.number_refs` lists every product's number reference that no claim
+  of that product backs; `--apply` removes them (other documents stay) as an ordinary product
+  change with its TMF637 event. Run in the app container on the VPS by the human.
+- **UI:** the Products detail shows each held number as `MSISDN`/`IMSI` digits (plus the SIM's
+  ICCID) linking to `/numbers?value=…&kind=…`, which Numbers now reads; the Subscriber number
+  dialog shows digits, never the resource id, and a product holding a number its specification
+  does not list says so instead of "does not use subscriber numbers".
+- Tests: `tests/resources/test_number_refs_need_a_claim.py`, `Products.test.tsx`,
+  `Numbers.test.tsx`.

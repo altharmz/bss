@@ -47,11 +47,19 @@ const COLUMNS: Column[] = [
   { key: 'admin', label: 'Administration', width: '160px' },
 ];
 
+function urlParam(name: string): string {
+  return new URLSearchParams(window.location.search).get(name) ?? '';
+}
+
 export function NumbersScreen() {
   useSetCrumbs([{ label: 'Numbers' }], 'numbers');
-  const [query, setQuery] = useState('');
+  // a link may open the list filtered to one number (/numbers?value=…&kind=…, #477)
+  const [query, setQuery] = useState(() => urlParam('value'));
   const value = numberDigits(useSettled(query));
-  const [kind, setKind] = useState<'' | ResourceKind>('');
+  const [kind, setKind] = useState<'' | ResourceKind>(() => {
+    const sent = urlParam('kind');
+    return sent === 'msisdn' || sent === 'imsi' ? sent : '';
+  });
   const filterKey = `${value}:${kind}`;
   const [offset, setOffset] = usePageOffset(filterKey);
   const numbers = useResource(`numbers:${filterKey}:${offset}`, (signal) =>
