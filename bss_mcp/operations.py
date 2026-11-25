@@ -971,6 +971,13 @@ OPERATIONS: dict[str, Op] = {
         extra={"product.id": UUID_ARG},
         required=("product.id",),
     ),
+    "list_product_history": Op(
+        "What happened to one product, newest first: statusChange (status and cause: manual,"
+        " lifecycle or dunning), offeringChange (the new offering) and numberAssignment (a"
+        " number or SIM IMSI held from date until the exclusive endDate), each with the date"
+        " it takes effect and the order that made it. The order items are on the product.",
+        query=PAGE,
+    ),
     "check_device": Op(
         "Ask the network whether a device (15-digit IMEI, Luhn-checked) works on it:"
         " compatible, incompatible or unknown, with the reasons. Stores nothing.",

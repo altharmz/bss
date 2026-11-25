@@ -1,3 +1,4 @@
+import type { components as Internal } from './generated/internal';
 import type { components as T637 } from './generated/tmf637';
 import { getJson, getPage } from './client';
 import { PATHS } from './bss';
@@ -74,4 +75,22 @@ export async function loadNumberValues(
 
 export function loadProduct(id: string, signal: AbortSignal) {
   return getJson<InventoryProduct>(`${PATHS.products}/${id}`, signal);
+}
+
+/** One entry of a product's history (#458): a status change, an offering change or a number
+ * or SIM assignment, newest first. */
+export type ProductHistoryEntry = Internal['schemas']['ProductHistoryEntry'];
+
+export const HISTORY_PAGE = 20;
+
+export async function loadProductHistory(
+  productId: string,
+  offset: number,
+  signal: AbortSignal,
+): Promise<{ items: ProductHistoryEntry[]; more: boolean; offset: number }> {
+  const page = await getPage<ProductHistoryEntry>(
+    `/internal/v1/product/${productId}/history?offset=${offset}&limit=${HISTORY_PAGE}`,
+    signal,
+  );
+  return { ...page, offset };
 }

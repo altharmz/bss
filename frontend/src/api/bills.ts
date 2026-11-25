@@ -55,6 +55,7 @@ export interface RateRow {
   appliedTax?: { taxCategory?: string; taxRate?: number; taxAmount?: Money }[];
   periodCoverage?: { startDateTime?: string; endDateTime?: string };
   product?: { id: string; name?: string };
+  bill?: { id: string; name?: string };
 }
 
 export interface BillFilter {
@@ -88,6 +89,16 @@ export function loadBillCycle(id: string, signal?: AbortSignal) {
 
 export function loadRates(billId: string, signal?: AbortSignal) {
   return getAll<RateRow>(`${RATES}?bill.id=${encodeURIComponent(billId)}`, signal);
+}
+
+/** One product's applied rates (#458), newest first: a product's own rows, read whole and
+ * paged on its page (the list is oldest first on the server). */
+export async function loadProductRates(productId: string, signal?: AbortSignal) {
+  const rows = await getAll<RateRow>(
+    `${RATES}?product.id=${encodeURIComponent(productId)}`,
+    signal,
+  );
+  return rows.reverse();
 }
 
 export function loadRate(id: string, signal?: AbortSignal) {

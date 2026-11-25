@@ -2,7 +2,16 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { describe, expect, it } from 'vitest';
 import { App } from '../app/App';
 import { expectUi } from '../test/expectUi';
-import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } from '../test/fetch';
+import {
+  CONTEXT,
+  json,
+  NAV_RUNS,
+  noRuns,
+  pending,
+  stubFetch,
+  tmfError,
+  type Handler,
+} from '../test/fetch';
 
 // The global Products screen (slice 21). Reads only: the query strings asserted here are
 // replayed against the real API by tests/internal/test_ui_requests.py - change both together.
@@ -75,6 +84,9 @@ describe('products screen', () => {
       [`GET ${PRODUCTS}?billingAccount.id=${A1}&${PAGE}`]: () =>
         json([first, second], { total: 2 }),
       [`GET ${PRODUCTS}/${P1}`]: () => json(first),
+      [`GET /tmf-api/accountManagement/v5/billingAccount/${A1}`]: pending,
+      [`GET /internal/v1/billingAccount/${A1}/products`]: pending,
+      [`GET /internal/v1/network/command?product.id=${P1}&offset=0&limit=100`]: pending,
       [`GET ${NUMBERS}?value=12025550123&limit=1`]: () => json([{ id: N1 }]),
       [`GET ${PRODUCTS}?realizingResource.id=${N1}&${PAGE}`]: () => json([first]),
       [`GET ${NUMBERS}?value=1999&limit=1`]: () => json([]),
@@ -102,122 +114,12 @@ describe('products screen', () => {
     fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'terminated' } });
     await waitFor(() => expect(calls).toContain(`GET ${PRODUCTS}?status=terminated&${PAGE}`));
     fireEvent.change(screen.getByLabelText('Status'), { target: { value: '' } });
+    // TEST-CHANGE (#458): a row opens the product's page (ProductPage.test.tsx), which
+    // replaces the detail dialog with its order items, numbers, device and network commands
     fireEvent.click(await screen.findByText('Basic 10'));
-    const detail = await screen.findByRole('dialog');
-    expectUi('ui.products.detail');
-    expect(await within(detail).findByText(/creation · add/)).toBeTruthy();
-    expectUi('ui.products.orderItems');
-    expectUi('ui.products.resource');
+    await waitFor(() => expect(window.location.pathname).toBe(`/products/${P1}`));
+    expect(await screen.findByRole('heading', { name: 'Basic 10' })).toBeTruthy();
     expect(calls).toContain(`GET ${PRODUCTS}/${P1}`);
-    expect(within(detail).getByRole('link', { name: 'Open in Orders' }).getAttribute('href')).toBe(
-      `/orders?account=${A1}&state=all`,
-    );
-    // TEST-CHANGE (#477): the realizing resource is the number's digits linking to the Numbers
-    // list filtered to it, not a short id and an unfiltered "Open Numbers"
-    const msisdn = await within(detail).findByRole('link', { name: '12025550123' });
-    expect(msisdn.getAttribute('href')).toBe('/numbers?value=12025550123&kind=msisdn');
-    expect(within(detail).getByText(/MSISDN/)).toBeTruthy();
-    expect(within(detail).queryByRole('link', { name: 'Open Numbers' })).toBeNull();
-  });
-
-  it('shows the IMSI and SIM of a product and an ordinary resource as it is (#477)', async () => {
-    const IMSI = '20000000-0000-4000-8000-000000000002';
-    const OTHER = '30000000-0000-4000-8000-000000000003';
-    const line = {
-      ...first,
-      realizingResource: [
-        { id: N1, '@referredType': 'LogicalResource' },
-        { id: IMSI, '@referredType': 'LogicalResource' },
-        { id: OTHER, '@referredType': 'Resource' },
-      ],
-    };
-    backend({
-      [`GET ${PRODUCTS}?${PAGE}`]: () => json([line], { total: 1 }),
-      [`GET ${PRODUCTS}/${P1}`]: () => json(line),
-      [`GET ${NUMBERS}/${IMSI}`]: () =>
-        json({
-          id: IMSI,
-          value: '250019876543210',
-          resourceSpecification: { id: 'imsi' },
-          resourceCharacteristic: [{ name: 'iccid', value: '8970199123456789012' }],
-        }),
-      [`GET ${NUMBERS}/${OTHER}`]: () => tmfError(404, 'Not Found'),
-    });
-    open('/products');
-    fireEvent.click(await screen.findByText('Basic 10'));
-    const detail = await screen.findByRole('dialog');
-    const imsi = await within(detail).findByRole('link', { name: '250019876543210' });
-    expect(imsi.getAttribute('href')).toBe('/numbers?value=250019876543210&kind=imsi');
-    expect(within(detail).getByText('8970199123456789012')).toBeTruthy();
-    expect(within(detail).getByRole('link', { name: '12025550123' })).toBeTruthy();
-    expect(within(detail).getByText(/^Resource 30000000/)).toBeTruthy();
-  });
-
-  it('shows the network commands of a product, without a Retry for a confirmed one', async () => {
-    const NET = '/internal/v1/network/command';
-    backend({
-      [`GET ${PRODUCTS}?${PAGE}`]: () => json([first, second], { total: 2 }),
-      [`GET ${PRODUCTS}/${P1}`]: () => json(first),
-      [`GET ${NET}?product.id=${P1}&offset=0&limit=100`]: () =>
-        json(
-          [
-            {
-              id: 'b0000001-0000-4000-8000-000000000001',
-              kind: 'activate',
-              state: 'confirmed',
-              productOrder: { id: 'c0000001-0000-4000-8000-000000000001' },
-              productOrderItem: { id: 'f0000001-0000-4000-8000-000000000001' },
-              product: { id: P1 },
-              dueDate: '2026-08-01',
-              profile: {},
-              request: null,
-              attempts: 1,
-              attemptedAt: '2026-08-01T09:00:00Z',
-              nextAttemptAt: null,
-              lastError: null,
-              refusalCode: null,
-              confirmedAt: '2026-08-01T09:00:01Z',
-              createdAt: '2026-08-01T08:00:00Z',
-            },
-          ],
-          { total: 1 },
-        ),
-    });
-    open('/products');
-    fireEvent.click(await screen.findByText('Basic 10'));
-    const detail = await screen.findByRole('dialog');
-    expect((await within(detail).findAllByText('Confirmed')).length).toBeGreaterThan(0);
-    expectUi('ui.network.commands');
-    expect(within(detail).getByText('Activate')).toBeTruthy();
-    expect(within(detail).queryByRole('button', { name: 'Retry' })).toBeNull();
-  });
-
-  it('shows the current device from the product characteristics', async () => {
-    const NET = '/internal/v1/network/command';
-    const withDevice = {
-      ...first,
-      productCharacteristic: [
-        { name: 'imei', value: '356938035643809', '@type': 'StringCharacteristic' },
-        { name: 'deviceCompatibility', value: 'unknown', '@type': 'StringCharacteristic' },
-        {
-          name: 'deviceReasons',
-          value: 'not in the device database',
-          '@type': 'StringCharacteristic',
-        },
-      ],
-    };
-    backend({
-      [`GET ${PRODUCTS}?${PAGE}`]: () => json([withDevice, second], { total: 2 }),
-      [`GET ${PRODUCTS}/${P1}`]: () => json(withDevice),
-      [`GET ${NET}?product.id=${P1}&offset=0&limit=100`]: () => json([], { total: 0 }),
-    });
-    open('/products');
-    fireEvent.click(await screen.findByText('Basic 10'));
-    const detail = await screen.findByRole('dialog');
-    const device = await waitFor(() => expectUi('ui.products.device'));
-    expect(within(device).getByText(/not confirmed by the network/)).toBeTruthy();
-    expect(within(device).getByText('not in the device database')).toBeTruthy();
-    expect(within(detail).getByText('356938035643809')).toBeTruthy();
   });
 
   it('maps product states to their pill families and shows PRD- ids', async () => {

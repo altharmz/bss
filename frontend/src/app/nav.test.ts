@@ -20,6 +20,7 @@ const ALL_ROUTES: Record<RouteName, true> = {
   catalog: true,
   orders: true,
   products: true,
+  product: true,
   billingRuns: true,
   prepaidCommands: true,
   financialAccounts: true,

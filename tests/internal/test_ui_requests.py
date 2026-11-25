@@ -1244,6 +1244,37 @@ def test_global_bill_cycle_and_rate_reads_as_the_ui_makes_them(api, db_conn):
     assert api.get(f"{RATES}/{rate['id']}").json()["id"] == rate["id"]
 
 
+def test_product_page_reads_as_the_ui_makes_them(api, db_conn):
+    """screens/ProductPage.tsx, pinned in ProductPage.test.tsx (#458): the product, the
+    account's open products, the product's rates by product.id (read whole: one product's
+    rows), its history, its usage summary and records."""
+    account, (dec, _) = two_open_bills(api, db_conn)
+    rate = api.get(f"{RATES}?bill.id={dec['id']}&offset=0&limit=100").json()[0]
+    product_id = rate["product"]["id"]
+
+    product = api.get(f"{apidata.PRODUCT}/{product_id}")
+    assert product.status_code == 200 and product.json()["productOrderItem"]
+    assert product.json()["billingAccount"]["id"] == account["id"]
+    lines = api.get(f"/internal/v1/billingAccount/{account['id']}/products")
+    assert product_id in {line["id"] for line in lines.json()}
+
+    rates = api.get(f"{RATES}?product.id={product_id}&offset=0&limit=100")
+    assert rates.status_code == 200
+    assert {r["product"]["id"] for r in rates.json()} == {product_id}
+    billed = [r for r in rates.json() if r.get("bill")]
+    assert billed and billed[0]["bill"]["id"] and billed[0]["periodCoverage"]["startDateTime"]
+
+    history = api.get(f"/internal/v1/product/{product_id}/history?offset=0&limit=20")
+    assert history.status_code == 200 and history.json() == []
+
+    summary = api.get(f"/internal/v1/usage/summary?product.id={product_id}")
+    assert summary.status_code == 200 and summary.json()["period"] is None
+    usage = api.get(
+        f"/tmf-api/productUsageManagement/v5/productUsage?product.id={product_id}&offset=0&limit=25"
+    )
+    assert usage.status_code == 200 and usage.json() == []
+
+
 # --- subscribers (frontend/src/screens/Subscribers.test.tsx, SubscriberCard.test.tsx) ---
 
 PARTY = "/tmf-api/partyManagement/v5"

@@ -75,6 +75,7 @@ items:
   - {id: db.product_device, area: db, stage: 5, table: product_device, title: "The devices (IMEI) of a prepaid line with the network's compatibility answer; the open row is the current device"}
   - {id: api.internal.device.list, area: api, stage: 5, method: GET, path: /internal/v1/device, title: "Device history of a prepaid line"}
   - {id: api.internal.device.check, area: api, stage: 5, method: GET, path: /internal/v1/device/check, title: "Ask the network whether a device (IMEI) works"}
+  - {id: api.internal.product.history, area: api, stage: 5, method: GET, path: "/internal/v1/product/{product_id}/history", title: "What happened to one product: status, offering, number and SIM changes, newest first"}
   - {id: db.sim_batch, area: db, stage: 5, table: sim_batch, title: "Stocked SIM and eSIM batches"}
   - {id: db.payment_method, area: db, stage: 5, table: payment_method, title: "Saved cards as gateway tokens (TMF670 tokenizedCard); the BSS never holds a card number"}
   - {id: db.payment_command, area: db, stage: 5, table: payment_command, title: "Durable card charges to the payment gateway: the balance rises only when the gateway confirms"}
@@ -506,7 +507,20 @@ items:
   - {id: ui.products.status, area: ui, stage: 5, title: "Products status filter"}
   - {id: ui.products.accountChip, area: ui, stage: 5, title: "Products account filter chip"}
   - {id: ui.products.subscriberSearch, area: ui, stage: 5, title: "Products: subscriber search sets the account filter"}
-  - {id: ui.products.detail, area: ui, stage: 5, title: "Product detail dialog"}
+  - {id: ui.product, area: ui, stage: 5, title: "Product page: one product's overview, charges, usage and history (replaces the detail dialog)"}
+  - {id: ui.product.header, area: ui, stage: 5, title: "Product page header: number, status, dates, billing account link"}
+  - {id: ui.product.overview, area: ui, stage: 5, title: "Product page overview: price today, specification, number and SIM, device"}
+  - {id: ui.product.related, area: ui, stage: 5, title: "Product page: the plan of an add-on or the add-on packs of a plan"}
+  - {id: ui.product.pendingChange, area: ui, stage: 5, title: "Product page: pending status, offering and E911 changes"}
+  - {id: ui.product.charges, area: ui, stage: 5, title: "Product page charges: the product's applied rates, newest first"}
+  - {id: ui.product.charges.bill, area: ui, stage: 5, title: "Product page charges: open the bill of a billed charge"}
+  - {id: ui.product.charges.previous, area: ui, stage: 5, title: "Product page charges: previous page"}
+  - {id: ui.product.charges.next, area: ui, stage: 5, title: "Product page charges: next page"}
+  - {id: ui.product.usage, area: ui, stage: 5, title: "Product page usage: the line's allowance summary and records"}
+  - {id: ui.product.history, area: ui, stage: 5, title: "Product page history: order items and status, offering, number and SIM changes"}
+  - {id: ui.product.history.previous, area: ui, stage: 5, title: "Product page history: previous page"}
+  - {id: ui.product.history.next, area: ui, stage: 5, title: "Product page history: next page"}
+  - {id: ui.subscriber.productLink, area: ui, stage: 5, title: "Card products table: the product name opens its page"}
   - {id: ui.products.orderItems, area: ui, stage: 5, title: "Product order items with Orders link"}
   - {id: ui.products.resource, area: ui, stage: 5, title: "Product realizing resource"}
   - {id: ui.products.previous, area: ui, stage: 5, title: "Products: previous page"}
@@ -531,7 +545,7 @@ items:
   - {id: ui.subscriber.checkDevice, area: ui, stage: 5, title: "Check device: ask the network whether an IMEI works, nothing stored"}
   - {id: ui.subscriber.changeDevice, area: ui, stage: 5, title: "Change device: a modify order with only the imei characteristic"}
   - {id: ui.subscriber.addProductImei, area: ui, stage: 5, title: "Add product: optional device IMEI for a prepaid line"}
-  - {id: ui.products.device, area: ui, stage: 5, title: "Product detail: current device (IMEI, compatibility, reasons)"}
+  - {id: ui.products.device, area: ui, stage: 5, title: "Product page: current device (IMEI, compatibility, reasons)"}
   - {id: ui.sims.list, area: ui, stage: 5, title: "SIM and eSIM stock with state, type and batch filters"}
   - {id: ui.sims.previous, area: ui, stage: 5, title: "SIMs: previous page"}
   - {id: ui.sims.next, area: ui, stage: 5, title: "SIMs: next page"}

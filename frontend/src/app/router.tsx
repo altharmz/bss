@@ -29,6 +29,7 @@ export type Route =
   | { name: 'catalog' }
   | { name: 'orders' }
   | { name: 'products' }
+  | { name: 'product'; productId: string }
   | { name: 'billingRuns' }
   | { name: 'prepaidCommands' }
   | { name: 'financialAccounts' }
@@ -66,6 +67,8 @@ const MOVED_TO_SETTINGS: Record<string, string> = {
 // (currentPath), so old links and the MCP and notification links keep working.
 const SUBSCRIBER = /^\/(?:billing-accounts|subscribers)\/([0-9a-fA-F-]{36})\/?$/;
 const LEGACY_SUBSCRIBERS = /^\/subscribers(?=\/|$)/;
+// One product's page (#458), off the sidebar and active under Products.
+const PRODUCT = /^\/products\/([0-9a-fA-F-]{36})\/?$/;
 
 export function parseRoute(path: string): Route {
   if (path === '/ui-kit' || path === '/ui-kit/') return { name: 'uiKit' };
@@ -90,6 +93,8 @@ export function parseRoute(path: string): Route {
   if (path === '/catalog' || path === '/catalog/') return { name: 'catalog' };
   if (path === '/orders' || path === '/orders/') return { name: 'orders' };
   if (path === '/products' || path === '/products/') return { name: 'products' };
+  const product = PRODUCT.exec(path);
+  if (product?.[1]) return { name: 'product', productId: product[1].toLowerCase() };
   if (path === '/billing-runs' || path === '/billing-runs/') return { name: 'billingRuns' };
   if (path === '/prepaid-commands' || path === '/prepaid-commands/') {
     return { name: 'prepaidCommands' };
@@ -149,6 +154,8 @@ export function hrefOf(route: Exclude<Route, { name: 'notFound' }>): string {
       return '/orders';
     case 'products':
       return '/products';
+    case 'product':
+      return `/products/${route.productId}`;
     case 'billingRuns':
       return '/billing-runs';
     case 'prepaidCommands':
