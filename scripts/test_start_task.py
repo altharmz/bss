@@ -1493,5 +1493,30 @@ class StartupTests(unittest.TestCase):
         self.assertNotEqual(first["branch"], second["branch"])
 
 
+class TelemetryCatchUpTests(unittest.TestCase):
+    def test_a_failed_catch_up_warns_and_start_task_still_reports_the_task(self):
+        import task_collect
+        import task_telemetry
+
+        result = {
+            "branch": "issue-81-subscriber-search",
+            "slot": "worker1",
+            "agent": "agent:claude",
+        }
+        with (
+            patch.object(task_telemetry, "sql", return_value="") as event,
+            patch.object(task_collect, "catch_up", side_effect=RuntimeError(MARKER)),
+            patch.object(task_collect, "collect", return_value=[]) as collect,
+            contextlib.redirect_stdout(io.StringIO()) as out,
+            contextlib.redirect_stderr(io.StringIO()) as error,
+        ):
+            task.print_result(result, json_output=True)
+        self.assertEqual(json.loads(out.getvalue()), result)
+        event.assert_called_once()
+        collect.assert_called_once()
+        self.assertIn("catch-up of finished tasks failed", error.getvalue())
+        self.assertNotIn(MARKER, error.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
