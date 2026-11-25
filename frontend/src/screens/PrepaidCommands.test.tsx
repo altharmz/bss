@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { App } from '../app/App';
+import { accountSearchRoute, searchAccount } from '../test/accountSearch';
 import { expectUi } from '../test/expectUi';
 import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, type Handler } from '../test/fetch';
 
@@ -103,6 +104,34 @@ describe('prepaid commands', () => {
 
     await waitFor(() => expect(calls).toContain(`GET ${COMMANDS}?offset=0&limit=50`));
     expect(screen.queryByText('Remove the account filter')).toBeNull();
+    expect(window.location.search).toBe('');
+  });
+
+  it('searches a billing account to filter by, back on the first page, and clears it', async () => {
+    // #466: the search sets ?account= and the chip; a filter change resets paging
+    const { calls } = backend({
+      [`GET ${COMMANDS}?offset=0&limit=50`]: () => json([command('done')], { more: true }),
+      [`GET ${COMMANDS}?offset=50&limit=50`]: () => json([command('pending')]),
+      [`GET ${COMMANDS}?billingAccount.id=${ACCOUNT_ID}&offset=0&limit=50`]: () =>
+        json([command('pending')]),
+      ...accountSearchRoute('BA-A0000001', ACCOUNT_ID, 'Olga Kuznetsova main'),
+    });
+    window.history.replaceState(null, '', '/prepaid-commands');
+    render(<App />);
+    await screen.findByText('Showing 1–1');
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    await screen.findByText('Showing 51–51');
+    await searchAccount('ui.prepaidCommands', 'BA-A0000001', 'Olga Kuznetsova main');
+    expect(window.location.search).toBe(`?account=${ACCOUNT_ID}`);
+    await waitFor(() =>
+      expect(calls).toContain(`GET ${COMMANDS}?billingAccount.id=${ACCOUNT_ID}&offset=0&limit=50`),
+    );
+    expect(await screen.findByText('Showing 1–1')).toBeTruthy();
+    const chip = expectUi('ui.prepaidCommands.accountChip');
+    fireEvent.click(within(chip).getByRole('button', { name: 'Remove the account filter' }));
+    await waitFor(() =>
+      expect(calls.filter((c) => c === `GET ${COMMANDS}?offset=0&limit=50`)).toHaveLength(2),
+    );
     expect(window.location.search).toBe('');
   });
 

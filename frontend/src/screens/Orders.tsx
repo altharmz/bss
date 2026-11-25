@@ -23,6 +23,7 @@ import {
   loadOrder,
   ORDER_PAGE,
   ORDER_STATES,
+  UNFINISHED_STATES,
   type Order,
   type OrderItem,
   type OrderState,
@@ -49,6 +50,7 @@ import {
 } from '../ui/kit';
 import { AddProductModal, type DraftToEdit } from './AddProduct';
 import { NetworkCommands } from './NetworkCommands';
+import { SubscriberSearch } from './SubscriberSearch';
 import { OrderWatch } from './PrepaidOrderWatch';
 import { watch, type Watched } from './watched';
 import { ErrorBlock } from '../ui/states';
@@ -70,14 +72,48 @@ const COLUMNS: Column[] = [
   { key: 'ended', label: 'Completed / cancelled', width: '184px', mono: true },
 ];
 
-type StateFilter = OrderState | 'all';
+/** `unfinished` (the default, #455) lists the orders someone may still act on. */
+type StateFilter = OrderState | 'all' | 'unfinished';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** The account the subscriber card's link asks for (?account=<id>). */
+/** The account the subscriber card's link or the subscriber search asks for (?account=<id>). */
 function accountFromUrl(): string | null {
   const value = new URLSearchParams(window.location.search).get('account');
   return value !== null && UUID.test(value) ? value.toLowerCase() : null;
+}
+
+/** The state filter in the URL (?state=all, ?state=<state>); none means unfinished. */
+function stateFromUrl(): StateFilter {
+  const value = new URLSearchParams(window.location.search).get('state');
+  if (value === 'all') return 'all';
+  return (ORDER_STATES as string[]).includes(value ?? '') ? (value as OrderState) : 'unfinished';
+}
+
+/** Keep the filters in the URL, so links and reloads keep them. */
+function writeUrl(state: StateFilter, account: string | null) {
+  const query = new URLSearchParams();
+  if (state !== 'unfinished') query.set('state', state);
+  if (account !== null) query.set('account', account);
+  const search = query.toString();
+  window.history.replaceState(null, '', search === '' ? '/orders' : `/orders?${search}`);
+}
+
+function stateQuery(state: StateFilter): OrderState | readonly OrderState[] | null {
+  if (state === 'all') return null;
+  return state === 'unfinished' ? UNFINISHED_STATES : state;
+}
+
+function shownIn(state: StateFilter, order: Order): boolean {
+  if (state === 'all') return true;
+  if (state === 'unfinished') return UNFINISHED_STATES.includes(order.state as OrderState);
+  return order.state === state;
+}
+
+function stateLabel(state: StateFilter): string {
+  if (state === 'all') return 'All';
+  if (state === 'unfinished') return 'Unfinished';
+  return statusPresentation('order', state)[1];
 }
 
 function day(instant: string | undefined, timeZone: string): string {
@@ -121,8 +157,10 @@ function itemSummary(order: Order): string {
 export function OrdersScreen() {
   useSetCrumbs([{ label: 'Orders' }], 'orders');
   const context = useSystemContext();
-  const [state, setState] = useState<StateFilter>('all');
+  const [state, setStateFilter] = useState<StateFilter>(stateFromUrl);
   const [account, setAccount] = useState<string | null>(accountFromUrl);
+  // the name of the subscriber chosen in the search, for the chip before rows load
+  const [chosenName, setChosenName] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
   const [open, setOpen] = useState<Order | null>(null);
   const [watched, setWatched] = useState<Watched | null>(null);
@@ -133,20 +171,27 @@ export function OrdersScreen() {
   const list = useResource(
     `orders:${state}:${account ?? ''}:${offset}`,
     async (signal) => {
-      const page = await loadNewestOrderPage(
-        { state: state === 'all' ? null : state, account },
-        offset,
-        signal,
-      );
+      const page = await loadNewestOrderPage({ state: stateQuery(state), account }, offset, signal);
       if (!signal.aborted) setChanged({});
       return { ...page, offset, state };
     },
     true,
   );
 
+  const setState = (next: StateFilter) => {
+    writeUrl(next, account);
+    setStateFilter(next);
+  };
+  const chooseAccount = (chosen: { id: string; name: string }) => {
+    writeUrl(state, chosen.id);
+    setAccount(chosen.id);
+    setChosenName(chosen.name);
+    setOffset(0);
+  };
   const dropAccount = () => {
-    window.history.replaceState(null, '', '/orders');
+    writeUrl(state, null);
     setAccount(null);
+    setChosenName(null);
     setOffset(0);
   };
   const refreshRow = async (id: string) => {
@@ -161,16 +206,14 @@ export function OrdersScreen() {
   const name =
     list.status === 'ok'
       ? (list.data.items.find((o) => o.billingAccount?.id === account)?.billingAccount?.name ??
-        null)
-      : null;
+        chosenName)
+      : chosenName;
 
   const visibleRows =
     list.status === 'ok'
       ? list.data.items.flatMap((row) => {
           const current = changed[row.id ?? ''] === undefined ? row : changed[row.id ?? ''];
-          return current && (list.data.state === 'all' || current.state === list.data.state)
-            ? [current]
-            : [];
+          return current && shownIn(list.data.state, current) ? [current] : [];
         })
       : [];
   const visibleList =
@@ -187,7 +230,7 @@ export function OrdersScreen() {
     <div className="bss-screen" data-ui="ui.orders">
       <PageHeader
         title="Orders"
-        meta="Every product order, newest first"
+        meta="Orders across all billing accounts. A billing account's own orders: the Orders link on its card."
         filters={
           <>
             <Segmented
@@ -197,12 +240,19 @@ export function OrdersScreen() {
                 setState(next);
                 setOffset(0);
               }}
-              options={(['all', ...ORDER_STATES] as const).map((key) => ({
+              options={(['unfinished', 'all', ...ORDER_STATES] as const).map((key) => ({
                 key,
-                label: key === 'all' ? 'All' : statusPresentation('order', key)[1],
-                title: key === 'all' ? undefined : key,
+                label: stateLabel(key),
+                title:
+                  key === 'all'
+                    ? undefined
+                    : key === 'unfinished'
+                      ? UNFINISHED_STATES.join(', ')
+                      : key,
+                ui: key === 'unfinished' ? 'ui.orders.unfinished' : undefined,
               }))}
             />
+            <SubscriberSearch ui="ui.orders.subscriberSearch" onChoose={chooseAccount} />
             {account !== null && (
               <span className="bss-run-tag" data-ui="ui.orders.accountChip">
                 Account {name ?? accountLabel(account)}{' '}
@@ -253,8 +303,15 @@ export function OrdersScreen() {
             title: 'No orders',
             text: 'Orders appear here once a product is added, changed or ended.',
           }}
-          count={(data) => data.items.length}
+          // filtered on the server: an empty filtered page is "no matches", not "no orders"
+          count={(data) => (state !== 'all' || account !== null ? 1 : data.items.length)}
           rows={(data) => data.items}
+          filters={[
+            ...(state !== 'all' ? [{ label: 'state', value: stateLabel(state) }] : []),
+            ...(account !== null
+              ? [{ label: 'account', value: name ?? accountLabel(account) }]
+              : []),
+          ]}
           onResetFilters={() => {
             setState('all');
             if (account !== null) dropAccount();

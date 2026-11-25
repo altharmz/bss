@@ -47,6 +47,24 @@ def as_bool(raw: str) -> bool:
 
 
 @dataclass(frozen=True)
+class AnyOf:
+    """Converter for the one filter that takes a comma-separated list (TMF630: the row
+    matches any of them; #455, docs/decisions/tmf-api.md): productOrder `state`. A single
+    value stays a plain string (an unknown one matches nothing, as before); a list is a
+    tuple, every member one of `values`, else a 400."""
+
+    values: frozenset[str]
+
+    def __call__(self, raw: str) -> str | tuple[str, ...]:
+        if "," not in raw:
+            return raw
+        members = tuple(dict.fromkeys(member.strip() for member in raw.split(",")))
+        if not all(member in self.values for member in members):
+            raise ValueError("every member must be one of the allowed values")
+        return members
+
+
+@dataclass(frozen=True)
 class ListQuery:
     offset: int
     limit: int
@@ -117,8 +135,10 @@ def parse_list_query(
         column, convert = filters[name]
         if column in where:
             raise bad_request(f"{name} given more than once")
-        if "," in raw and (
-            convert is not as_str or name not in ("name", "givenName", "familyName")
+        if (
+            "," in raw
+            and not isinstance(convert, AnyOf)
+            and (convert is not as_str or name not in ("name", "givenName", "familyName"))
         ):
             raise bad_request(f"{name}: comma-separated filters are not supported")
         try:

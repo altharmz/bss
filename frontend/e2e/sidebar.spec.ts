@@ -10,12 +10,12 @@ for (const viewport of [
 ]) {
   test(`sidebar fits at ${viewport.width}×${viewport.height}`, async ({ page }) => {
     await page.setViewportSize(viewport);
-    await page.goto('/subscribers');
+    await page.goto('/billing-accounts');
     await signIn(page);
     const nav = page.getByRole('navigation', { name: 'Main' });
     await expect(nav.locator('.section')).toHaveText([
       'Customers',
-      'Products',
+      'Catalog',
       'Resources',
       'Billing',
       'Prepaid',

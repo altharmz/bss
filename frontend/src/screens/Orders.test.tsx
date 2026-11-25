@@ -15,6 +15,19 @@ const P1 = 'd0000001-0000-4000-8000-000000000001';
 
 const ACCOUNT = { id: A1, name: 'Ivan Ivanov', '@type': 'BillingAccountRef' };
 
+/** A row of GET /internal/v1/subscriber (the subscriber search). */
+const SUBSCRIBER_ROW = {
+  state: 'Active',
+  ratingType: 'postpaid',
+  currency: 'USD',
+  balance: { unit: 'USD', value: 0 },
+  creditLimit: null,
+  cycleDay: 1,
+  financialAccount: null,
+  activeProducts: 1,
+  customerAccounts: 1,
+};
+
 const ADD = {
   id: O1,
   state: 'completed',
@@ -68,7 +81,8 @@ function backend(routes: Record<string, Handler>) {
   });
 }
 
-function open(path = '/orders') {
+// ?state=all: the tests that are not about the default Unfinished view (#455) read everything
+function open(path = '/orders?state=all') {
   window.history.replaceState(null, '', path);
   render(<App />);
 }
@@ -241,7 +255,7 @@ describe('orders list', () => {
       .getAllByRole('row')
       .find((r) => within(r).queryByText('C0000001')) as HTMLElement;
     expect(within(row).getByRole('link', { name: 'Ivan Ivanov' }).getAttribute('href')).toBe(
-      `/subscribers/${A1}`,
+      `/billing-accounts/${A1}`,
     );
     expect(within(row).getByText('Completed').classList.contains('pill-live')).toBe(true);
     expect(within(row).getByText('ORD-')).toBeTruthy();
@@ -263,7 +277,7 @@ describe('orders list', () => {
       [`GET ${ORDERS}?offset=0&limit=50`]: () => json([ADD], { total: 1 }),
       [`GET ${ORDERS}?state=inProgress&offset=0&limit=50`]: () => json([PENDING], { total: 1 }),
     });
-    open(`/orders?account=${A1}`);
+    open(`/orders?account=${A1}&state=all`);
     const chip = await screen.findByText(/Account/, {
       selector: '[data-ui="ui.orders.accountChip"]',
     });
@@ -278,10 +292,90 @@ describe('orders list', () => {
     expect(screen.queryByText('C0000001')).toBeNull();
     fireEvent.click(within(chip).getByRole('button', { name: 'Remove the account filter' }));
     await screen.findByText('C0000002'); // still filtered by state, no longer by account
-    expect(window.location.search).toBe('');
+    expect(window.location.search).toBe('?state=inProgress');
     expect(calls).toContain(
       `GET ${ORDERS}?billingAccount.id=${A1}&state=inProgress&offset=0&limit=50`,
     );
+  });
+
+  it('opens on the unfinished orders, says what it is for, and keeps the choice in the URL', async () => {
+    // #455: no ?state means Unfinished, one comma-separated state filter (OR on the server)
+    const unfinished = `GET ${ORDERS}?state=draft,acknowledged,inProgress,failed&offset=0&limit=50`;
+    const { calls } = backend({
+      [unfinished]: () => json([PENDING]),
+      [`GET ${ORDERS}?offset=0&limit=50`]: () => json([PENDING, ADD]),
+      [`GET ${ORDERS}?state=completed&offset=0&limit=50`]: () => json([]),
+    });
+    open('/orders');
+    await screen.findByText('C0000002');
+    expect(screen.queryByText('C0000001')).toBeNull();
+    expect(calls.filter((c) => c.startsWith(`GET ${ORDERS}?`))).toEqual([unfinished]);
+    const preset = expectUi('ui.orders.unfinished');
+    expect(preset.textContent).toBe('Unfinished');
+    expect(preset.getAttribute('aria-pressed')).toBe('true');
+    expect(preset.getAttribute('title')).toBe('draft, acknowledged, inProgress, failed');
+    expect(
+      screen.getByText(
+        "Orders across all billing accounts. A billing account's own orders: the Orders link on its card.",
+      ),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'All' }));
+    await screen.findByText('C0000001');
+    expect(window.location.search).toBe('?state=all');
+    // an empty filtered page is "no matches" with a reset, not "no orders"
+    fireEvent.click(screen.getByRole('button', { name: 'Completed' }));
+    expect(await screen.findByText('No matches')).toBeTruthy();
+    expect(window.location.search).toBe('?state=completed');
+    fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }));
+    await screen.findByText('C0000001');
+    expect(window.location.search).toBe('?state=all');
+  });
+
+  it('keeps an unfinished-only page in the URL after a reload', async () => {
+    backend({
+      [`GET ${ORDERS}?state=failed&offset=0&limit=50`]: () =>
+        json([{ ...PENDING, state: 'failed' }]),
+    });
+    open('/orders?state=failed');
+    await screen.findByText('C0000002');
+    expect(screen.getByRole('button', { name: 'Failed' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+  });
+
+  it('finds a subscriber by name, BA id or number and filters by their account', async () => {
+    const search = `GET /internal/v1/subscriber?q=777&offset=0&limit=50`;
+    const filtered = `GET ${ORDERS}?billingAccount.id=${A1}&state=draft,acknowledged,inProgress,failed&offset=0&limit=50`;
+    const { calls } = backend({
+      [`GET ${ORDERS}?state=draft,acknowledged,inProgress,failed&offset=0&limit=50`]: () =>
+        json([PENDING]),
+      [search]: () =>
+        json([
+          {
+            ...SUBSCRIBER_ROW,
+            id: A1,
+            name: 'Ivan main',
+            customer: { id: 'p1', name: 'Ivan Ivanov' },
+          },
+        ]),
+      [filtered]: () => json([]),
+    });
+    open('/orders');
+    await screen.findByText('C0000002');
+    const input = expectUi('ui.orders.subscriberSearch').querySelector('input') as HTMLElement;
+    expect(input.getAttribute('placeholder')).toBe('Subscriber: name, BA id or number');
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: '777' } });
+    // the server matched the number: the option shows although its label does not contain it
+    fireEvent.click(await screen.findByRole('option', { name: /Ivan Ivanov · Ivan main/ }));
+    const chip = await screen.findByText(/Account Ivan main/, {
+      selector: '[data-ui="ui.orders.accountChip"]',
+    });
+    expect(chip).toBeTruthy();
+    expect(window.location.search).toBe(`?account=${A1}`);
+    await screen.findByText('No matches');
+    expect(calls).toContain(search);
+    expect(calls).toContain(filtered);
   });
 
   it('shows the error with Retry, and the empty state', async () => {
@@ -571,7 +665,7 @@ describe('order writes', () => {
     const offered = async (order: object, shortId: string) => {
       const { unmount } = (() => {
         writes(order);
-        window.history.replaceState(null, '', '/orders');
+        window.history.replaceState(null, '', '/orders?state=all');
         return render(<App />);
       })();
       const dialog = await openOrder(shortId);
@@ -728,7 +822,7 @@ describe('order writes', () => {
         [`DELETE ${ORDERS}/${O1}`]: () => new Response(null, { status: 204 }),
       });
       const view = (() => {
-        window.history.replaceState(null, '', '/orders');
+        window.history.replaceState(null, '', '/orders?state=all');
         return render(<App />);
       })();
       const dialog = await openOrder('C0000001');

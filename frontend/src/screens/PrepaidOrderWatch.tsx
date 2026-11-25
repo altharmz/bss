@@ -182,7 +182,10 @@ export function OrderWatch({
           <>
             {watched.label} is still waiting for the billing worker. It completes on the
             worker&apos;s next wake-up. Still running. It continues in{' '}
-            <a className="bss-link" href={`/orders?account=${accountId ?? data.billingAccount.id}`}>
+            <a
+              className="bss-link"
+              href={`/orders?account=${accountId ?? data.billingAccount.id}&state=all`}
+            >
               Orders
             </a>
             . {check} {dismiss}

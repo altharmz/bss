@@ -138,6 +138,17 @@ def test_ui_dunning_exemption(api):
     assert api.get(path).json()["exempt"] is False
 
 
+def test_ui_dunning_account_filter(api):
+    """The account-filtered dunning list pinned by Dunning.test.tsx (#466)."""
+    account = apidata.account(api)
+    path = "/internal/v1/dunning/accounts"
+    response = api.get(f"{path}?billingAccount.id={account['id']}&offset=0&limit=50")
+    assert response.status_code == 200, response.text
+    assert response.json() == []
+    stepped = api.get(f"{path}?step=reminder1&billingAccount.id={account['id']}&offset=0&limit=50")
+    assert stepped.status_code == 200, stepped.text
+
+
 def test_ui_logging_settings(api):
     """The three PUT bodies pinned by LoggingSettings.test.tsx: base level (and null), the
     three debug durations, and Stop (0)."""
@@ -2264,6 +2275,32 @@ def test_orders_screen_reads_as_the_ui_makes_them(api):
     product = api.get(f"/tmf-api/productInventory/v5/product/{product_id}")
     assert product.status_code == 200 and product.json()["name"]
     assert api.get(f"{ORDER}?state=rejected&offset=0&limit=50").json() == []
+    # #455: the screen opens on the unfinished orders, one comma-separated state (OR)
+    unfinished = "state=draft,acknowledged,inProgress,failed&offset=0&limit=50"
+    assert api.get(f"{ORDER}?{unfinished}").json() == []
+    assert api.get(f"{ORDER}?billingAccount.id={account['id']}&{unfinished}").json() == []
+    draft = api.post(
+        ORDER,
+        {
+            "@type": "ProductOrder",
+            "requestedInitialState": "draft",
+            "billingAccount": {"id": account["id"], "@type": "BillingAccountRef"},
+            "productOrderItem": [
+                {
+                    "@type": "ProductOrderItem",
+                    "id": "1",
+                    "action": "add",
+                    "productOffering": {"id": offering["id"], "@type": "ProductOfferingRef"},
+                }
+            ],
+        },
+    ).json()
+    page = api.get(f"{ORDER}?billingAccount.id={account['id']}&{unfinished}")
+    assert [o["id"] for o in page.json()] == [draft["id"]]
+    # the subscriber search of Orders and Products (SubscriberSearch.tsx): the Subscribers
+    # list's own search, first page of 50
+    found = api.get(f"/internal/v1/subscriber?q={account['name'][:4]}&offset=0&limit=50")
+    assert found.status_code == 200 and account["id"] in [r["id"] for r in found.json()]
     cancels = api.get(
         "/tmf-api/productOrderingManagement/v5/cancelProductOrder"
         f"?productOrder.id={added['id']}&offset=0&limit=100"

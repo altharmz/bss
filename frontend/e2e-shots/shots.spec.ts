@@ -3,9 +3,9 @@ import { signIn } from '../e2e/auth';
 
 test('capture the admin pages at both design widths', async ({ page }) => {
   test.setTimeout(240_000);
-  await page.goto('/subscribers');
+  await page.goto('/billing-accounts');
   await signIn(page);
-  await expect(page.getByRole('heading', { name: 'Subscribers', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Billing accounts', exact: true })).toBeVisible();
   // Light at both widths, then dark at both: the theme is chosen the way a user's choice
   // reaches the page, through localStorage before it loads (decision D3).
   const passes = [
@@ -49,7 +49,7 @@ test('capture the admin pages at both design widths', async ({ page }) => {
             json: { ...body, unallocatedCredit: { ...body.unallocatedCredit, value: 25 } },
           });
         });
-      await page.goto(name.startsWith('card-') ? '/subscribers' : `/${name}`);
+      await page.goto(name.startsWith('card-') ? '/billing-accounts' : `/${name}`);
       await page.waitForLoadState('networkidle');
       if (name.startsWith('card-')) {
         await page
@@ -163,7 +163,7 @@ test('capture the admin pages at both design widths', async ({ page }) => {
         await expect(page.locator('.bss-inspector-name')).toHaveCount(0);
       }
       if (name === 'subscribers') {
-        await page.getByRole('button', { name: 'New subscriber', exact: true }).click();
+        await page.getByRole('button', { name: 'New billing account', exact: true }).click();
         await page.screenshot({ path: `/web/.shots/dialog-new-subscriber-${width}.png` });
         await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
       }
@@ -180,7 +180,7 @@ test('capture the admin pages at both design widths', async ({ page }) => {
       }
       if (name === 'card-postpaid') {
         await page.getByRole('button', { name: 'Edit', exact: true }).click();
-        const edit = page.getByRole('dialog', { name: 'Edit subscriber' });
+        const edit = page.getByRole('dialog', { name: 'Edit billing account' });
         await expect(edit.getByLabel('Account name')).not.toHaveValue('');
         await expect(edit.getByRole('button', { name: 'Save', exact: true })).toBeInViewport({
           ratio: 1,

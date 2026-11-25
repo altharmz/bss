@@ -69,6 +69,7 @@ _PAGE = """
         SELECT d.*, a.name FROM dunning d JOIN billing_account a ON a.id = d.billing_account_id
         WHERE (%(step)s::text IS NULL OR d.last_step = %(step)s)
           AND (%(by)s::date IS NULL OR d.suspended_since <= %(by)s)
+          AND (%(account)s::uuid IS NULL OR d.billing_account_id = %(account)s)
         ORDER BY d.overdue_since, d.billing_account_id OFFSET %(offset)s LIMIT %(limit)s
     """
 
@@ -205,12 +206,14 @@ def page(
     *,
     step: str | None,
     suspended_by: date | None,
+    account_id: UUID | None = None,
     offset: int,
     limit: int,
 ) -> tuple[list[Row], bool]:
     """The accounts in dunning on `today`, oldest O first: O, the amount past due, the last
     step taken for that O (`none` before the first) and the suspension's date. `step` keeps
-    those whose last step it is; `suspended_by` those suspended on or before that date."""
+    those whose last step it is; `suspended_by` those suspended on or before that date;
+    `account_id` that one account."""
     query = "WITH overdue AS (" + _OVERDUE + _GROUP + ")," + _PAGE  # noqa: S608 - fixed SQL
     rows = fetch_all(
         conn,
@@ -220,6 +223,7 @@ def page(
             "minimum": minimum,
             "step": step,
             "by": suspended_by,
+            "account": account_id,
             "offset": offset,
             "limit": limit + 1,
         },

@@ -18,19 +18,25 @@ issues; `docs/` holds no backlog or slice tracker (design and decisions only).
 | Project id | `PVT_kwHOEpM-b84BpHA0` |
 | Status field id | `PVTSSF_lAHOEpM-b84BpHA0zhnkE7M` |
 | Status option ids | Inbox `f75ad846` · Ready `abe5d139` · Doing `47fc9ee4` · Waiting `98f1210e` · Done `98236657` |
+| Priority field id (2026-11-24) | `PVTSSF_lAHOEpM-b84BpHA0zhrP5BI` |
+| Priority option ids | P0 `0c8ba284` · P1 `08fef3c3` · P2 `fd42a13c` · P3 `1df9b3bf` |
 
 Labels: `ops` `vps` `harness` `docs` `gui` `bug` `idea` `blocked` `vpn-adjacent`
 (anything near the VPN rules), `needs-human`, and per-client owner labels such as
-`agent:claude`, `agent:codex` and `agent:kimi`. Priority labels: `P0` urgent, `P1` high,
-`P2` normal, `P3` low (one per issue).
+`agent:claude`, `agent:codex` and `agent:kimi`.
+
+**Priority** is the project's single-select Priority field, not a label: `P0` urgent, `P1`
+high, `P2` normal, `P3` low, one value per item; an empty field counts as P3. There are no
+`P0`-`P3` labels ([tracking.md](decisions/tracking.md#board-priority)).
 
 ### Statuses
 
 - **Inbox**: new, not triaged; scope, priority or value still unclear. Never start work
   from Inbox without the human's OK.
 - **Ready**: triaged, with a clear goal, acceptance criteria as a task-list checklist,
-  labels and no open blockers. Take the next item by priority label: P0 first, then P1,
-  P2, P3; an issue with no priority label counts as P3. Among several with the same label, take the one highest on the board.
+  labels and no open blockers. Take the next item by the Priority field: P0 first, then
+  P1, P2, P3; an empty field counts as P3. Among several with the same priority, take the
+  one highest on the board.
 - **Doing**: actively worked on. An agent may own multiple Doing items when separate
   worker slots are available. It has an `agent:<client>` owner label (or `needs-human`)
   and, for code work, a branch `issue-<n>-<slug>`.
@@ -45,9 +51,9 @@ Labels: `ops` `vps` `harness` `docs` `gui` `bug` `idea` `blocked` `vpn-adjacent`
 ### Adding a task ("add a task / bug / idea")
 
 - Search first (`gh issue list --search`); if one exists, comment on it instead.
-- Create the issue with `make add-task TITLE="..." BODY_FILE=/abs/path LABELS="a,b"` (a
-  clear title, short context, a task-list checklist and labels). It lands in Inbox by
-  default.
+- Create the issue with `make add-task TITLE="..." BODY_FILE=/abs/path LABELS="a,b"
+  [PRIORITY=P1|P2|P3]` (a clear title, short context, a task-list checklist and labels;
+  `PRIORITY=` sets the Priority field). It lands in Inbox by default.
 - If the human gave enough detail and said it should be done soon, put it straight into
   Ready (`STATUS=Ready`) and say where you placed it.
 
@@ -62,18 +68,18 @@ Labels: `ops` `vps` `harness` `docs` `gui` `bug` `idea` `blocked` `vpn-adjacent`
 
 ### Changing priority with human approval
 
-Changing an existing issue's P0–P3 priority or its manual board order requires explicit
+Changing an existing issue's Priority field or its manual board order requires explicit
 human approval in the conversation for the issue and intended change. A request to
-implement work does not itself approve changing priority labels or manual board order.
+implement work does not itself approve changing priority or manual board order.
 An explicit human request to work on a specific issue authorizes selecting that issue
 with `make start-task BSS_TASK_OWNER=<client> ISSUE=<n> HUMAN_APPROVAL=<n>`; the matching
 approval marker must refer to that request in the current conversation. It bypasses
-selection order only and leaves priority labels, board order and every eligibility check
-unchanged (see [worktrees.md](worktrees.md#normal-agent-workflow)). Preserve one
-priority label per issue and leave other agents' owned work untouched.
+selection order only and leaves priority, board order and every eligibility check
+unchanged (see [worktrees.md](worktrees.md#normal-agent-workflow)). Leave other agents'
+owned work untouched.
 
 An approved priority change is `make set-priority ISSUE=<n> PRIORITY=<P0..P3>
-HUMAN_APPROVAL=<n>`: it replaces the issue's P0–P3 label with the new one. An approved
+HUMAN_APPROVAL=<n>`: it sets the issue's Priority field and confirms it on the board. An approved
 board order change is `make reorder-task ISSUE=<n> [AFTER=<m>] HUMAN_APPROVAL=<n>`: the
 item moves first on the board, or directly after issue `<m>`, and the new order is
 confirmed. The `HUMAN_APPROVAL` marker records the agent's assertion that the human
@@ -82,7 +88,7 @@ requirement rests on the agent, as the human-review rules do. Use `make start-ta
 claim/start work.
 
 `make new-priority-task TITLE=... BODY=... [LABELS=...]` creates an explicitly approved
-P0 issue first in Ready and stops. It does not claim ownership, check slot availability,
+issue with Priority P0 first in Ready and stops. It does not claim ownership, check slot availability,
 create a worktree or credentials, or start runtime. Start it later through the independent
 `make start-task BSS_TASK_OWNER=<client>` selection/claim workflow. A creation failure
 after GitHub created the issue identifies its number; inspect it before retrying to
@@ -138,6 +144,7 @@ then carry on in the normal order. The revert PR follows the same flow.
 
 For explicitly requested board triage or administration (not normal startup:
 `make start-task` claims work), the board snapshot is `make board` (open items by status
+with their Priority field
 in board order; `JSON=1` adds item ids and positions). Fetch only relevant issue bodies,
 with explicit JSON fields (the human-readable view can query deprecated Projects classic
 fields and fail): `gh issue view <n> --json number,title,body,labels,comments`. Manual

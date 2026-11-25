@@ -1,7 +1,7 @@
 # Admin UI (stage 5)
 
 Operators can open **Self-care login** on a subscriber card to check the customer's login,
-send an invitation, or disable access. Under **Customers → Signups**, filter by state and
+send an invitation, or disable access. Under **Customers → Online signups**, filter by state and
 open a signup to inspect its plan and identity result. A signup in identity review offers
 Approve and Reject actions.
 
@@ -43,7 +43,7 @@ Tested means a passing component test saw the marker on screen (`expectUi`, see 
 
 | Part | Where | What |
 |---|---|---|
-| Routing | `frontend/src/app/router.tsx` | a minimal History-API router: `/subscribers`, `/subscribers/{accountId}`, `/catalog`, `/billing-runs` (not `/billing`, so it can never be confused with the app's `/billing-status`); `/` redirects to `/subscribers`; anything else is the not-found page. Deep links work because Caddy answers unknown paths with `index.html` |
+| Routing | `frontend/src/app/router.tsx` | a minimal History-API router: `/billing-accounts`, `/billing-accounts/{accountId}`, `/catalog`, `/billing-runs` (not `/billing`, so it can never be confused with the app's `/billing-status`); `/` and the old `/subscribers` and `/subscribers/{accountId}` are replaced by the billing account paths (no history entry); anything else is the not-found page. Deep links work because Caddy answers unknown paths with `index.html` |
 | Shell | `frontend/src/app/Shell.tsx` | sidebar (brand, environment tag, navigation "Main" in seven sections from `app/nav.ts`, operator), top bar (breadcrumbs, business date, time zone) |
 | System context | `frontend/src/app/context.tsx` | loads `GET /internal/v1/context` before any screen: no date can be shown without the business date and zone |
 | API client | `frontend/src/api/client.ts`, `bss.ts` | fetch wrapper; every failure is an `ApiError` whose message is the call ("GET /path -> 503 Service Unavailable"); `getAll` pages by 100; `useResource` = loading / error / ok + retry; `usePolled` = the same, refreshed in the background every few seconds while a predicate on the data holds (a failed refresh keeps the data and stops) |
@@ -82,10 +82,11 @@ API: `GET /internal/v1/context`, `GET /internal/v1/billingRun?limit=1` (the late
 status).
 
 The sidebar is one `<nav aria-label="Main">` rendered from the data in `app/nav.ts`, with seven
-labelled sections in TMF / ODA domain order (`ui.shell.section.<key>`, #414):
+labelled sections in TMF / ODA domain order (`ui.shell.section.<key>`, #414, #457):
 
-- **Customers:** Subscribers, Parties, Financial accounts
-- **Products:** Product catalog, Orders, Products
+- **Customers**, down the account hierarchy: Parties, Financial accounts, Customers, Billing
+  accounts, Products, Orders, then Online signups
+- **Catalog:** Product catalog
 - **Resources:** Numbers, SIMs, Port requests
 - **Billing:** Billing runs (failed badge), Bills, Payments, Billing settings
 - **Prepaid:** Balances, Prepaid commands (failed badge), Prepaid lifecycle
@@ -95,7 +96,8 @@ labelled sections in TMF / ODA domain order (`ui.shell.section.<key>`, #414):
 Each item's `title` names its TMF API and resource, or "internal". No item has a count or a
 count request (G8; it replaces epic D6's counts). `nav.test.ts` fails when a navigable route
 has no nav item or has two. Design and the per-item TMF/DB mapping:
-[frontend.md](decisions/frontend.md#sidebar-by-tmf-domain-and-db-area-2026-11-20-issue-414).
+[frontend.md](decisions/frontend.md#sidebar-by-tmf-domain-and-db-area-2026-11-20-issue-414),
+reordered by [the account hierarchy](decisions/frontend.md#sidebar-by-the-account-hierarchy-2026-11-25-issue-457).
 
 ### Logging settings
 
@@ -136,9 +138,10 @@ identities. The ordinary seed still creates no users. Credentials live only in i
 and removes that file. The browser exercises forced password change, admin forms,
 ordinary-user denial and sign-out as well as the existing billing screens.
 
-### Subscribers list (`ui.subscribers.list`) - `screens/Subscribers.tsx`
+### Billing accounts list (`ui.subscribers.list`) - `screens/Subscribers.tsx`
 
-Ledger v2 slice 5: PageHeader shows the filtered count and New subscriber action. The
+Route `/billing-accounts` (#457; "Subscribers" before, the internal ids keep the old name).
+Ledger v2 slice 5: PageHeader shows the filtered count and New billing account action. The
 300 px search (Name, BA id or subscriber no.) has an icon and `/` focus shortcut outside
 editable fields. Account state and mode filters retain counts; Reset filters appears when
 active. Negative balance N stays at the right. The page table shows Name, copyable BA Id,
@@ -605,7 +608,8 @@ Ledger v2: explicit product StatusPill.
 R12: PageHeader with filters; `PRD-` and `ORD-` Ids; M detail Dialog with KeyValue and a compact order-items table.
 
 Route `/products` (sidebar Products). TMF637 `product` over every status: server filters status and
-`?account=` chip, client filters offering and number. Columns: product, offering, subscriber, status,
+`?account=` chip, client filters offering and number. The subscriber search (`ui.products.subscriberSearch`,
+#455) sets the chip; the caption says the page is cross-subscriber. Columns: product, offering, subscriber, status,
 start, end, number. A row opens the detail (`GET product/{id}`): dates, order items with a link to
 Orders, the realizing resource. Read-only; orders alone change products. Slice 21.
 
@@ -618,7 +622,10 @@ Ledger v2: explicit order StatusPill.
 R12: PageHeader with the state filter; `ORD-` Id; L detail Dialog with KeyValue, compact items (PRD- Ids, Amount prices) and cancellations tables; details and cancel forms use Field.
 
 Route `/orders`. The list is read-only, the dialog writes (slice 10, below). TMF622 `productOrder` pages of 50, newest first as the app serves them (#312), Next while `Link: rel="next"` follows; no total is shown. Existing rows stay mounted during paging; only the first load shows a skeleton. After a write only the changed order is read again (deleted rows are removed), alongside the existing navigation count refresh. State
-filter, `?account=<id>` chip (the card's "Orders" link `ui.subscriber.orders`). Columns: order id,
+filter, opening on **Unfinished** (`ui.orders.unfinished`, #455: draft, acknowledged, inProgress, failed;
+`?state=all` or `?state=<state>` in the URL), `?account=<id>` chip (the card's "Orders" link
+`ui.subscriber.orders`, with `state=all`, or the subscriber search `ui.orders.subscriberSearch`); the
+caption says the page is cross-subscriber. Columns: order id,
 subscriber (links to the card), state, item actions, requested start, created, completed or
 cancelled. A row opens the dialog: header fields, items (action, offering, product, state,
 tax-included price), `productOrderErrorMessage`, the order's `cancelProductOrder` rows, and for an
@@ -646,7 +653,8 @@ Ledger v2: command StatusPill uses the `command` kind mapping (Queued, Completed
 Route `/prepaid-commands`, sidebar Prepaid > Prepaid commands with a red badge while any command is
 `failedTechnical`. Lists the internal prepaid command journal (id, kind, account, state, due date,
 attempts, next retry, result), 50 per page, filtered by state and by `?account=<id>` (a removable
-chip; the card's "Commands" link, `ui.subscriber.prepaid.commands`, sets it). A row opens every
+chip; the card's "Commands" link, `ui.subscriber.prepaid.commands`, sets it, and so does the account
+search `ui.prepaidCommands.accountSearch`, #466). A row opens every
 field and the `needs_topup` block (`ui.prepaidCommands.needsTopup`); **Retry** appears only for
 `failedTechnical` (POST `.../retry`, no body; a 409 is shown).
 
@@ -656,10 +664,11 @@ Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use
 
 Ledger v2: separate party and customer StatusPill kinds.
 
-Route `/parties`, sidebar **Customers > Parties** (no count request). Three tabs: Individuals,
-Organizations (name, status, number of customers, linked subscribers) and Customers (name,
-status, engaged party, billing accounts), each with a name search and a status filter, so a party
-or customer without a billing account is reachable. **New individual** and **New organization**
+Route `/parties`, sidebar **Customers > Parties** (no count request). Two tabs: Individuals and
+Organizations (name, status, number of customers, linked billing accounts). Route `/customers`,
+sidebar **Customers > Customers** (`ui.customers`, `screens/Customers.tsx`, #457): the customers
+(name, status, engaged party, billing accounts) and the same customer dialog. Each list has a name
+search and a status filter, so a party or customer without a billing account is reachable. **New individual** and **New organization**
 create a party with its type-specific status, optional birth date and email/phone/postal contact
 media. Subscriber links go to the card. A row opens the record read with GET
 (`ui.parties.individual|organization|customer`). **Edit** (`ui.parties.edit`) patches changed
@@ -756,7 +765,7 @@ Ledger v2: bill StatusPill; hold actions use quiet negative buttons.
 Reads plus the existing bill dialog. Route `/bills`, sidebar Billing > Bills (no count): tabs **Bills** |
 **Bill cycles**. Bills: bill no., subscriber (link), billing date, state, total, kind (`runType`:
 onCycle/offCycle); filters: state (server), account chip (`?account=<id>`, sent as `billingAccount.id`,
-`ui.bills.accountChip`) and a billing date applied client side. A row opens the bill dialog (hold/release as
+`ui.bills.accountChip`; the account search `ui.bills.accountSearch` sets it, #466) and a billing date applied client side. A row opens the bill dialog (hold/release as
 on the card), whose **Related** section (`ui.bills.links`) has **Bill cycle** (`GET billCycle/{id}`,
 `ui.bills.cycleDetail`) and **Rates** (`GET appliedCustomerBillingRate?bill.id=`; a row opens
 `ui.bills.rateDetail`, the raw GET). The Bill cycles tab lists `GET billCycle` (name, billing date, payment
@@ -780,7 +789,9 @@ tabs **In dunning** (a **Last step** filter on the server: No step yet, First re
 reminder, Suspended) and **Deactivation candidates** (suspended more than 60 days; ended by an
 operator). Columns: subscriber (link to the card's Bills tab), overdue since (O), past due, last
 step (with a Candidate tag), suspended since; oldest O first, paged with Previous/Next
-(`ui.dunning.previous|next`). API: `GET /internal/v1/dunning/accounts?step=&deactivationCandidate=true`.
+(`ui.dunning.previous|next`). Both tabs take an account filter (#466): the account search
+(`ui.dunning.accountSearch`) or a `?account=<id>` link sets the removable chip (`ui.dunning.accountChip`).
+API: `GET /internal/v1/dunning/accounts?step=&deactivationCandidate=true&billingAccount.id=`.
 
 Billing settings has a **Dunning** tab (`ui.billingSettings.dunning`): the days after O of the
 first reminder, the second reminder and the suspension, the minimum past due (in the system
@@ -810,7 +821,7 @@ above Recorded refunds; a row opens the payment read with `GET /payment/{id}`
 (`ui.payments.detail`: total, net, tax, method, references, and the bills it paid). Route
 `/payments`, sidebar Billing > Payments (no count): tabs **Payments** | **Refunds**, a status filter
 (`done`, the only status), an account chip (`?account=<id>`, sent as `account.id`,
-`ui.payments.accountChip`) and From/To dates applied client side to the loaded rows (business dates).
+`ui.payments.accountChip`; the account search `ui.payments.accountSearch` sets it, #466) and From/To dates applied client side to the loaded rows (business dates).
 Subscribers link to their cards. API: `GET .../payment/v4/payment|refund?account.id=&status=` (paged
 100 at a time), `GET .../payment/{id}`.
 
@@ -827,7 +838,7 @@ in a KeyValue detail; both show the returned currency. The account filter applie
 they have no status filter. The other tabs each have a status filter
 (`ui.balances.status`; buckets: active, suspended, expired; actions: created, completed,
 cancelled, failed) and an account chip (`?account=<id>`, `ui.balances.accountChip`, sent as
-`partyAccount.id`). Buckets: `GET bucket` joined with `GET accumulatedBalance` by account
+`partyAccount.id`; the account search `ui.balances.accountSearch` sets it on every tab, #466). Buckets: `GET bucket` joined with `GET accumulatedBalance` by account
 (Subscriber, Remaining, Reserved, Total, Status); a row opens the bucket detail
 (`ui.balances.bucketDetail`: `GET bucket/{id}` and `GET accumulatedBalance/{id}`). The action tabs
 list `topupBalance`, `adjustBalance`, `reserveBalance`, `transferBalance` (a transfer's receiver is

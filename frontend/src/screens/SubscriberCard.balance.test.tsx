@@ -208,10 +208,10 @@ describe('prepaid balance actions', () => {
     expect(within(detail).getByText('A5000000')).toBeTruthy();
     expect(within(detail).getByText('Customer requested credit transfer')).toBeTruthy();
     expect(within(detail).getByRole('link', { name: 'Ivan Sidorov' }).getAttribute('href')).toBe(
-      `/subscribers/${B}`,
+      `/billing-accounts/${B}`,
     );
     expect(within(detail).getByRole('link', { name: 'Olga Kuznetsova' }).getAttribute('href')).toBe(
-      `/subscribers/${A}`,
+      `/billing-accounts/${A}`,
     );
     expect(within(detail).getByText('1.00')).toBeTruthy();
     expect(within(detail).getByText('originator')).toBeTruthy();

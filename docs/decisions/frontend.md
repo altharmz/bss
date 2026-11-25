@@ -844,9 +844,10 @@ self-hosted (`@fontsource`), no CDN at runtime. Every dependency needs a stated 
 - **The UI's write requests are pinned on both sides**: component tests assert the exact
   bodies, and `tests/internal/test_ui_requests.py` replays the same bodies against the real API.
   Change both together.
-- **Routes:** `/subscribers`, `/subscribers/{accountId}`, `/catalog`, `/billing-runs`
+- **Routes:** `/billing-accounts`, `/billing-accounts/{accountId}` (#457; the old
+  `/subscribers` paths are replaced by them), `/catalog`, `/billing-runs`
   (not `/billing`: never confusable with the app's `/billing-status`, which Caddy routes
-  to the backend); `/` redirects to `/subscribers`; anything else is a not-found page.
+  to the backend); `/` redirects to `/billing-accounts`; anything else is a not-found page.
 - **Component tests stub every request** (`src/test/fetch.ts`): an unmatched one fails
   the test after it ends (`src/test/setup.ts`), not just renders a network error. The
   old behaviour made App.test "recovers on Retry" flaky (2 of 5 on master, 7 of 10 in
@@ -1050,6 +1051,8 @@ refused, and the card showed both as final panel errors.
 
 ## Sidebar by TMF domain and DB area (2026-11-20, issue #414)
 
+Its Customers and Products sections are superseded by
+[the account hierarchy](#sidebar-by-the-account-hierarchy-2026-11-25-issue-457).
 Supersedes the 2026-10-21 sidebar table. Items were added one at a time to that
 three-section menu, which by then had five sections and 18 items. Products mixed TMF620/622/637
 commerce with TMF639 resources, Billing mixed TMF678, TMF676, TMF654, TMF666 and internal items,
@@ -1199,9 +1202,91 @@ The UI of the bill PDFs and email delivery (#202) and of postpaid dunning (#385)
 - **Markers:** as the issue names them, plus `ui.subscriber.dunning.exemptConfirm` (the dialog)
   and `ui.dunning.previous|next` (paging).
 
+## Orders and Products: a useful first view (2026-11-24, issue #455)
+
+The global Orders and Products screens are cross-subscriber operations views; a subscriber's
+own orders and products are on the card.
+
+- **Orders opens on Unfinished:** `draft`, `acknowledged`, `inProgress` and `failed` (`failed`
+  needs a person), the default when the URL has no `state`. **All** and the single states stay.
+  The choice is in the URL (`?state=all`, `?state=failed`), written with `replaceState`, so
+  links and reloads keep it. The server takes the list as one comma-separated `state` (the one
+  comma filter, [tmf-api.md](tmf-api.md#input-correctness-and-read-completeness-2026-10-14)).
+- **Links from a subscriber context carry `state=all`:** the card's Orders link, the product
+  dialog's and the prepaid order watch's "Open in Orders" and the draft-saved toast. They mean
+  "this subscriber's orders", which may be completed; Unfinished would hide them.
+- **Subscriber search:** a combobox in both headers (`SubscriberSearch.tsx`) uses the
+  Subscribers list's own `GET /internal/v1/subscriber?q=` (first page of 50, typed text
+  debounced). The server matched the text, so the combobox shows every row it returns (a number
+  or an id need not be in the label). Choosing a row sets `?account=` and the existing
+  removable chip; no new endpoint.
+- **A caption says what the page is for** (the header's meta line). Products keeps "all
+  statuses" as its default.
+- **An empty filtered Orders page is "No matches"** with Reset filters (to All), as on
+  Products, not "No orders".
+- **Markers:** `ui.orders.unfinished` (a `Segmented` option now takes a `ui` marker),
+  `ui.orders.subscriberSearch`, `ui.products.subscriberSearch`.
+
+## Account search on the money screens (2026-11-25, issue #466)
+
+Bills, Payments (both tabs), Dunning, Prepaid → Balances (all tabs) and Prepaid commands could
+filter by billing account only through a card's `?account=` link; Dunning had no account filter.
+
+- **One shared filter** (`screens/AccountFilter.tsx`): `useAccountFilter(path)` reads
+  `?account=`, and `<AccountFilter>` shows the search box (`<screen>.accountSearch`) and, while
+  filtered, the removable chip (`<screen>.accountChip`). Picking a row sets `?account=` with
+  `replaceState`; removing the chip drops it. The chip shows the account's name from the loaded
+  rows, else the name picked in the search, else the `BA-` id.
+- **The lookup is the #455 subscriber search** (`SubscriberSearch.tsx`, the Billing accounts
+  list's `GET /internal/v1/subscriber?q=`), which already matches a name, a `BA-` short id or a
+  number. No new search endpoint.
+- **Dunning filters on the server:** `GET /internal/v1/dunning/accounts` takes
+  `billingAccount.id` (the bill list's name; a non-UUID or a repeat is a 400), also an MCP
+  argument of `list_dunning_accounts`.
+- **A filter change resets paging, also back to an earlier filter:** `usePageOffset` forgets
+  the old key's offset when the key changes. It used to keep it, so clearing a filter returned
+  to the page the unfiltered list was on before.
+- Orders and Products keep their own copy of the search and chip (#455); they can move to
+  `AccountFilter` when next changed.
+
+## Sidebar by the account hierarchy (2026-11-25, issue #457)
+
+Supersedes the Customers and Products sections of the #414 sidebar. Customers held Signups,
+which are not customers, and Subscribers, which is the TMF666 billing account list (one row per
+billing account). TMF629 customers were only a Parties tab, and TMF637 products, which belong to a
+billing account, sat next to the catalog.
+
+- **Customers runs down the account hierarchy:** Parties (TMF632), Financial accounts (TMF666
+  financialAccount), Customers (TMF629), Billing accounts (TMF666 billingAccount), Products
+  (TMF637), Orders (TMF622), then Online signups. **Catalog** (`ui.shell.section.catalog`, was
+  `products`) holds Product catalog alone. Resources, Billing, Prepaid, Reports and System are
+  unchanged. Sign-in still lands on the billing account list.
+- **Online signups stays in Customers, not System** (the issue's decision 4 is dropped). #467
+  makes System admin-only, and every operator works the signup queue. The route `/signups` and
+  the `ui.careSignups.*` markers are unchanged; the label is "Online signups".
+- **"Subscribers" is "Billing accounts"** in the sidebar, the page title, breadcrumbs, the
+  card's back link and crumb, the create/edit dialogs ("New billing account", "Edit billing
+  account"), the links from Numbers, SIMs and Port requests ("Open billing account") and the
+  Orders and Products captions. "Subscriber number" (the MSISDN) keeps its name, and so do the
+  column headers that name the person on other lists. Internal ids stay: route names
+  (`subscribers`, `subscriber`), `data-ui="ui.subscriber*"`, `/internal/v1/subscriber`.
+  Renaming them would only churn tests and the UI/MCP parity check.
+- **Routes:** `/billing-accounts` and `/billing-accounts/{id}`. `/subscribers` and
+  `/subscribers/{id}` still parse; `currentPath` replaces them in the address bar
+  (`replaceState`, keeping the query and hash, no history entry), so bookmarks and the
+  MCP/notification links keep working. Every link builds the path with `hrefOf`.
+- **Customers is its own screen** (`/customers`, `screens/Customers.tsx`, `ui.customers`): the
+  former Parties tab's list, name search, status filter and customer dialog, with the same
+  request. The inner markers stay `ui.parties.customers`, `ui.parties.customer` and the rest.
+  A customer is still created from its party (Parties, New customer). Parties keeps
+  Individuals and Organizations; its column and dialog say "Billing accounts".
+- **Tests:** `nav.test.ts` pins the Customers and Catalog items; `App.test.tsx` the full
+  sidebar order, the new routes and the replaced old paths; `Parties.test.tsx` the Customers
+  screen, its filters and that Parties has no Customers tab.
+
 ## Subscriber numbers in the lists (2026-11-24, issue #456)
 
-The subscriber card's products table and the Subscribers list show the line numbers that
+The billing account card's products table and the Billing accounts list (the Subscribers list before #457) show the line numbers that
 an operator had to open the ⋯ → Subscriber number dialog to see.
 
 - **What is live is decided on the server, today:** a claim counts when it is not cancelled
@@ -1213,7 +1298,7 @@ an operator had to open the ⋯ → Subscriber number dialog to see.
   then `IMSI …` and `SIM …` (the ICCID) on secondary lines, only for a product that has them,
   and "—" otherwise. The human clarified on the issue that the IMSI/SIM belong in this
   table too.
-- **The Subscribers list:** each row of `GET /internal/v1/subscriber` gains `msisdns` (up to
+- **The Billing accounts list:** each row of `GET /internal/v1/subscriber` gains `msisdns` (up to
   3 live numbers of the account's not-ended products, oldest product start first) and
   `msisdnCount`. They come from one windowed query per page in the request's transaction
   (`subscribers.live_msisdns`), and a test checks its plan has no sequential scan. The new

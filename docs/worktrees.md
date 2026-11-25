@@ -19,11 +19,11 @@ does not know and lists the ones it accepts.
 |---|---|---|
 | Start and claim a task | `make start-task BSS_TASK_OWNER=<client>` | primary |
 | Start a specific Ready issue, with explicit human approval | `make start-task BSS_TASK_OWNER=<client> ISSUE=<n> HUMAN_APPROVAL=<n>` | primary |
-| Create an approved P0 issue in Ready | `make new-priority-task TITLE="..." BODY="..." [LABELS="a,b"]` (`BODY_FILE=/abs/path` for long text; `ISSUE=<n>` finishes a preserved one) | primary |
+| Create an approved Priority P0 issue in Ready | `make new-priority-task TITLE="..." BODY="..." [LABELS="a,b"]` (`BODY_FILE=/abs/path` for long text; `ISSUE=<n>` finishes a preserved one) | primary |
 | Show the board | `make board` (`JSON=1` for item ids and positions) | any |
 | Add an issue to the board | `make add-task TITLE="..." BODY_FILE=/abs/path [LABELS="a,b"] [PRIORITY=P1\|P2\|P3] [STATUS=Inbox\|Ready]` | any |
 | Move an issue to Inbox, Ready or Waiting | `make move-task ISSUE=<n> STATUS=<status>` (Waiting needs `WAITING_ON="..." UNBLOCKS_WHEN="..."`) | any |
-| Change an approved priority | `make set-priority ISSUE=<n> PRIORITY=<P0..P3> HUMAN_APPROVAL=<n>` | any |
+| Change an approved Priority field | `make set-priority ISSUE=<n> PRIORITY=<P0..P3> HUMAN_APPROVAL=<n>` | any |
 | Change an approved board order | `make reorder-task ISSUE=<n> [AFTER=<m>] HUMAN_APPROVAL=<n>` | any |
 | Resume / hand off a session | `make telemetry-collect` | task |
 | Finish usage after `finish-task` (its `telemetry_next_command`) | `make telemetry-watch TASK=<task-id>` (or `make telemetry-collect TASK=<task-id>`; no `CLIENT=`/`SESSION_ID=`) | primary |
@@ -65,7 +65,12 @@ does not know and lists the ones it accepts.
    `make test` (the full suite but the `migration_history` and `slow` tests; `make test-all`
    runs everything) before a PR touching billing, migrations or the API. A pass
    on a clean tree is recorded, and `check-pr` reports it as `full_suite`: a resumed session
-   reads it there instead of running the suite again.
+   reads it there instead of running the suite again. Before `make commit`, run `make format`
+   again after any edit, including a fix made after a hook failure. If the change touches a
+   shared test builder or factory (`tests/builders/**`, `tests/factories.py`), find every test
+   file that imports it (`grep -rl`) and run them with `make test-files TESTS=...`: migration
+   tests call those builders on schemas older than head, so a builder must not name a new
+   column unconditionally (in #456 one did, and the hook found it only after 21 minutes).
 4. **PR.** `make create-pr` publishes the branch and opens (or reuses) the PR with
    `Fixes #N`. `make check-pr WAIT=600` reports readiness and waits for pending checks.
 5. **Merge.** `make merge-task` when ready. A human-gated PR stays blocked until the human
@@ -168,7 +173,8 @@ primary `master` is accepted: no staged, tracked or untracked changes, no local 
 of or diverging from `origin/master` (no stash, reset or rebase). Tracked secret paths are
 refused.
 
-Selection follows [board.md](board.md): open Ready issues, P0 before P3, then board order
+Selection follows [board.md](board.md): open Ready issues by the Priority field, P0 before P3
+(empty counts as P3), then board order
 (or the one human-approved issue, step 1 above).
 `blocked`, `needs-human`, any `agent:` label and open GitHub blockers exclude an issue, as do
 existing task branches, worktrees, linked branches and open PRs. The helper claims by adding

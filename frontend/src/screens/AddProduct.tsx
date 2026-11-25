@@ -274,7 +274,8 @@ export function AddProductModal({
         }
         toast(
           <>
-            Draft saved · <Link href={`/orders?account=${account.id}`}>Open in Orders</Link>
+            Draft saved ·{' '}
+            <Link href={`/orders?account=${account.id}&state=all`}>Open in Orders</Link>
           </>,
         );
       }

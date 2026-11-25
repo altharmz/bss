@@ -154,7 +154,7 @@ function backend(routes: Record<string, Handler> = {}) {
 }
 
 async function open() {
-  window.history.replaceState(null, '', `/subscribers/${A}`);
+  window.history.replaceState(null, '', `/billing-accounts/${A}`);
   render(<App />);
   await screen.findByRole('heading', { name: /Olga Kuznetsova/ });
   fireEvent.click(screen.getByRole('tab', { name: /^Bills/ }));

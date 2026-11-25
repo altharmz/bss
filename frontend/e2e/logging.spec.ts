@@ -11,7 +11,7 @@ const nav = (page: Page) => page.getByRole('navigation', { name: 'Main' });
 test('admin starts and stops a temporary debug', async ({ page }) => {
   await page.goto('/');
   await signIn(page);
-  await expect(page).toHaveURL(/\/subscribers$/);
+  await expect(page).toHaveURL(/\/billing-accounts$/);
   await nav(page).getByRole('link', { name: 'Logging', exact: true }).click();
   await expect(page).toHaveURL(/\/settings\/logging$/);
   await expect(page.getByRole('heading', { name: 'Logging' })).toBeVisible();

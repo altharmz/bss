@@ -25,7 +25,7 @@ function backend(
     [NAV_RUNS]: latestRun,
     // the billing runs screen: no runs (the screen has its own tests)
     'GET /internal/v1/billingRun?offset=0&limit=20': empty,
-    // the subscribers list: no accounts
+    // the billing account list: no accounts
     'GET /internal/v1/subscriber?offset=0&limit=50': empty,
     // the catalog: empty
     [`GET ${TMF}/productCatalogManagement/v5/productOffering?offset=0&limit=100`]: empty,
@@ -51,7 +51,7 @@ describe('routes', () => {
     ['DELETE', '/tmf-api/productCatalogManagement/v5/productOffering/o1'],
   ])('sends no sidebar count request, also after %s %s', async (method, path) => {
     const { calls, fetchMock } = backend();
-    start('/subscribers');
+    start('/billing-accounts');
     await screen.findByRole('navigation', { name: 'Main' });
     fetchMock.mockImplementationOnce(async () => json({ id: ID }, { status: 201 }));
     await act(async () => {
@@ -63,9 +63,9 @@ describe('routes', () => {
   });
   it('marks the active sidebar item and puts operator identity in the footer trigger', async () => {
     backend();
-    start('/subscribers');
+    start('/billing-accounts');
     const nav = await screen.findByRole('navigation', { name: 'Main' });
-    const active = within(nav).getByRole('link', { name: /Subscribers/ });
+    const active = within(nav).getByRole('link', { name: /Billing accounts/ });
     expect(active.classList.contains('is-active')).toBe(true);
     expect(active.getAttribute('aria-current')).toBe('page');
     expect(within(nav).getByRole('link', { name: 'Parties' }).classList.contains('is-active')).toBe(
@@ -84,9 +84,13 @@ describe('routes', () => {
     );
   });
   it.each([
+    ['/billing-accounts', { name: 'subscribers' }],
+    [`/billing-accounts/${ID}`, { name: 'subscriber', accountId: ID }],
+    [`/billing-accounts/${ID.toUpperCase()}`, { name: 'subscriber', accountId: ID }],
+    // the old paths still parse; currentPath replaces them in the address bar
     ['/subscribers', { name: 'subscribers' }],
     [`/subscribers/${ID}`, { name: 'subscriber', accountId: ID }],
-    [`/subscribers/${ID.toUpperCase()}`, { name: 'subscriber', accountId: ID }],
+    ['/customers', { name: 'customers' }],
     ['/catalog', { name: 'catalog' }],
     ['/billing-runs', { name: 'billingRuns' }],
     ['/financial-accounts', { name: 'financialAccounts' }],
@@ -107,34 +111,56 @@ describe('routes', () => {
     ['/products', { name: 'products' }],
     ['/billing', { name: 'notFound', path: '/billing' }], // not /billing: /billing-status
     ['/subscribers/nope', { name: 'notFound', path: '/subscribers/nope' }],
+    ['/billing-accounts/nope', { name: 'notFound', path: '/billing-accounts/nope' }],
   ])('%s', (path, route) => {
     expect(parseRoute(path)).toEqual(route);
   });
 
-  it('sends / to the subscribers list', async () => {
+  it('sends / to the billing account list', async () => {
     backend();
     start('/');
-    expect(window.location.pathname).toBe('/subscribers');
-    expect(await screen.findByRole('heading', { name: 'Subscribers' })).toBeTruthy();
+    expect(window.location.pathname).toBe('/billing-accounts');
+    expect(await screen.findByRole('heading', { name: 'Billing accounts' })).toBeTruthy();
+  });
+
+  it.each([
+    ['/subscribers', '/billing-accounts'],
+    [`/subscribers/${ID}`, `/billing-accounts/${ID}`],
+    [`/subscribers/${ID}?tab=bills#usage`, `/billing-accounts/${ID}?tab=bills#usage`],
+  ])('replaces the old %s with %s, without a history entry', async (from, to) => {
+    backend();
+    window.history.replaceState(null, '', '/catalog');
+    window.history.pushState(null, '', from);
+    const before = window.history.length;
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Main' });
+    expect(`${window.location.pathname}${window.location.search}${window.location.hash}`).toBe(to);
+    expect(window.history.length).toBe(before);
+    const nav = screen.getByRole('navigation', { name: 'Main' });
+    expect(
+      within(nav)
+        .getByRole('link', { name: /Billing accounts/ })
+        .getAttribute('aria-current'),
+    ).toBe('page');
   });
 
   it('navigates in place on a nav click and follows the back button', async () => {
     backend();
-    start('/subscribers');
+    start('/billing-accounts');
     const nav = await screen.findByRole('navigation', { name: 'Main' });
     fireEvent.click(within(nav).getByRole('link', { name: /Product catalog/ }));
     expect(window.location.pathname).toBe('/catalog');
     expect(await screen.findByRole('heading', { name: 'Product catalog' })).toBeTruthy();
     window.history.back();
-    expect(await screen.findByRole('heading', { name: 'Subscribers' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Billing accounts' })).toBeTruthy();
   });
 
   it('leaves modified clicks to the browser', async () => {
     backend();
-    start('/subscribers');
+    start('/billing-accounts');
     const nav = await screen.findByRole('navigation', { name: 'Main' });
     fireEvent.click(within(nav).getByRole('link', { name: /Product catalog/ }), { ctrlKey: true });
-    expect(window.location.pathname).toBe('/subscribers');
+    expect(window.location.pathname).toBe('/billing-accounts');
   });
 
   it('answers an unknown path with a not-found page', async () => {
@@ -149,7 +175,7 @@ describe('routes', () => {
 describe('shell', () => {
   it('shows the business date and time zone from /internal/v1/context', async () => {
     backend();
-    start('/subscribers');
+    start('/billing-accounts');
     const bar = await screen.findByRole('banner');
     expect(await within(bar).findByText('2026-10-01')).toBeTruthy();
     expect(within(bar).getByText('UTC+3')).toBeTruthy();
@@ -157,20 +183,21 @@ describe('shell', () => {
 
   it('has the environment tag, operator and the items without counts', async () => {
     const { calls } = backend();
-    start('/subscribers');
+    start('/billing-accounts');
     const nav = await screen.findByRole('navigation', { name: 'Main' });
     expectUi('ui.shell');
     expect(screen.getByText('PROD')).toBeTruthy();
     expect(screen.getAllByText('i.petrova').length).toBeGreaterThan(0);
     const links = within(nav).getAllByRole('link');
     expect(links.map((a) => a.getAttribute('href'))).toEqual([
-      '/subscribers',
-      '/signups',
       '/parties',
       '/financial-accounts',
-      '/catalog',
-      '/orders',
+      '/customers',
+      '/billing-accounts',
       '/products',
+      '/orders',
+      '/signups',
+      '/catalog',
       '/numbers',
       '/sims',
       '/ports',
@@ -188,20 +215,22 @@ describe('shell', () => {
       '/users',
       '/settings/logging',
     ]);
-    // seven labelled sections in TMF / ODA domain order (#414), each item under its label
+    // TEST-CHANGE (#457): seven labelled sections in TMF / ODA domain order (#414), Customers
+    // down the account hierarchy and Catalog alone, each item under its label
     const labels = Array.from(nav.children).map((el) =>
       el.classList.contains('section') ? `# ${el.textContent}` : (el.getAttribute('href') ?? ''),
     );
     expect(labels).toEqual([
       '# Customers',
-      '/subscribers',
-      '/signups',
       '/parties',
       '/financial-accounts',
-      '# Products',
-      '/catalog',
-      '/orders',
+      '/customers',
+      '/billing-accounts',
       '/products',
+      '/orders',
+      '/signups',
+      '# Catalog',
+      '/catalog',
       '# Resources',
       '/numbers',
       '/sims',
@@ -226,7 +255,7 @@ describe('shell', () => {
     ]);
     for (const section of [
       'customers',
-      'products',
+      'catalog',
       'resources',
       'billing',
       'prepaid',
@@ -237,7 +266,7 @@ describe('shell', () => {
     }
     expectUi('ui.shell.theme');
     // no item carries a count: the link text is the label alone
-    for (const label of ['Subscribers', 'Product catalog', 'Orders']) {
+    for (const label of ['Billing accounts', 'Product catalog', 'Orders']) {
       expect(within(nav).getByRole('link', { name: new RegExp(`^${label}`) }).textContent).toBe(
         label,
       );
@@ -252,7 +281,7 @@ describe('shell', () => {
     expect(within(runs).queryByText('failed')).toBeNull();
     expect(
       within(nav)
-        .getByRole('link', { name: /Subscribers/ })
+        .getByRole('link', { name: /Billing accounts/ })
         .getAttribute('aria-current'),
     ).toBe('page');
   });
@@ -261,7 +290,7 @@ describe('shell', () => {
     backend(undefined, () =>
       json([{ ...RUN, status: 'failed', failureKind: 'run' }], { total: 9 }),
     );
-    start('/subscribers');
+    start('/billing-accounts');
     const nav = await screen.findByRole('navigation', { name: 'Main' });
     const runs = within(nav).getByRole('link', { name: /Billing runs/ });
     expect((await within(runs).findByText('failed')).className).toBe('bss-badge badge-failed');
@@ -270,7 +299,7 @@ describe('shell', () => {
 
   it('opens Billing runs from the navigation', async () => {
     backend();
-    start('/subscribers');
+    start('/billing-accounts');
     const nav = await screen.findByRole('navigation', { name: 'Main' });
     fireEvent.click(within(nav).getByRole('link', { name: /Billing runs/ }));
     expect(window.location.pathname).toBe('/billing-runs');
@@ -283,25 +312,25 @@ describe('shell', () => {
     ).toBe('page');
   });
 
-  it('keeps Subscribers active on a subscriber card, with breadcrumbs back', async () => {
+  it('keeps Billing accounts active on a card, with breadcrumbs back', async () => {
     backend();
-    start(`/subscribers/${ID}`);
+    start(`/billing-accounts/${ID}`);
     const crumbs = await screen.findByRole('navigation', { name: 'Breadcrumbs' });
     // the screen sets its crumbs in an effect, one render after the bar exists
-    const back = await within(crumbs).findByRole('link', { name: 'Subscribers' });
-    expect(back.getAttribute('href')).toBe('/subscribers');
+    const back = await within(crumbs).findByRole('link', { name: 'Billing accounts' });
+    expect(back.getAttribute('href')).toBe('/billing-accounts');
     expect(within(crumbs).getByText('BA-1F3A9C2B')).toBeTruthy();
     const nav = screen.getByRole('navigation', { name: 'Main' });
     expect(
       within(nav)
-        .getByRole('link', { name: /Subscribers/ })
+        .getByRole('link', { name: /Billing accounts/ })
         .getAttribute('aria-current'),
     ).toBe('page');
   });
 
   it('shows the authenticated operator even without a context operator', async () => {
     backend(() => json({ ...CONTEXT, operator: null, environment: 'dev' }));
-    start('/subscribers');
+    start('/billing-accounts');
     expect(await screen.findByText('i.petrova')).toBeTruthy();
     expect(screen.getByText('DEV')).toBeTruthy();
   });
@@ -309,7 +338,7 @@ describe('shell', () => {
   it('shows the failing context call and recovers on Retry', async () => {
     let fail = true;
     backend(() => (fail ? tmfError(503, 'Service Unavailable') : json(CONTEXT)));
-    start('/subscribers');
+    start('/billing-accounts');
     const alert = await screen.findByRole('alert');
     expect(within(alert).getByText('Failed to load the business date')).toBeTruthy();
     expect(
@@ -319,7 +348,7 @@ describe('shell', () => {
     fireEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
     expect(await screen.findByText('2026-10-01')).toBeTruthy();
     // the screen behind it loads and settles (its empty state): nothing failed
-    expect(await screen.findByText(/No subscribers/)).toBeTruthy();
+    expect(await screen.findByText(/No billing accounts/)).toBeTruthy();
     expect(screen.queryByRole('alert')).toBeNull();
   });
 });

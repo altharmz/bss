@@ -11,7 +11,7 @@ export function NotFoundScreen({ path }: { path: string }) {
       <PageHeader title="Page not found" />
       <p className="bss-not-found">
         Nothing lives at {path}.{' '}
-        <Link href={hrefOf({ name: 'subscribers' })}>Go to Subscribers</Link>
+        <Link href={hrefOf({ name: 'subscribers' })}>Go to Billing accounts</Link>
       </p>
     </div>
   );

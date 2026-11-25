@@ -10,8 +10,8 @@ import test_start_task as startup_fixtures
 connection = startup_fixtures.connection
 
 
-def item(number, column="Ready", labels=("P2",), **content):
-    row = startup_fixtures.issue(number, **content)
+def item(number, column="Ready", labels=(), priority="P2", **content):
+    row = startup_fixtures.issue(number, priority, **content)
     row["content"]["labels"] = connection([{"name": name} for name in labels])
     row["fieldValueByName"] = {"name": column} if column else None
     return row
@@ -70,22 +70,22 @@ class BoardAdminTests(unittest.TestCase):
     def test_board_groups_by_status_in_board_order_without_done(self):
         self.f.board(
             [
-                item(5, "Ready", ("docs", "P2"), title="Docs"),
+                item(5, "Ready", ("docs",), title="Docs"),
                 item(6, "Done", title="Finished"),
-                item(7, "Inbox", ("P3",), title="Idea"),
-                item(8, None, (), title="Loose"),
-                item(9, "Waiting", ("needs-human", "P1"), title="Blocked"),
-                item(10, "Ready", ("P1",), title="Second"),
-                item(11, "Doing", ("agent:codex", "P2"), title="Busy"),
+                item(7, "Inbox", (), "P3", title="Idea"),
+                item(8, None, (), None, title="Loose"),
+                item(9, "Waiting", ("needs-human",), "P1", title="Blocked"),
+                item(10, "Ready", (), "P1", title="Second"),
+                item(11, "Doing", ("agent:codex",), title="Busy"),
             ]
         )
         self.assertEqual(
             self.ok("board"),
-            "Inbox: 1\n  #7 [P3] Idea\n"
-            "Ready: 2\n  #5 [P2,docs] Docs\n  #10 [P1] Second\n"
-            "Doing: 1\n  #11 [P2,agent:codex] Busy\n"
-            "Waiting: 1\n  #9 [P1,needs-human] Blocked\n"
-            "No status: 1\n  #8 [] Loose",
+            "Inbox: 1\n  #7 P3 [] Idea\n"
+            "Ready: 2\n  #5 P2 [docs] Docs\n  #10 P1 [] Second\n"
+            "Doing: 1\n  #11 P2 [agent:codex] Busy\n"
+            "Waiting: 1\n  #9 P1 [needs-human] Blocked\n"
+            "No status: 1\n  #8 -- [] Loose",
         )
         items = self.json("board")["items"]
         self.assertEqual([i["issue"] for i in items], [7, 5, 10, 11, 9, 8])
@@ -95,12 +95,14 @@ class BoardAdminTests(unittest.TestCase):
                 "issue": 5,
                 "item_id": "item-5",
                 "status": "Ready",
-                "labels": ["P2", "docs"],
+                "priority": "P2",
+                "labels": ["docs"],
                 "title": "Docs",
                 "position": 1,
             },
         )
         self.assertEqual(items[-1]["status"], None)
+        self.assertEqual(items[-1]["priority"], None)
         self.assertEqual(items[-1]["position"], 4)
         self.assertEqual(self.writes(), [])
 
@@ -129,15 +131,18 @@ class BoardAdminTests(unittest.TestCase):
                 "url": "https://github.com/altharmz/bss/issues/82",
                 "title": "New idea",
                 "status": "Inbox",
+                "priority": "P2",
             },
         )
         create = self.writes()[0]
         self.assertEqual(create[create.index("--body") + 1], body)
         self.assertEqual(
-            [create[i + 1] for i, a in enumerate(create) if a == "--label"], ["docs", "ui", "P2"]
+            [create[i + 1] for i, a in enumerate(create) if a == "--label"], ["docs", "ui"]
         )
         self.assertEqual(self.state(82), "Inbox")
-        self.assertIn("f75ad846", " ".join(self.writes()[1]))  # Inbox set explicitly
+        self.assertEqual(self.row(82)["priority"], {"name": "P2"})
+        self.assertIn("fd42a13c", " ".join(self.writes()[1]))  # the P2 field option
+        self.assertIn("f75ad846", " ".join(self.writes()[2]))  # Inbox set explicitly
 
     def test_add_task_ready_from_body_file(self):
         body = self.f.base / "body.md"
@@ -157,8 +162,14 @@ class BoardAdminTests(unittest.TestCase):
             (["TITLE=t"], "add-task requires exactly one of BODY and BODY_FILE"),
             (["TITLE=t", "BODY=x", f"BODY_FILE={body}"], "exactly one of BODY and BODY_FILE"),
             (["TITLE=t", "BODY=x", "PRIORITY=P0"], "P0 issues are created with make new-pri"),
-            (["TITLE=t", "BODY=x", "LABELS=agent:codex"], "LABELS must not contain priority"),
-            (["TITLE=t", "BODY=x", "LABELS=docs,P1"], "LABELS must not contain priority"),
+            (
+                ["TITLE=t", "BODY=x", "LABELS=agent:codex"],
+                "LABELS must not contain agent labels or P0-P3",
+            ),
+            (
+                ["TITLE=t", "BODY=x", "LABELS=docs,P1"],
+                "LABELS must not contain agent labels or P0-P3",
+            ),
             (["TITLE=t", "BODY=x", "STATUS=Doing"], "STATUS must be Inbox or Ready"),
             (["TITLE=t", "BODY=x", "PRIORITY=high"], "PRIORITY must be P1, P2 or P3"),
         ):
@@ -183,6 +194,12 @@ class BoardAdminTests(unittest.TestCase):
         )
         result = self.make("add-task", "TITLE=t", "BODY=x", "STATUS=Ready")
         self.assertIn("finish with: make move-task ISSUE=83 STATUS=Ready", result.stderr)
+        result = self.make("add-task", "TITLE=t", "BODY=x", "PRIORITY=P2")
+        self.assertIn(
+            "finish with: make move-task ISSUE=84 STATUS=Inbox"
+            " and make set-priority ISSUE=84 PRIORITY=P2",
+            result.stderr,
+        )
 
     # make move-task
 
@@ -203,7 +220,7 @@ class BoardAdminTests(unittest.TestCase):
                     "move-task", "ISSUE=81", "STATUS=Waiting", "WAITING_ON=x", "UNBLOCKS_WHEN=y"
                 )
                 self.assertEqual(self.state(81), "Waiting")
-        self.f.board([item(81, "Waiting", ("P2", "agent:claude"))])
+        self.f.board([item(81, "Waiting", ("agent:claude",))])
         self.assertEqual(self.ok("move-task", "ISSUE=81", "STATUS=Doing"), "#81: Waiting -> Doing")
         self.assertEqual(self.state(81), "Doing")
 
@@ -284,16 +301,19 @@ class BoardAdminTests(unittest.TestCase):
                 )
         self.assertEqual(self.logged(), [])
 
-    def test_set_priority_replaces_the_old_label(self):
-        self.f.board([item(81, "Ready", ("P2", "P3", "docs"))])
+    def test_set_priority_sets_the_field_and_leaves_labels_alone(self):
+        self.f.board([item(81, "Ready", ("P3", "docs"), "P2")])
         result = self.json("set-priority", "ISSUE=81", "PRIORITY=P1", "HUMAN_APPROVAL=81")
-        self.assertEqual(result, {"issue": 81, "previous": ["P2", "P3"], "priority": "P1"})
+        self.assertEqual(result, {"issue": 81, "previous": "P2", "priority": "P1"})
+        self.assertEqual(self.row(81)["priority"], {"name": "P1"})
         labels = {n["name"] for n in self.row(81)["content"]["labels"]["nodes"]}
-        self.assertEqual(labels, {"P1", "docs"})
-        self.assertEqual(len(self.writes()), 1)
+        self.assertEqual(labels, {"P3", "docs"})
+        [write] = self.writes()
+        self.assertIn("PVTSSF_lAHOEpM-b84BpHA0zhrP5BI", " ".join(write))
+        self.assertIn("08fef3c3", " ".join(write))
 
     def test_set_priority_without_change_writes_nothing(self):
-        self.f.board([item(81, "Ready", ("P1",))])
+        self.f.board([item(81, "Ready", (), "P1")])
         self.assertEqual(
             self.ok("set-priority", "ISSUE=81", "PRIORITY=P1", "HUMAN_APPROVAL=81"),
             "#81: priority P1 -> P1",
@@ -301,11 +321,12 @@ class BoardAdminTests(unittest.TestCase):
         self.assertEqual(self.writes(), [])
 
     def test_set_priority_from_none(self):
-        self.f.board([item(81, "Ready", ())])
+        self.f.board([item(81, "Ready", (), None)])
         self.assertEqual(
             self.ok("set-priority", "ISSUE=81", "PRIORITY=P0", "HUMAN_APPROVAL=81"),
             "#81: priority none -> P0",
         )
+        self.assertEqual(self.row(81)["priority"], {"name": "P0"})
 
     # make reorder-task
 

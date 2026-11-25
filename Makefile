@@ -44,7 +44,7 @@ new-priority-task: export BSS_NEW_TASK_BODY := $(BODY)
 new-priority-task: export BSS_NEW_TASK_BODY_FILE := $(BODY_FILE)
 new-priority-task: export BSS_NEW_TASK_ISSUE := $(ISSUE)
 new-priority-task: export BSS_NEW_TASK_LABELS := $(LABELS)
-new-priority-task: ## [task] Create an approved P0 issue first in Ready; start separately (TITLE= BODY=|BODY_FILE=/abs/path [LABELS=a,b]); ISSUE=<n> finishes a preserved one
+new-priority-task: ## [task] Create an approved Priority P0 issue first in Ready; start separately (TITLE= BODY=|BODY_FILE=/abs/path [LABELS=a,b]); ISSUE=<n> finishes a preserved one
 	@python3 -B scripts/task.py $@
 
 release-slot: ## [task] Release a slot after its task worktree was safely removed (SLOT=worker1)
@@ -66,11 +66,11 @@ reorder-task: export BSS_BOARD_AFTER := $(AFTER)
 
 board: ## [task] Show the open board items by status, in board order (JSON=1 for JSON)
 	@python3 -B scripts/task.py $@
-add-task: ## [task] Create an issue on the board (TITLE= BODY=|BODY_FILE=/abs/path [LABELS=a,b] [PRIORITY=P1|P2|P3] [STATUS=Inbox|Ready])
+add-task: ## [task] Create an issue on the board (TITLE= BODY=|BODY_FILE=/abs/path [LABELS=a,b] [PRIORITY=P1|P2|P3 sets the Priority field] [STATUS=Inbox|Ready])
 	@python3 -B scripts/task.py $@
 move-task: ## [task] Move an issue to Inbox, Ready or Waiting (ISSUE= STATUS=; Waiting needs WAITING_ON= UNBLOCKS_WHEN=)
 	@python3 -B scripts/task.py $@
-set-priority: ## [task] Change an issue's priority label with human approval (ISSUE= PRIORITY=P0..P3 HUMAN_APPROVAL=<same issue>)
+set-priority: ## [task] Change an issue's Priority board field with human approval (ISSUE= PRIORITY=P0..P3 HUMAN_APPROVAL=<same issue>)
 	@python3 -B scripts/task.py $@
 reorder-task: ## [task] Move an issue first on the board, or after AFTER=<issue>, with human approval (ISSUE= HUMAN_APPROVAL=<same issue>)
 	@python3 -B scripts/task.py $@

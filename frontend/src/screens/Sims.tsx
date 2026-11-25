@@ -19,7 +19,7 @@ import { explain } from '../api/client';
 import { plural } from '../format/labels';
 import { useResource } from '../api/useResource';
 import { useSetCrumbs } from '../app/context';
-import { Link } from '../app/router';
+import { hrefOf, Link } from '../app/router';
 import {
   Button,
   Dialog,
@@ -403,7 +403,10 @@ function SimDetail({ sim: listed, onClose }: { sim: Sim; onClose: () => void }) 
               {p.billingAccount?.id && (
                 <>
                   {' '}
-                  · <Link href={`/subscribers/${p.billingAccount.id}`}>Open subscriber</Link>
+                  ·{' '}
+                  <Link href={hrefOf({ name: 'subscriber', accountId: p.billingAccount.id })}>
+                    Open billing account
+                  </Link>
                 </>
               )}
             </p>

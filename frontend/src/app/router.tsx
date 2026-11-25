@@ -34,6 +34,7 @@ export type Route =
   | { name: 'financialAccounts' }
   | { name: 'careSignups' }
   | { name: 'parties' }
+  | { name: 'customers' }
   | { name: 'billingSettings' }
   | { name: 'payments' }
   | { name: 'dunning' }
@@ -45,7 +46,11 @@ export type Route =
   | { name: 'integrations' }
   | { name: 'notFound'; path: string };
 
-const SUBSCRIBER = /^\/subscribers\/([0-9a-fA-F-]{36})\/?$/;
+// The billing account list and card (#457, "Subscribers" before): /subscribers and
+// /subscribers/{id} still open them, replaced by the new path without a history entry
+// (currentPath), so old links and the MCP and notification links keep working.
+const SUBSCRIBER = /^\/(?:billing-accounts|subscribers)\/([0-9a-fA-F-]{36})\/?$/;
+const LEGACY_SUBSCRIBERS = /^\/subscribers(?=\/|$)/;
 
 export function parseRoute(path: string): Route {
   if (path === '/ui-kit' || path === '/ui-kit/') return { name: 'uiKit' };
@@ -57,7 +62,14 @@ export function parseRoute(path: string): Route {
   if (path === '/sims' || path === '/sims/') return { name: 'sims' };
   if (path === '/signups' || path === '/signups/') return { name: 'careSignups' };
   if (path === '/ports' || path === '/ports/') return { name: 'ports' };
-  if (path === '/subscribers' || path === '/subscribers/') return { name: 'subscribers' };
+  if (
+    path === '/billing-accounts' ||
+    path === '/billing-accounts/' ||
+    path === '/subscribers' ||
+    path === '/subscribers/'
+  ) {
+    return { name: 'subscribers' };
+  }
   const card = SUBSCRIBER.exec(path);
   if (card?.[1]) return { name: 'subscriber', accountId: card[1].toLowerCase() };
   if (path === '/catalog' || path === '/catalog/') return { name: 'catalog' };
@@ -71,6 +83,7 @@ export function parseRoute(path: string): Route {
     return { name: 'financialAccounts' };
   }
   if (path === '/parties' || path === '/parties/') return { name: 'parties' };
+  if (path === '/customers' || path === '/customers/') return { name: 'customers' };
   if (path === '/billing-settings' || path === '/billing-settings/') {
     return { name: 'billingSettings' };
   }
@@ -110,9 +123,9 @@ export function hrefOf(route: Exclude<Route, { name: 'notFound' }>): string {
     case 'ports':
       return '/ports';
     case 'subscribers':
-      return '/subscribers';
+      return '/billing-accounts';
     case 'subscriber':
-      return `/subscribers/${route.accountId}`;
+      return `/billing-accounts/${route.accountId}`;
     case 'catalog':
       return '/catalog';
     case 'orders':
@@ -129,6 +142,8 @@ export function hrefOf(route: Exclude<Route, { name: 'notFound' }>): string {
       return '/signups';
     case 'parties':
       return '/parties';
+    case 'customers':
+      return '/customers';
     case 'billingSettings':
       return '/billing-settings';
     case 'payments':
@@ -156,13 +171,18 @@ interface RouterValue {
 const RouterContext = createContext<RouterValue | null>(null);
 
 function currentPath(): string {
-  // "/" has no screen of its own: it is the subscribers list
-  const path = window.location.pathname;
-  if (path === '/') {
-    window.history.replaceState(null, '', '/subscribers');
-    return '/subscribers';
+  // "/" has no screen of its own: it is the billing account list
+  const { pathname, search, hash } = window.location;
+  if (pathname === '/') {
+    window.history.replaceState(null, '', '/billing-accounts');
+    return '/billing-accounts';
   }
-  return path;
+  if (LEGACY_SUBSCRIBERS.test(pathname)) {
+    const path = pathname.replace(LEGACY_SUBSCRIBERS, '/billing-accounts');
+    window.history.replaceState(null, '', `${path}${search}${hash}`);
+    return path;
+  }
+  return pathname;
 }
 
 export function RouterProvider({ children }: { children: ReactNode }) {
