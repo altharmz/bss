@@ -1,6 +1,15 @@
 import type { components as T639 } from './generated/tmf639';
 import type { components as T637 } from './generated/tmf637';
-import { accountPinHeader, getAll, getJson, getPage, patchJson, postJson, request } from './client';
+import {
+  accountPinHeader,
+  ApiError,
+  getAll,
+  getJson,
+  getPage,
+  patchJson,
+  postJson,
+  request,
+} from './client';
 import { PATHS } from './bss';
 
 export const NUMBERS = '/tmf-api/resourceInventory/v5/resource';
@@ -109,6 +118,31 @@ export async function loadNumbersById(
     [...new Set(ids)].map((id) => getJson<NumberBody>(`${NUMBERS}/${id}`, signal)),
   );
   return bodies.map(toNumber);
+}
+
+/** A product's realizing resources by id: the subscriber numbers and IMSIs among them, null
+ * for a reference that is not one (an ordinary resource document, a 404). */
+export async function loadRealizingNumbers(
+  ids: string[],
+  signal: AbortSignal,
+): Promise<Record<string, SubscriberNumber | null>> {
+  const unique = [...new Set(ids)];
+  const found = await Promise.all(
+    unique.map(async (id) => {
+      try {
+        return toNumber(await getJson<NumberBody>(`${NUMBERS}/${id}`, signal));
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404) return null;
+        throw error;
+      }
+    }),
+  );
+  return Object.fromEntries(unique.map((id, i) => [id, found[i] ?? null]));
+}
+
+/** The Numbers list filtered to one number (Numbers reads `value` and `kind`, #477). */
+export function numberHref(n: SubscriberNumber): string {
+  return `/numbers?${new URLSearchParams({ value: n.value, kind: kindOf(n) })}`;
 }
 
 export function createNumber(

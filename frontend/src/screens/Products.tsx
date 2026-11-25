@@ -3,6 +3,7 @@ import { NetworkCommands } from './NetworkCommands';
 import { SubscriberSearch } from './SubscriberSearch';
 import { characteristicOf } from '../api/devices';
 import { Note } from '../ui/Note';
+import { iccidOf, kindOf, loadRealizingNumbers, numberHref } from '../api/numbers';
 import { useState } from 'react';
 import {
   loadNumberValues,
@@ -228,6 +229,11 @@ function ProductDetail({ product, onClose }: { product: InventoryProduct; onClos
   const p = loaded.status === 'ok' ? loaded.data : product;
   const orders = p.productOrderItem ?? [];
   const resources = p.realizingResource ?? [];
+  // the digits of the numbers and IMSIs it holds, each linking to the Numbers list (#477)
+  const resourceIds = resources.map((r) => r.id ?? '').filter(Boolean);
+  const numbers = useResource(`product-resources:${resourceIds.join(',')}`, (signal) =>
+    loadRealizingNumbers(resourceIds, signal),
+  );
   return (
     <Dialog
       onSubmit={submitDialogPrimary}
@@ -319,12 +325,40 @@ function ProductDetail({ product, onClose }: { product: InventoryProduct; onClos
       <section className="bss-dialog-section" data-ui="ui.products.resource">
         <h3>Realizing resource</h3>
         {resources.length === 0 && <p>None.</p>}
-        {resources.map((r) => (
-          <p key={r.id}>
-            {r['@referredType'] ?? 'Resource'} {r.id !== undefined ? shortId(r.id) : ''} ·{' '}
-            <Link href="/numbers">Open Numbers</Link>
-          </p>
-        ))}
+        {resources.length > 0 && numbers.status === 'loading' && <p>Loading numbers…</p>}
+        {numbers.status === 'error' && (
+          <ErrorBlock
+            title="Failed to load the product's numbers"
+            error={numbers.error}
+            onRetry={numbers.retry}
+          />
+        )}
+        {numbers.status === 'ok' &&
+          resources.map((r) => {
+            const n = r.id !== undefined ? numbers.data[r.id] : null;
+            if (!n) {
+              return (
+                <p key={r.id}>
+                  {r['@referredType'] ?? 'Resource'} {r.id !== undefined ? shortId(r.id) : ''}
+                </p>
+              );
+            }
+            const iccid = iccidOf(n);
+            return (
+              <p key={r.id}>
+                {kindOf(n) === 'imsi' ? 'IMSI' : 'MSISDN'}{' '}
+                <Link className="bss-mono" href={numberHref(n)}>
+                  {n.value}
+                </Link>
+                {iccid !== undefined && (
+                  <>
+                    {' '}
+                    · SIM (ICCID) <span className="bss-mono">{iccid}</span>
+                  </>
+                )}
+              </p>
+            );
+          })}
       </section>
     </Dialog>
   );

@@ -16,6 +16,20 @@ CODES = {
     "imsi": ("imsiRequired", "imsiUnavailable", "imsiNotRequired"),
 }
 NOUN = {"msisdn": "subscriber number", "imsi": "IMSI"}
+# Why a subscriber number or IMSI cannot be attached to a product that takes none (#477)
+NOT_SOLD_WITH_NUMBERS = (
+    "this product's specification lists no msisdn or imsi resourceSpecification, so it takes no"
+    " subscriber number or IMSI: add the resourceSpecification to the product specification and"
+    " order the product with the number; numbers are only ever attached by a product order"
+)
+
+
+def number_rows(conn, refs) -> list:
+    """The subscriber numbers and IMSIs among these resource references."""
+    ids = [uid for uid in (_uuid(r) for r in refs or []) if uid is not None]
+    if not ids:
+        return []
+    return fetch_all(conn, "SELECT id FROM subscriber_number WHERE id = ANY(%s)", (ids,))
 
 
 def required(details, kind="msisdn"):
@@ -133,6 +147,15 @@ def validate(conn, request, products, locked, start):
         else:
             needs = product_requirements(product)
         refs = references(item)
+        if (
+            not any(needs.values())
+            and item.action in ("add", "modify")
+            and any(_uuid(r) in locked for r in refs or [])
+        ):
+            # a number on a product that takes none would be a bare reference no claim backs:
+            # the number stays free and no list or search finds it (#477)
+            problems.append((item.item_id, "numberNotRequired", NOT_SOLD_WITH_NUMBERS))
+            continue
         if not any(needs.values()) and item.action == "modify" and refs is not None:
             problems.append(
                 (

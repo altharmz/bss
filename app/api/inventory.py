@@ -58,6 +58,7 @@ from app.billing.model import MissingPrice, OfferingChange
 from app.config import settings
 from app.events import emit
 from app.network import device, e911, profile
+from app.ordering import numbers as number_orders
 from app.ordering.network import offering_profile
 from app.ordering.process import ItemRequest, OrderRefused, OrderRequest, place_order
 from app.repository import billing, catalog, orders, parties, products
@@ -659,6 +660,11 @@ def patch_product(
             current.get("requires_msisdn") or current.get("requires_imsi")
         ) and "realizingResource" in documents:
             raise conflict("realizingResource: change subscriber numbers through a product order")
+        if "realizingResource" in documents and number_orders.number_rows(
+            conn, documents["realizingResource"]
+        ):
+            # a bare reference no claim backs: the number would stay free (#477)
+            raise conflict(f"realizingResource: {number_orders.NOT_SOLD_WITH_NUMBERS}")
         if "place" in documents and _is_line(conn, current["product_offering_id"]):
             raise conflict("place: change the E911 address of a line through a product order")
         check_server_set(server_set, before)

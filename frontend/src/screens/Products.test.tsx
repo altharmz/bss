@@ -112,6 +112,45 @@ describe('products screen', () => {
     expect(within(detail).getByRole('link', { name: 'Open in Orders' }).getAttribute('href')).toBe(
       `/orders?account=${A1}&state=all`,
     );
+    // TEST-CHANGE (#477): the realizing resource is the number's digits linking to the Numbers
+    // list filtered to it, not a short id and an unfiltered "Open Numbers"
+    const msisdn = await within(detail).findByRole('link', { name: '12025550123' });
+    expect(msisdn.getAttribute('href')).toBe('/numbers?value=12025550123&kind=msisdn');
+    expect(within(detail).getByText(/MSISDN/)).toBeTruthy();
+    expect(within(detail).queryByRole('link', { name: 'Open Numbers' })).toBeNull();
+  });
+
+  it('shows the IMSI and SIM of a product and an ordinary resource as it is (#477)', async () => {
+    const IMSI = '20000000-0000-4000-8000-000000000002';
+    const OTHER = '30000000-0000-4000-8000-000000000003';
+    const line = {
+      ...first,
+      realizingResource: [
+        { id: N1, '@referredType': 'LogicalResource' },
+        { id: IMSI, '@referredType': 'LogicalResource' },
+        { id: OTHER, '@referredType': 'Resource' },
+      ],
+    };
+    backend({
+      [`GET ${PRODUCTS}?${PAGE}`]: () => json([line], { total: 1 }),
+      [`GET ${PRODUCTS}/${P1}`]: () => json(line),
+      [`GET ${NUMBERS}/${IMSI}`]: () =>
+        json({
+          id: IMSI,
+          value: '250019876543210',
+          resourceSpecification: { id: 'imsi' },
+          resourceCharacteristic: [{ name: 'iccid', value: '8970199123456789012' }],
+        }),
+      [`GET ${NUMBERS}/${OTHER}`]: () => tmfError(404, 'Not Found'),
+    });
+    open('/products');
+    fireEvent.click(await screen.findByText('Basic 10'));
+    const detail = await screen.findByRole('dialog');
+    const imsi = await within(detail).findByRole('link', { name: '250019876543210' });
+    expect(imsi.getAttribute('href')).toBe('/numbers?value=250019876543210&kind=imsi');
+    expect(within(detail).getByText('8970199123456789012')).toBeTruthy();
+    expect(within(detail).getByRole('link', { name: '12025550123' })).toBeTruthy();
+    expect(within(detail).getByText(/^Resource 30000000/)).toBeTruthy();
   });
 
   it('shows the network commands of a product, without a Retry for a confirmed one', async () => {
