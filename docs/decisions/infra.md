@@ -455,6 +455,15 @@ OpenMetrics check) scrapes `GET /metrics` on the app and on mcp; the kit is in
   statement timeout, cached for 30 s with `app/clock.py`. On any error only `bss_db_up 0` is
   exported: never stale values. The queue-to-status mapping is one dict in `app/metrics.py`.
   `bss_prepaid_lines` is not exported: no prepaid lifecycle state comes from one indexed query.
+- **Prepaid commands awaiting funds (2026-11-25, issue #445):** a pending `prepaid_command`
+  whose latest decision was a funding shortfall (observed at or after `attempted_at`, or
+  `created_at` when never attempted) waits for a top-up, not for the worker. It is left out of
+  the queue's `bss_queue_pending` and `bss_queue_oldest_pending_age_seconds` and counted in
+  `bss_prepaid_commands_awaiting_funds`, so `BssQueueStuck` keeps meaning "work the worker has
+  not done" and its threshold stays. A credit that arrives after the shortfall does not bring
+  the command back into the queue age: the worker's own liveness shows in `worker_request` and
+  billing freshness, and the full `_SIGNALLED` scan of `app/repository/prepaid_commands.py` is
+  too heavy for a scrape.
 - **Worker:** no endpoint (no HTTP server there); its health shows in the queue and billing
   series. No pushgateway.
 - **MCP series:** fed from `bss_mcp.audit.audit`, so the audit log and the counters agree. The

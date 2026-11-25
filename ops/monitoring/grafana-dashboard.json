@@ -328,6 +328,15 @@
           },
           "expr": "bss_queue_pending",
           "legendFormat": "{{queue}}"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "bss_prepaid_commands_awaiting_funds",
+          "legendFormat": "prepaid_command awaiting funds"
         }
       ]
     },

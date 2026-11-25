@@ -98,7 +98,13 @@ edit a rule in the UI (Configure no data and error handling).
 
 ### `BssQueueStuck` on `prepaid_command`
 
-The age of the oldest pending row, from `created_at`. A renewal the customer cannot pay stays
-pending by design until a top-up or the line's deactivation (up to grace + suspension days,
-[prepaid.md](../../docs/decisions/prepaid.md)), so this alert can fire for a planned wait for
-money rather than a stuck worker. Check which row it is before acting on it.
+The age of the oldest pending row the worker owes an attempt, from `created_at`. A renewal the
+customer cannot pay stays pending by design until a top-up or the line's deactivation (up to
+grace + suspension days, [prepaid.md](../../docs/decisions/prepaid.md)). Since #445 such a
+command, pending with a funding shortfall observed at or after its last attempt, is left out
+of `bss_queue_pending` and `bss_queue_oldest_pending_age_seconds` and counted in
+`bss_prepaid_commands_awaiting_funds` instead (a wait for money, no alert). So the alert now
+means a command never attempted, or retried after a technical failure and not attempted again.
+Find it with `SELECT id, kind, due_date, created_at, attempted_at FROM prepaid_command c WHERE
+state = 'pending' AND NOT EXISTS (SELECT FROM prepaid_funding_shortfall s WHERE s.command_id =
+c.id AND s.observed_at >= coalesce(c.attempted_at, c.created_at)) ORDER BY created_at`.
