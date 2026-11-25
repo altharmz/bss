@@ -26,7 +26,7 @@ does not know and lists the ones it accepts.
 | Change an approved Priority field | `make set-priority ISSUE=<n> PRIORITY=<P0..P3> HUMAN_APPROVAL=<n>` | any |
 | Change an approved board order | `make reorder-task ISSUE=<n> [AFTER=<m>] HUMAN_APPROVAL=<n>` | any |
 | Resume / hand off a session | `make telemetry-collect` | task |
-| Finish usage after `finish-task` (its `telemetry_next_command`) | `make telemetry-watch TASK=<task-id>` (or `make telemetry-collect TASK=<task-id>`; no `CLIENT=`/`SESSION_ID=`) | primary |
+| Finish usage after `finish-task` by hand (its `telemetry_next_command`; normally the background capture or the next `start-task` does it) | `make telemetry-watch TASK=<task-id>` (or `make telemetry-collect TASK=<task-id>`; no `CLIENT=`/`SESSION_ID=`) | primary |
 | Install UI dependencies (first time) | `make web-install` | task |
 | Refresh the primary checkout's UI dependencies for `make deploy` (the human) | `make deploy-web-install` | primary |
 | Format backend and UI | `make format` | task |

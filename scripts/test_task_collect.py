@@ -322,6 +322,123 @@ class CollectionTests(unittest.TestCase):
         self.assertNotIn("BSS_SERVICE_SECRET", args.kwargs["env"])
         self.assertTrue(args.kwargs["start_new_session"])
 
+    def catch_up_db(self, rows):
+        """Fake storage: the catch-up query returns rows; writes are recorded."""
+        queries, writes = [], []
+
+        def fake(statement):
+            if statement.startswith("BEGIN;"):
+                writes.append(statement)
+                return ""
+            queries.append(statement)
+            return json.dumps(rows)
+
+        return fake, queries, writes
+
+    def test_start_task_collects_a_finished_tasks_late_end_turn(self):
+        patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": str(self.home / ".claude")}).start()
+        rows = fixture("claude")
+        self.source("claude", rows[:-1])
+        row = self.row("claude", checked_at=when(2), status="partial")
+        row["closed_at"] = when(2)
+        with patch.object(collect, "sql"):
+            first = collect.collect_one(row)
+        self.assertEqual((first["status"], first["reason"]), ("partial", "final_counter_pending"))
+        # The turn ended after finish-task's watcher gave up; the source keeps it.
+        path = self.source("claude", rows)
+        os.utime(path, (timestamp(when(5)).timestamp(),) * 2)
+        fake, queries, writes = self.catch_up_db([row])
+        with (
+            patch.object(collect, "sql", side_effect=fake),
+            patch.object(collect, "collect", return_value=[]) as current,
+            contextlib.redirect_stderr(io.StringIO()) as error,
+        ):
+            collect.automatic("issue-125-next", "start-task", "claude")
+        self.assertIn("final counters collected for 1 finished task(s) (#124)", error.getvalue())
+        self.assertEqual(len(writes), 1)
+        self.assertIn("status='complete'", writes[0])
+        current.assert_called_once()
+        # Only finished tasks' closed windows waiting for the final counter are read.
+        query = queries[0]
+        for clause in (
+            "t.ended_at IS NOT NULL",
+            "a.closed_at IS NOT NULL",
+            "a.status='partial'",
+            "a.reason='final_counter_pending'",
+        ):
+            self.assertIn(clause, query)
+
+    def test_catch_up_skips_unchanged_sources_and_respects_the_limit(self):
+        patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": str(self.home / ".claude")}).start()
+        path = self.source("claude")
+        os.utime(path, (timestamp(when(5)).timestamp(),) * 2)
+        unchanged = self.row("claude", checked_at=when(6))
+        missing = dict(self.row("claude", checked_at=when(1)), external_session_id="gone")
+        changed = self.row("claude", checked_at=when(4))
+        fake, _, writes = self.catch_up_db([unchanged, missing, changed, changed])
+        with patch.object(collect, "sql", side_effect=fake):
+            results = collect.catch_up(limit=1)
+        self.assertEqual([r["status"] for r in results], ["complete"])
+        self.assertEqual(len(writes), 1)
+        fake, _, writes = self.catch_up_db([unchanged])
+        with (
+            patch.object(collect, "sql", side_effect=fake),
+            contextlib.redirect_stderr(io.StringIO()) as error,
+        ):
+            self.assertEqual(collect.report_catch_up(), [])
+        self.assertEqual((writes, error.getvalue()), ([], ""))
+
+    def test_catch_up_failure_warns_and_start_task_still_collects(self):
+        with (
+            patch.object(collect, "catch_up", side_effect=RuntimeError(PRIVATE)),
+            patch.object(collect, "collect", return_value=[]) as current,
+            contextlib.redirect_stderr(io.StringIO()) as error,
+        ):
+            self.assertEqual(collect.automatic(TASK, "start-task", "claude"), [])
+        current.assert_called_once()
+        self.assertIn("catch-up of finished tasks failed", error.getvalue())
+        self.assertNotIn(PRIVATE, error.getvalue())
+        self.assertNotIn("collection failed", error.getvalue())
+        with (
+            patch.object(collect, "catch_up") as catch,
+            patch.object(collect, "collect", return_value=[]),
+            contextlib.redirect_stderr(io.StringIO()),
+        ):
+            collect.automatic(TASK, "commit", "claude")
+        catch.assert_not_called()
+
+    def test_finish_reports_a_pending_final_counter_as_background_capture(self):
+        pending = [
+            dict(client="claude", status="partial", reason="final_counter_pending"),
+            dict(client="codex", status="complete", reason="collected"),
+        ]
+        collect._ANNOUNCED.discard(TASK)
+        with (
+            patch.object(collect, "collect", return_value=pending),
+            patch.object(collect, "launch_final_capture") as launch,
+            patch.object(collect, "capture_facts"),
+            contextlib.redirect_stderr(io.StringIO()) as error,
+        ):
+            collect.automatic(TASK, "task-completed")
+            collect.automatic(TASK, "finish-task")
+        launch.assert_called_once_with(TASK)
+        lines = error.getvalue().splitlines()
+        self.assertEqual(len(lines), 1, lines)
+        self.assertIn("final usage counter pending for 1 closed session(s)", lines[0])
+        self.assertIn("background capture", lines[0])
+        self.assertIn(f"make telemetry-watch TASK={TASK}", lines[0])
+        self.assertNotIn('"partial"', lines[0])
+        # Any other open result is shown as it is.
+        other = [*pending, dict(client="kimi", status="unavailable", reason="source_missing")]
+        with (
+            patch.object(collect, "collect", return_value=other),
+            patch.object(collect, "launch_final_capture"),
+            patch.object(collect, "capture_facts"),
+            contextlib.redirect_stderr(io.StringIO()) as error,
+        ):
+            collect.automatic("issue-126-other", "task-completed")
+        self.assertIn('"source_missing"', error.getvalue())
+
     def test_finished_handoff_or_delegate_is_complete_before_later_task_closure(self):
         for client in collect.CLIENTS:
             self.source(client)
@@ -416,14 +533,36 @@ class CollectionTests(unittest.TestCase):
                 patch.object(task_quality, "context", side_effect=blocked),
                 patch.object(collect, "collect") as run,
                 patch.object(collect, "watch") as tail,
+                patch.object(collect, "catch_up", side_effect=RuntimeError) as catch,
                 contextlib.redirect_stdout(io.StringIO()),
                 contextlib.redirect_stderr(err),
             ):
                 self.assertEqual(collect.main(), 1)
-            self.assertEqual(err.getvalue(), collect.NO_WORKTREE + "\n")
+            self.assertTrue(err.getvalue().endswith(collect.NO_WORKTREE + "\n"))
             self.assertIn("TASK=<task-id>", err.getvalue())
+            self.assertNotIn("Traceback", err.getvalue())
             run.assert_not_called()
             tail.assert_not_called()
+            self.assertEqual(catch.called, argv == ["task_collect.py"])
+
+    def test_collect_without_a_task_catches_up_finished_tasks_first(self):
+        import task_quality
+        from task_runtime import InvalidRuntime
+
+        blocked = InvalidRuntime("use a linked task worktree; primary is administration-only")
+        caught = [dict(task_id=TASK, status="complete", reason="collected")]
+        with (
+            patch("sys.argv", ["task_collect.py"]),
+            patch.dict(os.environ, {"BSS_COLLECT_TASK": ""}),
+            patch.object(collect, "current", return_value=("claude", SID)),
+            patch.object(task_quality, "context", side_effect=blocked),
+            patch.object(collect, "catch_up", return_value=caught),
+            patch.object(collect, "collect") as run,
+            contextlib.redirect_stderr(io.StringIO()) as err,
+        ):
+            self.assertEqual(collect.main(), 0)
+        self.assertIn("final counters collected for 1 finished task(s) (#124)", err.getvalue())
+        run.assert_not_called()
 
     def test_explicit_task_collects_and_watches_without_a_worktree(self):
         import task_quality

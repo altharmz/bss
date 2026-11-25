@@ -62,10 +62,26 @@ itself; an orchestrator running several issues in parallel would otherwise charg
 child to whichever issue it bound last. An unrelated source is never attributed by recency
 or slot. An explicit rebinding closes the previous window; a sample already stored for one
 task is skipped by any other. `finish-task` closes all windows and
-starts a bounded two-minute final-tail collector. A missing final counter leaves the
-collection `partial / final_counter_pending`; `finish-task` then adds
-`"telemetry_next_command": "make telemetry-watch TASK=<task-id>"` to its JSON, to run from
-the primary checkout.
+starts a bounded two-minute final-tail collector.
+
+**The final counter arrives after `finish-task`.** `finish-task` runs inside the agent's
+turn, and a closed window is complete only at the next turn end (Claude's `end_turn`), which
+the client writes after the reply. So at `finish-task` time a window is normally
+`partial / final_counter_pending`. When that is the only open result, `finish-task` says so
+in one line (the counter is pending, the background capture collects it, fallback
+`make telemetry-watch TASK=<task-id>`) instead of printing the raw collection; its JSON also
+keeps `"telemetry_next_command": "make telemetry-watch TASK=<task-id>"` as the manual
+fallback, to run from the primary checkout. Any other open result is printed as it is.
+
+**Catch-up.** When the turn runs on for more than two minutes, the watcher gives up. The
+next `make start-task` (and `make telemetry-collect` without `TASK=`, also from the primary
+checkout) therefore first runs one collection pass over finished tasks (`tasks.ended_at`
+set) whose closed windows are still `partial / final_counter_pending`: the source files
+outlive the worktree. A window is re-read only when its source file changed after it was
+last checked (a window capped by a later binding stays pending for good), at most 20 per
+pass (`task_collect.catch_up`). Open tasks and `session_open` windows are never touched.
+It prints one line when it completes something; a failure is a one-line warning and never
+blocks `start-task`.
 
 Other commands: `make telemetry-watch TASK=<task>` (retry the final tail),
 `make telemetry-probe CLIENT= SESSION_ID=` (validate a source without attributing it) and

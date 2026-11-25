@@ -746,6 +746,98 @@ def collect(task, client=None, session=None, close=False):
     return [collect_one(row) for row in collection_rows(task)]
 
 
+CATCH_UP_LIMIT = 20
+
+
+def catch_up(limit=CATCH_UP_LIMIT, home=None):
+    """One bounded pass over finished tasks whose closed windows wait for the final counter.
+
+    finish-task's watcher gives up after two minutes, but the sources outlive the
+    worktree: the next start-task (or telemetry-collect without a task) collects the
+    missed tail. Open tasks and session_open results are never touched. A window capped
+    by a later binding stays pending for good, so a row is re-collected only when its
+    source changed after the row was last checked.
+    """
+    rows = json.loads(
+        sql(
+            "SELECT COALESCE(json_agg(c),'[]') FROM "
+            "(SELECT a.*, (SELECT min(b.bound_at) FROM usage_collections b "
+            "WHERE b.client=a.client AND b.external_session_id=a.external_session_id "
+            "AND b.bound_at>a.bound_at) AS next_bound_at "
+            "FROM usage_collections a JOIN tasks t ON t.task_id=a.task_id "
+            "WHERE t.ended_at IS NOT NULL AND a.closed_at IS NOT NULL "
+            "AND a.status='partial' AND a.reason='final_counter_pending' "
+            "ORDER BY t.ended_at DESC, a.task_id, a.client, a.external_session_id) c;"
+        )
+    )
+    rows = [row for row in rows if source_changed(row, home)][: int(limit)]
+    return [dict(task_id=row["task_id"], **collect_one(row, home)) for row in rows]
+
+
+def source_changed(row, home=None):
+    try:
+        path = locate(row["client"], row["external_session_id"], home)
+        checked = row.get("checked_at")
+        return not checked or path.stat().st_mtime > timestamp(checked).timestamp()
+    except (CollectionError, OSError, ValueError):
+        return False
+
+
+def report_catch_up(quiet=True):
+    """The catch-up as one line (none when quiet and idle), or a warning when it failed."""
+    try:
+        results = catch_up()
+    except (
+        OSError,
+        ValueError,
+        RuntimeError,
+        TypeError,
+        KeyError,
+        AttributeError,
+        subprocess.SubprocessError,
+    ):
+        print(
+            "telemetry: catch-up of finished tasks failed; retry make telemetry-collect",
+            file=sys.stderr,
+        )
+        return None
+    done = sorted({int(r["task_id"].split("-")[1]) for r in results if r["status"] == "complete"})
+    if done or (results and not quiet):
+        print(
+            f"telemetry catch-up: final counters collected for {len(done)} finished task(s)"
+            + (f" ({', '.join(f'#{n}' for n in done)})" if done else "")
+            + f"; {sum(r['status'] != 'complete' for r in results)} still pending",
+            file=sys.stderr,
+        )
+    elif not quiet:
+        print("telemetry catch-up: no pending final counters of finished tasks", file=sys.stderr)
+    return results
+
+
+def final_counter_only(results):
+    """Every open result is a closed window whose last counter arrives after this turn."""
+    pending = [r for r in results if r["status"] != "complete"]
+    return bool(pending) and all(
+        r["status"] == "partial" and r["reason"] == "final_counter_pending" for r in pending
+    )
+
+
+_ANNOUNCED = set()
+
+
+def announce_final_counter(task, results):
+    if task in _ANNOUNCED:
+        return
+    _ANNOUNCED.add(task)
+    sessions = sum(r["status"] != "complete" for r in results)
+    print(
+        f"telemetry collection: final usage counter pending for {sessions} closed session(s); "
+        "it is written when this agent turn ends and the background capture collects it "
+        f"(fallback: make telemetry-watch TASK={task})",
+        file=sys.stderr,
+    )
+
+
 def reset(task):
     """Forget a task's bindings and samples so they can be re-attributed from sources.
 
@@ -821,6 +913,9 @@ def capture_facts(task):
 def automatic(task, operation, client=None, result=0, pr_number=None):
     """Fail open but visibly; retries reread bound sources, including closed sessions."""
     try:
+        if operation == "start-task":
+            # Before binding this task: a rebinding would cap the earlier window.
+            report_catch_up()
         detected, session = current(os.environ)
         client = client or detected
         if operation.startswith(("finish-task", "cleanup-task")) or operation == "task-completed":
@@ -830,7 +925,9 @@ def automatic(task, operation, client=None, result=0, pr_number=None):
             launch_final_capture(task)
         if operation == "task-completed":
             capture_facts(task)
-        if operation in {"start-task", "finish-task", "task-completed"}:
+        if operation in {"finish-task", "task-completed"} and final_counter_only(results):
+            announce_final_counter(task, results)
+        elif operation in {"start-task", "finish-task", "task-completed"}:
             print("telemetry collection: " + json.dumps(results, sort_keys=True), file=sys.stderr)
         if operation == "start-task" and any(
             r["reason"] == "counters_missing" and r["observed_samples"] == 0 for r in results
@@ -907,11 +1004,13 @@ def main():
             from task_quality import context
             from task_runtime import InvalidRuntime
 
+            # Without a task, telemetry-collect first finishes earlier tasks' tails.
+            caught = None if args.watch else report_catch_up(quiet=False)
             try:
                 task = context()[2]
             except InvalidRuntime:
                 print(NO_WORKTREE, file=sys.stderr)
-                return 1
+                return int(caught is None)
         if args.watch:
             print(json.dumps({"collections": watch(task)}, sort_keys=True))
             return 0
