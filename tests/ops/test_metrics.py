@@ -1,6 +1,7 @@
 """GET /metrics: token access, HTTP series, database series (issue #240)."""
 
 from datetime import date, timedelta
+from decimal import Decimal as D
 from unittest.mock import patch
 
 import pytest
@@ -10,7 +11,9 @@ from app import metrics
 from app.config import settings
 from app.main import app
 from app.repository import network_commands
+from app.repository import prepaid_commands as commands
 from tests import factories
+from tests.builders.prepaid.prepaid_commands import enqueue
 
 TOKEN = "scrape-token-for-tests"
 AUTH = {"Authorization": f"Bearer {TOKEN}"}
@@ -29,6 +32,7 @@ FAMILIES = (
     "bss_queue_failed",
     "bss_products",
     "bss_usage_record_default_rows",
+    "bss_prepaid_commands_awaiting_funds",
 )
 
 
@@ -121,6 +125,32 @@ def test_pending_network_command_shows_after_the_cache_expires(client, db_conn):
     assert sample(text, "bss_queue_oldest_pending_age_seconds", queue="network_command") == 31
     assert sample(text, "bss_queue_failed", queue="network_command") == 0
     assert sample(text, "bss_queue_failed", queue="worker_request") is None
+
+
+def test_a_renewal_waiting_for_a_top_up_is_not_a_stuck_prepaid_queue(client, db_conn):
+    """#445: an unpaid renewal stays pending by design; the queue age counts only the
+    commands the worker owes an attempt, and the wait for money has its own series."""
+    now = client.clock.now()
+    acc = factories.account(db_conn)
+    hour = timedelta(hours=1)
+
+    def renewal(created):
+        return enqueue(db_conn, acc, kind="renewal", due_date=created.date(), now=created)["id"]
+
+    unpaid = renewal(now - 30 * 24 * hour)
+    commands.record_shortfall(
+        db_conn, unpaid, required=D(20), available=D(5), now=now - 29 * 24 * hour
+    )
+    retried = renewal(now - 3 * hour)  # a shortfall, then a technical failure and its retry
+    commands.record_shortfall(db_conn, retried, required=D(20), available=D(5), now=now - 3 * hour)
+    commands.fail(db_conn, retried, "broken posting", now=now - 2 * hour)
+    commands.retry(db_conn, retried, now=now - 2 * hour)
+    renewal(now - hour)  # never attempted
+    db_conn.commit()
+    text = client.get("/metrics", headers=AUTH).text
+    assert sample(text, "bss_queue_pending", queue="prepaid_command") == 2
+    assert sample(text, "bss_queue_oldest_pending_age_seconds", queue="prepaid_command") == 3 * 3600
+    assert sample(text, "bss_prepaid_commands_awaiting_funds") == 1
 
 
 def test_a_usage_record_without_its_months_partition_shows_in_the_default_gauge(client, db_conn):

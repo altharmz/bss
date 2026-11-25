@@ -146,6 +146,14 @@ class HttpMetricsMiddleware:
             DURATION.labels(scope["method"], route).observe(elapsed)
 
 
+# A shortfall observed at or after the command's last recorded attempt (its creation when
+# never attempted): an unpaid renewal stays pending until a top-up or the line ends
+# (docs/decisions/prepaid.md). The shortfall's primary key (command_id, observed_at) serves it.
+AWAITING_FUNDS = (
+    "EXISTS (SELECT FROM prepaid_funding_shortfall s WHERE s.command_id = prepaid_command.id"
+    " AND s.observed_at >= coalesce(prepaid_command.attempted_at, prepaid_command.created_at))"
+)
+
 # queue -> (pending SQL condition, failed SQL condition or None, timestamp column the age
 # counts from). Statuses follow docs/db/<table>.md; a final business outcome (declined,
 # refused, cancelled) is not a failure of the queue.
@@ -156,8 +164,14 @@ QUEUES: dict[str, tuple[str, str | None, str]] = {
     "network_command": ("state = 'pending'", "state = 'exhausted'", "created_at"),
     # pending or sent (the gateway's result is awaited) are open; exhausted as above
     "payment_command": ("state IN ('pending', 'sent')", "state = 'exhausted'", "created_at"),
-    # pending = not yet attempted; failedTechnical = last attempt failed, awaiting its retry
-    "prepaid_command": ("state = 'pending'", "state = 'failedTechnical'", "created_at"),
+    # pending = the worker owes an attempt; failedTechnical = last attempt failed, awaiting
+    # its retry. A pending command whose latest decision was a funding shortfall waits for
+    # money, not for the worker (#445): bss_prepaid_commands_awaiting_funds counts those.
+    "prepaid_command": (
+        "state = 'pending' AND NOT " + AWAITING_FUNDS,
+        "state = 'failedTechnical'",
+        "created_at",
+    ),
     # initial = queued, inProgress = a send failed and a retry is scheduled; failed = used up
     "notification_message": (
         "state IN ('initial', 'inProgress')",
@@ -232,6 +246,10 @@ class DbCollector(Collector):
             products = conn.execute(
                 "SELECT status::text, count(*) FROM product GROUP BY 1"
             ).fetchall()
+            awaiting_funds = conn.execute(
+                "SELECT count(*) FROM prepaid_command"  # noqa: S608 - fixed SQL fragment
+                " WHERE state = 'pending' AND " + AWAITING_FUNDS
+            ).fetchone()
             # the safety net of a missing partition (#282): should stay empty, so cheap
             default_rows = conn.execute("SELECT count(*) FROM usage_record_default").fetchone()
             conn.rollback()
@@ -272,6 +290,13 @@ class DbCollector(Collector):
             if QUEUES[name][1]:
                 failed.add_metric([name], failures)
         families += [pending, oldest, failed]
+
+        waiting = GaugeMetricFamily(
+            "bss_prepaid_commands_awaiting_funds",
+            "Pending prepaid commands waiting for a top-up after a funding shortfall.",
+        )
+        waiting.add_metric([], awaiting_funds[0])
+        families.append(waiting)
 
         by_status = GaugeMetricFamily("bss_products", "Products by status.", labels=["status"])
         for name, count in products:
