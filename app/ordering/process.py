@@ -132,7 +132,7 @@ def _midnight(day: date) -> datetime:
 
 
 def _check_structure(request: OrderRequest) -> None:
-    if not request.items:
+    if not request.items:  # pragma: no cover - the API model and every caller send one
         raise OrderRefused("an order needs at least one item")
     ids = [item.item_id for item in request.items]
     if len(set(ids)) != len(ids):

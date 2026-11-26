@@ -30,6 +30,7 @@ from tests.builders.orders.api_order_cancel import (  # noqa: F401 - fixtures
     run,
     worker,
 )
+from tests.builders.orders.api_suspension import status_item
 from tests.timeline import TZ, iso, midnight
 
 OCT2, OCT20, NOV1, NOV5 = (
@@ -251,3 +252,18 @@ def test_mcp_cancels_with_the_write_scope_only(api, mcp, shop):
     )
     assert not error and answer["status"] == 201
     assert api.get(order["href"]).json()["state"] == "cancelled"
+
+
+def test_a_future_product_whose_status_another_order_changes_stays(api, shop):
+    offering, acc = shop
+    product = add(api, acc, offering, NOV1, on=at(OCT20))
+    suspend = apidata.order(
+        api, acc, status_item(product, "suspended"), requestedStartDate=iso(midnight(NOV5))
+    )
+    assert suspend["state"] == "completed", suspend
+    refused(
+        api,
+        order_of(api, product, "creation"),
+        "item 1 (add): another order changes its product's status",
+    )
+    assert api.get(product["href"]).json()["status"] == "created"

@@ -9,6 +9,7 @@ import pytest
 
 from tests import apidata
 from tests.apidata import ORDER
+from tests.builders.orders.api_order_cancel import CANCEL, cancel_body
 from tests.builders.prepaid.prepaid_renewal_producer import tick
 from tests.builders.resources.api_resource_inventory import number
 from tests.builders.resources.imsi import all_refs
@@ -355,6 +356,12 @@ def test_a_refused_swap_changes_nothing(api, db_conn, line_world, stub):
     assert db_conn.execute("SELECT status FROM product WHERE id = %s", (product,)).fetchone() == (
         "active",
     )
+    refused = api.post(CANCEL, cancel_body(order))
+    assert refused.status_code == 409, refused.text
+    assert refused.json()["message"] == (
+        f"productOrder {order['id']} is failed: it cannot be cancelled"
+    )
+    assert sim_row(db_conn, sim(2)["imsi"]) == ("in_stock", None)
 
 
 def test_cancelling_an_unconfirmed_swap_releases_the_new_sim(api, db_conn, line_world):
@@ -527,3 +534,15 @@ def test_ui_sim_requests_replayed(api, db_conn, line_world):
     assert order.status_code == 201, order.text
     first = min(g["value"] for g in resources(api, batchNumber="UG", simType="esim"))
     assert sim_row(db_conn, first)[0] == "reserved"
+
+
+def test_an_order_names_an_imsi_or_a_sim_type_not_both(api, db_conn, line_world):
+    stock(api, "B1", "physical", 2)
+    named = by_imsi(api, sim(1)["imsi"])
+    order = order_with(api, line_world, "79991234500", "physical", imsi=named["id"]).json()
+    assert order["state"] == "rejected"
+    assert [(e["code"], e["reason"]) for e in order["productOrderErrorMessage"]] == [
+        ("realizingResourceDuplicate", "name an IMSI or a simType, not both")
+    ]
+    assert sim_row(db_conn, sim(1)["imsi"]) == ("in_stock", None)
+    assert sim_row(db_conn, sim(2)["imsi"]) == ("in_stock", None)

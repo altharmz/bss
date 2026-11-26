@@ -39,7 +39,7 @@ def problems(conn, request, account, locked, now: datetime) -> list[tuple[str, s
         if imei is None:
             continue
         item_id = item.item_id
-        if (why := device.problem(imei)) is not None:
+        if (why := device.problem(imei)) is not None:  # pragma: no cover - the API's 422 first
             found.append((item_id, "invalidImei", why))
             continue
         offering = item.product_offering_id
@@ -56,7 +56,7 @@ def problems(conn, request, account, locked, now: datetime) -> list[tuple[str, s
                 )
             )
             continue
-        if item.action == "modify" and not device_only(item):
+        if item.action == "modify" and not device_only(item):  # pragma: no cover - the API's 422
             found.append(
                 (
                     item_id,

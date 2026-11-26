@@ -36,13 +36,6 @@ def required(details, kind="msisdn"):
     return any(r.get("id") == kind for r in details.get("resourceSpecification", []))
 
 
-def offering_requires(conn, offering_id, kind="msisdn"):
-    offering = catalog.get_product_offering(conn, offering_id)
-    uid = offering["product_specification_id"]
-    spec = catalog.lock_product_specification(conn, uid, share=True) if uid else None
-    return bool(spec and required(spec["details"], kind))
-
-
 def requirements(conn, offering_id):
     """{kind: bool} for the offering's specification."""
     offering = catalog.get_product_offering(conn, offering_id)

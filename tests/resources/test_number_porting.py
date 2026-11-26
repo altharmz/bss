@@ -443,3 +443,21 @@ def test_ui_port_requests_replayed(api, db_conn, world, stub):
     assert pin.status_code == 201 and len(pin.json()["pin"]) == 6
     pins = api.get(f"{PIN}?product.id={product}&offset=0&limit=100")
     assert pins.status_code == 200 and [p["id"] for p in pins.json()] == [pin.json()["id"]]
+
+
+def test_a_ported_in_number_is_like_any_other_once_its_port_completed(api, db_conn, world, stub):
+    from tests.builders.prepaid.prepaid_terminations import terminate
+
+    port = port_in(api)
+    resource_id = port["resource"]["id"]
+    order = buy_number(api, world, resource_id)
+    run_ticks(api, db_conn, 4)
+    assert port_state(api, port)["state"] == "completed" and state(api, order) == "completed"
+    product = apidata.product_of(api, api.get(order["href"]).json())
+    ended = terminate(api, world.acc, product)
+    run_ticks(api, db_conn, 2)
+    assert state(api, ended) == "completed"
+    # the completed port leaves a number like any other: no open port-in to wait for
+    again = buy_number(api, world, resource_id)
+    assert again["state"] == "inProgress", again.get("productOrderErrorMessage")
+    assert api.get(f"{RESOURCE}/{resource_id}").json()["allocationStatus"] != "available"
