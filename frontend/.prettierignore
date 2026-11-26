@@ -8,3 +8,4 @@ package-lock.json
 
 # Preserve the design handoff token file byte for byte.
 src/ui/tokens.css
+.coverage/

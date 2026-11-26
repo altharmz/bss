@@ -24,3 +24,5 @@ frontend/.shots/
 # make test-changed: pytest-testmon's data (which test ran which code)
 .testmon/
 loadtest/out/
+# make coverage: the combined backend + frontend report
+.coverage-report/

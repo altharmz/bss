@@ -312,9 +312,12 @@ def runtime_inventory(root, task):
 
 
 # Ignored build and test output of Make targets (web-build, web-shots, web-types, web-e2e,
-# loadtest-*: reports and profiles; datasets live outside the worktree, docs/loadtest.md).
+# loadtest-*: reports and profiles; datasets live outside the worktree, docs/loadtest.md;
+# coverage: its reports, docs/coverage.md).
 DISPOSABLE = (
     ".testmon/",
+    ".coverage-report/",
+    "frontend/.coverage/",
     "loadtest/out/",
     ".docs/",
     ".progress/",
