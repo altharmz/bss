@@ -137,6 +137,9 @@ class ReadGate {
   /** Waits in line for a slot; rejects if `signal` aborts first. */
   wait(signal?: AbortSignal | null): Promise<() => void> {
     return new Promise((resolve, reject) => {
+      // request() checks `aborted` in the same tick before it waits, so no caller reaches
+      // this; it stays so the gate never parks a waiter whose abort has already fired
+      /* v8 ignore if -- @preserve unreachable from request(), which checks aborted first */
       if (signal?.aborted) {
         reject(abortError(signal));
         return;

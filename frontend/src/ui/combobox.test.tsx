@@ -60,4 +60,33 @@ describe('Combobox', () => {
     expect((input as HTMLInputElement).value).toBe('Lone Ltd · organization');
     expect(input.getAttribute('aria-expanded')).toBe('false');
   });
+
+  it('closes when focus leaves it, keeps focus on an option press, and picks with the mouse', () => {
+    render(
+      <>
+        <Example />
+        <button>Elsewhere</button>
+      </>,
+    );
+    const input = screen.getByRole('combobox', { name: 'Owner' });
+    fireEvent.focus(input);
+    const options = screen.getAllByRole('option');
+    fireEvent.mouseEnter(options[2] as HTMLElement);
+    expect(input.getAttribute('aria-activedescendant')).toBe(options[2]?.id);
+    expect(options[2]?.classList.contains('is-active')).toBe(true);
+    // pressing an option must not blur the input first (that would close the list)
+    expect(fireEvent.mouseDown(options[1] as HTMLElement)).toBe(false);
+    fireEvent.click(options[1] as HTMLElement);
+    expect((input as HTMLInputElement).value).toBe('Romashka LLC · organization');
+    expect(screen.queryByRole('listbox')).toBeNull();
+    // focus moving inside the combobox keeps it open; moving out closes it
+    fireEvent.focus(input);
+    const listbox = screen.getByRole('listbox');
+    fireEvent.blur(input, { relatedTarget: listbox });
+    expect(screen.getByRole('listbox')).toBeTruthy();
+    fireEvent.change(input, { target: { value: 'lone' } });
+    fireEvent.blur(input, { relatedTarget: screen.getByRole('button', { name: 'Elsewhere' }) });
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect((input as HTMLInputElement).value).toBe('Romashka LLC · organization');
+  });
 });

@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { Button, Dialog, StatusPill, Segmented, ToastProvider, useToast } from './kit';
+import { Button, Dialog, FileField, StatusPill, Segmented, ToastProvider, useToast } from './kit';
 
 describe('StatusPill', () => {
   it('uses the explicit product family and preserves the note label', () => {
@@ -158,5 +158,23 @@ describe('Toast', () => {
     act(() => vi.advanceTimersByTime(1));
     expect(screen.queryByRole('status')).toBeNull();
     vi.useRealTimers();
+  });
+});
+
+describe('FileField', () => {
+  it('opens the hidden file chooser from its button and reports the chosen file', () => {
+    const onFile = vi.fn();
+    render(<FileField label="SIM batch file" fileName={null} onFile={onFile} accept=".csv" />);
+    const input = screen.getByLabelText('SIM batch file') as HTMLInputElement;
+    expect(input.type).toBe('file');
+    expect(input.accept).toBe('.csv');
+    expect(screen.getByText('No file chosen')).toBeTruthy();
+    const opened = vi.fn();
+    input.addEventListener('click', opened);
+    fireEvent.click(screen.getByRole('button', { name: 'Choose file' }));
+    expect(opened).toHaveBeenCalledOnce();
+    const file = new File(['iccid\n'], 'sims.csv', { type: 'text/csv' });
+    fireEvent.change(input, { target: { files: [file] } });
+    expect(onFile).toHaveBeenCalledExactlyOnceWith(file);
   });
 });

@@ -173,4 +173,28 @@ describe('Ledger navigation', () => {
     expect(screen.getByText('1–50').className).toBe('range');
     expect(screen.getByText('1–50').parentElement?.textContent).toBe('1–50 of 1,284');
   });
+
+  it('moves focus into an open menu from its trigger with the arrows', () => {
+    render(
+      <Menu
+        items={[
+          { label: 'Suspend', onClick: () => {} },
+          { label: 'Resume', disabled: true, onClick: () => {} },
+          { label: 'End', onClick: () => {} },
+          { label: 'Archive', disabled: true, onClick: () => {} },
+        ]}
+      />,
+    );
+    const trigger = screen.getByRole('button', { name: 'Row actions' });
+    fireEvent.click(trigger);
+    expect(screen.getByRole('menu')).toBeTruthy();
+    trigger.focus();
+    // the last enabled item, skipping a disabled one at the end
+    fireEvent.keyDown(trigger, { key: 'ArrowUp' });
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'End' }));
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Suspend' }));
+    expect(screen.getByRole('menu')).toBeTruthy();
+  });
 });

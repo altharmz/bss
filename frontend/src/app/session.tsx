@@ -35,6 +35,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [attempt, setAttempt] = useState(0);
   const signOut = useCallback(() => {
     const path = signInPath();
     setSession(null);
@@ -57,7 +58,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, [signOut]);
+  }, [signOut, attempt]);
   useEffect(() => {
     const expired = () => signOut();
     window.addEventListener('bss:unauthorized', expired);
@@ -72,7 +73,15 @@ export function SessionGate({ children }: { children: ReactNode }) {
     return (
       <Panel>
         <p role="alert">{error}</p>
-        <Button onClick={() => window.location.reload()}>Retry</Button>
+        <Button
+          onClick={() => {
+            setError('');
+            setLoading(true);
+            setAttempt((n) => n + 1);
+          }}
+        >
+          Retry
+        </Button>
       </Panel>
     );
   if (!session)

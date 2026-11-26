@@ -79,6 +79,8 @@ function Screen() {
       return <IntegrationsScreen />;
     case 'signIn':
     case 'password':
+      // SessionGate shows its own sign-in and password forms there and never renders the screen
+      /* v8 ignore next -- @preserve unreachable: SessionGate owns the signIn and password routes */
       return null;
     case 'subscribers':
       return <SubscribersScreen />;

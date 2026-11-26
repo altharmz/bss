@@ -784,6 +784,10 @@ self-hosted (`@fontsource`), no CDN at runtime. Every dependency needs a stated 
   - `web` has network: `make web-dev` (Vite on 0.0.0.0 inside, published on
     127.0.0.1:5173, proxying `/tmf-api` and `/internal` to `app`) and `make web-install`;
   - `web-offline` has `network_mode: none`: build, lint, test, types, fmt.
+- **Retry re-runs the read, never reloads the page** (#486). The session gate's Retry after
+  a failed session check (anything but 401) asks `/internal/v1/session` again in place, as
+  `useResource`'s Retry and the self-care entry point do; before, it reloaded the whole page,
+  which no component test can observe (jsdom cannot navigate).
 - **Installs are explicit.** Only `make web-install` downloads (`npm ci`, exactly the
   lockfile) and stores the lockfile's hash in the volume. Every other target first runs
   `frontend/scripts/check-deps.sh`, which only compares that hash and fails with "run make
