@@ -300,7 +300,8 @@ def build_app(
         if tool is None:
             done("unknown_tool")
             return _error(f"no tool named {params.name}")
-        if not tool.read_only and WRITE not in token.scopes:  # Guard refused it already
+        # defence in depth: Guard answers 403 first, and the SDK refuses batches it cannot see
+        if not tool.read_only and WRITE not in token.scopes:  # pragma: no cover - Guard refused
             done(403)
             return _error(f"{tool.name} changes data: it needs the write scope")
         arguments = dict(params.arguments or {})

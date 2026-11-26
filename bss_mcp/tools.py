@@ -168,7 +168,7 @@ def result_text(status: int, headers: dict[str, str], content: bytes) -> str:
             out["body"] = content.decode(errors="replace")
     try:
         return dumps(out)
-    except TypeError:
+    except TypeError:  # pragma: no cover - loads() yields only types dumps() encodes
         return json.dumps(out, default=str)
 
 
