@@ -7,3 +7,5 @@
 CVE-2026-76844 exp:2027-01-07
 # renewed 2026-11-08, #263: Debian zlib1g +b1, fix +deb13u1 not in python:3.12-slim 5e2bdb1b0d54 yet
 CVE-2026-85091 exp:2027-01-07
+# accepted 2026-11-26, #489: Debian libzstd1 1.5.7+dfsg-1, fix +deb13u1 not in python:3.12-slim 5e2bdb1b0d54 nor the newest 191083cdf6c7 (2026-11-24); retry the base-image bump when a 3.12-slim ships it
+CVE-2026-124851 exp:2027-01-25

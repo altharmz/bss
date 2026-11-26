@@ -18,7 +18,7 @@ turned a cached build into an 11-minute rebuild (apt 414 s, pip 221 s). Pinned a
 match the deployed image's first 4). **Bumped to `5e2bdb1b0d54` on 2026-11-08** (#263;
 Python 3.12.16, image built 2026-11-05): fixes Trivy's apt/libapt-pkg7.0 and libpcre2-8-0
 findings. zlib1g is still `+b1` there, so its two CVEs stay in `.trivyignore`, renewed to
-2027-01-07; the next bump should clear them. Bump it on purpose, as its own commit, for a
+2027-01-07; the next bump should clear them. On 2026-11-26 (#489) the newest index `191083cdf6c7` (built 2026-11-24) had zlib1g `+deb13u1` but still libzstd1 `1.5.7+dfsg-1`, so CVE-2026-124851 (HIGH, fix `+deb13u1`) is accepted in `.trivyignore` until 2027-01-25 instead of a bump; bump once a 3.12-slim ships the fixed libzstd1, which clears all three entries. To read a candidate's package versions: `docker run --rm python:3.12-slim@sha256:<index> dpkg-query -W libzstd1 zlib1g`. Bump it on purpose, as its own commit, for a
 security fix or a new 3.12 patch release:
 
 1. `docker buildx imagetools inspect python:3.12-slim` - the top `Digest:` is the index.
