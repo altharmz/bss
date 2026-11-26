@@ -290,16 +290,6 @@ def _stored_cycle(conn: psycopg.Connection, raw_id: str, lock=None) -> Row | Non
     return cycles.get(conn, uid, lock)
 
 
-def cycle_ref(conn: psycopg.Connection, spec_id: Any) -> dict[str, Any]:
-    if spec_id is None:
-        return ref(
-            "BillingCycleSpecification", f"{CYCLE_BASE}/{CYCLE_ID}", CYCLE_ID, "Monthly billing"
-        )
-    row = cycles.get(conn, spec_id)
-    assert row is not None  # foreign key
-    return ref("BillingCycleSpecification", f"{CYCLE_BASE}/{row['id']}", row["id"], row["name"])
-
-
 @router.get("/billingCycleSpecification")
 def list_cycle_specifications(request: Request, tx: Tx) -> TmfJSONResponse:
     query = listing.parse_list_query(
@@ -514,29 +504,6 @@ def check_rated(conn: psycopg.Connection, reference: Any) -> None:
             f"billingAccount {reference.id}: ratingType is {row['rating_type']},"
             f" not {reference.rating_type}"
         )
-
-
-def customer_party(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
-    """The account's customer as a relatedParty entry (role `customer`)."""
-    customer = parties.get_customer(conn, row["customer_id"])
-    assert customer is not None  # foreign key
-    return {
-        "role": CUSTOMER_ROLE,
-        "partyOrPartyRole": ref(
-            "Customer",
-            customer_href(customer["id"]),
-            customer["id"],
-            customer["name"],
-            ref_type="PartyRoleRef",
-        ),
-        "@type": "RelatedPartyRefOrPartyRoleRef",
-    }
-
-
-def linked_financial(conn: psycopg.Connection, row: Row) -> Row | None:
-    if row["financial_account_id"] is None:
-        return None
-    return accounts.get_financial(conn, row["financial_account_id"])
 
 
 def account_bodies(conn: psycopg.Connection, rows: list[Row]) -> list[dict[str, Any]]:

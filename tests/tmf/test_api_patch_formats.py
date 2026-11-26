@@ -70,11 +70,16 @@ def test_a_failed_test_operation_changes_nothing(api, account):
     ("ops", "status"),
     [
         ({"op": "replace"}, 400),  # not an array
+        (["replace"], 400),  # an operation that is not an object
+        ([{"op": "remove", "path": 5}], 400),  # a path that is not a string
         ([{"op": "upsert", "path": "/name"}], 400),
         ([{"op": "replace", "path": "name", "value": "x"}], 400),  # not a pointer
         ([{"op": "add", "path": "/name"}], 400),  # no value
         ([{"op": "copy", "path": "/name"}], 400),  # no from
         ([{"op": "remove", "path": "/description"}], 422),  # nothing there
+        ([{"op": "test", "path": "/description", "value": "x"}], 422),  # nothing to test
+        ([{"op": "add", "path": "/name/x", "value": 1}], 422),  # the parent is a string
+        ([{"op": "test", "path": "/relatedParty", "value": []}], 409),  # another array
         ([{"op": "replace", "path": "/creditLimit/value", "value": 1}], 422),
         ([{"op": "add", "path": "/relatedParty/5", "value": {}}], 422),  # out of range
         ([{"op": "move", "from": "/relatedParty", "path": "/relatedParty/0/x"}], 422),
@@ -90,6 +95,23 @@ def test_bad_json_patches_change_nothing(api, account, ops, status):
     response = patch(api, account["href"], ops)
     assert response.status_code == status, response.text
     assert api.get(account["href"]).json() == account
+
+
+def test_test_operations_compare_objects_and_arrays_as_json(api, account):
+    href, party = account["href"], account["relatedParty"]
+    ops = [
+        {"op": "test", "path": "/relatedParty", "value": party},
+        {"op": "test", "path": "/relatedParty/0", "value": party[0]},
+        {"op": "replace", "path": "/name", "value": "Checked"},
+    ]
+    response = patch(api, href, ops)
+    assert response.status_code == 200, response.text
+    assert api.get(href).json()["name"] == "Checked"
+    other = {**party[0], "role": "payer"}
+    ops[1]["value"], ops[2]["value"] = other, "Not saved"
+    response = patch(api, href, ops)
+    assert response.status_code == 409 and "the value differs" in response.json()["message"]
+    assert api.get(href).json()["name"] == "Checked"
 
 
 def test_json_patch_of_a_missing_resource_is_a_404(api):
@@ -124,10 +146,35 @@ def test_json_patch_query_changes_the_selected_elements(api, order):
     assert api.get(href).json()["externalId"] == patch(api, href, [], QUERY).json()["externalId"]
 
 
+def test_json_patch_add_at_an_index_inserts_before_it(api, order):
+    new = {"id": "Z", "owner": "Shop", "externalIdentifierType": "SalesOrder"}
+    response = patch(api, order["href"], [{"op": "add", "path": "/externalId/0", "value": new}])
+    assert response.status_code == 200, response.text
+    assert [e["id"] for e in api.get(order["href"]).json()["externalId"]] == ["Z", "A", "B", "C"]
+
+
+@pytest.mark.parametrize(
+    "op",
+    [
+        # move and copy take plain pointers only
+        {"op": "copy", "from": "/externalId/0/owner", "path": "/externalId/owner?id=A"},
+        {"op": "copy", "from": "/externalId/owner?id=A", "path": "/description"},
+    ],
+)
+def test_json_patch_query_move_and_copy_reject_a_query(api, order, op):
+    response = patch(api, order["href"], [op], QUERY)
+    assert response.status_code == 422, response.text
+    assert "query" in response.json()["message"]
+    assert api.get(order["href"]).json() == order
+
+
 @pytest.mark.parametrize(
     ("path", "status"),
     [
         ("/externalId/owner?owner=Nobody", 422),  # selects nothing
+        ("/state?x=1", 422),  # the path ends at a string, not an array
+        # an object never equals a query value, so nothing is selected
+        ("/productOrderItem/action?productOffering=x", 422),
         ("/description?x=1", 422),  # no array on the path
         ("/externalId/owner?owner", 400),  # not attr=value
     ],
@@ -141,3 +188,25 @@ def test_json_patch_query_errors(api, order, path, status):
 def test_a_query_is_part_of_the_key_in_plain_json_patch(api, order):
     ops = [{"op": "replace", "path": "/externalId/owner?owner=Shop", "value": "x"}]
     assert patch(api, order["href"], ops).status_code == 422  # no such location
+
+
+def test_json_patch_query_matches_booleans_as_true_and_false(api):
+    """The vendored specs' own example selects contact media by `preferred`."""
+    media = [
+        {"@type": "EmailContactMedium", "preferred": True, "emailAddress": "a@example.org"},
+        {"@type": "EmailContactMedium", "preferred": False, "emailAddress": "b@example.org"},
+    ]
+    body = {"@type": "Individual", "givenName": "Jane", "familyName": "Doe"}
+    person = api.post(f"{apidata.PARTY}/individual", {**body, "contactMedium": media}).json()
+    href = person["href"]
+    ops = [
+        {"op": "test", "path": "/contactMedium/0/preferred", "value": True},
+        {"op": "add", "path": "/contactMedium/contactType?preferred=true", "value": "home"},
+    ]
+    response = patch(api, href, ops, QUERY)
+    assert response.status_code == 200, response.text
+    stored = api.get(href).json()["contactMedium"]
+    assert [m.get("contactType") for m in stored] == ["home", None]
+    # a JSON true is never the number 1
+    one = [{"op": "test", "path": "/contactMedium/0/preferred", "value": 1}]
+    assert patch(api, href, one).status_code == 409

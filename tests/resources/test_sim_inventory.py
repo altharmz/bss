@@ -84,6 +84,29 @@ def test_an_esim_profile_in_stock_hides_its_activation_code(api):
     assert characteristic(profile, "matchingId") is None
 
 
+def test_a_typed_sim_echoes_its_derived_characteristics_but_never_edits_them(api):
+    stock(api, "B1", "physical", 2)
+    resource = by_imsi(api, sim(1)["imsi"])
+    href, echoed = resource["href"], resource["resourceCharacteristic"]
+    label = {"@type": "StringCharacteristic", "name": "label", "value": "shelf 4"}
+    response = api.patch(href, {"resourceCharacteristic": [*echoed, label]})
+    assert response.status_code == 200, response.text
+    stored = api.get(href).json()
+    assert characteristic(stored, "label") == "shelf 4"
+    assert characteristic(stored, "simState") == "in_stock"
+
+    def edited(name, value):
+        return [{**c, "value": value} if c["name"] == name else c for c in echoed]
+
+    response = api.patch(href, {"resourceCharacteristic": edited("simState", "active")})
+    assert response.status_code == 422
+    assert response.json()["message"] == "the simState characteristic is set by the server"
+    response = api.patch(href, {"resourceCharacteristic": edited("iccid", sim(2)["iccid"])})
+    assert response.status_code == 409
+    assert response.json()["message"] == "a resource with this iccid already exists"
+    assert api.get(href).json() == stored
+
+
 def test_csv_import(api):
     csv = "iccid,imsi\n" + "\n".join(f"{sim(n)['iccid']},{sim(n)['imsi']}" for n in (1, 2)) + "\n"
     response = api.post_raw(f"{BATCH}?batch=C1&simType=physical", csv, content_type="text/csv")
