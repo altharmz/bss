@@ -1,11 +1,12 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { App } from '../app/App';
 import {
   CONTEXT,
   json,
   NAV_RUNS,
   noRuns,
+  pending,
   stubFetch,
   tmfCodeError,
   tmfError,
@@ -771,5 +772,233 @@ describe('billing accounts of a customer', () => {
     expect(
       within(dialog).queryByRole('button', { name: 'Remove billing accounts first' }),
     ).toBeNull();
+  });
+});
+
+/** A TMF Error whose message is the server's own words (its reason is the status phrase). */
+const refused = (status: number, message: string) =>
+  json(
+    { '@type': 'Error', code: String(status), reason: 'Refused', message, status: String(status) },
+    { status },
+  );
+
+// The cancelled, refused and uncertain paths of the party and customer dialogs (#487): what
+// the operator sees and that nothing is sent by a step back.
+describe('party and customer dialogs: cancel, refusal and unknown outcome', () => {
+  const dialogOf = async (name: string) => {
+    fireEvent.click(await screen.findByText(name));
+    const dialog = await screen.findByRole('dialog', { name });
+    return dialog;
+  };
+
+  it('opens an account link from a party row without opening the party', async () => {
+    backend({ 'GET /*': pending });
+    await open();
+    const row = (await screen.findByText('Ivan Petrov')).closest('[role="row"]') as HTMLElement;
+    fireEvent.click(within(row).getByRole('link', { name: 'Ivan main' }));
+    expect(window.location.pathname).toBe(`/billing-accounts/${A1}`);
+    expect(screen.queryByRole('dialog', { name: 'Ivan Petrov' })).toBeNull();
+  });
+
+  it('resets a search and a status filter that hide every party', async () => {
+    const { calls } = backend();
+    await open();
+    await screen.findByText('Olga Kuznetsova');
+    fireEvent.click(screen.getByRole('button', { name: 'deceased' }));
+    fireEvent.change(screen.getByLabelText('Search individuals'), { target: { value: 'zz' } });
+    // the search settles and is asked for before Reset is pressed
+    await waitFor(() => expect(calls.some((c) => c.includes('q=zz'))).toBe(true));
+    await waitFor(() => expect(screen.queryByText('Olga Kuznetsova')).toBeNull());
+    fireEvent.click(await screen.findByRole('button', { name: 'Reset filters' }));
+    await screen.findByText('Olga Kuznetsova');
+    expect(screen.getByLabelText('Search individuals')).toHaveProperty('value', '');
+    expect(screen.getByRole('button', { name: 'All' }).getAttribute('aria-pressed')).toBe('true');
+    const last = calls.filter((c) => c.startsWith(`GET ${PARTIES}?kind=Individual`)).at(-1);
+    expect(last).not.toMatch(/[?&](q|status)=/);
+  });
+
+  it('cancels a new party and a new customer without sending', async () => {
+    const { fetchMock } = backend({
+      [`GET ${PARTY}/organization/${EMPTY_ORG}`]: () => json(ORGANIZATIONS[1]),
+    });
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: 'New individual' }));
+    const party = await screen.findByRole('dialog', { name: 'New individual' });
+    fireEvent.click(within(party).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    tab('Organizations');
+    const org = await dialogOf('Lone Ltd');
+    fireEvent.click(within(org).getByRole('button', { name: 'New customer' }));
+    const created = await screen.findByRole('dialog', { name: 'New customer' });
+    fireEvent.click(within(created).getByRole('button', { name: 'Cancel' }));
+    // back to the party it came from
+    expect(await screen.findByRole('dialog', { name: 'Lone Ltd' })).toBeTruthy();
+    expect(writes(fetchMock)).toEqual([]);
+  });
+
+  it('says a create with no answer may have happened and Refresh reloads the list', async () => {
+    const { fetchMock, calls } = backend({
+      [`POST ${PARTY}/individual`]: () => refused(504, 'upstream timed out'),
+    });
+    await open();
+    await screen.findByText('Olga Kuznetsova');
+    fireEvent.click(screen.getByRole('button', { name: 'New individual' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New individual' });
+    fireEvent.change(within(dialog).getByLabelText('Given name'), { target: { value: 'Anna' } });
+    fireEvent.change(within(dialog).getByLabelText('Family name'), { target: { value: 'Lee' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
+    expect((await within(dialog).findByRole('alert')).textContent).toBe(
+      'upstream timed out. Unsure whether it was saved: Refresh to check.',
+    );
+    // the input stays for a retry
+    expect(within(dialog).getByLabelText('Given name')).toHaveProperty('value', 'Anna');
+    const lists = calls.filter((c) => c.startsWith(`GET ${PARTIES}?kind=Individual`)).length;
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Refresh' }));
+    await screen.findByText('Refreshed');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() =>
+      expect(calls.filter((c) => c.startsWith(`GET ${PARTIES}?kind=Individual`))).toHaveLength(
+        lists + 1,
+      ),
+    );
+    expect(writes(fetchMock)).toHaveLength(1);
+  });
+
+  it('sends the edited customer name and offers Refresh after an unknown outcome', async () => {
+    const { fetchMock } = backend({
+      [`GET ${PARTY}/organization/${EMPTY_ORG}`]: () => json(ORGANIZATIONS[1]),
+      [`POST ${CUSTOMERS}`]: () => refused(502, 'bad gateway'),
+    });
+    await open();
+    tab('Organizations');
+    const org = await dialogOf('Lone Ltd');
+    fireEvent.click(within(org).getByRole('button', { name: 'New customer' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New customer' });
+    fireEvent.change(within(dialog).getByLabelText('Customer name'), {
+      target: { value: 'Lone Retail' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create customer' }));
+    expect((await within(dialog).findByRole('alert')).textContent).toContain('Refresh to check');
+    expect(String(writes(fetchMock)[0]?.[2])).toContain('"name":"Lone Retail"');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Refresh' }));
+    await screen.findByText('Refreshed');
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('steps back from a delete and from an edit, dropping the PIN and the refusal', async () => {
+    const { fetchMock } = backend({
+      [`GET ${PARTY}/individual/${OLGA}`]: () => json(INDIVIDUALS[1]),
+      [`PATCH ${PARTY}/individual/${OLGA}`]: () =>
+        tmfCodeError(403, 'pinRequired', 'the account PIN is required'),
+    });
+    await open();
+    const dialog = await dialogOf('Olga Kuznetsova');
+    await within(dialog).findByText('Given name');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'No' }));
+    expect(within(dialog).queryByText('Delete this party?')).toBeNull();
+    expect(within(dialog).getByRole('button', { name: 'Delete' })).toBeTruthy();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Edit' }));
+    fireEvent.change(within(dialog).getByLabelText('Given name'), { target: { value: 'Olya' } });
+    fireEvent.change(within(dialog).getByLabelText('Email'), { target: { value: 'o@x.org' } });
+    fireEvent.change(within(dialog).getByLabelText('Account PIN'), {
+      target: { value: '482913' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await within(dialog).findByRole('alert');
+    expect(String(writes(fetchMock)[0]?.[2])).toContain('"givenName":"Olya"');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    // the record again, without the refusal; a new edit starts from it, PIN empty
+    expect(within(dialog).queryByRole('alert')).toBeNull();
+    expect(within(dialog).getByText('Olga')).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Edit' }));
+    expect(within(dialog).getByLabelText('Given name')).toHaveProperty('value', 'Olga');
+    fireEvent.change(within(dialog).getByLabelText('Email'), { target: { value: 'o@x.org' } });
+    expect(within(dialog).getByLabelText('Account PIN')).toHaveProperty('value', '');
+  });
+
+  it('steps back from a customer edit and closes Add billing account without sending', async () => {
+    const { fetchMock } = backend({
+      [`GET ${CUSTOMERS}/${C_ORPHAN}`]: () => json(CUSTOMER_ROWS[1]),
+      [`PATCH ${CUSTOMERS}/${C_ORPHAN}`]: () => refused(422, 'name is too long'),
+    });
+    await open();
+    await customers();
+    const dialog = await dialogOf('Ivan Second');
+    await within(dialog).findByText('Engaged party');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Edit' }));
+    fireEvent.change(within(dialog).getByLabelText('Customer name'), {
+      target: { value: 'Ivan the Second' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    expect((await within(dialog).findByRole('alert')).textContent).toContain('name is too long');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(within(dialog).queryByRole('alert')).toBeNull();
+    expect(within(dialog).getByText('Engaged party')).toBeTruthy();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add billing account' }));
+    const add = await screen.findByRole('dialog', { name: 'Add billing account' });
+    fireEvent.click(within(add).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog', { name: 'Add billing account' })).toBeNull();
+    expect(writes(fetchMock).map(([method]) => method)).toEqual(['PATCH']);
+  });
+
+  it('keeps Delete customer after a refused delete and scrolls to accounts to remove', async () => {
+    const scrolled = vi.fn();
+    const { fetchMock } = backend({
+      [`GET ${CUSTOMERS}/${C_ORPHAN}`]: () => json(CUSTOMER_ROWS[1]),
+      [`DELETE ${CUSTOMERS}/${C_ORPHAN}`]: () => refused(409, 'Customer has open orders'),
+      [`GET ${CUSTOMERS}/${C_IVAN}`]: () => json(CUSTOMER_ROWS[0]),
+    });
+    await open();
+    await customers();
+    let dialog = await dialogOf('Ivan Second');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Yes' }));
+    expect((await within(dialog).findByRole('alert')).textContent).toContain('open orders');
+    // the confirm closed: Delete is offered again, not a second Yes
+    expect(within(dialog).queryByRole('button', { name: 'Yes' })).toBeNull();
+    expect(within(dialog).getByRole('button', { name: 'Delete' })).toBeTruthy();
+    expect(writes(fetchMock)).toEqual([['DELETE', `${CUSTOMERS}/${C_ORPHAN}`, null]]);
+    fireEvent.click(within(dialog).getAllByRole('button', { name: 'Close' })[1] as HTMLElement);
+
+    fireEvent.click((await screen.findAllByText('Ivan Petrov'))[0] as HTMLElement);
+    dialog = await screen.findByRole('dialog', { name: 'Ivan Petrov' });
+    await within(dialog).findByText('Engaged party');
+    const accounts = expectUi('ui.parties.customerAccounts').parentElement as HTMLElement;
+    accounts.scrollIntoView = scrolled;
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove billing accounts first' }));
+    expect(scrolled).toHaveBeenCalledWith({ block: 'center' });
+  });
+});
+
+describe('billing accounts of a customer: cancel and unknown outcome', () => {
+  const ACCOUNT_URL = `${ACCOUNTS}/billingAccount/${A1}`;
+
+  it('steps back from an account delete and offers Refresh after no answer', async () => {
+    const { fetchMock } = backend({
+      [`GET ${CUSTOMERS}/${C_IVAN}`]: () => json(CUSTOMER_ROWS[0]),
+      [`DELETE ${ACCOUNT_URL}`]: () => refused(500, 'database restarted'),
+    });
+    await open();
+    await customers();
+    fireEvent.click((await screen.findAllByText('Ivan Petrov'))[0] as HTMLElement);
+    const dialog = await screen.findByRole('dialog', { name: 'Ivan Petrov' });
+    const rows = expectUi('ui.parties.customerAccounts');
+    fireEvent.click(within(rows).getByRole('button', { name: 'Delete' }));
+    fireEvent.click(within(rows).getByRole('button', { name: 'No' }));
+    expect(within(rows).queryByText('Delete this billing account?')).toBeNull();
+    expect(writes(fetchMock)).toEqual([]);
+    fireEvent.click(within(rows).getByRole('button', { name: 'Delete' }));
+    fireEvent.click(within(rows).getByRole('button', { name: 'Yes' }));
+    expect((await within(rows).findByRole('alert')).textContent).toBe(
+      'database restarted. Unsure whether it was saved: Refresh to check.',
+    );
+    fireEvent.click(within(rows).getByRole('button', { name: 'Refresh' }));
+    await screen.findByText('Refreshed');
+    expect(screen.queryByRole('dialog', { name: 'Ivan Petrov' })).toBeNull();
+    expect(dialog.isConnected).toBe(false);
+    expect(writes(fetchMock)).toEqual([['DELETE', ACCOUNT_URL, null]]);
   });
 });

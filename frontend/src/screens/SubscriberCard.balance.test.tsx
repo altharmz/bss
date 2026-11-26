@@ -958,4 +958,29 @@ describe('prepaid plans (#212)', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Buy add-on' }));
     expect(await within(dialog).findByText(/no paid period running today/)).toBeTruthy();
   });
+
+  // #487: Top up from Buy add-on closes it and opens Top up with the shortfall; Escape
+  // closes Buy add-on without an order
+  it('tops up the add-on shortfall in place of the purchase, or closes without ordering', async () => {
+    const { fetchMock } = routes({ [QUOTE]: () => json(quote) });
+    await open();
+    const row = await waitFor(() => productRow('Mobile L'));
+    fireEvent.click(productAction(row, 'Buy add-on…'));
+    expect(await screen.findByRole('dialog', { name: /Buy add-on/ })).toBeTruthy();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    fireEvent.click(productAction(row, 'Buy add-on…'));
+    const dialog = await screen.findByRole('dialog', { name: /Buy add-on/ });
+    fireEvent.click((await within(dialog).findAllByRole('radio'))[0] as HTMLElement);
+    await within(dialog).findByTestId('addon-required');
+    expect(expectUi('ui.subscriber.buyAddOn.topUp').textContent).toBe('Top up 1.80');
+    fireEvent.click(expectUi('ui.subscriber.buyAddOn.topUp'));
+    const form = await screen.findByRole('dialog', { name: 'Top up' });
+    expect(within(form).getByLabelText('Amount')).toHaveProperty('value', '1.80');
+    expect(screen.queryByRole('dialog', { name: /Buy add-on/ })).toBeNull();
+    expect(
+      fetchMock.mock.calls.filter(([, init]) => init?.method && init.method !== 'GET'),
+    ).toEqual([]);
+  });
 });
