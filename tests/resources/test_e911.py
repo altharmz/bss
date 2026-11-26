@@ -1,11 +1,13 @@
 """The registered E911 address of Wi-Fi calling lines (issue #201)."""
 # ruff: noqa: F811
 
+from datetime import timedelta
+
 import pytest
 
 from app.config import settings
 from app.network import e911
-from tests import apidata
+from tests import apidata, timeline
 from tests.apidata import ORDER
 from tests.builders.billing.tax_engine import CA, set_address
 from tests.builders.care.account_security import PIN, audit, head, set_pin
@@ -208,6 +210,11 @@ def test_a_refused_change_leaves_the_old_address(api, db_conn, wifi, stub):
         ("networkRefused", "e911AddressInvalid")
     ]
     assert stored(db_conn, product) == HOME_STORED
+    refused = api.post(CANCEL, cancel_body(order))
+    assert refused.status_code == 409, refused.text
+    assert refused.json()["message"] == (
+        f"productOrder {order['id']} is failed: it cannot be cancelled"
+    )
 
 
 def test_an_activation_with_the_refused_address_cancels_the_line(api, db_conn, wifi, stub):
@@ -413,3 +420,86 @@ def test_the_address_rules():
     assert e911.role_problem(place(HOME)) is None
     assert e911.role_problem(place(HOME) * 2) is not None
     assert e911.wifi_calling({"wifiCalling": 1}) and not e911.wifi_calling({"wifiCalling": 0})
+
+
+def address_item(product_id, address, item_id):
+    return {
+        "@type": "ProductOrderItem",
+        "id": item_id,
+        "action": "modify",
+        "product": {"id": product_id, "@type": "ProductRef", "place": place(address)},
+    }
+
+
+def test_two_changes_without_the_pin_are_refused_once(api, db_conn, wifi, stub, monkeypatch):
+    monkeypatch.setattr(settings, "account_pin_required", True)
+    first = activated(api, db_conn, wifi, HOME)
+    second = activated(api, db_conn, wifi, HOME, value="79991234501")
+    assert set_pin(api, str(customer_of(db_conn, wifi.acc))).status_code == 200
+    body = apidata.order_body(
+        wifi.acc, address_item(first, OFFICE, "1"), address_item(second, OFFICE, "2")
+    )
+    order = api.post(ORDER, body).json()
+    assert order["state"] == "rejected"
+    assert sorted(
+        (e["productOrderItem"][0]["productOrderItemId"], e["code"])
+        for e in order["productOrderErrorMessage"]
+    ) == [
+        ("1", "pinRequired"),
+        ("2", "pinRequired"),
+    ]
+    refused = audit(api, action="e911_changed")
+    assert sorted(e["product"]["id"] for e in refused) == sorted([first, second])
+    assert {e["outcome"] for e in refused} == {"refused"}
+    assert stored(db_conn, first) == stored(db_conn, second) == HOME_STORED
+
+
+def test_an_address_change_is_an_order_of_its_own(api, db_conn, wifi, stub):
+    first = activated(api, db_conn, wifi, HOME)
+    second = activated(api, db_conn, wifi, HOME, value="79991234501")
+    suspend = {
+        "@type": "ProductOrderItem",
+        "id": "2",
+        "action": "modify",
+        "product": {"id": second, "@type": "ProductRef", "status": "suspended"},
+    }
+    order = api.post(
+        ORDER, apidata.order_body(wifi.acc, address_item(first, OFFICE, "1"), suspend)
+    ).json()
+    assert order["state"] == "rejected" and errors(order) == ["e911ChangeAlone"]
+    assert stored(db_conn, first) == HOME_STORED
+    assert db_conn.execute("SELECT count(*) FROM product_status_change").fetchone() == (0,)
+
+
+def test_a_wifi_calling_add_on_gives_an_addressless_line_the_service_address(
+    api, db_conn, world, stub
+):
+    from tests.builders.prepaid.prepaid_plans import ADDON_PROFILE, add_on_item, offering, price
+
+    now = api.clock.now()
+    api.clock.set(timeline.START - timedelta(hours=1))  # the pack's price starts at START
+    pack = offering(
+        api,
+        "Wi-Fi calling",
+        [price(api, "oneTime", 1, "Wi-Fi calling")],
+        kind="addOn",
+        profile=ADDON_PROFILE | {"wifiCalling": 1},
+    )
+    api.clock.set(now)
+    plan = activated(api, db_conn, world)  # no Wi-Fi calling: no address needed
+    assert stored(db_conn, plan) is None
+    buy_pack = lambda: api.post(  # noqa: E731
+        ORDER, apidata.order_body(world.acc, add_on_item(world, {"id": plan}, offering_=pack))
+    ).json()
+    refused = buy_pack()
+    assert refused["state"] == "rejected" and errors(refused) == ["e911AddressRequired"]
+    assert set_address(api, world.acc, CA).status_code == 200
+    bought = buy_pack()
+    assert bought["state"] != "rejected", errors(bought)
+    assert stored(db_conn, plan) == e911.from_service_address(CA)
+    tick(db_conn, api.clock.now())
+    # the line has its address now: a second pack keeps it, whatever the service address
+    assert set_address(api, world.acc, CA | {"street1": "9 Other St"}).status_code == 200
+    again = buy_pack()
+    assert again["state"] != "rejected", errors(again)
+    assert stored(db_conn, plan) == e911.from_service_address(CA)

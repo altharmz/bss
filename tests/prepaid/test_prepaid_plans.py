@@ -7,15 +7,19 @@ from decimal import Decimal as D
 
 import pytest
 
+from app.config import settings
 from app.integrations.network import adapter as network
 from app.integrations.payment import adapter as gateway
+from app.integrations.tax.stub import FAILING_ZIP
 from tests import apidata, timeline
-from tests.apidata import CATALOG
+from tests.apidata import CATALOG, ORDER
 from tests.builders.billing.settlement_db import make_payment
+from tests.builders.billing.tax_engine import CA, set_address
 from tests.builders.prepaid.payment_gateway import commands_of as card_commands
 from tests.builders.prepaid.payment_gateway import rule, save
 from tests.builders.prepaid.prepaid_plans import (  # noqa: F401 - fixtures
     ACCOUNTS,
+    ADDON_PROFILE,
     RATES,
     add_on_item,
     at,
@@ -455,3 +459,70 @@ def test_a_non_plan_offering_without_a_fee_has_no_quote(api, db_conn, build):
     world = build("30")
     bare = offering(api, "Bare pack", [], kind="addOn")
     assert quote(api, world, bare).status_code == 422
+
+
+HOME = {
+    "@type": "GeographicAddress",
+    "streetNr": "742",
+    "streetName": "Evergreen",
+    "streetSuffix": "Terrace",
+    "city": "Springfield",
+    "stateOrProvince": "OR",
+    "postcode": "97403",
+    "country": "US",
+}
+
+
+def buy_payg(api, db_conn, world):
+    placed = apidata.order(api, world.acc, apidata.add_item(world.payg))
+    tick(db_conn, api.clock.now())
+    done = api.get(placed["href"]).json()
+    assert done["state"] == "completed", done
+    return apidata.product_of(api, done)
+
+
+def test_an_add_on_is_bought_for_a_paid_plan_with_a_fee_and_no_address_of_its_own(
+    api, db_conn, build
+):
+    world = build("60", fee=False)
+    bought = line(api, db_conn, world)
+    payg = buy_payg(api, db_conn, world)
+    on_payg = apidata.order(api, world.acc, add_on_item(world, payg))
+    assert errors(on_payg) == ["addOnParentNotPlan"]
+    free = offering(api, "Free pack", [], kind="addOn", profile=ADDON_PROFILE)
+    unpriced = apidata.order(api, world.acc, add_on_item(world, bought.product, offering_=free))
+    assert errors(unpriced) == ["noOneTimePrice"]
+    addressed = add_on_item(world, bought.product)
+    addressed["product"]["place"] = [
+        {"@type": "RelatedPlaceRefOrValue", "role": "e911Address", "place": HOME}
+    ]
+    placed = apidata.order(api, world.acc, addressed)
+    assert errors(placed) == ["e911NotApplicable"]
+    assert (
+        placed["productOrderErrorMessage"][0]["reason"] == "an add-on's line keeps its own address"
+    )
+    assert db_conn.execute(
+        "SELECT count(*) FROM product WHERE parent_product_id IS NOT NULL"
+    ).fetchone() == (0,)
+
+
+def test_an_add_on_waits_for_an_unavailable_tax_engine(api, db_conn, build, monkeypatch):
+    world = build("60", fee=False)
+    bought = line(api, db_conn, world)
+    monkeypatch.setattr(settings, "tax_require_service_address", True)
+    assert set_address(api, world.acc, CA | {"postCode": FAILING_ZIP}).status_code == 200
+    before = balance(db_conn, world.acc)
+    response = api.post(ORDER, apidata.order_body(world.acc, add_on_item(world, bought.product)))
+    assert response.status_code == 503, response.text
+    assert response.json()["message"].startswith("tax engine unavailable")
+    assert balance(db_conn, world.acc) == before
+    assert db_conn.execute(
+        "SELECT count(*) FROM product WHERE parent_product_id IS NOT NULL"
+    ).fetchone() == (0,)
+
+
+def test_an_add_on_parent_that_is_no_uuid_names_no_plan(api, db_conn, build):
+    world = build("60", fee=False)
+    line(api, db_conn, world)
+    placed = apidata.order(api, world.acc, add_on_item(world, {"id": "not-a-uuid"}))
+    assert errors(placed) == ["addOnParentRequired"]

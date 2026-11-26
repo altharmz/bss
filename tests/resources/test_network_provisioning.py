@@ -438,3 +438,44 @@ def test_an_unknown_adapter_fails_startup(monkeypatch):
     assert Settings().network_adapter == "stub"
     monkeypatch.delenv("BSS_NETWORK_ADAPTER")
     assert Settings().network_adapter == "stub"
+
+
+def cancel_refused(api, order, text):
+    before = api.get(order["href"]).json()
+    response = api.post(CANCEL, cancel_body(order))
+    assert response.status_code == 409, response.text
+    assert text in response.json()["message"], response.json()["message"]
+    assert api.get(order["href"]).json() == before
+
+
+def test_an_offering_change_waiting_for_the_network_at_the_renewal_cannot_be_cancelled(
+    api, db_conn, world, cheaper, stub
+):
+    product = line(api, db_conn, world)
+    order = switch(api, world.acc, product, cheaper, product["due"])
+    assert order["state"] == "inProgress"
+    cancel_refused(api, order, "an offering change waiting for the network cannot be cancelled")
+    assert db_conn.execute("SELECT count(*) FROM product_offering_change").fetchone() == (1,)
+
+
+def test_a_refused_offering_change_cannot_be_cancelled(api, db_conn, world, cheaper, stub):
+    product = line(api, db_conn, world)
+    stub.refuse_kinds.add("change_profile")
+    order = switch(api, world.acc, product, cheaper, api.clock.now().date())
+    tick(db_conn, api.clock.now())
+    assert state(api, order) == "failed"
+    cancel_refused(api, order, f"productOrder {order['id']} is failed: it cannot be cancelled")
+
+
+def test_a_line_keeps_a_number_an_empty_resource_list_would_drop(api, db_conn, world, stub):
+    product = line(api, db_conn, world)
+    item = {
+        "@type": "ProductOrderItem",
+        "id": "1",
+        "action": "modify",
+        "product": {"id": product["id"], "@type": "ProductRef", "realizingResource": []},
+    }
+    order = apidata.order(api, world.acc, item)
+    assert order["state"] == "rejected" and errors(order) == ["numberRequired"]
+    shown = api.get(f"{apidata.PRODUCT}/{product['id']}").json()
+    assert len(shown["realizingResource"]) == 1

@@ -12,8 +12,11 @@ from datetime import timedelta
 from uuid import UUID
 
 import psycopg
+import pytest
 
+from app.ordering import process
 from app.ordering.process import ItemRequest, OrderRequest, place_order
+from app.repository import parties
 from tests import apidata, timeline
 from tests.apidata import ORDER
 
@@ -67,3 +70,56 @@ def test_a_concurrent_second_delete_waits_and_is_rejected(api, migrated_db_url):
     assert ended["status"] == "terminated"
     creation, termination = ended["productOrderItem"]
     assert termination["orderId"] != order["id"]  # terminated by the first order only
+
+
+# --- the account changes between the unlocked look and the lock ---
+
+
+@pytest.fixture
+def rival(db_conn):
+    """Another session; it fails rather than waits on a lock the request holds."""
+    db_conn.execute("SET lock_timeout = '5s'")
+    db_conn.commit()
+    return db_conn
+
+
+def race_on_account_lock(monkeypatch, competing):
+    """Run `competing` (committed in another session) right after the order's first,
+    unlocked read of its account and before it locks the account."""
+    real = parties.get_billing_account
+
+    def raced(conn, uid, lock=None):
+        if lock is not None:
+            competing()
+        return real(conn, uid, lock)
+
+    monkeypatch.setattr(process.parties, "get_billing_account", raced)
+
+
+@pytest.mark.parametrize(
+    "sql,message",
+    [
+        (
+            "UPDATE billing_account SET rating_type = 'prepaid' WHERE id = %s",
+            "billing account mode changed; retry the order",
+        ),
+        ("DELETE FROM billing_account WHERE id = %s", "does not exist"),
+    ],
+)
+def test_an_account_that_changes_before_its_lock_refuses_the_order(
+    api, rival, monkeypatch, sql, message
+):
+    offering = apidata.sellable_offering(api)
+    acc = apidata.account(api)
+    api.clock.set(timeline.START + timedelta(hours=9))
+
+    def competing():
+        rival.execute(sql, (acc["id"],))
+        rival.commit()
+
+    race_on_account_lock(monkeypatch, competing)
+    response = api.post(ORDER, apidata.order_body(acc, apidata.add_item(offering)))
+    assert response.status_code == 422, response.text
+    assert message in response.json()["message"]
+    assert rival.execute("SELECT count(*) FROM product_order").fetchone()[0] == 0
+    assert rival.execute("SELECT count(*) FROM product").fetchone()[0] == 0

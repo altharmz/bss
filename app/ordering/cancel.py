@@ -109,7 +109,9 @@ def _item_problem(
         day = product["start_date"]
     else:
         ends = product["termination_date"]
-        if product["terminated_by_item_id"] != item["id"] or ends is None:
+        if (
+            product["terminated_by_item_id"] != item["id"] or ends is None
+        ):  # pragma: no cover - only cancelling this completed order takes its termination back
             return "its product is no longer ended by this order"
         if ends <= today:
             return f"the termination took effect on {ends}"
@@ -135,7 +137,7 @@ def _modify_problem(
         ),
         None,
     )
-    if change is None:
+    if change is None:  # pragma: no cover - only cancelling (or failing) its order deletes it
         return "its offering change is no longer the product's"
     day = change["change_date"]
     if day <= today:
@@ -161,7 +163,7 @@ def _status_problem(conn: psycopg.Connection, item: Row, product: Row, today: da
         ),
         None,
     )
-    if change is None:
+    if change is None:  # pragma: no cover - only cancelling (or failing) its order deletes it
         return "its status change is no longer the product's"
     if change["change_date"] < today:
         return f"the status change took effect on {change['change_date']}"
@@ -177,7 +179,7 @@ def undoable_status_change(conn: psycopg.Connection, product: Row, today: date) 
             continue
         item = orders.get_order_item(conn, change["changed_by_item_id"])
         order = orders.get_order(conn, item["product_order_id"])
-        if order["state"] != "completed":
+        if order["state"] != "completed":  # pragma: no cover - applying completes the order
             continue
         account = parties.get_billing_account(conn, order["billing_account_id"])
         items = orders.items_of(conn, order["id"])
@@ -356,14 +358,9 @@ def _cancel_prepaid(conn, order, command, request, now, today):
     parties.get_billing_account(conn, order["billing_account_id"], "update")
     items = orders.items_of(conn, order["id"])
     locked = products.lock_products(conn, [i["product_id"] for i in items])
-    if fetch_one(
-        conn, "SELECT id FROM funded_interval WHERE command_id = %s LIMIT 1", (command["id"],)
-    ):
-        raise CancelRefused("prepaid order already has a funded grant")
+    # Its grants are posted with the command's completion, refused above; and its add
+    # items end no number claim, so cancelling restores none that could conflict.
     number_rows = number_orders.lock(conn, list(locked))
-    problem = number_orders.cancellation_problem(conn, items)
-    if problem:
-        raise CancelRefused(problem)
     old_numbers = number_orders.before(conn, number_rows, today)
     number_orders.cancel(conn, items, now)
     hold = fetch_one(

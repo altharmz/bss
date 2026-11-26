@@ -326,3 +326,85 @@ def test_delete_unstarted_product_keeps_empty_number_history(api, shop, db_conn)
     assert ended["state"] == "completed"
     assert api.get(n["href"]).json()["allocationStatus"] == "available"
     assert db_conn.execute("SELECT isempty(valid_for) FROM number_assignment").fetchone()[0]
+
+
+# --- refusals: what an order may not do to numbers, and cancellations that come too late ---
+
+
+def errors(order):
+    return [e["code"] for e in order.get("productOrderErrorMessage", [])]
+
+
+def later(days):
+    return timeline.TOMORROW + timedelta(days=days)
+
+
+def cancel_refused(api, order, text):
+    response = cancel(api, order)
+    assert response.status_code == 409, response.text
+    assert text in response.json()["message"], response.json()["message"]
+    assert api.get(order["href"]).json()["state"] == "completed"
+
+
+def test_a_number_change_that_took_effect_cannot_be_cancelled(api, shop):
+    old, new = number(api), number(api, "12025550124")
+    product = apidata.product_of(api, add(api, shop, old["id"]))
+    change = modify(api, shop[1], product, new["id"], later(3))
+    api.clock.set(timeline.midnight(later(3)) + timedelta(hours=9))
+    cancel_refused(api, change, "item 1 (modify): the number change has already taken effect")
+    assert api.get(product["href"]).json()["realizingResource"][0]["id"] == new["id"]
+
+
+def test_a_number_change_a_later_termination_ends_cannot_be_cancelled(api, shop):
+    old, new = number(api), number(api, "12025550124")
+    product = apidata.product_of(api, add(api, shop, old["id"]))
+    change = modify(api, shop[1], product, new["id"], later(3))
+    ended = apidata.order(
+        api,
+        shop[1],
+        apidata.delete_item(product["id"]),
+        requestedStartDate=timeline.iso(timeline.midnight(later(6))),
+    )
+    assert ended["state"] == "completed", errors(ended)
+    cancel_refused(api, change, "item 1 (modify): another order ended the number assignment")
+    api.clock.set(timeline.midnight(later(3)) + timedelta(hours=9))
+    assert api.get(product["href"]).json()["realizingResource"][0]["id"] == new["id"]
+
+
+def test_a_future_product_whose_number_another_order_changes_cannot_be_cancelled(api, shop):
+    old, new = number(api), number(api, "12025550124")
+    created = add(api, shop, old["id"], later(3))
+    product = apidata.product_of(api, created)
+    assert product["status"] == "created"
+    change = modify(api, shop[1], product, new["id"], later(5))
+    assert change["state"] == "completed", errors(change)
+    cancel_refused(api, created, "item 1 (add): another order changes its product number")
+    assert api.get(product["href"]).json()["status"] == "created"
+
+
+def test_a_number_change_must_follow_a_later_one(api, shop):
+    old, first, second = number(api), number(api, "12025550124"), number(api, "12025550125")
+    product = apidata.product_of(api, add(api, shop, old["id"]))
+    assert modify(api, shop[1], product, first["id"], later(5))["state"] == "completed"
+    earlier = modify(api, shop[1], product, second["id"], later(3))
+    assert earlier["state"] == "rejected"
+    assert [(e["code"], e["reason"]) for e in earlier["productOrderErrorMessage"]] == [
+        ("numberUnavailable", "msisdn changes must follow existing assignments")
+    ]
+    assert api.get(second["href"]).json()["allocationStatus"] == "available"
+
+
+def test_a_reference_that_is_no_uuid_names_no_number(api, shop, db_conn):
+    order = add(api, shop, "not-a-uuid")
+    assert order["state"] == "rejected" and errors(order) == ["numberUnavailable"]
+    assert db_conn.execute("SELECT count(*) FROM product").fetchone()[0] == 0
+
+
+def test_a_product_without_numbers_keeps_its_resource_documents_out_of_orders(api):
+    offering, acc = apidata.sellable_offering(api), apidata.account(api)
+    api.clock.set(timeline.START + timedelta(hours=9))
+    product = apidata.product_of(api, apidata.order(api, acc, apidata.add_item(offering)))
+    change = modify(api, acc, product, str(uuid4()), later(1))
+    assert change["state"] == "rejected" and errors(change) == ["numberNotRequired"]
+    assert "through product inventory" in change["productOrderErrorMessage"][0]["reason"]
+    assert "realizingResource" not in api.get(product["href"]).json()

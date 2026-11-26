@@ -375,3 +375,80 @@ def test_a_draft_names_only_what_exists(api, shop):
             "productOrderItem": [apidata.add_item(offering)],
         } | over
         assert api.post(ORDER, body).status_code == 422, over
+
+
+# --- what an item may carry for its action ---
+
+IMEI = {"@type": "StringCharacteristic", "name": "imei", "value": "490154203237518"}
+SIM_TYPE = {"@type": "StringCharacteristic", "name": "simType", "value": "esim"}
+PLACE = [{"@type": "RelatedPlaceRefOrValue", "role": "e911Address", "place": {"city": "X"}}]
+ADD_ON = [{"@type": "ProductRelationship", "relationshipType": "addOn", "id": apidata.NIL}]
+
+
+def _modify(product: dict, **over) -> dict:
+    return {"@type": "ProductOrderItem", "id": "1", "action": "modify", "product": product, **over}
+
+
+@pytest.mark.parametrize(
+    "item,message",
+    [
+        ("not an item", "productOrderItem.0"),
+        (
+            _modify(
+                {
+                    "@type": "ProductRefOrValue",
+                    "id": apidata.NIL,
+                    "productCharacteristic": [SIM_TYPE],
+                },
+                productOffering={"id": apidata.NIL, "@type": "ProductOfferingRef"},
+            ),
+            "item 1: simType is writable only on add items",
+        ),
+        (
+            apidata.delete_item(apidata.NIL, product={"id": apidata.NIL, "place": PLACE}),
+            "item 1: place is writable only on add or modify items",
+        ),
+        (
+            apidata.delete_item(
+                apidata.NIL, product={"id": apidata.NIL, "realizingResource": [{"id": apidata.NIL}]}
+            ),
+            "realizingResource is writable only on add or modify items",
+        ),
+        (
+            apidata.delete_item(
+                apidata.NIL, product={"id": apidata.NIL, "productRelationship": ADD_ON}
+            ),
+            "productRelationship is writable only on add items",
+        ),
+        (
+            _modify({"@type": "ProductRefOrValue", "productCharacteristic": [IMEI]}),
+            "item 1: a modify item needs product",
+        ),
+        (
+            _modify({"@type": "ProductRefOrValue", "place": PLACE}),
+            "item 1: a modify item needs product",
+        ),
+    ],
+)
+def test_an_item_carries_only_what_its_action_writes(api, shop, db_conn, item, message):
+    _, acc = shop
+    response = api.post(ORDER, apidata.order_body(acc, item))
+    assert response.status_code == 422, response.text
+    assert message in response.json()["message"]
+    assert db_conn.execute("SELECT count(*) FROM product_order").fetchone()[0] == 0
+
+
+def test_a_draft_keeps_its_items_well_formed(api, shop):
+    offering, _ = shop
+    draft = _draft(api, apidata.add_item(offering))
+    for items, message in (
+        (None, "productOrderItem cannot be null: an order needs at least one item"),
+        (
+            [apidata.add_item(offering), apidata.add_item(offering)],
+            "productOrderItem ids must be unique within the order",
+        ),
+    ):
+        response = api.patch(draft["href"], {"productOrderItem": items})
+        assert response.status_code == 422, response.text
+        assert message in response.json()["message"]
+        assert api.get(draft["href"]).json() == draft

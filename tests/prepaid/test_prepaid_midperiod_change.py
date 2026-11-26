@@ -25,6 +25,7 @@ from tests.builders.prepaid.prepaid_renewal_producer import pay, tick
 from tests.builders.prepaid.prepaid_status_orders import errors
 from tests.builders.prepaid.prepaid_terminations import terminate
 from tests.builders.resources.api_resource_inventory import number
+from tests.builders.resources.number_orders import refs
 from tests.builders.tmf.events import stored, subscribe
 
 
@@ -281,3 +282,29 @@ def test_0050_round_trips(temp_db_url):
     command.upgrade(cfg, "head")
     command.downgrade(cfg, "0049")
     command.upgrade(cfg, "head")
+
+
+def test_a_change_whose_old_number_was_claimed_again_cannot_be_cancelled(
+    api,
+    db_conn,
+    granted,  # noqa: F811
+):
+    first, _ = granted.products
+    day = api.clock.now().date() + timedelta(days=2)
+    (old,) = api.get(f"{apidata.PRODUCT}/{first['id']}").json()["realizingResource"]
+    new = number(api, value="79991234012")
+    pay(db_conn, UUID(granted.acc["id"]), "6", api.clock.now())
+    order = switch(api, granted.acc, first, granted.b, day, new["id"])
+    assert order["state"] == "inProgress", errors(order)
+    other = apidata.account(api, name="Other")
+    item = apidata.add_item(granted.b)
+    item["product"] = {"@type": "ProductRefOrValue", "realizingResource": refs(old["id"])}
+    taken = apidata.order(api, other, item, requestedStartDate=at(day).isoformat())
+    assert taken["state"] == "completed", errors(taken)
+    response = api.post(CANCEL, cancel_body(order))
+    assert response.status_code == 409, response.text
+    assert response.json()["message"] == (
+        "restoring the number assignment conflicts with another accepted claim"
+    )
+    assert api.get(order["href"]).json()["state"] == "inProgress"
+    assert held(db_conn) == D("6.00")

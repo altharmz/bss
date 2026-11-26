@@ -94,7 +94,9 @@ def problems(conn, request, account, locked, start: date) -> list[tuple[str, str
                 )
             )
             continue
-        if given is not None and item.action == "modify" and not address_only(item):
+        if (
+            given is not None and item.action == "modify" and not address_only(item)
+        ):  # pragma: no cover - the API refuses it (422) first
             found.append(
                 (
                     item.item_id,

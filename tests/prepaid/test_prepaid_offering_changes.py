@@ -26,6 +26,7 @@ from tests.builders.prepaid.prepaid_orders import shop
 from tests.builders.prepaid.prepaid_posting import TZ
 from tests.builders.prepaid.prepaid_renewal_producer import pay, tick
 from tests.builders.prepaid.prepaid_status_orders import errors
+from tests.builders.prepaid.prepaid_terminations import terminate
 from tests.builders.resources.api_resource_inventory import number
 from tests.builders.resources.number_orders import refs
 from tests.builders.tmf.events import stored, subscribe
@@ -171,3 +172,34 @@ def test_0044_combined_items_block_downgrade(temp_db_url):
         conn.execute("UPDATE product_order_item SET state = 'rejected' WHERE action = 'modify'")
     command.downgrade(cfg, "0043")
     command.upgrade(cfg, "head")
+
+
+def test_an_expired_product_changes_its_offering_and_number_today_only(api, db_conn, granted):
+    first, _ = granted.products
+    later = at(first["due"] + timedelta(days=2))
+    tick(db_conn, later)
+    api.clock.set(later)
+    tomorrow = switch(api, granted.acc, first, granted.b, later.date() + timedelta(days=1))
+    assert errors(tomorrow) == ["offeringChangeNotAtRenewal"]
+    assert "changes today" in tomorrow["productOrderErrorMessage"][0]["reason"]
+    new = number(api, value="79991234011")
+    subscribe(api, "TMF637", "ProductAttributeValueChangeEvent")
+    order = switch(api, granted.acc, first, granted.b, later.date(), new["id"])
+    assert order["state"] == "completed", errors(order)
+    shown = api.get(f"{apidata.PRODUCT}/{first['id']}").json()
+    assert shown["productOffering"]["id"] == granted.b["id"]
+    assert [r["id"] for r in shown["realizingResource"]] == [new["id"]]
+    assert [e["event"]["product"]["id"] for _, e in stored(db_conn, "TMF637")] == [first["id"]]
+
+
+def test_a_prepaid_product_that_is_ending_keeps_its_offering(api, db_conn, granted):
+    first, _ = granted.products
+    ends = first["due"] - timedelta(days=1)
+    ending = terminate(api, granted.acc, first, requestedStartDate=at(ends).isoformat())
+    assert ending["state"] == "inProgress", errors(ending)
+    order = switch(api, granted.acc, first, granted.b, api.clock.now().date())
+    assert order["state"] == "rejected"
+    assert [(e["code"], e["reason"]) for e in order["productOrderErrorMessage"]] == [
+        ("productAlreadyEnded", f"the prepaid product ends on {ends}")
+    ]
+    assert offering_of(api, first) == granted.a["id"]
