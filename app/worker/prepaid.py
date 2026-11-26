@@ -353,10 +353,12 @@ def _revalidation(conn, action, hold) -> str | None:
         return f"the sending account is {sender['state']}"
     if receiver["state"] == "Closed":
         return "the receiving account is closed"
+    # Both accounts hold the transfer's buckets (prepaid_bucket's key carries the currency and
+    # the rating type), so the database refuses either change once a transfer is accepted.
     if "prepaid" != sender["rating_type"] or "prepaid" != receiver["rating_type"]:
-        return "an account is no longer prepaid"
+        return "an account is no longer prepaid"  # pragma: no cover - refused by the database
     if sender["currency"] != receiver["currency"]:
-        return "currency: the accounts' currencies differ"
+        return "currency: the accounts' currencies differ"  # pragma: no cover - see above
     held = action["amount"] + (
         action["transfer_cost"] if action["cost_owner"] == "originator" else Decimal(0)
     )
