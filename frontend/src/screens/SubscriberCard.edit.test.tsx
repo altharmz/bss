@@ -750,4 +750,38 @@ describe('subscriber Overview orders', () => {
     expect(screen.getByText(/Customer no\./)).toBeTruthy();
     expect(await screen.findByText('Starts 2026-10-06')).toBeTruthy();
   });
+
+  // #487: a draft submitted from the card that the worker completes later is followed there
+  it('follows a draft submitted from the card that is accepted in progress', async () => {
+    const DRAFT_ID = 'a0000000-0000-4000-8000-000000000002';
+    const draft = {
+      id: DRAFT_ID,
+      state: 'draft',
+      billingAccount: { id: A },
+      requestedStartDate: '2026-10-06T09:00:00Z',
+      productOrderItem: [
+        { id: '1', action: 'add', productOffering: { id: O2, name: 'Draft Fiber' } },
+      ],
+    };
+    const { fetchMock } = backend({
+      [`GET ${ORDERS}?billingAccount.id=${A}&state=draft&offset=0&limit=50`]: () =>
+        json([draft], { total: 1 }),
+      [`GET ${ORDERS}/${DRAFT_ID}`]: () => json(draft),
+      [`PATCH ${ORDERS}/${DRAFT_ID}`]: () => json({ id: DRAFT_ID, state: 'inProgress' }),
+      [`GET /internal/v1/prepaid/command/${DRAFT_ID}`]: pending,
+      'GET /*': pending,
+    });
+    await open();
+    const box = expectUi('ui.subscriber.unfinishedOrders');
+    fireEvent.click(await within(box).findByRole('button', { name: 'Open' }));
+    const dialog = await screen.findByRole('dialog', { name: /Order/ });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Submit' }));
+    const watch = await waitFor(() => expectUi('ui.subscriber.prepaid.orderWatch'));
+    expect(watch.textContent).toContain('Order A0000000 accepted');
+    expect(
+      fetchMock.mock.calls
+        .filter(([, init]) => init?.method === 'PATCH')
+        .map(([, init]) => init?.body),
+    ).toEqual(['{"state":"acknowledged"}']);
+  });
 });

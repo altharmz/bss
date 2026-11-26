@@ -1,8 +1,10 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { json, stubFetch, tmfError, type Handler } from '../test/fetch';
+import { json, pending, stubFetch, tmfError, type Handler } from '../test/fetch';
 import { expectUi } from '../test/expectUi';
 import { accountBody } from '../test/fixtures';
+import { pickOption } from '../test/combobox';
+import { NUMBERS } from '../api/numbers';
 import {
   A,
   C,
@@ -16,6 +18,7 @@ import {
   usd,
   ACCOUNT,
   product,
+  PRODUCTS,
   FIRST_CHARGE,
   backend,
   open,
@@ -613,6 +616,67 @@ describe('product actions', () => {
       expect.stringContaining('the change was already applied'),
     );
   });
+
+  // #487: a refused change keeps the dialog and its date; an unknown outcome offers Refresh,
+  // which closes the dialog and reloads the card
+  it('keeps a refused suspend in the dialog and refreshes after an unknown outcome', async () => {
+    let answer = () => tmfError(422, 'the date is outside the paid period');
+    let productReads = 0;
+    const { fetchMock } = backend({
+      [`GET ${INTERNAL}/products`]: () => {
+        productReads += 1;
+        return json(PRODUCTS, { total: PRODUCTS.length });
+      },
+      [`POST ${ORDERS}`]: () => answer(),
+    });
+    await open();
+    const row = await waitFor(() => productRow('Mobile L'));
+    openMenu(row);
+    fireEvent.click(within(productMenu(row)).getByRole('menuitem', { name: 'Suspend…' }));
+    const dialog = screen.getByRole('dialog', { name: 'Suspend: Mobile L' });
+    fireEvent.change(within(dialog).getByLabelText('Date'), { target: { value: '2026-11-03' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Suspend' }));
+    expect((await within(dialog).findByRole('alert')).textContent).toContain(
+      'the date is outside the paid period',
+    );
+    expect(within(dialog).queryByRole('button', { name: 'Refresh' })).toBeNull();
+    expect(within(dialog).getByLabelText('Date')).toHaveProperty('value', '2026-11-03');
+
+    answer = () => tmfError(504, 'upstream timed out');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Suspend' }));
+    await within(dialog).findByText(/The request was sent but no answer came back/);
+    expect(dialog.querySelector('.bss-write-note')?.textContent).toBe(
+      'Unsure whether it was saved. The request was sent but no answer came back. Refresh to read it back before trying again.',
+    );
+    const before = productReads;
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Refresh' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => expect(productReads).toBeGreaterThan(before));
+    expect(posts(fetchMock)).toHaveLength(2);
+  });
+
+  it('keeps the suspend dialog open on Escape while the order is in flight', async () => {
+    let answer: ((response: Response) => void) | undefined;
+    backend({
+      [`POST ${ORDERS}`]: () =>
+        new Promise<Response>((resolve) => {
+          answer = resolve;
+        }),
+    });
+    await open();
+    const row = await waitFor(() => productRow('Mobile L'));
+    openMenu(row);
+    fireEvent.click(within(productMenu(row)).getByRole('menuitem', { name: 'Suspend…' }));
+    const dialog = screen.getByRole('dialog', { name: 'Suspend: Mobile L' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Suspend' }));
+    await waitFor(() => expect(answer).toBeDefined());
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.getByRole('dialog', { name: 'Suspend: Mobile L' })).toBeTruthy();
+    answer?.(tmfError(422, 'the date is taken'));
+    await within(dialog).findByText(/the date is taken/);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
 });
 
 describe('change offering', () => {
@@ -1085,6 +1149,97 @@ describe('change offering', () => {
     );
     expect(screen.getByRole('dialog')).toBe(dialog);
   });
+
+  // #487: the filter, a keyboard pick and the unknown outcome of the change order
+  it('filters offerings by name or code and picks one from the keyboard', async () => {
+    backend({
+      ...catalog,
+      [CATALOG]: () =>
+        json(
+          [
+            offering(O1, 'Mobile L', 'pr1'),
+            offering(O2, 'Fiber 100', 'pr2'),
+            offering('o3', 'Fiber 500', 'pr2'),
+          ],
+          { total: 3 },
+        ),
+      [preview('2026-10-28')]: pending,
+      [`GET ${INTERNAL}/firstCharge?productOffering.id=o3&startDate=2026-10-28`]: pending,
+    });
+    const { dialog } = await openDialog();
+    await within(dialog).findByRole('radio', { name: /Fiber 100/ });
+    const filter = within(dialog).getByLabelText('Filter offerings');
+    fireEvent.change(filter, { target: { value: ' 500 ' } });
+    expect(within(dialog).queryByRole('radio', { name: /Fiber 100/ })).toBeNull();
+    // the code matches too (offeringCode: the upper-case name)
+    fireEvent.change(filter, { target: { value: 'FIBER 1' } });
+    const fiber = within(dialog).getByRole('radio', { name: /Fiber 100/ });
+    expect(within(dialog).queryByRole('radio', { name: /Fiber 500/ })).toBeNull();
+    fireEvent.keyDown(fiber, { key: 'Tab' });
+    expect(fiber.getAttribute('aria-checked')).toBe('false');
+    fireEvent.keyDown(fiber, { key: ' ' });
+    expect(fiber.getAttribute('aria-checked')).toBe('true');
+    fireEvent.change(filter, { target: { value: '' } });
+    const other = within(dialog).getByRole('radio', { name: /Fiber 500/ });
+    fireEvent.keyDown(other, { key: 'Enter' });
+    expect(other.getAttribute('aria-checked')).toBe('true');
+    expect(fiber.getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('says a change order with no answer may have happened and Refresh reloads the card', async () => {
+    let productReads = 0;
+    const { fetchMock } = backend({
+      ...catalog,
+      [`GET ${INTERNAL}/products`]: () => {
+        productReads += 1;
+        return json([product(P1, {})], { total: 1 });
+      },
+      [preview('2026-10-28')]: () => json({ ...FIRST_CHARGE, startDate: '2026-10-28' }),
+      [`POST ${ORDERS}`]: () => tmfError(502, 'bad gateway'),
+    });
+    const { dialog } = await openDialog();
+    fireEvent.click(await within(dialog).findByRole('radio', { name: /Fiber 100/ }));
+    await within(dialog).findByTestId('first-charge');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Change offering' }));
+    await within(dialog).findByText(/The request was sent but no answer came back/);
+    expect(dialog.querySelector('.bss-write-note')?.textContent).toBe(
+      'Unsure whether it was saved. The request was sent but no answer came back. Refresh to read it back before trying again.',
+    );
+    // the choice stays for a look before trying again
+    expect(
+      within(dialog)
+        .getByRole('radio', { name: /Fiber 100/ })
+        .getAttribute('aria-checked'),
+    ).toBe('true');
+    const before = productReads;
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Refresh' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => expect(productReads).toBeGreaterThan(before));
+    expect(posts(fetchMock)).toHaveLength(1);
+  });
+
+  it('keeps the change dialog open on Escape while the order is in flight', async () => {
+    let answer: ((response: Response) => void) | undefined;
+    backend({
+      ...catalog,
+      [preview('2026-10-28')]: () => json({ ...FIRST_CHARGE, startDate: '2026-10-28' }),
+      [`POST ${ORDERS}`]: () =>
+        new Promise<Response>((resolve) => {
+          answer = resolve;
+        }),
+    });
+    const { dialog } = await openDialog();
+    fireEvent.click(await within(dialog).findByRole('radio', { name: /Fiber 100/ }));
+    await within(dialog).findByTestId('first-charge');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Change offering' }));
+    await waitFor(() => expect(answer).toBeDefined());
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.getByRole('dialog')).toBe(dialog);
+    answer?.(tmfError(422, 'the offering is retired'));
+    await within(dialog).findByText(/the offering is retired/);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
 });
 
 describe('product identities (#456)', () => {
@@ -1115,5 +1270,71 @@ describe('product identities (#456)', () => {
     expect(identities('Fiber 100')?.textContent).toBe('12025550102');
     expect(identities('No number')).toBeNull();
     expect(within(productRow('No number')).getByText('—')).toBeTruthy();
+  });
+
+  // #487: an accepted number change closes the dialog, says so and is followed on the card
+  it('follows a subscriber number change the card accepted', async () => {
+    const OLD = '10000000-0000-4000-8000-0000000000aa';
+    const NEW = '10000000-0000-4000-8000-0000000000bb';
+    const number = (id: string, value: string, allocationStatus: string) => ({
+      id,
+      '@type': 'LogicalResource',
+      name: `MSISDN ${value}`,
+      value,
+      allocationStatus,
+      administrativeState: 'unlocked',
+      usageState: 'idle',
+    });
+    const numbers = [
+      number(OLD, '12025550122', 'allocated'),
+      number(NEW, '12025550123', 'available'),
+    ];
+    const { fetchMock } = backend({
+      [`GET /tmf-api/productInventory/v5/product/${P1}`]: () =>
+        json({
+          id: P1,
+          status: 'active',
+          productSpecification: { id: 'spec' },
+          realizingResource: [{ id: OLD, name: '12025550122' }],
+        }),
+      'GET /tmf-api/productCatalogManagement/v5/productSpecification/spec': () =>
+        json({ resourceSpecification: [{ id: 'msisdn' }] }),
+      [`GET ${NUMBERS}?*`]: (url) => {
+        const query = new URL(url ?? '', 'http://test').searchParams;
+        return json(
+          numbers.filter(
+            (n) =>
+              (!query.has('allocationStatus') ||
+                n.allocationStatus === query.get('allocationStatus')) &&
+              (!query.has('value') || n.value === query.get('value')),
+          ),
+        );
+      },
+      ...Object.fromEntries(numbers.map((n) => [`GET ${NUMBERS}/${n.id}`, () => json(n)])),
+      [`POST ${ORDERS}`]: () =>
+        json({ id: 'o-number', state: 'inProgress', '@type': 'ProductOrder' }, { status: 201 }),
+      'GET /internal/v1/prepaid/command/o-number': pending,
+    });
+    await open();
+    fireEvent.click(
+      productAction(await waitFor(() => productRow('Mobile L')), 'Subscriber number'),
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Subscriber number' });
+    const picker = await within(dialog).findByRole('combobox', { name: 'Subscriber number' });
+    await waitFor(() => expect(picker.hasAttribute('disabled')).toBe(false));
+    pickOption(picker, '12025550123');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Change number' }));
+    expect(
+      await screen.findByText(
+        'Subscriber number change accepted, the billing worker completes it shortly',
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    const watch = await waitFor(() => expectUi('ui.subscriber.prepaid.orderWatch'));
+    expect(watch.textContent).toContain('Subscriber number change accepted');
+    const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(
+      JSON.parse(String(post?.[1]?.body)).productOrderItem[0].product.realizingResource,
+    ).toEqual([{ id: NEW, '@type': 'ResourceRef', '@referredType': 'LogicalResource' }]);
   });
 });

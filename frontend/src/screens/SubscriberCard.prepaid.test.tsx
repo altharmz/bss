@@ -1,7 +1,8 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { json, pending, stubFetch, tmfError, type Handler } from '../test/fetch';
 import { NUMBERS } from '../api/numbers';
+import { POLL_CAP_MS } from './watched';
 import { expectUi } from '../test/expectUi';
 import { accountBody } from '../test/fixtures';
 import {
@@ -1001,6 +1002,31 @@ describe('prepaid transfer', () => {
     await within(form).findByText(/belongs to this account/);
     expect(within(form).getByRole('button', { name: 'Next' })).toHaveProperty('disabled', true);
   });
+
+  // #487: a dismissed transfer watch frees Transfer again; nothing more is sent
+  it('dismisses a transfer still waiting after the follow window and offers Transfer again', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { fetchMock, form } = await transferForm({
+      [`POST ${PREPAY}/transferBalance`]: stored('created'),
+      [`GET ${PREPAY}/transferBalance/${TRANSFER}`]: () =>
+        json({ id: TRANSFER, status: 'created' }),
+    });
+    await fill(form);
+    press(form, 'Review transfer');
+    fireEvent.click(within(form).getByRole('checkbox'));
+    press(form, 'Transfer 30.00 USD');
+    const progress = await waitFor(() => expectUi('ui.subscriber.inProgress'));
+    expect(screen.getByRole('button', { name: 'Transfer' })).toHaveProperty('disabled', true);
+    // Dismiss is offered once the card stops following it (POLL_CAP_MS after the submission)
+    await act(async () => {
+      vi.advanceTimersByTime(POLL_CAP_MS + 1);
+    });
+    fireEvent.click(await within(progress).findByRole('button', { name: 'Dismiss' }));
+    vi.useRealTimers();
+    expect(document.querySelector('[data-ui="ui.subscriber.inProgress"]')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Transfer' })).toHaveProperty('disabled', false);
+    expect(posts(fetchMock)).toHaveLength(1);
+  });
 });
 
 describe('prepaid orders and commands', () => {
@@ -1269,6 +1295,37 @@ describe('prepaid orders and commands', () => {
     expect(await screen.findByText('Order for Fiber 100 completed')).toBeTruthy();
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.queryByText(/The order was/)).toBeNull();
+  });
+
+  // #487: the watch's own Top up opens the card's Top up with the shortfall; Dismiss drops
+  // the watch and leaves the order alone
+  it('tops up a funding wait from the watch and dismisses the watch', async () => {
+    const { fetchMock } = await deactivate({
+      [`GET ${CMD}/${ORDER_ID}`]: () =>
+        json(
+          command({
+            needs_topup: {
+              required: 650,
+              available: 100,
+              shortfall: 550,
+              observedAt: '2026-10-01T06:00:00Z',
+            },
+          }),
+        ),
+    });
+    const watch = await waitFor(() => expectUi('ui.subscriber.prepaid.orderWatch'));
+    await within(watch).findByText(/needs a top-up/);
+    fireEvent.click(within(watch).getByRole('button', { name: 'Top up' }));
+    const form = await screen.findByRole('dialog', { name: 'Top up' });
+    expect(within(form).getByLabelText('Amount')).toHaveProperty('value', '550.00');
+    fireEvent.click(within(form).getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(within(watch).getByRole('button', { name: 'Dismiss' }));
+    expect(document.querySelector('[data-ui="ui.subscriber.prepaid.orderWatch"]')).toBeNull();
+    expect(document.querySelector('[data-ui="ui.subscriber.inProgress"]')).toBeNull();
+    // only the deactivation was sent
+    expect(
+      fetchMock.mock.calls.filter(([, init]) => init?.method && init.method !== 'GET'),
+    ).toHaveLength(1);
   });
 });
 
@@ -1590,6 +1647,34 @@ describe('prepaid first-charge preview in Add product', () => {
         { '@type': 'StringCharacteristic', name: 'simType', valueType: 'string', value: 'esim' },
         { '@type': 'StringCharacteristic', name: 'imei', valueType: 'string', value: IMEI },
       ],
+    });
+  });
+
+  // #487: an accepted device change closes the dialog, says so and is followed on the card
+  it('follows an accepted device change from the card', async () => {
+    const IMEI = '356938035643809'; // Luhn-valid
+    const { fetchMock } = stubbed({
+      [`GET /internal/v1/device?product.id=${P1}`]: () => json([]),
+      [`POST ${ORDERS}`]: () =>
+        json({ id: 'o-device', state: 'inProgress', '@type': 'ProductOrder' }, { status: 201 }),
+      'GET /internal/v1/prepaid/command/o-device': pending,
+    });
+    await open();
+    fireEvent.click(productAction(await waitFor(() => productRow('Mobile L')), 'Device…'));
+    const dialog = await screen.findByRole('dialog', { name: 'Device' });
+    await within(dialog).findByText('No device is recorded for this line.');
+    fireEvent.change(within(dialog).getByLabelText('IMEI'), { target: { value: IMEI } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Change device' }));
+    expect(
+      await screen.findByText('Device change accepted, the billing worker completes it shortly'),
+    ).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    const watch = await waitFor(() => expectUi('ui.subscriber.prepaid.orderWatch'));
+    expect(watch.textContent).toContain('Device change accepted');
+    const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(JSON.parse(String(post?.[1]?.body)).productOrderItem[0].product).toMatchObject({
+      id: P1,
+      productCharacteristic: [{ name: 'imei', value: IMEI }],
     });
   });
 });

@@ -453,3 +453,241 @@ describe('product page', () => {
     expect(await screen.findByRole('heading', { name: 'Basic 10' })).toBeTruthy();
   });
 });
+
+// #487: the menu's other dialogs, the undo of a status change, pending lines and the plan link
+describe('product page actions and facts', () => {
+  const PREPAID = accountBody(A1, { id: C1, name: 'Olga Kuznetsova' }, { ratingType: 'prepaid' });
+  const menu = async () => {
+    const trigger = await screen.findByRole('button', { name: 'Actions' });
+    fireEvent.click(trigger);
+    return document.getElementById(trigger.getAttribute('aria-controls') ?? '') as HTMLElement;
+  };
+  const writes = (fetchMock: ReturnType<typeof backend>['fetchMock']) =>
+    fetchMock.mock.calls.filter(([, init]) => init?.method !== undefined && init.method !== 'GET');
+
+  it.each([
+    ['Subscriber number', 'Subscriber number', PREPAID],
+    ['Number Transfer PIN…', 'Number Transfer PIN', PREPAID],
+    ['Device…', 'Device', PREPAID],
+    ['Edit E911 address…', 'Edit E911 address: Basic 10', PREPAID],
+    ['Deactivate', 'End on a date: Basic 10', ACCOUNT],
+  ])('opens %s from the menu and closes it without a write', async (item, title, account) => {
+    const { fetchMock } = backend({
+      [`GET /tmf-api/accountManagement/v5/billingAccount/${A1}`]: () => json(account),
+      [`GET /internal/v1/billingAccount/${A1}/products`]: () =>
+        json([line(P1, { wifiCalling: true, paidThrough: '2026-10-20' })]),
+      'GET /*': pending,
+    });
+    open(`/products/${P1}`);
+    fireEvent.click(within(await menu()).getByRole('menuitem', { name: item }));
+    expect(await screen.findByRole('dialog', { name: title })).toBeTruthy();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.getByRole('heading', { name: 'Basic 10' })).toBeTruthy();
+    expect(writes(fetchMock)).toEqual([]);
+  });
+
+  it('offers only the number of an ending product', async () => {
+    backend({
+      [`GET /internal/v1/billingAccount/${A1}/products`]: () =>
+        json([line(P1, { status: 'pendingTerminate', terminationDate: '2026-10-13' })]),
+      'GET /*': pending,
+    });
+    open(`/products/${P1}`);
+    const trigger = await screen.findByRole('button', { name: 'Subscriber number' });
+    fireEvent.click(trigger);
+    const items = document.getElementById(trigger.getAttribute('aria-controls') ?? '');
+    expect(
+      within(items as HTMLElement)
+        .getAllByRole('menuitem')
+        .map((i) => i.textContent),
+    ).toEqual(['Subscriber number']);
+    fireEvent.click(within(items as HTMLElement).getByRole('menuitem'));
+    expect(await screen.findByRole('dialog', { name: 'Subscriber number' })).toBeTruthy();
+  });
+
+  it('undoes an applied suspension and shows a refused undo on the page', async () => {
+    let answer = () => tmfError(409, 'the suspension was already billed');
+    const { fetchMock } = backend({
+      [`GET /internal/v1/billingAccount/${A1}/products`]: () =>
+        json([
+          line(P1, {
+            status: 'suspended',
+            undoableStatusChange: {
+              date: '2026-10-01',
+              status: 'suspended',
+              productOrder: { id: ORD2 },
+            },
+          }),
+        ]),
+      ['POST /tmf-api/productOrderingManagement/v5/cancelProductOrder']: () => answer(),
+    });
+    open(`/products/${P1}`);
+    fireEvent.click(within(await menu()).getByRole('menuitem', { name: 'Undo suspension' }));
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'the suspension was already billed',
+    );
+    answer = () => json({ id: 'k1', state: 'done' }, { status: 201 });
+    fireEvent.click(within(await menu()).getByRole('menuitem', { name: 'Undo suspension' }));
+    expect(await screen.findByRole('status')).toHaveProperty(
+      'textContent',
+      'Basic 10: the status change was cancelled',
+    );
+    expect(screen.queryByRole('alert')).toBeNull();
+    const bodies = writes(fetchMock).map(([, init]) => JSON.parse(String(init?.body)));
+    expect(bodies).toEqual([
+      { '@type': 'CancelProductOrder', productOrder: { id: ORD2, '@type': 'ProductOrderRef' } },
+      { '@type': 'CancelProductOrder', productOrder: { id: ORD2, '@type': 'ProductOrderRef' } },
+    ]);
+  });
+
+  it('lists each pending change in words', async () => {
+    const order = (id: string) => ({ id, href: `/o/${id}` });
+    backend({
+      [`GET /internal/v1/billingAccount/${A1}/products`]: () =>
+        json([
+          line(P1, {
+            pendingChanges: [
+              { kind: 'status', date: '2026-11-03', status: 'suspended', productOrder: order('s') },
+              { kind: 'status', date: '2026-11-10', status: 'active', productOrder: order('r') },
+              {
+                kind: 'offering',
+                date: '2026-11-28',
+                productOffering: { id: 'o2', name: 'Fiber 100' },
+                productOrder: order('o'),
+              },
+              { kind: 'offering', date: '2026-12-28', productOrder: order('x') },
+              { kind: 'e911', productOrder: order('e') },
+            ],
+          }),
+        ]),
+    });
+    open(`/products/${P1}`);
+    const overview = await waitFor(() => expectUi('ui.product.overview'));
+    await within(overview).findAllByText(/^Pending:/);
+    expect(
+      Array.from(overview.querySelectorAll('[data-ui="ui.product.pendingChange"]')).map(
+        (p) => p.textContent,
+      ),
+    ).toEqual([
+      'Pending: suspends on 2026-11-03',
+      'Pending: resumes on 2026-11-10',
+      'Pending: changes to Fiber 100 on 2026-11-28',
+      'Pending: changes to another offering on 2026-12-28',
+      'Pending: E911 address changes to a new address',
+    ]);
+  });
+
+  it.each([
+    ['by name when the plan is listed', true, 'Plan 30'],
+    ['by id when it is not', false, 'PRD-E0000002'],
+  ])('links an add-on to its plan %s', async (_what, listed, name) => {
+    const addOn = line(P1, {
+      offeringKind: 'addOn',
+      parentProduct: { id: P2, href: '' },
+      productOffering: { id: 'o2', name: 'Roaming 1 GB', code: null },
+    });
+    const plan = line(P2, { productOffering: { id: 'o1', name: 'Plan 30', code: null } });
+    backend({
+      [`GET /internal/v1/billingAccount/${A1}/products`]: () =>
+        json(listed ? [addOn, plan] : [addOn]),
+    });
+    open(`/products/${P1}`);
+    const related = await waitFor(() => expectUi('ui.product.related'));
+    expect(within(related).getByRole('link', { name }).getAttribute('href')).toBe(
+      `/products/${P2}`,
+    );
+  });
+
+  it('puts a bill on hold from the charges, then closes it and reloads the product', async () => {
+    let productReads = 0;
+    const { fetchMock } = backend({
+      [`GET ${PRODUCTS}/${P1}`]: () => {
+        productReads += 1;
+        return json(inventory);
+      },
+      [`GET ${RATES}?product.id=${P1}&offset=0&limit=100`]: () =>
+        json(
+          [
+            {
+              id: 'r1',
+              name: 'Basic 10 monthly',
+              date: '2026-09-01T00:30:00Z',
+              appliedBillingRateType: 'recurring',
+              taxExcludedAmount: usd(12.9),
+              taxIncludedAmount: usd(14.06),
+              periodCoverage: { startDateTime: '2026-09-01T00:00:00+03:00' },
+              product: { id: P1, name: 'Basic 10' },
+              bill: { id: B1, name: 'B-0001' },
+            },
+          ],
+          { total: 1 },
+        ),
+      [`GET /internal/v1/customerBill/${B1}`]: () =>
+        json({
+          id: B1,
+          href: `/tmf-api/customerBillManagement/v5/customerBill/${B1}`,
+          billNo: 'B-0001',
+          billingAccount: { id: A1, href: '' },
+          billDate: '2026-09-01',
+          period: { start: '2026-09-01', end: '2026-10-01' },
+          paymentDueDate: '2026-10-01',
+          amountDue: usd(14.06),
+          remainingAmount: usd(14.06),
+          state: 'sent',
+          category: 'normal',
+          overdue: false,
+          allowedStates: ['onHold'],
+          charges: [],
+          sources: [],
+          history: [],
+          pdf: null,
+        }),
+      [`PATCH /tmf-api/customerBillManagement/v5/customerBill/${B1}`]: () => json({ id: B1 }),
+    });
+    open(`/products/${P1}#charges`);
+    const charges = await waitFor(() => expectUi('ui.product.charges'));
+    fireEvent.click(await within(charges).findByRole('button', { name: 'B-0001' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Bill B-0001' });
+    const reads = productReads;
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Put on hold' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Yes' }));
+    expect(await screen.findByRole('status')).toHaveProperty(
+      'textContent',
+      'Bill B-0001 put on hold',
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => expect(productReads).toBeGreaterThan(reads));
+    expect(writes(fetchMock).map(([, init]) => init?.body)).toEqual(['{"state":"onHold"}']);
+  });
+
+  it('closes a bill opened from the charges', async () => {
+    const { fetchMock } = backend({
+      [`GET ${RATES}?product.id=${P1}&offset=0&limit=100`]: () =>
+        json(
+          [
+            {
+              id: 'r1',
+              name: 'Basic 10 monthly',
+              date: '2026-09-01T00:30:00Z',
+              appliedBillingRateType: 'recurring',
+              taxExcludedAmount: usd(12.9),
+              taxIncludedAmount: usd(14.06),
+              periodCoverage: { startDateTime: '2026-09-01T00:00:00+03:00' },
+              product: { id: P1, name: 'Basic 10' },
+              bill: { id: B1, name: 'B-0001' },
+            },
+          ],
+          { total: 1 },
+        ),
+      [`GET /internal/v1/customerBill/${B1}`]: pending,
+    });
+    open(`/products/${P1}#charges`);
+    const charges = await waitFor(() => expectUi('ui.product.charges'));
+    fireEvent.click(await within(charges).findByRole('button', { name: 'B-0001' }));
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(writes(fetchMock)).toEqual([]);
+  });
+});

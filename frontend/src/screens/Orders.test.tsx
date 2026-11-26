@@ -982,3 +982,156 @@ describe('order writes', () => {
     });
   });
 });
+
+// #487: what the list does around a write, a followed order and the paging edge
+describe('orders around a write', () => {
+  it('names a modify item that changes nothing it can name as a change of the product', () => {
+    expect(
+      itemText({
+        '@type': 'ProductOrderItem',
+        action: 'modify',
+        product: { '@type': 'Product', id: P1, name: 'Home internet' },
+      }),
+    ).toBe('Change Home internet');
+  });
+
+  it('opens the account of a row from its link without opening the order', async () => {
+    backend({
+      [`GET ${ORDERS}?offset=0&limit=50`]: () => json([ADD], { total: 1 }),
+      'GET /*': () => new Promise<Response>(() => {}),
+    });
+    open();
+    fireEvent.click(await screen.findByRole('link', { name: 'Ivan Ivanov' }));
+    expect(window.location.pathname).toBe(`/billing-accounts/${A1}`);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('closes the dialog after a submitted draft completes and shows the completed row', async () => {
+    let completed = false;
+    const { fetchMock } = writes(DRAFT, {
+      [`PATCH ${ORDERS}/${O1}`]: () => {
+        completed = true;
+        return json({ id: O1, state: 'completed' });
+      },
+      [`GET ${ORDERS}/${O1}`]: () => json(completed ? { ...DRAFT, state: 'completed' } : DRAFT),
+    });
+    open();
+    const dialog = await openOrder('C0000001');
+    press(dialog, 'Submit');
+    expect(await screen.findByText('Draft submitted: the order is completed')).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    const row = screen.getByText('C0000001').closest('[role="row"]') as HTMLElement;
+    expect(within(row).getByText('Completed')).toBeTruthy();
+    expect(sent(fetchMock).map((s) => s.call)).toEqual([`PATCH ${ORDERS}/${O1}`]);
+  });
+
+  it('refreshes the followed row when the worker is done and retries a failed refresh', async () => {
+    let reads = 0;
+    writes(DRAFT, {
+      [`PATCH ${ORDERS}/${O1}`]: () => json({ id: O1, state: 'inProgress' }),
+      [`GET /internal/v1/prepaid/command/${O1}`]: () =>
+        json({
+          id: O1,
+          state: 'completed',
+          outcome: 'funded',
+          needs_topup: null,
+          dueDate: '2026-10-01',
+          reason: null,
+        }),
+      // 1: the dialog's own reload after Submit; 2: the refresh after the worker, refused;
+      // 3: Retry
+      [`GET ${ORDERS}/${O1}`]: () => {
+        reads += 1;
+        if (reads === 2) return tmfError(503, 'Service Unavailable');
+        return json(
+          reads === 1 ? { ...DRAFT, state: 'inProgress' } : { ...DRAFT, state: 'completed' },
+        );
+      },
+    });
+    open();
+    const dialog = await openOrder('C0000001');
+    press(dialog, 'Submit');
+    expect(await screen.findByText('Order C0000001 completed')).toBeTruthy();
+    expect(await screen.findByText('Failed to refresh order')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(screen.queryByText('Failed to refresh order')).toBeNull());
+    const row = screen.getByText('C0000001').closest('[role="row"]') as HTMLElement;
+    expect(within(row).getByText('Completed')).toBeTruthy();
+    expect(reads).toBe(3);
+  });
+
+  it('dismisses a followed order without touching it', async () => {
+    const { fetchMock } = writes(DRAFT, {
+      [`PATCH ${ORDERS}/${O1}`]: () => json({ id: O1, state: 'inProgress' }),
+      [`GET /internal/v1/prepaid/command/${O1}`]: () =>
+        json({ id: O1, state: 'pending', needs_topup: null, dueDate: '2026-10-05' }),
+    });
+    open();
+    const dialog = await openOrder('C0000001');
+    press(dialog, 'Submit');
+    await screen.findByText(/scheduled for 2026-10-05/);
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(screen.queryByText(/scheduled for 2026-10-05/)).toBeNull();
+    expect(sent(fetchMock)).toHaveLength(1);
+  });
+
+  it('closes the dialog on Refresh after an unknown outcome and reloads the row', async () => {
+    let reads = 0;
+    writes(ADD, {
+      [`PATCH ${ORDERS}/${O1}`]: () => tmfError(503, 'Service Unavailable'),
+      [`GET ${ORDERS}/${O1}`]: () => {
+        reads += 1;
+        return json({ ...ADD, description: reads > 1 ? 'Saved after all' : undefined });
+      },
+    });
+    open();
+    const dialog = await openOrder('C0000001');
+    press(dialog, 'Edit details');
+    fireEvent.change(within(dialog).getByLabelText('Order description'), {
+      target: { value: 'Saved after all' },
+    });
+    press(dialog, 'Save details');
+    await within(dialog).findByText(/Unsure whether it was saved/);
+    const before = reads;
+    press(dialog, 'Refresh');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => expect(reads).toBe(before + 1));
+  });
+
+  it('goes back from Edit draft to the order with Close, sending nothing', async () => {
+    const { fetchMock } = writes(DRAFT, {
+      [`GET /tmf-api/accountManagement/v5/billingAccount/${A1}`]: () =>
+        new Promise<Response>(() => {}),
+    });
+    open();
+    const dialog = await openOrder('C0000001');
+    press(dialog, 'Edit draft');
+    const edit = await screen.findByRole('dialog', { name: 'Edit draft' });
+    expect(within(edit).getByText('Loading…')).toBeTruthy();
+    fireEvent.click(within(edit).getAllByRole('button', { name: 'Close' }).at(-1) as HTMLElement);
+    expect(await screen.findByRole('dialog', { name: 'Order C0000001' })).toBeTruthy();
+    expect(sent(fetchMock)).toEqual([]);
+  });
+
+  it('offers Previous when the only order of a later page is deleted', async () => {
+    const page = Array.from({ length: 50 }, (_, i) => ({
+      ...ADD,
+      id: `${(i + 100).toString(16).padStart(8, '0')}-0000-4000-8000-000000000001`,
+    }));
+    const { calls } = writes(DRAFT, {
+      [`GET ${ORDERS}?offset=0&limit=50`]: () => json(page, { more: true }),
+      [`GET ${ORDERS}?offset=50&limit=50`]: () => json([DRAFT], { more: false }),
+      [`DELETE ${ORDERS}/${O1}`]: () => new Response(null, { status: 204 }),
+    });
+    open();
+    await screen.findByText('Showing 1–50');
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    const dialog = await openOrder('C0000001');
+    press(dialog, 'Delete');
+    press(dialog, 'Delete order');
+    await screen.findByText('Order deleted');
+    fireEvent.click(await screen.findByRole('button', { name: 'Previous' }));
+    await screen.findByText('Showing 1–50');
+    expect(calls.filter((c) => c === `GET ${ORDERS}?offset=0&limit=50`).length).toBeGreaterThan(1);
+  });
+});

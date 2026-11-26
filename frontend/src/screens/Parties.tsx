@@ -291,7 +291,8 @@ interface FrameProps {
   subtitle: ReactNode;
   state: 'loading' | 'error' | 'ok';
   error?: Error;
-  retry: () => void;
+  /** Loads the record again; a create dialog loads nothing and has none. */
+  retry?: () => void;
   body: ReactNode;
   write: ReturnType<typeof useWrite>;
   actions: ReactNode;
@@ -323,7 +324,7 @@ function Frame(p: FrameProps) {
       {p.state === 'loading' && (
         <SkeletonRows columns={[{ key: 'a', label: '', width: '1fr' }]} rows={4} />
       )}
-      {p.state === 'error' && p.error && (
+      {p.state === 'error' && p.error && p.retry && (
         <ErrorBlock title="Failed to load the record" error={p.error} onRetry={p.retry} />
       )}
       {p.state === 'ok' && p.body}
@@ -455,7 +456,6 @@ function NewPartyModal({
       ui={`${kind === 'Individual' ? 'ui.parties.newIndividual' : 'ui.parties.newOrganization'}Form`}
       subtitle="Contact details are optional"
       state="ok"
-      retry={() => undefined}
       body={
         <>
           <section className="bss-form">
@@ -544,7 +544,6 @@ function NewCustomerModal({
       ui="ui.parties.newCustomerForm"
       subtitle={`${party.name} · ${shortId(party.id)}`}
       state="ok"
-      retry={() => undefined}
       body={
         <section className="bss-form">
           <Field label="Customer name">
