@@ -61,3 +61,27 @@ it('keeps the form available after a refused password', async () => {
   expect((await screen.findByRole('alert')).textContent).toBe('Sign in refused');
   expect(screen.getByLabelText('Password')).toBeTruthy();
 });
+
+it('sets a password with an invite code and goes back to sign-in without a trace', async () => {
+  const { fetchMock } = stubFetch({
+    'POST /self-care/v1/password': () =>
+      Response.json({ message: 'Invite code expired' }, { status: 400 }),
+  });
+  render(<SignIn onSignedIn={() => {}} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Set password with invite code' }));
+  expect(screen.getByRole('heading', { name: 'Set password' })).toBeTruthy();
+  // an invite needs no email: only the code and the new password
+  expect(screen.queryByLabelText('Email')).toBeNull();
+  fireEvent.change(screen.getByLabelText('Email code'), { target: { value: 'invite-1' } });
+  fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'first password' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Set password' }));
+  expect((await screen.findByRole('alert')).textContent).toBe('Invite code expired');
+  expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
+    code: 'invite-1',
+    newPassword: 'first password',
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Back to sign in' }));
+  expect(screen.getByRole('heading', { name: 'Sign in' })).toBeTruthy();
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Forgot password' })).toBeTruthy();
+});
