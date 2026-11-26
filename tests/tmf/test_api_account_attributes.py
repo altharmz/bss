@@ -242,6 +242,16 @@ def test_the_customer_changes_only_while_the_account_has_no_history(api, db_conn
     assert api.patch(acc["href"], {"relatedParty": gone}).status_code == 409
 
 
+def test_an_unknown_new_customer_is_refused_and_changes_nothing(api):
+    acc = apidata.account(api)
+    entry = acc["relatedParty"][0]
+    gone = [{**entry, "partyOrPartyRole": {**entry["partyOrPartyRole"], "id": NIL}}]
+    response = api.patch(acc["href"], {"relatedParty": gone, "name": "Not saved"})
+    assert response.status_code == 422, response.text
+    assert response.json()["message"] == f"relatedParty: customer {NIL} does not exist"
+    assert api.get(acc["href"]).json() == acc
+
+
 def test_a_new_customer_must_own_the_linked_financial_account(api):
     acc = apidata.account(api)
     cust = api.get(acc["relatedParty"][0]["partyOrPartyRole"]["href"]).json()

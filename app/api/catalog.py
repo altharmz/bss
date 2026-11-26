@@ -1136,8 +1136,7 @@ def _check_kind(conn: psycopg.Connection, offering_id: UUID, price_type: str) ->
     """Only a plan has a recurring price (an add-on pack and a pay-as-you-go offering do
     not), and only a pay-as-you-go offering has a usage price (a plan's usage is included)."""
     offering = catalog.get_product_offering(conn, offering_id)
-    if offering is None:
-        return
+    assert offering is not None  # the caller is creating or changing it
     offering_kind = kind.kind_of(offering["details"])
     if price_type == "recurring" and offering_kind != kind.PLAN:
         raise unprocessable(f"a {offering_kind} offering has no recurring price")
@@ -1152,8 +1151,7 @@ def _check_discount(conn: psycopg.Connection, offering_id: UUID, price: Row) -> 
     if price["price_type"] != "discount":
         return
     offering = catalog.get_product_offering(conn, offering_id)
-    if offering is None:
-        return
+    assert offering is not None  # the caller is creating or changing it
     offering_kind = kind.kind_of(offering["details"])
     if price["alteration_lines"] is not None and offering_kind != kind.PLAN:
         raise unprocessable(f"a {offering_kind} offering has no multi-line discount")

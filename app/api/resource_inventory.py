@@ -128,9 +128,7 @@ def sim_attributes(row):
 
 
 def activation_code(row):
-    """The LPA activation code of an eSIM profile; None for any other resource."""
-    if row["sim_type"] != "esim":
-        return None
+    """The LPA activation code of an eSIM profile (callers check sim_type)."""
     return f"LPA:1${row['esim_smdp_address']}${row['esim_matching_id']}"
 
 
