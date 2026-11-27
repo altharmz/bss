@@ -227,6 +227,44 @@ def test_a_code_that_was_not_sent_is_a_503_and_logged_failed(api, care, db_conn)
     assert api.post(login_url(customer["id"]), {"email": "fail@example.test"}).status_code == 201
 
 
+def broken_sender(monkeypatch):
+    """The sender raises something that is no NotifyError (a bug or a dropped connection)."""
+
+    def broken(key, to, subject, body, attachments=()):
+        raise RuntimeError("smtp connection reset")
+
+    monkeypatch.setattr(sender(), "send_email", broken)
+
+
+def failed_messages(db_conn):
+    rows = db_conn.execute(
+        "SELECT receiver_email, last_error FROM notification_message WHERE state = 'failed'"
+    ).fetchall()
+    db_conn.commit()
+    return rows
+
+
+def test_a_sign_in_code_the_sender_crashed_on_is_a_503_and_logged_failed(
+    api, care, db_conn, monkeypatch
+):
+    active_customer(api, care)
+    broken_sender(monkeypatch)
+    response = care.post(BASE + "/session", {"email": EMAIL, "password": PASSWORD})
+    assert response.status_code == 503 and response.json()["code"] == "codeNotSent"
+    assert failed_messages(db_conn) == [(EMAIL, "smtp connection reset")]
+    assert care.get(BASE + "/session").status_code == 401
+
+
+def test_a_reset_code_that_was_not_sent_still_looks_the_same(
+    api, care, db_conn, monkeypatch, caplog
+):
+    active_customer(api, care)
+    broken_sender(monkeypatch)
+    assert care.post(BASE + "/password/reset", {"email": EMAIL}).status_code == 204
+    assert failed_messages(db_conn) == [(EMAIL, "smtp connection reset")]
+    assert "self-care reset code for login" in caplog.text and "was not sent" in caplog.text
+
+
 # --- feature switch ---
 
 

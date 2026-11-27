@@ -357,3 +357,15 @@ def test_next_charge_is_first_uncharged_run_not_cycle_boundary(api, db_conn, off
     api.clock.set(at(date(2026, 10, 16)))
     [paid] = api.get(path).json()
     assert paid["nextChargeDate"] == "2026-11-01"
+
+
+def test_a_product_ending_with_its_charged_period_has_no_next_charge(api, db_conn, offering):
+    account = apidata.account(api)
+    start = date(2026, 10, 15)
+    product = add(api, account, offering, start, on=at(start))
+    delete(api, account, product, date(2026, 11, 1), on=at(start, 11))
+    bill(db_conn, account, date(2026, 10, 16))
+    api.clock.set(at(date(2026, 10, 16)))
+    [row] = api.get(f"{BASE}/billingAccount/{account['id']}/products").json()
+    assert (row["status"], row["terminationDate"]) == ("pendingTerminate", "2026-11-01")
+    assert row["nextChargeDate"] is None

@@ -109,10 +109,9 @@ def _ref(uid: Any) -> dict[str, str] | None:
     return None if uid is None else {"id": str(uid)}
 
 
-def esim_of(conn: psycopg.Connection, product_id: UUID | None) -> Row | None:
-    """The eSIM profile the line holds (reserved or active), with its number."""
-    if product_id is None:
-        return None
+def esim_of(conn: psycopg.Connection, product_id: UUID) -> Row | None:
+    """The eSIM profile the line holds (reserved or active). Callers pass an active signup's
+    product, which the worker set together with the activating state."""
     return fetch_one(
         conn,
         "SELECT s.iccid, s.esim_smdp_address, s.esim_matching_id FROM subscriber_number s"
@@ -127,9 +126,7 @@ def activation_code(sim: Row) -> str:
     return f"LPA:1${sim['esim_smdp_address']}${sim['esim_matching_id']}"
 
 
-def number_of(conn: psycopg.Connection, product_id: UUID | None) -> str | None:
-    if product_id is None:
-        return None
+def number_of(conn: psycopg.Connection, product_id: UUID) -> str | None:
     row = fetch_one(
         conn,
         "SELECT n.value FROM number_assignment a JOIN subscriber_number n"

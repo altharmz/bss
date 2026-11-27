@@ -9,10 +9,15 @@ from uuid import UUID
 
 import pytest
 
+from app.care import signup as signup_api
 from app.config import settings
 from app.integrations.identity import adapter as identity
 from app.integrations.network import adapter as network
 from app.integrations.notify import adapter as sender
+from app.integrations.payment import adapter as gateway
+from app.integrations.payment.interface import Card
+from app.repository import care_logins
+from tests import apidata, timeline
 from tests.builders.care.care_signup import (  # noqa: F401
     identity_stub,
     last_code,
@@ -29,7 +34,13 @@ from tests.builders.care.self_care import (  # noqa: F401 - fixtures
     new_care,
     sign_in,
 )
-from tests.builders.prepaid.prepaid_plans import balance, stubs  # noqa: F401 - fixtures
+from tests.builders.prepaid.prepaid_plans import (  # noqa: F401 - fixtures
+    balance,
+    offering,
+    price,
+    stubs,
+)
+from tests.builders.resources.network_provisioning import PROFILE
 
 SIGNUP = BASE + "/signup"
 INTERNAL = "/internal/v1/careSignup"
@@ -382,3 +393,108 @@ def test_the_stub_identity_adapter(identity_stub):
     assert identity_stub.verify("k", person, {}) is None
     assert identity_stub.verify("k", person, {}).verdict == "pass"
     assert len(identity_stub.checks) == 1 and identity_stub.attempts == ["k", "k"]
+
+
+def failed_codes(db_conn):
+    rows = db_conn.execute(
+        "SELECT receiver_email, last_error FROM notification_message"
+        " WHERE event_type = 'care_signup_code' AND state = 'failed'"
+    ).fetchall()
+    db_conn.commit()
+    return rows
+
+
+def test_a_code_the_sender_refused_or_crashed_on_is_a_503_and_logged(
+    api, care, db_conn, shop, monkeypatch
+):
+    refused = care.post(SIGNUP, {"email": "fail@example.test", "offeringId": shop["id"]})
+    assert refused.status_code == 503 and refused.json()["code"] == "codeNotSent"
+
+    def broken(key, to, subject, body, attachments=()):
+        raise RuntimeError("smtp connection reset")
+
+    monkeypatch.setattr(sender(), "send_email", broken)
+    crashed = care.post(SIGNUP, {"email": EMAIL, "offeringId": shop["id"]})
+    assert crashed.status_code == 503 and crashed.json()["code"] == "codeNotSent"
+    assert failed_codes(db_conn) == [
+        ("fail@example.test", "the sender refused fail@example.test"),
+        (EMAIL, "smtp connection reset"),
+    ]
+
+
+def test_an_offering_id_that_is_no_uuid_is_no_plan_on_sale(api, care, shop):
+    response = care.post(SIGNUP, {"email": EMAIL, "offeringId": "plan-10"})
+    assert response.status_code == 422 and response.json()["code"] == "offeringUnavailable"
+    assert response.json()["message"] == "offeringId plan-10 is not a plan on sale"
+
+
+# --- the first payment ---
+
+
+def test_an_expired_card_is_refused_before_anything_is_made(api, care, db_conn, shop, monkeypatch):
+    signup = passed(api, care, db_conn, shop)
+    expired = Card("visa", "4242", expires=api.clock.now() - timedelta(days=1))
+    monkeypatch.setattr(gateway(), "card", lambda token: expired)
+    response = pay(care, signup)
+    assert response.status_code == 422 and response.json()["message"] == "the card has expired"
+    assert count(db_conn, "customer") == 0 and count(db_conn, "payment_method") == 0
+
+
+def test_a_free_plan_is_paid_without_a_charge(api, care, db_conn, stubs):
+    free = offering(api, "Free plan", [price(api, "recurring", 0, "Monthly", "monthly", 1)],
+                    kind="plan", profile=PROFILE)  # fmt: skip
+    api.clock.set(timeline.START + timedelta(hours=9))
+    signup = passed(api, care, db_conn, free)
+    paid = pay(care, signup)
+    assert paid.status_code == 202, paid.text
+    assert paid.json()["state"] == "paid" and paid.json()["payment"] is None
+    assert count(db_conn, "payment_method") == 1 and count(db_conn, "payment_command") == 0
+
+
+def test_a_second_decline_with_the_same_card_keeps_one_saved_card(api, care, db_conn, shop):
+    signup = passed(api, care, db_conn, shop)
+    for _ in range(2):
+        assert pay(care, signup, "tok_decline").status_code == 202
+        wake(api, db_conn, 2)
+        assert state(care, signup)["payment"]["state"] == "declined"
+    assert count(db_conn, "payment_method") == 1 and count(db_conn, "payment_command") == 2
+
+
+def test_a_payment_repeated_while_the_first_was_working_answers_with_its_state(
+    api, care, db_conn, shop, monkeypatch
+):
+    """The other tab's payment commits between this one's look and its write."""
+    signup = passed(api, care, db_conn, shop)
+    other_tab = new_care(api)
+    real, raced = signup_api.hash_password, []
+
+    def hash_after_the_other_tab(password):
+        if not raced:
+            raced.append(True)
+            assert pay(other_tab, signup).status_code == 202
+        return real(password)
+
+    monkeypatch.setattr(signup_api, "hash_password", hash_after_the_other_tab)
+    late = pay(care, signup)
+    assert late.status_code == 202, late.text
+    assert late.json()["payment"]["state"] == "pending"
+    assert count(db_conn, "customer") == 1 and count(db_conn, "payment_command") == 1
+
+
+def test_an_email_given_a_login_during_the_payment_is_a_409(api, care, db_conn, shop, monkeypatch):
+    """The operator invites the same email for another customer just before the write."""
+    signup = passed(api, care, db_conn, shop)
+    customer = apidata.customer(api)
+    real = signup_api.hash_password
+
+    def hash_after_the_invite(password):
+        care_logins.invite(db_conn, customer["id"], EMAIL, "i.petrova", api.clock.now())
+        db_conn.commit()
+        return real(password)
+
+    monkeypatch.setattr(signup_api, "hash_password", hash_after_the_invite)
+    taken = pay(care, signup)
+    assert taken.status_code == 409, taken.text
+    assert taken.json()["message"] == "this email already has a self-care login"
+    assert count(db_conn, "customer") == 1 and count(db_conn, "payment_method") == 0
+    assert state(care, signup)["state"] == "identityPassed"
