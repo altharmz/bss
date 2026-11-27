@@ -11,6 +11,7 @@ is what makes a takeover safe (docs/archive/stage4-design.md, section 2; docs/de
 import psycopg
 
 from app.config import settings
+from app.db import configure_json_loader
 
 # The one advisory lock key of the billing worker ('bss' + 1). Advisory locks are scoped
 # to a database, so every database (each test's clone included) has its own.
@@ -33,12 +34,14 @@ def connect(url: str | None = None, *, lock_timeout: str = LOCK_TIMEOUT) -> psyc
     """The worker's connection: autocommit, so nothing stays idle in a transaction. A row
     lock held longer than `lock_timeout` raises LockNotAvailable - a whole-run failure
     (app/worker/process.py); tests pass a short one to reach it quickly."""
-    return psycopg.connect(
+    conn = psycopg.connect(
         url or settings.database_url,
         autocommit=True,
         options=f"-c lock_timeout={lock_timeout}",
         **CONNECTION,
     )
+    configure_json_loader(conn)
+    return conn
 
 
 def acquire_ownership(conn: psycopg.Connection) -> bool:

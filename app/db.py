@@ -13,19 +13,17 @@ from psycopg_pool import ConnectionPool
 
 from app.config import settings
 
-# json/jsonb read back with exact numbers: a stored document (a party's details) may hold
-# numbers, and Decimal is what the API writes them from (app/api/tmfjson.py)
-_loads = partial(json.loads, parse_float=Decimal)
-
 # One pool per database URL (docs/decisions/infra.md, "DB connections per request"): the
 # app has one; tests point settings.database_url at a database per test, and
 # conftest closes that database's pool before dropping it (`close`).
 _pools: dict[str, ConnectionPool] = {}
 _lock = threading.Lock()
 _OPEN = (TransactionStatus.INTRANS, TransactionStatus.INERROR)
+_loads = partial(json.loads, parse_float=Decimal)
 
 
-def _configure(conn: psycopg.Connection) -> None:
+def configure_json_loader(conn: psycopg.Connection) -> None:
+    """Read JSON and JSONB fractions as Decimal on this connection."""
     set_json_loads(_loads, conn)
 
 
@@ -40,7 +38,7 @@ def _pool(url: str) -> ConnectionPool:
                 max_size=settings.db_pool_size,
                 # waiting for a free connection is bounded like a connect
                 timeout=settings.db_connect_timeout,
-                configure=_configure,
+                configure=configure_json_loader,
                 # a connection broken by a database restart is replaced, not handed out
                 check=ConnectionPool.check_connection,
                 open=True,

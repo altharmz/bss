@@ -7,24 +7,27 @@ from uuid import UUID
 import pytest
 from psycopg.types.range import Range
 
-from app.billing.model import DateRange, InconsistentState
+from app.billing.model import AppliedTax, DateRange, InconsistentState
 from app.repository import billing, products
+from app.worker import db as worker_db
+from app.worker.process import bill_date
 from tests import apidata
 from tests.builders.billing.billing_db import add, at, bill, delete
 from tests.builders.catalog.api_catalog import make_offering, make_price, price_refs
 from tests.builders.orders.api_order_modify import modify
+from tests.timeline import TZ
 
 START = date(2026, 10, 15)
 CYCLE = date(2026, 11, 1)
 
 
-def plan(api, unit="monthly", length=1, value=310):
+def plan(api, unit="monthly", length=1, value=310, *, tax=None):
     price = make_price(
         api,
         recurringChargePeriodType=unit,
         recurringChargePeriodLength=length,
         price={"unit": "USD", "value": value},
-        tax=[{"@type": "TaxItem", "taxCategory": "VAT", "taxRate": 20}],
+        tax=[apidata.tax_item("VAT", 20)] if tax is None else tax,
     )
     return make_offering(api, productOfferingPrice=price_refs(price))
 
@@ -186,6 +189,42 @@ def test_anniversary_waits_for_the_effective_day_of_a_known_switch(api, db_conn)
     [next_charge] = bill(db_conn, account, change_day).abrs
     assert next_charge.offering_id == UUID(successor["id"])
     assert next_charge.amount == D("70") and next_charge.period.start == change_day
+
+
+def test_worker_replays_a_prorated_charge_with_fractional_jsonb_tax(api, migrated_db_url):
+    original = plan(
+        api,
+        "weekly",
+        value=7,
+        tax=[apidata.tax_item("VAT", 20), apidata.tax_item("city", 2.3)],
+    )
+    successor = plan(api, "weekly", value=70)
+    account = apidata.account(api)
+    account_id = UUID(account["id"])
+    product = add(api, account, original, START, on=at(START - timedelta(days=1)))
+    change_day = START + timedelta(days=4)
+    order = modify(api, account, product, successor, change_day, on=at(START))
+    assert order["state"] == "completed", order
+
+    first_day = change_day - timedelta(days=1)
+    with worker_db.connect(migrated_db_url) as worker:
+        api.clock.set(at(first_day))
+        first = bill_date(worker, first_day, clock=api.clock, tz=TZ, trigger="scheduled")
+        assert first["status"] == "completed", first
+        [charge] = billing.load_abrs(worker, account_id)
+        assert charge.amount == D("4.00") and charge.period == DateRange(START, change_day)
+
+        api.clock.set(at(change_day))
+        second = bill_date(worker, change_day, clock=api.clock, tz=TZ, trigger="scheduled")
+        assert second["status"] == "completed", second
+        [replayed, next_charge] = billing.load_abrs(worker, account_id)
+        assert replayed == charge
+        assert replayed.taxes == (
+            AppliedTax("VAT", D("20"), D("0.80")),
+            AppliedTax("city", D("2.3"), D("0.09")),
+        )
+        assert next_charge.offering_id == UUID(successor["id"])
+        assert next_charge.amount == D("70.00") and next_charge.period.start == change_day
 
 
 def test_a_cancelled_weekly_product_leaves_no_charge_or_bill(api, db_conn):
