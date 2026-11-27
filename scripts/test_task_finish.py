@@ -492,14 +492,63 @@ if a[0] == 'ps' and any(x.startswith('ancestor=') for x in a):
         del self.env[REEXEC_MARKER]
         with self.assertRaises(lifecycle.Reexec):
             self.finish()
-        # Nothing was removed or released; the checkpoint lets the rerun resume.
+        # The hand-over comes before the preflight: nothing checked, removed or released.
         self.assertTrue(self.work.exists())
         self.assertTrue(self.active.exists())
-        self.assertTrue(list(self.slot.glob("finish-*.json")))
+        self.assertFalse(list(self.slot.glob("finish-*.json")))
         # The marker (set by the hand-over) prevents a second hand-over.
         self.env[REEXEC_MARKER] = "1"
         self.assertEqual(self.finish()["status"], "finished")
         self.assertFalse(self.active.exists())
+
+    def test_changed_scripts_after_a_checkpoint_hand_over_then_resume(self):
+        self.sync_primary()
+        self.inventory["fail_down"] = True
+        self.docker_state.write_text(json.dumps(self.inventory))
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.finish()
+        self.assertTrue(list(self.slot.glob("finish-*.json")))
+        self.inventory["fail_down"] = False
+        self.docker_state.write_text(json.dumps(self.inventory))
+        self.advance_master("scripts/task_finish.py")
+        del self.env[REEXEC_MARKER]
+        with self.assertRaises(lifecycle.Reexec):
+            self.finish()
+        # Nothing was removed or released; the checkpoint lets the rerun resume.
+        self.assertTrue(self.work.exists())
+        self.assertTrue(self.active.exists())
+        self.env[REEXEC_MARKER] = "1"
+        self.assertEqual(self.finish()["status"], "finished")
+        self.assertFalse(self.active.exists())
+
+    def test_a_task_that_adds_a_disposable_path_finishes_under_its_own_rule(self):
+        # #491: the merged task widens DISPOSABLE; primary still has the old list.
+        self.sync_primary()
+        with (self.work / ".gitignore").open("a") as ignore:
+            ignore.write(".newcache/\n")
+        (self.work / "scripts").mkdir(exist_ok=True)
+        (self.work / "scripts/task_finish.py").write_text("DISPOSABLE += ('.newcache/',)\n")
+        self.call(["git", "add", ".gitignore", "scripts/task_finish.py"])
+        self.call(["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "rule"])
+        self.call(["git", "push", "-q", "origin", "HEAD:refs/heads/master"])
+        self.head = self.call(["git", "rev-parse", "HEAD"]).stdout.strip()
+        self.state["pr"].update(headRefOid=self.head, mergeCommit={"oid": self.head})
+        (self.work / ".newcache").mkdir()
+        (self.work / ".newcache/output").write_text("generated\n")
+        del self.env[REEXEC_MARKER]
+        # The old list would refuse the path; the merged scripts take over first.
+        with self.assertRaises(lifecycle.Reexec):
+            self.finish()
+        self.assertTrue((self.work / ".newcache/output").exists())
+        self.assertFalse(list(self.slot.glob("finish-*.json")))
+        # The rerun is the merged script, with the task's own list.
+        self.env[REEXEC_MARKER] = "1"
+        with patch.object(lifecycle, "DISPOSABLE", (*lifecycle.DISPOSABLE, ".newcache/")):
+            self.assertEqual(self.finish()["status"], "finished")
+        self.assertFalse(self.work.exists())
+        self.assertEqual(
+            self.call(["git", "rev-parse", "HEAD"], cwd=self.primary).stdout.strip(), self.head
+        )
 
     def test_unrelated_changes_on_master_do_not_hand_over(self):
         self.sync_primary()
@@ -726,7 +775,8 @@ if a[0] == 'ps' and any(x.startswith('ancestor=') for x in a):
         def fail_last(primary):
             nonlocal calls
             calls += 1
-            if calls == 2:
+            # Preflight, cleanup, then the final fast-forward (#491 added the first).
+            if calls == 3:
                 raise InvalidRuntime("interrupted final fetch")
             original(primary)
 
