@@ -4,7 +4,16 @@ import { App } from '../app/App';
 import { accountSearchRoute, searchAccount } from '../test/accountSearch';
 import { expectUi } from '../test/expectUi';
 import { accountBody, billsUrl, NO_SETTLEMENT } from '../test/fixtures';
-import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } from '../test/fetch';
+import {
+  CONTEXT,
+  json,
+  NAV_RUNS,
+  noRuns,
+  pending,
+  stubFetch,
+  tmfError,
+  type Handler,
+} from '../test/fetch';
 
 // Payments and refunds history, including the shared account-level refund entry points.
 // Requests are replayed against the real API by tests/internal/test_ui_requests.py.
@@ -224,6 +233,48 @@ describe('payments screen', () => {
     fireEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
     await screen.findByText('No payments');
   });
+
+  // #499: Reset filters, the account link and closing a payment
+  it('resets the status and the account chip that hide every payment', async () => {
+    const { calls } = backend({
+      [`GET ${PAYMENT}?account.id=${A1}&${LIST}`]: () => json([PAY1]),
+      [`GET ${PAYMENT}?account.id=${A1}&status=done&${LIST}`]: () => json([]),
+      [`GET ${PAYMENT}?${LIST}`]: () => json([PAY2, PAY1]),
+    });
+    open(`/payments?account=${A1}`);
+    await screen.findByRole('link', { name: 'Ivan Ivanov' });
+    fireEvent.click(screen.getByRole('button', { name: 'done' }));
+    expect(await screen.findByText('No matches')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }));
+
+    expect(await screen.findByText('Olga Kuznetsova')).toBeTruthy();
+    expect(calls.at(-1)).toBe(`GET ${PAYMENT}?${LIST}`);
+    expect(window.location.search).toBe('');
+  });
+
+  it('opens the card from the account link of a row without opening the payment', async () => {
+    backend({ [`GET ${PAYMENT}?${LIST}`]: () => json([PAY1], { total: 1 }), 'GET /*': pending });
+    open('/payments');
+    fireEvent.click(await screen.findByRole('link', { name: 'Ivan Ivanov' }));
+    expect(window.location.pathname).toBe(`/billing-accounts/${A1}`);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('closes a payment without a write', async () => {
+    const { fetchMock } = backend({
+      [`GET ${PAYMENT}?${LIST}`]: () => json([PAY1], { total: 1 }),
+      [`GET ${PAYMENT}/${P1}`]: () => json(PAY1),
+    });
+    open('/payments');
+    fireEvent.click(await screen.findByText('INV-77'));
+    const dialog = await screen.findByRole('dialog');
+    await within(dialog).findByText('B1000001');
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(fetchMock.mock.calls.filter(([, init]) => (init?.method ?? 'GET') !== 'GET')).toEqual(
+      [],
+    );
+  });
 });
 
 describe('payments panel on the subscriber card', () => {
@@ -260,6 +311,10 @@ describe('payments panel on the subscriber card', () => {
     await screen.findByRole('dialog');
     expectUi('ui.payments.detail');
     expect(calls).toContain(`GET ${PAYMENT}/${P1}`);
+    // #499: Escape closes it and the card stays
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(expectUi('ui.subscriber.payments')).toBe(card);
   });
 });
 

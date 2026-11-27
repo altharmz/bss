@@ -336,5 +336,76 @@ describe('financial accounts', () => {
       await screen.findByText('Personal deleted');
       expect(writes(fetchMock)).toEqual([['DELETE', `${FIN}/${F2}`, null]]);
     });
+
+    // #499: Cancel sends nothing; an unanswered save or delete offers only Refresh
+    it('cancels New, Edit and Delete without a write', async () => {
+      const { fetchMock } = withWrites({});
+      await open();
+      await screen.findByText('Group receivables');
+      for (const [button, title] of [
+        ['New financial account', 'New financial account'],
+        ['Edit Personal', 'Edit Personal'],
+        ['Delete Personal', 'Delete Personal'],
+      ] as const) {
+        fireEvent.click(screen.getByRole('button', { name: button }));
+        const dialog = await screen.findByRole('dialog', { name: title });
+        fireEvent.click(await within(dialog).findByRole('button', { name: 'Cancel' }));
+        expect(screen.queryByRole('dialog', { name: title })).toBeNull();
+      }
+      expect(writes(fetchMock)).toEqual([]);
+    });
+
+    it('offers only Refresh after an unanswered save, which closes and reloads', async () => {
+      let lists = 0;
+      const { fetchMock } = withWrites({
+        [LIST]: () => {
+          lists += 1;
+          return json([GROUP, EMPTY], { total: 2 });
+        },
+        [`PATCH ${FIN}/${F2}`]: () => tmfError(502, 'Bad Gateway'),
+      });
+      await open();
+      await screen.findByText('Group receivables');
+      fireEvent.click(screen.getByRole('button', { name: 'Edit Personal' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Edit Personal' });
+      fireEvent.change(await within(dialog).findByLabelText('Name'), {
+        target: { value: 'Personal 2' },
+      });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+      expect(await within(dialog).findByText('Unsure whether it was saved.')).toBeTruthy();
+      expect(within(dialog).queryByRole('button', { name: 'Save' })).toBeNull();
+      const before = lists;
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Refresh' }));
+      expect(await screen.findByText('Refreshed')).toBeTruthy();
+      expect(screen.queryByRole('dialog', { name: 'Edit Personal' })).toBeNull();
+      await waitFor(() => expect(lists).toBe(before + 1));
+      expect(writes(fetchMock)).toEqual([['PATCH', `${FIN}/${F2}`, '{"name":"Personal 2"}']]);
+    });
+
+    it('offers only Refresh after an unanswered delete, which closes and reloads', async () => {
+      let lists = 0;
+      const { fetchMock } = withWrites({
+        [LIST]: () => {
+          lists += 1;
+          return json([GROUP, EMPTY], { total: 2 });
+        },
+        [`DELETE ${FIN}/${F2}`]: () => tmfError(503, 'Service Unavailable'),
+      });
+      await open();
+      await screen.findByText('Group receivables');
+      fireEvent.click(screen.getByRole('button', { name: 'Delete Personal' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Delete Personal' });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+
+      expect(await within(dialog).findByText('Unsure whether it was saved.')).toBeTruthy();
+      expect(within(dialog).queryByRole('button', { name: 'Delete' })).toBeNull();
+      const before = lists;
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Refresh' }));
+      expect(await screen.findByText('Refreshed')).toBeTruthy();
+      expect(screen.queryByRole('dialog', { name: 'Delete Personal' })).toBeNull();
+      await waitFor(() => expect(lists).toBe(before + 1));
+      expect(writes(fetchMock)).toEqual([['DELETE', `${FIN}/${F2}`, null]]);
+    });
   });
 });

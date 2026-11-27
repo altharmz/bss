@@ -354,6 +354,7 @@ function ActionWrites({ action, onChanged }: { action: BalanceAction; onChanged:
     setUnsure(false);
     try {
       await write();
+      /* v8 ignore next -- @preserve unreachable: cancelAction, removeAction and editNote each send one request */
       if (writeLock.sent() === before) {
         setProblem('Not sent. Try again.');
         return;

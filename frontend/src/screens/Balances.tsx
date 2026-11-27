@@ -275,7 +275,8 @@ export function BalancesScreen() {
               columns={ACTION_COLUMNS}
               errorTitle="Failed to load the list"
               empty={{ title: 'Nothing here', text: 'No matching requests.' }}
-              count={(data) => data.items.length}
+              // filtered on the server: an empty filtered page is "no matches", not "nothing here"
+              count={(data) => (account !== null || status !== '' ? 1 : data.items.length)}
               rows={(data) => data.items}
               onResetFilters={reset}
             >

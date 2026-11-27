@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import { App } from '../app/App';
 import { expectUi } from '../test/expectUi';
 import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } from '../test/fetch';
@@ -165,5 +165,58 @@ describe('Users', () => {
     fail = false;
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(await screen.findByText('No users')).toBeTruthy();
+  });
+
+  // #499: closing sends nothing, an unchanged edit sends nothing, and a change to one's own
+  // user ends the session instead of reloading the list
+  it('closes the form with Cancel or Escape, and an unchanged edit, without a request', async () => {
+    const { fetchMock, calls } = start();
+    fireEvent.click(await screen.findByRole('button', { name: 'New user' }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit alice' }));
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit alice' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(fetchMock.mock.calls.filter(([, init]) => (init?.method ?? 'GET') !== 'GET')).toEqual(
+      [],
+    );
+    expect(calls.filter((c) => c === `GET ${PATH}`)).toHaveLength(1);
+  });
+
+  it("ends the session after a change to one's own user", async () => {
+    const self = { ...alice, username: 'i.petrova', role: 'admin' };
+    const unauthorized = vi.fn();
+    window.addEventListener('bss:unauthorized', unauthorized);
+    try {
+      const { fetchMock, calls } = stubFetch({
+        'GET /tmf-api/accountManagement/v5/financialAccount?limit=1&fields=id': () =>
+          json([], { total: 23 }),
+        'GET /internal/v1/session': () =>
+          json({ username: 'i.petrova', role: 'admin', mustChangePassword: false }),
+        'GET /internal/v1/context': () => json(CONTEXT),
+        [NAV_RUNS]: noRuns,
+        'GET /tmf-api/accountManagement/v5/billingAccount?limit=1&fields=id': () =>
+          json([], { total: 0 }),
+        'GET /tmf-api/productCatalogManagement/v5/productOffering?limit=1&fields=id': () =>
+          json([], { total: 0 }),
+        [`GET ${PATH}`]: () => json([self]),
+        [`PATCH ${PATH}/i.petrova`]: () => json(self),
+      });
+      window.history.replaceState(null, '', '/users');
+      render(<App />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Reset password for i.petrova' }));
+      fill('Initial password', 'replacement-password');
+      fireEvent.click(screen.getByRole('button', { name: 'Reset password' }));
+      await waitFor(() => expect(unauthorized).toHaveBeenCalledOnce());
+      expect(
+        fetchMock.mock.calls.filter(([, init]) => init?.method === 'PATCH').map(([url]) => url),
+      ).toEqual([`${PATH}/i.petrova`]);
+      expect(calls.filter((c) => c === `GET ${PATH}`)).toHaveLength(1);
+    } finally {
+      window.removeEventListener('bss:unauthorized', unauthorized);
+    }
   });
 });

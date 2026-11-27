@@ -246,6 +246,57 @@ describe('messages tab', () => {
       sender: { '@type': 'Sender', name: 'bss admin' },
     });
   });
+
+  // #499: a queued message with no time yet, Previous, and the dialogs closed without a write
+  it('shows a dash for a message with no time and pages back with Previous', async () => {
+    const second = `GET ${MSG}?receiver.party.id=${C}&offset=25&limit=25`;
+    const unscheduled = message(M3, {
+      state: 'initial',
+      tryTimes: 0,
+      sendTime: undefined,
+      sendTimeComplete: undefined,
+    });
+    const { calls } = tab({
+      [LIST]: () => json([unscheduled], { more: true }),
+      [second]: () => json([FAILED]),
+    });
+    await open('#messages');
+    const section = await waitFor(() => expectUi('ui.subscriber.messages'));
+    const row = (await within(section).findByText('Queued')).closest('[role=row]') as HTMLElement;
+    expect(within(row).getAllByRole('cell')[0]?.textContent).toBe('—');
+    fireEvent.click(expectUi('ui.subscriber.messages.next'));
+    await within(section).findByText('Showing 26–26');
+    fireEvent.click(expectUi('ui.subscriber.messages.previous'));
+    await within(section).findByText('Showing 1–1');
+    expect(calls.filter((c) => c === LIST)).toHaveLength(2);
+  });
+
+  it('closes a message, a new message and a consent dialog without a write', async () => {
+    const { fetchMock } = tab({
+      [LIST]: () => json([FAILED]),
+      [`GET ${MSG}/${M2}`]: () => json(FAILED),
+    });
+    await open('#messages');
+    fireEvent.click(await screen.findByText('mailbox unavailable'));
+    const detail = await waitFor(() => expectUi('ui.subscriber.messages.detail'));
+    await within(detail).findByText('Card declined');
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(document.querySelector('[data-ui="ui.subscriber.messages.detail"]')).toBeNull();
+
+    fireEvent.click(expectUi('ui.subscriber.messages.newItem'));
+    const writing = await waitFor(() => expectUi('ui.subscriber.messages.new'));
+    fireEvent.click(within(writing).getByRole('button', { name: 'Cancel' }));
+    expect(document.querySelector('[data-ui="ui.subscriber.messages.new"]')).toBeNull();
+
+    const sms = await waitFor(() => expectUi('ui.subscriber.consent.sms'));
+    fireEvent.click(within(sms).getByRole('button', { name: 'Opt in' }));
+    const record = await waitFor(() => expectUi('ui.subscriber.consent.record'));
+    fireEvent.click(within(record).getByRole('button', { name: 'Cancel' }));
+    expect(document.querySelector('[data-ui="ui.subscriber.consent.record"]')).toBeNull();
+    expect(fetchMock.mock.calls.filter(([, init]) => (init?.method ?? 'GET') !== 'GET')).toEqual(
+      [],
+    );
+  });
 });
 
 describe('marketing consent', () => {

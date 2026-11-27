@@ -409,6 +409,80 @@ describe('usage tab', () => {
     expect(await screen.findByText(/150.0 MB left/)).toBeTruthy();
   });
 
+  // #499: small byte counts, Previous, a second line picked, and an account with no line
+  it('shows kilobytes and bytes, and pages back with Previous', async () => {
+    const second = `GET /tmf-api/productUsageManagement/v5/productUsage?product.id=${P1}&offset=25&limit=25`;
+    const sized = (id: string, bytes: number) =>
+      record(id, {
+        usageCharacteristic: [
+          { name: 'quantity', value: bytes },
+          { name: 'unit', value: 'bytes' },
+          { name: 'eventTime', value: '2026-10-01T06:00:00Z' },
+        ],
+      });
+    const { calls } = lazy({
+      [SUMMARY]: () => json(summary({ throttled: false })),
+      [RECORDS]: () => json([sized('u1', 2048), sized('u2', 512)], { more: true }),
+      [second]: () => json([record('u3')], { more: false }),
+    });
+    await open('#usage');
+    expect(await screen.findByText('2.0 KB')).toBeTruthy();
+    expect(screen.getByText('512 B')).toBeTruthy();
+    fireEvent.click(expectUi('ui.subscriber.usage.next'));
+    await screen.findByText('Showing 26–26');
+    fireEvent.click(expectUi('ui.subscriber.usage.previous'));
+    expect(await screen.findByText('Showing 1–2')).toBeTruthy();
+    expect(calls.filter((c) => c === RECORDS)).toHaveLength(2);
+  });
+
+  it('reads the summary and records of the line picked', async () => {
+    // hexadecimal ids: the picker names each line by its short id
+    const L1 = 'ab000001-0000-4000-8000-000000000001';
+    const L2 = 'ab000002-0000-4000-8000-000000000002';
+    const usage = (id: string) =>
+      `GET /tmf-api/productUsageManagement/v5/productUsage?product.id=${id}&offset=0&limit=25`;
+    const first = product(L1, {
+      offeringKind: 'plan',
+      paidThrough: '2026-10-20',
+      suspensionCause: null,
+      needs_topup: null,
+    });
+    const other = product(L2, {
+      offeringKind: 'payAsYouGo',
+      suspensionCause: null,
+      needs_topup: null,
+      productOffering: { id: 'o-payg', name: 'Pay as you go', code: null },
+    });
+    const { calls } = lazy({
+      [`GET ${INTERNAL}/products`]: () => json([first, other], { total: 2 }),
+      [`GET /internal/v1/usage/summary?product.id=${L1}`]: () =>
+        json(summary({ product: { id: L1, href: '' }, throttled: false })),
+      [usage(L1)]: () => json([], { total: 0 }),
+      [`GET /internal/v1/usage/summary?product.id=${L2}`]: () =>
+        json(summary({ product: { id: L2, href: '' }, throttled: false, allowances: [] })),
+      [usage(L2)]: () => json([], { total: 0 }),
+    });
+    await open('#usage');
+    const line = (await screen.findByLabelText('Line')) as HTMLSelectElement;
+    expect(line.value).toBe(L1);
+    expect(within(line).getByRole('option', { name: 'Pay as you go · PRD-AB000002' })).toBeTruthy();
+    fireEvent.change(line, { target: { value: L2 } });
+    await waitFor(() => expect(calls).toContain(usage(L2)));
+    expect(calls).toContain(`GET /internal/v1/usage/summary?product.id=${L2}`);
+    expect((screen.getByLabelText('Line') as HTMLSelectElement).value).toBe(L2);
+  });
+
+  it('says there is no usage for an account without a plan or pay-as-you-go line', async () => {
+    const { fetchMock } = lazy({ [`GET ${INTERNAL}/products`]: () => json([], { total: 0 }) });
+    await open('#usage');
+    expect(
+      await screen.findByText(
+        'This account has no plan or pay-as-you-go line, so there is no usage.',
+      ),
+    ).toBeTruthy();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('usage'))).toBe(false);
+  });
+
   it('shows the pay-as-you-go balance and a barred line', async () => {
     lazy({
       [SUMMARY]: () =>
@@ -606,6 +680,25 @@ describe('prepaid money forms', () => {
       expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('/bucket?'))).toHaveLength(
         2,
       ),
+    );
+  });
+
+  // #499: an Other payment method is sent by the name typed, and needs one
+  it('tops up with an Other payment method by the name typed', async () => {
+    const { fetchMock } = await prepaid({ [`POST ${PREPAY}/topupBalance`]: stored('completed') });
+    press(document.body, 'Top up');
+    const form = await dialog('Top up');
+    type(form, 'Amount', '20');
+    type(form, 'Reason', 'Voucher');
+    press(form, 'Other');
+    const submit = within(form).getByRole('button', { name: 'Top up 20.00 USD' });
+    expect(submit).toHaveProperty('disabled', true);
+    type(form, 'Payment method name', ' Voucher desk ');
+    expect(submit).toHaveProperty('disabled', false);
+    fireEvent.click(submit);
+    await screen.findByRole('status');
+    expect(posts(fetchMock)[0]?.body).toContain(
+      '"paymentMethod":{"id":"Voucher desk","name":"Voucher desk"}',
     );
   });
 
@@ -1027,6 +1120,68 @@ describe('prepaid transfer', () => {
     expect(screen.getByRole('button', { name: 'Transfer' })).toHaveProperty('disabled', false);
     expect(posts(fetchMock)).toHaveLength(1);
   });
+
+  // #499: a failed lookup, a definitive refusal (a new key next time), Escape while the
+  // transfer is sent, and Back to the receiver
+  it('says why the receiver lookup failed and sends nothing', async () => {
+    const { fetchMock, form } = await transferForm({
+      [`GET ${RESOURCES}?value=79991234001&offset=0&limit=100`]: () =>
+        tmfError(500, 'Internal Server Error'),
+    });
+    type(form, 'Receiver number', '79991234001');
+    press(form, 'Find');
+    expect(
+      await within(form).findByText(
+        `GET ${RESOURCES}?value=79991234001&offset=0&limit=100 → 500 Internal Server Error`,
+        { exact: false },
+      ),
+    ).toBeTruthy();
+    expect(within(form).getByRole('button', { name: 'Next' })).toHaveProperty('disabled', true);
+    expect(posts(fetchMock)).toEqual([]);
+  });
+
+  it('shows a definitive refusal and sends the next try under a new key', async () => {
+    const { fetchMock, form } = await transferForm({
+      [`POST ${PREPAY}/transferBalance`]: () => tmfError(422, 'amount exceeds the daily limit'),
+    });
+    await fill(form);
+    press(form, 'Review transfer');
+    fireEvent.click(within(form).getByRole('checkbox'));
+    press(form, 'Transfer 30.00 USD');
+    const refusal = await within(form).findByText(/amount exceeds the daily limit/);
+    expect(refusal.closest('.bss-note')?.textContent).toContain('Refused.');
+    expect(within(form).queryByRole('button', { name: 'Retry' })).toBeNull();
+    press(form, 'Transfer 30.00 USD');
+    await waitFor(() => expect(posts(fetchMock)).toHaveLength(2));
+    const [first, second] = posts(fetchMock);
+    expect(second?.body).toBe(first?.body);
+    expect(second?.key).not.toBe(first?.key);
+  });
+
+  it('ignores Escape while the transfer is sent, and steps Back to the receiver', async () => {
+    let answer: (response: Response) => void = () => undefined;
+    const { fetchMock, form } = await transferForm({
+      [`POST ${PREPAY}/transferBalance`]: () =>
+        new Promise<Response>((resolve) => {
+          answer = resolve;
+        }),
+    });
+    await fill(form);
+    press(form, 'Back');
+    expect(within(form).getByLabelText('Receiver number')).toHaveProperty('value', '79991234001');
+    press(form, 'Next');
+    press(form, 'Review transfer');
+    fireEvent.click(within(form).getByRole('checkbox'));
+    press(form, 'Transfer 30.00 USD');
+    await waitFor(() => expect(posts(fetchMock)).toHaveLength(1));
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.getByRole('dialog', { name: 'Transfer funds' })).toBe(form);
+    answer(tmfError(409, 'transfer conflicts with another'));
+    expect(await within(form).findByText(/transfer conflicts with another/)).toBeTruthy();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Transfer funds' })).toBeNull();
+    expect(posts(fetchMock)).toHaveLength(1);
+  });
 });
 
 describe('prepaid orders and commands', () => {
@@ -1208,6 +1363,52 @@ describe('prepaid orders and commands', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Retry now' }));
     await screen.findByText(/waiting for the billing worker/);
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  // #499: a refused retry says why and keeps Retry now; a failed list load has its own Retry
+  it('shows why a retry was refused and keeps Retry now offered', async () => {
+    const { fetchMock } = await deactivate({
+      [`GET ${CMD}/${ORDER_ID}`]: () =>
+        json(command({ state: 'failedTechnical', error: 'connection reset' })),
+      [`POST ${CMD}/${ORDER_ID}/retry`]: () => tmfError(403, 'retry not allowed'),
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry now' }));
+    expect(
+      await screen.findByText(`POST ${CMD}/${ORDER_ID}/retry → 403 retry not allowed`),
+    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Retry now' })).toHaveProperty('disabled', false);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/retry'))).toHaveLength(1);
+  });
+
+  it('says the failed commands could not be loaded, and Retry lists them', async () => {
+    let reads = 0;
+    base({
+      [FAILED]: () =>
+        ++reads === 1
+          ? tmfError(503, 'Service Unavailable')
+          : json(
+              [
+                command({
+                  id: 'c0000001-0000-4000-8000-0000000000c1',
+                  kind: 'renewal',
+                  dueDate: '2026-09-28',
+                  state: 'failedTechnical',
+                  error: 'deadlock detected',
+                }),
+              ],
+              { total: 1 },
+            ),
+    });
+    await open();
+    selectTab('Commands');
+    const error = await screen.findByText('Failed to load prepaid commands');
+    fireEvent.click(
+      within(error.closest('[role="alert"]') as HTMLElement).getByRole('button', {
+        name: 'Retry',
+      }),
+    );
+    const strip = await waitFor(() => expectUi('ui.subscriber.prepaid.failedCommands'));
+    expect(strip.textContent).toContain('deadlock detected');
   });
 
   it('lists the account’s technically failed commands and retries one', async () => {

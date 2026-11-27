@@ -310,4 +310,22 @@ describe('party and settlement accounts', () => {
       ['DELETE', `${ACC}/settlementAccount/${A1}`, null],
     ]);
   });
+
+  // #499: Cancel on the party tab's dialogs sends nothing
+  it('cancels New, Edit and Delete of a party account without a write', async () => {
+    const { fetchMock } = backend();
+    await open('Party');
+    await screen.findByText('Payroll');
+    for (const [button, title] of [
+      ['New party account', 'New party account'],
+      ['Edit Payroll', 'Edit Payroll'],
+      ['Delete Payroll', 'Delete Payroll'],
+    ] as const) {
+      fireEvent.click(screen.getByRole('button', { name: button }));
+      const dialog = await screen.findByRole('dialog', { name: title });
+      fireEvent.click(await within(dialog).findByRole('button', { name: 'Cancel' }));
+      expect(screen.queryByRole('dialog', { name: title })).toBeNull();
+    }
+    expect(writes(fetchMock)).toEqual([]);
+  });
 });

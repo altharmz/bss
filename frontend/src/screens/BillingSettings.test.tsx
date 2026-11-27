@@ -309,6 +309,63 @@ describe('billing settings', () => {
     expect(alert.textContent).toContain('billStructure first');
     expect(screen.getByRole('dialog', { name: 'Delete Spare' })).toBeTruthy();
   });
+
+  // #499: Cancel sends nothing; an unanswered save or delete offers only Refresh
+  it('cancels New, Edit and Delete without a write', async () => {
+    const { fetchMock } = backend();
+    await open();
+    await shown('Spare');
+    for (const [button, title] of [
+      ['New cycle specification', 'New cycle specification'],
+      ['Edit Spare', 'Edit Spare'],
+      ['Delete Spare', 'Delete Spare'],
+    ] as const) {
+      fireEvent.click(screen.getByRole('button', { name: button }));
+      const dialog = await screen.findByRole('dialog', { name: title });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+      expect(screen.queryByRole('dialog', { name: title })).toBeNull();
+    }
+    expect(writes(fetchMock)).toEqual([]);
+  });
+
+  it('offers only Refresh after an unanswered save or delete, which reloads the list', async () => {
+    let lists = 0;
+    const { fetchMock } = backend({
+      [`GET ${ACC}/billingCycleSpecification?${PAGE}`]: () => {
+        lists += 1;
+        return json(CYCLES, { total: 3 });
+      },
+      [`PATCH ${ACC}/billingCycleSpecification/${CY2}`]: () => tmfError(504, 'Gateway Timeout'),
+      [`DELETE ${ACC}/billingCycleSpecification/${CY2}`]: () => tmfError(502, 'Bad Gateway'),
+    });
+    await open();
+    await shown('Spare');
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Spare' }));
+    let dialog = await screen.findByRole('dialog', { name: 'Edit Spare' });
+    fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Spare 2' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    expect(await within(dialog).findByText('Unsure whether it was saved.')).toBeTruthy();
+    expect(within(dialog).queryByRole('button', { name: 'Save' })).toBeNull();
+    let before = lists;
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Refresh' }));
+    expect(await screen.findByText('Refreshed')).toBeTruthy();
+    await waitFor(() => expect(lists).toBe(before + 1));
+
+    await shown('Spare');
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Spare' }));
+    dialog = await screen.findByRole('dialog', { name: 'Delete Spare' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    expect(await within(dialog).findByText('Unsure whether it was saved.')).toBeTruthy();
+    expect(within(dialog).queryByRole('button', { name: 'Delete' })).toBeNull();
+    before = lists;
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Refresh' }));
+    await waitFor(() => expect(lists).toBe(before + 1));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(writes(fetchMock).map(([method, url]) => [method, url])).toEqual([
+      ['PATCH', `${ACC}/billingCycleSpecification/${CY2}`],
+      ['DELETE', `${ACC}/billingCycleSpecification/${CY2}`],
+    ]);
+  });
 });
 
 // #386: the postpaid dunning steps. The PATCH bodies are replayed against the real API by
@@ -418,5 +475,35 @@ describe('dunning settings', () => {
     await open('Dunning');
     fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
     expect(await screen.findByText('14 days after the first overdue date')).toBeTruthy();
+  });
+
+  // #499: Cancel sends nothing; an unanswered save offers only Refresh, which reads them again
+  it('cancels the edit, and refreshes after an unanswered save', async () => {
+    let reads = 0;
+    const { fetchMock } = backend({
+      [`GET ${path}`]: () => {
+        reads += 1;
+        return json(settings);
+      },
+      [`PATCH ${path}`]: () => tmfError(503, 'Service Unavailable'),
+    });
+    await open('Dunning');
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit dunning settings' }));
+    let dialog = await screen.findByRole('dialog', { name: 'Edit dunning settings' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(writes(fetchMock)).toEqual([]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit dunning settings' }));
+    dialog = await screen.findByRole('dialog', { name: 'Edit dunning settings' });
+    fireEvent.change(within(dialog).getByLabelText('Suspension'), { target: { value: '20' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    expect(await within(dialog).findByText('Unsure whether it was saved.')).toBeTruthy();
+    const before = reads;
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Refresh' }));
+    expect(await screen.findByText('Dunning settings refreshed')).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => expect(reads).toBe(before + 1));
+    expect(writes(fetchMock)).toEqual([['PATCH', path, '{"suspendDays":20}']]);
   });
 });

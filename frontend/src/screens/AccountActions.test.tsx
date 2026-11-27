@@ -227,6 +227,42 @@ describe('refunds', () => {
       (screen.getByRole('button', { name: 'Refund unused credit' }) as HTMLButtonElement).disabled,
     ).toBe(true);
   });
+
+  // #499: closing the refund tells the card to reload; a 409 whose limit cannot be read
+  // again leaves the outcome unconfirmed
+  it('closes the refund without a write and has the card reload', async () => {
+    const { calls } = stubFetch({});
+    const changed = vi.fn();
+    render(<RefundAction account={account} settlement={credit} onChanged={changed} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Refund unused credit' }));
+    fireEvent.click(screen.getByText('Close', { selector: 'button' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(changed).toHaveBeenCalledOnce();
+    expect(calls).toEqual([]);
+  });
+
+  it('asks to check Recorded refunds when the limit after a conflict cannot be read', async () => {
+    const { calls } = stubFetch({
+      [`POST ${REFUNDS}`]: () => tmfError(409, 'refund exceeds refundable credit 10'),
+      [`GET /tmf-api/accountManagement/v5/billingAccount/${A}`]: () =>
+        tmfError(503, 'Service Unavailable'),
+      [`GET /internal/v1/billingAccount/${A}/settlement`]: () => json(credit),
+    });
+    render(
+      <RefundModal account={account} initialLimit={10025} onClose={vi.fn()} onRecorded={vi.fn()} />,
+    );
+    fireEvent.change(screen.getByLabelText('Refund description'), {
+      target: { value: 'Returned deposit' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Record refund' }));
+
+    expect(await screen.findByText(/check Recorded refunds/)).toBeTruthy();
+    expect(screen.getByText(/409 refund exceeds refundable credit 10/)).toBeTruthy();
+    expect(
+      (screen.getByRole('button', { name: 'Record refund' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(calls.filter((c) => c.startsWith('POST'))).toEqual([`POST ${REFUNDS}`]);
+  });
 });
 
 describe('bill requests', () => {
@@ -366,5 +402,32 @@ describe('bill requests', () => {
     expect((screen.getByRole('button', { name: 'Bill now' }) as HTMLButtonElement).disabled).toBe(
       false,
     );
+  });
+
+  // #499: Close and Escape leave Bill now without a request; Escape waits for one in flight
+  it('closes Bill now without a request, and ignores Escape while one is sent', async () => {
+    const { calls } = stubFetch({
+      [DEMANDS]: () => json([], { total: 0 }),
+      [`POST ${BILL_DEMANDS}`]: pending,
+    });
+    billView();
+    await screen.findByText('No bill requests');
+    fireEvent.click(screen.getByRole('button', { name: 'Bill now' }));
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'Bill now' })).getByText('Close', {
+        selector: 'button',
+      }),
+    );
+    expect(screen.queryByRole('dialog', { name: 'Bill now' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Bill now' }));
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Bill now' })).toBeNull();
+    expect(calls.filter((c) => c.startsWith('POST'))).toEqual([]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Bill now' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Request bill' }));
+    await waitFor(() => expect(calls).toContain(`POST ${BILL_DEMANDS}`));
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.getByRole('dialog', { name: 'Bill now' })).toBeTruthy();
   });
 });

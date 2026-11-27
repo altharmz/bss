@@ -193,6 +193,17 @@ describe('prepaid balance actions', () => {
     expect(rowsOf()[1]).toContain('Released');
   });
 
+  // #499: a status the screen has no word for is shown as the server sends it
+  it('shows an unknown status as sent', async () => {
+    backend(
+      routes({ [OWN]: list({ ...topup, status: 'inProgress' }), [RECEIVED]: list() }),
+      PREPAID,
+    );
+    await open();
+    await waitFor(() => expect(rowsOf()).toHaveLength(1));
+    expect(rowsOf()[0]).toContain('inProgress');
+  });
+
   it('opens the detail fetched fresh, with links to both cards and the transfer cost', async () => {
     const { calls } = backend(
       routes({ [`GET ${HISTORY}/${T5}`]: () => json({ ...sent, description: 'Fresh copy' }) }),
@@ -561,6 +572,24 @@ describe('prepaid balance actions', () => {
       expect(screen.getByRole('dialog', { name: 'Balance action' })).toBeTruthy();
       expect(writes(fetchMock)).toHaveLength(1);
       expect(within(dialog).queryByRole('button', { name: 'Refresh' })).toBeNull();
+    });
+
+    // #499: No and Cancel step back without a write
+    it('steps back from a confirmation with No and from a note edit with Cancel', async () => {
+      const { dialog, fetchMock } = await detailOf(topup, 'Top-up');
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel top-up' }));
+      fireEvent.click(within(dialog).getByRole('button', { name: 'No' }));
+      expect(within(dialog).queryByText(/Takes 50\.00 back off the balance/)).toBeNull();
+      expect(buttons(dialog)).toEqual(['Cancel top-up', 'Edit note']);
+
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Edit note' }));
+      fireEvent.change(within(dialog).getByLabelText('Description'), {
+        target: { value: 'Typed' },
+      });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+      expect(document.querySelector('[data-ui="ui.subscriber.prepaid.editNoteForm"]')).toBeNull();
+      expect(buttons(dialog)).toEqual(['Cancel top-up', 'Edit note']);
+      expect(writes(fetchMock)).toEqual([]);
     });
 
     it('says it is unsure after a 5xx and offers Refresh', async () => {
@@ -982,6 +1011,100 @@ describe('prepaid plans (#212)', () => {
     expect(
       fetchMock.mock.calls.filter(([, init]) => init?.method && init.method !== 'GET'),
     ).toEqual([]);
+  });
+
+  // #499: an add-on the worker completes later, a refusal, an unanswered order, a busy
+  // dialog and the keyboard pick
+  const buyAddOn = async () => {
+    await open();
+    const row = await waitFor(() => productRow('Mobile L'));
+    fireEvent.click(productAction(row, 'Buy add-on…'));
+    return screen.findByRole('dialog', { name: /Buy add-on/ });
+  };
+  const nonGets = (calls: [RequestInfo | URL, (RequestInit | undefined)?][]) =>
+    calls.filter(([, init]) => init?.method && init.method !== 'GET');
+
+  it('picks an add-on with the keyboard and follows an order the worker completes', async () => {
+    const { fetchMock } = routes({
+      [QUOTE]: () => json(quote),
+      [`POST ${ORDERS}`]: () =>
+        json({ id: 'o1', state: 'inProgress', '@type': 'ProductOrder' }, { status: 201 }),
+      'GET /internal/v1/prepaid/command/o1': () => new Promise<Response>(() => {}),
+    });
+    const dialog = await buyAddOn();
+    const radio = (await within(dialog).findAllByRole('radio'))[0] as HTMLElement;
+    fireEvent.keyDown(radio, { key: 'Tab' });
+    expect(radio.getAttribute('aria-checked')).toBe('false');
+    fireEvent.keyDown(radio, { key: ' ' });
+    expect(radio.getAttribute('aria-checked')).toBe('true');
+    fireEvent.keyDown(radio, { key: 'Enter' });
+    expect(radio.getAttribute('aria-checked')).toBe('true');
+    await within(dialog).findByTestId('addon-required');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Buy add-on' }));
+
+    expect(
+      await screen.findByText('Extra 2 GB accepted for Mobile L, the billing worker completes it'),
+    ).toBeTruthy();
+    expect(screen.queryByRole('dialog', { name: /Buy add-on/ })).toBeNull();
+    expect(
+      await screen.findByText('Add-on Extra 2 GB for Mobile L accepted, checking…'),
+    ).toBeTruthy();
+    expect(nonGets(fetchMock.mock.calls)).toHaveLength(1);
+  });
+
+  it('keeps the pick after a refused order, and ignores Escape while the order is sent', async () => {
+    let answer: (response: Response) => void = () => undefined;
+    const { fetchMock } = routes({
+      [QUOTE]: () => json(quote),
+      [`POST ${ORDERS}`]: () =>
+        new Promise<Response>((resolve) => {
+          answer = resolve;
+        }),
+    });
+    const dialog = await buyAddOn();
+    const radio = (await within(dialog).findAllByRole('radio'))[0] as HTMLElement;
+    fireEvent.click(radio);
+    await within(dialog).findByTestId('addon-required');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Buy add-on' }));
+    await waitFor(() => expect(nonGets(fetchMock.mock.calls)).toHaveLength(1));
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.getByRole('dialog', { name: /Buy add-on/ })).toBe(dialog);
+    answer(tmfError(422, 'add-on not allowed on this plan'));
+
+    expect(await within(dialog).findByText(/add-on not allowed on this plan/)).toBeTruthy();
+    expect(within(dialog).getByText('Refused.')).toBeTruthy();
+    expect(radio.getAttribute('aria-checked')).toBe('true');
+    expect(within(dialog).getByRole('button', { name: 'Buy add-on' })).toHaveProperty(
+      'disabled',
+      false,
+    );
+    expect(nonGets(fetchMock.mock.calls)).toHaveLength(1);
+  });
+
+  it('offers only Refresh after an unanswered order, which closes and reloads the card', async () => {
+    let productLoads = 0;
+    const { fetchMock } = routes({
+      [QUOTE]: () => json(quote),
+      [`POST ${ORDERS}`]: () => tmfError(503, 'Service Unavailable'),
+      [`GET ${INTERNAL}/products`]: () => {
+        productLoads += 1;
+        return json([plan, pack], { total: 2 });
+      },
+    });
+    const dialog = await buyAddOn();
+    fireEvent.click((await within(dialog).findAllByRole('radio'))[0] as HTMLElement);
+    await within(dialog).findByTestId('addon-required');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Buy add-on' }));
+
+    expect(await within(dialog).findByText('Unsure whether it was saved.')).toBeTruthy();
+    expect(within(dialog).queryByRole('button', { name: 'Buy add-on' })).toBeNull();
+    const loads = productLoads;
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Refresh' }));
+
+    expect(screen.queryByRole('dialog', { name: /Buy add-on/ })).toBeNull();
+    await waitFor(() => expect(productLoads).toBeGreaterThan(loads));
+    expect(nonGets(fetchMock.mock.calls)).toHaveLength(1);
   });
 });
 

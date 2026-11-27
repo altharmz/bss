@@ -263,6 +263,66 @@ describe('billing structure in the edit form', () => {
     expect(alert.textContent).toContain('format does not exist');
     expect((within(dialog).getByLabelText('Bill format') as HTMLSelectElement).value).toBe(BF2);
   });
+
+  // #499: one failed list says so; Retry asks for all three again
+  it('retries the billing settings lists after one fails to load', async () => {
+    let formats = 0;
+    const { calls } = editBackend({
+      ...LISTS,
+      [`GET ${ACCOUNT_BASE}/billFormat?offset=0&limit=100`]: () => {
+        formats += 1;
+        return formats === 1
+          ? tmfError(500, 'Internal Server Error')
+          : json([{ id: BF2, name: 'JSON summary' }], { total: 1 });
+      },
+    });
+    const dialog = await openEdit();
+    const note = await within(dialog).findByText(/Failed to load the billing settings/);
+    const lists = (path: string) =>
+      calls.filter((c) => c === `GET ${ACCOUNT_BASE}/${path}?offset=0&limit=100`).length;
+    const before = ['billingCycleSpecification', 'billFormat', 'billPresentationMedia'].map(lists);
+    fireEvent.click(within(note).getByRole('button', { name: 'Retry' }));
+
+    expect(await within(dialog).findByRole('option', { name: 'JSON summary' })).toBeTruthy();
+    expect(within(dialog).queryByText(/Failed to load the billing settings/)).toBeNull();
+    expect(['billingCycleSpecification', 'billFormat', 'billPresentationMedia'].map(lists)).toEqual(
+      before.map((n) => n + 1),
+    );
+  });
+});
+
+// #499: an organization's name is edited in place of the person's names
+describe('edit an organization subscriber', () => {
+  const ORG_URL = `/tmf-api/partyManagement/v5/organization/${PARTY_ID}`;
+
+  it('patches the organization with its new name only', async () => {
+    const { fetchMock } = editBackend({
+      [`GET ${CUSTOMER_URL}`]: () =>
+        json({
+          id: C,
+          name: 'Olga Kuznetsova',
+          status: 'Active',
+          engagedParty: { id: PARTY_ID, '@type': 'PartyRef', '@referredType': 'Organization' },
+          '@type': 'Customer',
+        }),
+      [`GET ${ORG_URL}`]: () =>
+        json({ id: PARTY_ID, name: 'Kuznetsova Trading', '@type': 'Organization' }),
+      [`PATCH ${ORG_URL}`]: () => json({ id: PARTY_ID }),
+    });
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit billing account' });
+    const name = await within(dialog).findByLabelText('Organization name');
+    expect(name).toHaveProperty('value', 'Kuznetsova Trading');
+    expect(within(dialog).queryByLabelText('Family name')).toBeNull();
+    fireEvent.change(name, { target: { value: '  ' } });
+    expect(within(dialog).getByRole('button', { name: 'Save' })).toHaveProperty('disabled', true);
+    fireEvent.change(name, { target: { value: 'Kuznetsova Trading LLC ' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByRole('status')).toHaveProperty('textContent', 'Saved: party');
+    expect(patches(fetchMock)).toEqual([[ORG_URL, '{"name":"Kuznetsova Trading LLC"}']]);
+  });
 });
 
 describe('link a financial account', () => {
@@ -441,6 +501,78 @@ describe('delete a billing account', () => {
     const alert = await within(dialog).findByRole('alert');
     expect(alert.textContent).toContain('close it instead');
     expect(window.location.pathname).toBe(`/billing-accounts/${A}`);
+  });
+
+  // #499: an unanswered delete offers Refresh (the list), another refusal is shown as it is,
+  // and a refused new account keeps what was typed
+  const openDelete = async () => {
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    await waitFor(() => expect(deleteButton()).toBeTruthy());
+    fireEvent.click(deleteButton() as HTMLElement);
+    return screen.findByRole('dialog', { name: 'Delete billing account' });
+  };
+
+  it('offers Refresh after an unanswered delete, which opens the list', async () => {
+    const { calls } = backend({
+      ...EMPTY,
+      [DELETE_KEY]: () => tmfError(504, 'Gateway Timeout'),
+      [`GET ${LIST}`]: () => json([], { total: 0 }),
+    });
+    const dialog = await openDelete();
+    expect(within(dialog).queryByRole('button', { name: 'Refresh' })).toBeNull();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert.textContent).toContain('Unsure whether it was saved: Refresh to check.');
+    expect(alert.textContent).not.toContain('close it instead');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Refresh' }));
+    await waitFor(() => expect(window.location.pathname).toBe('/billing-accounts'));
+    expect(await screen.findByText('Refreshed')).toBeTruthy();
+    expect(deletes(calls)).toEqual([DELETE_KEY]);
+  });
+
+  it('shows another refusal as the server words it, with no Refresh', async () => {
+    const { calls } = backend({
+      ...EMPTY,
+      [DELETE_KEY]: () => tmfError(403, 'operator may not delete accounts'),
+    });
+    const dialog = await openDelete();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert.textContent).toBe(`DELETE ${ACCOUNT_URL} → 403 operator may not delete accounts`);
+    expect(within(dialog).queryByRole('button', { name: 'Refresh' })).toBeNull();
+    expect(within(dialog).getByRole('button', { name: 'Delete' })).toHaveProperty(
+      'disabled',
+      false,
+    );
+    expect(window.location.pathname).toBe(`/billing-accounts/${A}`);
+    expect(deletes(calls)).toEqual([DELETE_KEY]);
+  });
+
+  it('keeps the new account typed in after a refusal', async () => {
+    const { fetchMock } = backend({
+      ...EMPTY,
+      'POST /tmf-api/accountManagement/v5/billingAccount': () =>
+        tmfError(422, 'creditLimit exceeds the allowed maximum'),
+    });
+    await open();
+    await screen.findByText('No active products');
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Add billing account' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Add billing account' });
+    const day = within(dialog).getByLabelText('Billing cycle day (1-28)');
+    const limit = within(dialog).getByLabelText('Credit limit, USD (optional)');
+    fireEvent.change(day, { target: { value: '15' } });
+    fireEvent.change(limit, { target: { value: '999999' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add billing account' }));
+
+    expect(await within(dialog).findByText(/creditLimit exceeds the allowed maximum/)).toBeTruthy();
+    expect(day).toHaveProperty('value', '15');
+    expect(limit).toHaveProperty('value', '999999');
+    expect(window.location.pathname).toBe(`/billing-accounts/${A}`);
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
   });
 });
 
