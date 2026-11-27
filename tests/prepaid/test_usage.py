@@ -523,6 +523,57 @@ def test_tmf635_post_refusals(api, db_conn, world, stub, change, status):
     assert db_conn.execute("SELECT count(*) FROM usage_record").fetchone() == (0,)
 
 
+def characteristic(name, value, kind="StringCharacteristic"):
+    return {"@type": kind, "name": name, "value": value}
+
+
+QUANTITY = characteristic("quantity", 2048, "IntegerCharacteristic")
+
+
+@pytest.mark.parametrize(
+    "change, message",
+    [
+        (
+            {"usageCharacteristic": [QUANTITY, QUANTITY]},
+            "usageCharacteristic quantity is given twice",
+        ),
+        (
+            {
+                "usageCharacteristic": [
+                    QUANTITY,
+                    characteristic("msisdn", 79991234567, "IntegerCharacteristic"),
+                ]
+            },
+            "usageCharacteristic msisdn must be a string",
+        ),
+        (
+            {"usageCharacteristic": [QUANTITY, characteristic("eventTime", "yesterday")]},
+            "usageCharacteristic eventTime must be a date-time",
+        ),
+        (
+            {"usageCharacteristic": [QUANTITY, characteristic("eventTime", "2026-01-15T12:00:00")]},
+            "usageCharacteristic eventTime needs a time zone",
+        ),
+        (
+            {"usageCharacteristic": [QUANTITY, "roaming"]},
+            "usageCharacteristic.1: must be an object",
+        ),
+        ({"usageCharacteristic": [QUANTITY, None]}, "usageCharacteristic.1: cannot be null"),
+        (
+            {"relatedParty": [{"@type": "RelatedPartyRefOrPartyRoleRef", "role": "user"}]},
+            "relatedParty is not supported: usage is reported by the network",
+        ),
+    ],
+    ids=["twice", "msisdn", "eventTime", "zone", "not-an-object", "null", "relatedParty"],
+)
+def test_tmf635_post_refusals_name_the_characteristic(api, db_conn, world, stub, change, message):
+    product = line_on(api, db_conn, world.off, world.acc)
+    response = api.post(USAGE, create_body(product) | change)
+    assert response.status_code == 422, response.text
+    assert response.json()["message"] == message
+    assert db_conn.execute("SELECT count(*) FROM usage_record").fetchone() == (0,)
+
+
 def test_a_usage_is_a_fact_patch_and_delete_are_405(api, db_conn, world, stub):
     product = line_on(api, db_conn, world.off, world.acc)
     usage = api.post(USAGE, create_body(product)).json()
@@ -536,3 +587,44 @@ def test_the_tmf635_server_path_is_the_specs(api):
         "/tmf-api/productUsageManagement/v5/"
     )
     assert settings.billing_tz  # the event date is the business date in this zone
+
+
+def test_a_record_the_feed_stores_first_is_answered_as_the_stored_usage(
+    api, db_conn, world, stub, monkeypatch
+):
+    """The network feed commits the same record id after the request's checks and before
+    its insert: the insert does nothing and the request answers with the feed's record."""
+    from app.api.common import billing_tz
+    from app.network import usage as rules
+    from app.repository import usage as usage_repo
+
+    product = line_on(api, db_conn, world.off, world.acc)
+    db_conn.execute("SET lock_timeout = '5s'")
+    db_conn.commit()
+    real = usage_repo.by_network_id
+    calls = []
+
+    def raced(conn, record_id):
+        found = real(conn, record_id)
+        calls.append(record_id)
+        if len(calls) == 2:  # the request's own check, then ingest's: the feed goes now
+            monkeypatch.setattr(usage_repo, "by_network_id", real)
+            rules.ingest(
+                db_conn,
+                rules.Incoming(network_record_id=record_id, kind="data", quantity=999,
+                               event_at=api.clock.now(), msisdn=None, imsi=None, roaming=False,
+                               throttled=False, international=False, product_id=product["id"]),
+                now=api.clock.now(),
+                tz=billing_tz(),
+            )  # fmt: skip
+            db_conn.commit()
+        return found
+
+    monkeypatch.setattr(usage_repo, "by_network_id", raced)
+    response = api.post(USAGE, create_body(product, "mediation-race"))
+    assert response.status_code == 201, response.text
+    names = {c["name"]: c["value"] for c in response.json()["usageCharacteristic"]}
+    assert names["quantity"] == 999 and names["roaming"] is False
+    assert db_conn.execute("SELECT network_record_id, quantity FROM usage_record").fetchall() == [
+        ("mediation-race", 999)
+    ]

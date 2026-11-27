@@ -29,6 +29,8 @@ CATALOG = f"{BASE}/productCatalog"
 EXPORT = f"{BASE}/exportJob"
 IMPORT = f"{BASE}/importJob"
 PATHS = (SPEC, PRICE, OFFERING, CATEGORY, CATALOG)
+ROOT = "11111111-1111-4111-8111-111111111111"
+CHILD = "22222222-2222-4222-8222-222222222222"
 
 
 def build_catalog(api, name="Home") -> dict:
@@ -211,6 +213,37 @@ def _data_url(doc) -> str:
             },
             "does not exist",
         ),
+        (
+            {"@type": "BssCatalogDocument", "version": 1, "category": [{"name": "no id"}]},
+            "every category entry must be an object with an id",
+        ),
+        (
+            {
+                "@type": "BssCatalogDocument",
+                "version": 1,
+                "category": [{"id": NIL, "@type": "Category", "name": "x"}] * 2,
+            },
+            "category: an id appears more than once",
+        ),
+        (
+            {
+                "@type": "BssCatalogDocument",
+                "version": 1,
+                "category": [
+                    {"id": ROOT, "@type": "Category", "name": "a", "parent": {"id": CHILD}},
+                    {"id": CHILD, "@type": "Category", "name": "b", "parent": {"id": ROOT}},
+                ],
+            },
+            "category: the parents form a cycle",
+        ),
+        (
+            {
+                "@type": "BssCatalogDocument",
+                "version": 1,
+                "category": [{"id": NIL, "@type": "Category", "name": "x", "parent": {"id": "p"}}],
+            },
+            "category: a parent id is not a UUID",
+        ),
     ],
 )
 def test_invalid_documents_fail_the_job(api, doc, error):
@@ -271,6 +304,19 @@ def test_lists_fields_filters_and_delete(api):
         assert api.get(href).status_code == 404
         assert api.delete(href).status_code == 404
     assert api.delete(f"{EXPORT}/{NIL}?fields=x").status_code == 400
+
+
+def test_an_oversized_import_is_refused_before_decoding(api, monkeypatch):
+    monkeypatch.setattr(catalog_jobs, "MAX_DOCUMENT_BYTES", 100)
+    refused = import_(api, _data_url({"padding": "x" * 200}), status=422)
+    assert refused["message"] == "the document is larger than 100 bytes"
+    assert api.get(IMPORT).json() == []
+
+
+def test_an_export_query_names_a_catalog_by_its_uuid(api):
+    response = api.post(EXPORT, {"@type": "ExportJob", "query": "productCatalog.id=home"})
+    assert response.status_code == 422, response.text
+    assert response.json()["message"] == "query: home is not a product catalog id"
 
 
 def test_an_oversized_export_fails(api, monkeypatch):

@@ -10,7 +10,7 @@ Failure event; a malformed or unknown reference is a 4xx that stores nothing.
 """
 
 import copy
-from datetime import UTC, datetime
+from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 
@@ -172,21 +172,14 @@ def _reserve_body(row: Row, account: Row) -> dict:
 
 def _check_validity(request: dict, now) -> None:
     """422 unless `validFor` can be honoured: it starts now (no start, or one already
-    reached) and ends in the future. A zone-less date-time is UTC."""
-    period = request.get("validFor") or {}
-    try:
-        end = repo.expiry(request)
-        start = period.get("startDateTime")
-        started = datetime.fromisoformat(start) if start else None
-    except ValueError:
-        raise unprocessable("validFor must hold ISO 8601 date-times") from None
+    reached) and ends in the future. The spec check (TimePeriod) has already refused a
+    value that is not a date-time with a time zone."""
+    end = repo.expiry(request)
+    start = (request.get("validFor") or {}).get("startDateTime")
     if end is not None and end <= now:
         raise unprocessable("validFor.endDateTime must be in the future")
-    if started is not None:
-        if started.tzinfo is None:
-            started = started.replace(tzinfo=UTC)
-        if started > now:
-            raise unprocessable("a hold starts when it is accepted: validFor.startDateTime is past")
+    if start and datetime.fromisoformat(start) > now:
+        raise unprocessable("a hold starts when it is accepted: validFor.startDateTime is past")
 
 
 @router.get(f"/{RESOURCE}")

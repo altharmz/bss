@@ -328,8 +328,7 @@ def _summary_pool(conn: psycopg.Connection, product_id: UUID, day: date) -> dict
     """The domestic data entry of a pool member: the pool's used, included and remaining in
     the pool period, with the members live on `day`."""
     line = repo.product_row(conn, product_id)
-    if line is None:
-        return None
+    assert line is not None  # summary() found the line's period
     pool = data_pool.pool_on(conn, line["billing_account_id"], day, profiles(conn))
     if pool is None or product_id not in pool.members:
         return None

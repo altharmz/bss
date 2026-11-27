@@ -229,3 +229,52 @@ def test_deliveries_go_30_days_after_they_finish_and_events_after_90(
     assert db_conn.execute("SELECT count(*) FROM event").fetchone() == (2,)
     assert housekeeping_after(92) == {"event": 1}
     assert db_conn.execute("SELECT count(*) FROM event").fetchone() == (1,)  # the pending one
+
+
+def test_a_callback_host_resolves_to_its_distinct_addresses_or_is_refused(monkeypatch):
+    def lookup(host, port, type=0):
+        if host == "gone.example":
+            raise socket.gaierror(-2, "Name or service not known")
+        stream = (socket.AF_INET, socket.SOCK_STREAM, 6, "")
+        return [(*stream, ("93.184.216.35", port)), (*stream, ("93.184.216.34", port)),
+                (*stream, ("93.184.216.35", port))]  # fmt: skip
+
+    monkeypatch.setattr(socket, "getaddrinfo", lookup)
+    assert callbacks.resolve("listener.example", 443) == ["93.184.216.34", "93.184.216.35"]
+    with pytest.raises(callbacks.CallbackRefused) as refused:
+        callbacks.resolve("gone.example", 443)
+    assert str(refused.value) == (
+        "callback host gone.example does not resolve ([Errno -2] Name or service not known)"
+    )
+
+
+def test_the_heartbeat_beats_after_each_delivery(api, db_conn, listener):
+    server = listener()
+    hub(api, server.url)
+    apidata.organization(api)
+    apidata.organization(api)
+    beats = []
+    done = deliver.process(db_conn, clock=api.clock, heartbeat=lambda: beats.append(1))
+    assert len(done.delivered) == 2 and len(server.received) == 2
+    assert beats == [1, 1]
+
+
+def test_https_wraps_the_pinned_connection_in_tls_for_the_host(monkeypatch):
+    """The peer answers in plain HTTP: the TLS handshake on the checked address fails."""
+    monkeypatch.setattr(settings, "app_env", "staging")
+    monkeypatch.setattr(callbacks, "resolve", lambda host, port: ["93.184.216.34"])
+    ours, peer = socket.socketpair()
+    peer.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+    connected = []
+
+    def connect(address, timeout=None, *args):
+        connected.append(address)
+        return ours
+
+    monkeypatch.setattr(socket, "create_connection", connect)
+    try:
+        error = deliver.post("https://listener.example/events", b"{}")
+    finally:
+        peer.close()
+    assert connected == [("93.184.216.34", 443)]
+    assert error is not None and error.startswith("SSLError: "), error

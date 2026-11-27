@@ -107,7 +107,7 @@ async def _current(request: Request) -> dict[str, Any]:
     }
     status, chunks = 500, []
 
-    async def receive() -> dict[str, Any]:
+    async def receive() -> dict[str, Any]:  # pragma: no cover - a GET route reads no body
         return {"type": "http.request", "body": b"", "more_body": False}
 
     async def send(message: dict[str, Any]) -> None:

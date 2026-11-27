@@ -271,12 +271,23 @@ def test_a_change_needs_the_pin_of_a_protected_customer(api, db_conn, wifi, stub
         ({"postcode": "9410"}, "place.0.place.postcode"),
         ({"country": "CA"}, "place.0.place.country"),
         ({"streetName": " "}, "place.0.place.streetName"),
+        ({"streetNr": " "}, "place.0.place.streetNr: streetNr must not be empty"),
     ],
 )
 def test_an_invalid_address_is_a_422_with_its_path(api, db_conn, wifi, bad, path):
     response = add(api, wifi, address=HOME | bad)
     assert response.status_code == 422, response.text
     assert path in response.json()["message"]
+    assert db_conn.execute("SELECT count(*) FROM product_order").fetchone() == (0,)
+
+
+def test_an_address_by_reference_is_refused(api, db_conn, wifi):
+    response = add(api, wifi, address={"@type": "GeographicAddressRef", "id": "home-1"})
+    assert response.status_code == 422, response.text
+    assert response.json()["message"] == (
+        "productOrderItem.0.product.place.0.place: the E911 address is a GeographicAddress"
+        " value (@type GeographicAddress)"
+    )
     assert db_conn.execute("SELECT count(*) FROM product_order").fetchone() == (0,)
 
 

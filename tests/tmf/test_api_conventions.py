@@ -9,8 +9,9 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api import tmfjson
+from app.api import errors, tmfjson
 from app.repository import catalog
 from tests import apidata, contract, timeline
 from tests.apiclient import decimals, total
@@ -122,6 +123,16 @@ def test_the_encoder_refuses_floats():
     with pytest.raises(TypeError, match="float"):
         tmfjson.dumps({"value": 19.99})
     assert tmfjson.dumps({"value": Decimal("0.10")}) == '{"value":0.10}'
+
+
+@pytest.mark.parametrize(
+    "value, message",
+    [(Decimal("NaN"), "non-finite Decimal NaN"), (Decimal("-Infinity"), "non-finite Decimal"),
+     ({1, 2}, "cannot encode set as JSON")],
+)  # fmt: skip
+def test_the_encoder_refuses_what_json_cannot_hold(value, message):
+    with pytest.raises(TypeError, match=message):
+        tmfjson.dumps({"value": value})
 
 
 # --- TimePeriod ---
@@ -450,3 +461,28 @@ def test_old_base_paths_are_gone(api):
         f"/tmf-api/customerManagement/v5/customer/{customer['id']}",
     ):
         assert api.get(old).status_code == 404, old
+
+
+def test_framework_errors_of_any_status_answer_with_a_tmf_error():
+    """errors.install covers what FastAPI and Starlette raise themselves: an HTTPException
+    other than 404/405 and a parameter FastAPI validates (no route of the app declares one)."""
+    probe = FastAPI()
+    errors.install(probe)
+
+    @probe.get("/teapot")
+    def teapot() -> None:
+        raise StarletteHTTPException(418, "short and stout")
+
+    @probe.get("/count")
+    def count(n: int) -> dict:
+        return {"n": n}
+
+    with TestClient(probe) as client:
+        tea = client.get("/teapot")
+        assert tea.status_code == 418
+        assert tea.json() == {"@type": "Error", "code": "418", "reason": "I'm a Teapot",
+                              "message": "short and stout", "status": "418"}  # fmt: skip
+        bad = client.get("/count?n=many")
+        assert bad.status_code == 400
+        assert bad.json()["@type"] == "Error"
+        assert bad.json()["message"].startswith("query.n: ")

@@ -281,6 +281,67 @@ def test_a_malformed_file_is_a_422_naming_row_and_column(api, world, content, wh
     assert where in response.json()["message"]
 
 
+def eur(msisdn, charge, amount):
+    return (*row(msisdn, charge, amount)[:-1], "EUR")
+
+
+@pytest.mark.parametrize(
+    "content, message",
+    [
+        (
+            csv(row("12025550101", "data", "1.00", "-5", "MB")),
+            "row 1, column quantity: must not be negative",
+        ),
+        (
+            csv(row("12025550101", "line", "1.00", period=("2026-02-30", "2026-03-01"))),
+            "row 1, column period_start: '2026-02-30' is not a date (YYYY-MM-DD)",
+        ),
+        (
+            csv(row("12025550101", "line", "1.00", period=("2026-03-01", "April"))),
+            "row 1, column period_end: 'April' is not a date (YYYY-MM-DD)",
+        ),
+        (b"\xff\xfe" + INVOICE, "the file is not UTF-8 text"),
+        (csv(row("12025550101", "line", "1.00")[:5]), "row 1: 5 columns, expected 9"),
+        (csv(row("", "line", "1.00")), "row 1, column msisdn: msisdn or iccid is required"),
+        (
+            csv(row("", "line", "1.00", iccid="8901")),
+            "row 1, column iccid: '8901' is not an ICCID (18 to 22 digits)",
+        ),
+        (
+            csv((*row("12025550101", "line", "1.00")[:-1], "usd")),
+            "row 1, column currency: 'usd' is not an ISO 4217 code",
+        ),
+        (
+            csv(row("12025550101", "line", "1.00"), eur("12025550103", "line", "1.00")),
+            "row 2, column currency: one currency per invoice (USD)",
+        ),
+    ],
+    ids=["negative", "no-such-day", "not-a-date", "not-utf8", "columns", "no-number",
+         "iccid", "currency", "two-currencies"],
+)  # fmt: skip
+def test_a_malformed_file_names_its_first_problem(api, world, content, message):
+    response = upload(api, content, "BAD-2")
+    assert response.status_code == 422, response.text
+    assert response.json()["message"] == message
+    assert api.get(URL).json() == []
+
+
+def test_blank_lines_between_rows_are_skipped(api, world):
+    content = (
+        HEADER.encode()
+        + b"\n"
+        + b"\n".join([",".join(row("12025550101", "line", "10.00")).encode(), b"", b" , ,", b""])
+        + b"\n"
+        + ",".join(row("12025550103", "line", "10.00")).encode()
+        + b"\n"
+    )
+    parsed = invoice_format.parse_invoice(content)
+    assert [(line.line_number, line.msisdn) for line in parsed.lines] == [
+        (1, "12025550101"), (5, "12025550103"),
+    ]  # fmt: skip
+    assert upload(api, content, "BLANK-1").status_code == 201
+
+
 def test_a_float_looking_amount_is_exact(api, world):
     content = csv(
         row("12025550101", "line", "0.1"),

@@ -14,6 +14,8 @@ from uuid import UUID
 import psycopg
 import pytest
 
+from app.config import settings
+from app.integrations.notify import adapter as sender
 from app.ordering.process import ItemRequest, OrderRequest, place_order
 from app.repository import billing, parties
 from app.worker import db as worker_db
@@ -21,6 +23,7 @@ from app.worker.process import DateRun
 from app.worker.runs import start_run
 from tests import apidata, timeline
 from tests.builders.billing.billing_db import at
+from tests.builders.care.self_care import invite
 from tests.builders.catalog.api_catalog_delete import _finish, _waits, gone, refused
 from tests.builders.tmf.api_financial_account import FINANCIAL, financial, link, owner
 from tests.timeline import TZ
@@ -124,6 +127,16 @@ def test_a_customer_stays_while_it_has_billing_accounts(api):
     assert api.delete(acc["href"]).status_code == 204
     assert api.delete(cust["href"]).status_code == 204
     assert api.delete(cust["engagedParty"]["href"]).status_code == 204
+
+
+def test_a_customer_with_a_self_care_login_stays_on_the_foreign_key(api, monkeypatch):
+    """A login is never deleted and the delete does not count it: the foreign key refuses."""
+    monkeypatch.setattr(settings, "self_care_enabled", True)
+    sender().reset()
+    cust, _, _ = invite(api)
+    message = refused(api, cust["href"])
+    assert message == f"{cust['id']} is still referenced"
+    assert api.get(cust["engagedParty"]["href"]).status_code == 200
 
 
 def test_a_financial_account_stays_while_accounts_link_to_it(api):

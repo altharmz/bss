@@ -12,7 +12,7 @@ import pytest
 from app.repository import funding
 from app.repository import prepaid_commands as commands
 from app.worker import loop
-from tests import apidata
+from tests import apidata, factories
 from tests.apiclient import decimals
 from tests.builders.prepaid.api_topup import TOPUP, body, current_balance, post, prepaid, remaining
 from tests.builders.prepaid.prepaid_orders import purchase, shop
@@ -323,3 +323,37 @@ def test_a_top_up_resumes_a_funding_suspended_renewal(api, db_conn, monkeypatch)
     assert db_conn.execute(
         "SELECT count(*) FROM product WHERE status = 'suspended'"
     ).fetchone() == (0,)
+
+
+def test_an_amount_out_of_range_stores_nothing(api, db_conn):
+    _, acc = prepaid(api, db_conn)
+    huge = post(api, acc, 10**10)
+    assert huge.status_code == 422, huge.text
+    assert huge.json()["message"] == "amount.amount: Value error, out of range for an amount"
+    assert counts(db_conn) == (0, 0)
+
+
+def test_a_product_of_another_account_is_refused_not_rejected(api, db_conn):
+    off, acc = prepaid(api, db_conn)
+    other = apidata.account(api)
+    foreign = factories.product(db_conn, other["id"], off["id"], api.clock.today())
+    db_conn.commit()
+    response = api.post(TOPUP, body(acc, product=[{"id": str(foreign["id"])}]))
+    assert response.status_code == 201, response.text
+    refused = response.json()
+    assert refused["status"] == "failed"
+    assert refused["reason"] == "product is not a live product of this account"
+    assert counts(db_conn) == (1, 0) and remaining(api, acc) == 0
+
+
+@pytest.mark.parametrize(
+    "name, value",
+    [("voucher", "V-1"), ("numberOfPeriods", 2), ("recurringPeriod", "monthly")],
+)
+def test_patch_refuses_what_a_top_up_does_not_support(api, db_conn, name, value):
+    _, acc = prepaid(api, db_conn)
+    topup = post(api, acc, 10).json()
+    response = api.patch(f"{TOPUP}/{topup['id']}", {"status": "completed", name: value})
+    assert response.status_code == 422, response.text
+    assert response.json()["message"] == f"{name} is not supported"
+    assert api.get(f"{TOPUP}/{topup['id']}").json() == topup

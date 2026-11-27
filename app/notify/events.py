@@ -83,10 +83,6 @@ def detectors(
     ]
 
 
-def detect(conn: psycopg.Connection, now: datetime, tz: ZoneInfo) -> list[Event]:
-    return [event for _, run in detectors(now, tz) for event in run(conn)]
-
-
 def _account_ids(conn: psycopg.Connection, only: list[UUID] | None) -> list[UUID]:
     query = (
         "SELECT DISTINCT a.id FROM billing_account a JOIN product p"

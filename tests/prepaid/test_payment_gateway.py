@@ -4,14 +4,14 @@ Every TMF670 response is checked against the vendored schema by the `api` client
 
 from datetime import timedelta
 from decimal import Decimal as D
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from pydantic import ValidationError
 
 from app.config import Settings
 from app.integrations.payment import adapter
-from app.repository import funding
+from app.repository import funding, parties, payment_methods
 from tests import apidata
 from tests.builders.prepaid.api_topup import prepaid
 from tests.builders.prepaid.payment_gateway import (
@@ -117,6 +117,51 @@ def test_card_write_rules(api, db_conn):
     assert api.post(METHODS, card_body(acc)).status_code == 409  # the same token twice
     assert api.patch(f"{METHODS}/{card['id']}", {"token": "tok_x"}).status_code == 400
     assert api.patch(f"{METHODS}/{card['id']}", {"brand": "amex"}).status_code == 400
+
+
+def test_card_refusals_name_the_missing_account_card_or_null(api, db_conn):
+    _, acc = prepaid(api, db_conn)
+    nobody = str(uuid4())
+    unknown = api.post(METHODS, card_body({"id": nobody}))
+    assert unknown.status_code == 422, unknown.text
+    assert unknown.json()["message"] == f"account {nobody} does not exist"
+    card = save(api, acc)
+    for name, column in (("name", "name"), ("isPreferred", "is_preferred")):
+        cleared = api.patch(f"{METHODS}/{card['id']}", {name: None})
+        assert cleared.status_code == 422, cleared.text
+        assert cleared.json()["message"] == f"{column} cannot be null"
+    for response in (
+        api.patch(f"{METHODS}/{nobody}", {"name": "Renamed"}),
+        api.delete(f"{METHODS}/{nobody}"),
+    ):
+        assert response.status_code == 404, response.text
+        assert response.json()["message"] == f"paymentMethod {nobody} not found"
+    assert api.get(f"{METHODS}/{card['id']}").json() == card
+
+
+@pytest.mark.parametrize("method", ["PATCH", "DELETE"])
+def test_a_card_removed_before_its_lock_is_not_found(api, db_conn, monkeypatch, method):
+    """Another session removes the card between the request's look and its account lock."""
+    _, acc = prepaid(api, db_conn)
+    card = save(api, acc)
+    db_conn.execute("SET lock_timeout = '5s'")
+    db_conn.commit()
+    real = parties.get_billing_account
+
+    def raced(conn, account_id, lock=None):
+        if lock is not None:
+            payment_methods.remove(db_conn, UUID(card["id"]), now=api.clock.now())
+            db_conn.commit()
+        return real(conn, account_id, lock)
+
+    monkeypatch.setattr(parties, "get_billing_account", raced)
+    url = f"{METHODS}/{card['id']}"
+    response = api.patch(url, {"name": "Renamed"}) if method == "PATCH" else api.delete(url)
+    assert response.status_code == 404, response.text
+    assert response.json()["message"] == f"paymentMethod {card['id']} not found"
+    assert db_conn.execute(
+        "SELECT name, status FROM payment_method WHERE id = %s", (card["id"],)
+    ).fetchone() == ("Personal Visa", "removed")
 
 
 # --- card top-up ---

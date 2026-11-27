@@ -395,6 +395,29 @@ def test_the_stub_identity_adapter(identity_stub):
     assert len(identity_stub.checks) == 1 and identity_stub.attempts == ["k", "k"]
 
 
+def test_an_unavailable_identity_service_answers_once_recovered(identity_stub):
+    from app.integrations.identity.interface import IdentityTemporary, Person
+
+    person = Person("Grace", "Unavailable", date(1990, 12, 9))
+    with pytest.raises(IdentityTemporary, match="unavailable"):
+        identity_stub.verify("k", person, {})
+    identity_stub.recover()
+    assert identity_stub.verify("k", person, {}) is None  # recorded: decided on the next call
+    assert identity_stub.verify("k", person, {}).verdict == "pass"
+
+
+@pytest.mark.parametrize(
+    "setting, factory, name",
+    [("identity_adapter", identity, "BSS_IDENTITY_ADAPTER"),
+     ("network_adapter", network, "BSS_NETWORK_ADAPTER")],
+)  # fmt: skip
+def test_an_unknown_adapter_name_fails(monkeypatch, setting, factory, name):
+    with monkeypatch.context() as patched:  # restored before the stub fixtures' teardown
+        patched.setattr(settings, setting, "nope")
+        with pytest.raises(ValueError, match=f"unknown {name} 'nope'"):
+            factory()
+
+
 def failed_codes(db_conn):
     rows = db_conn.execute(
         "SELECT receiver_email, last_error FROM notification_message"

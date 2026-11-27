@@ -315,6 +315,13 @@ def test_presentation_crud_validation_and_queries(api, path, name, typ):
     assert api.patch(f"{path}/{NIL}", {"description": "x"}).status_code == 404
 
 
+def test_a_refund_to_an_unknown_account_is_unprocessable(api):
+    response = api.post(REFUND, payout_body({"id": NIL}))
+    assert response.status_code == 422, response.text
+    assert response.json()["message"] == "account does not exist"
+    assert api.get(REFUND).json() == []
+
+
 def test_refund_and_preferences_invalid_requests_are_atomic(api):
     account = apidata.account(api)
     pay(api, account, 100, date(2026, 12, 1))
