@@ -415,6 +415,13 @@ def finish_steps(primary, common, slot):
     secret = task_repo.secret_file(task, trees, root)
     if state is None:
         require(root.exists() and not root.is_symlink(), "missing task worktree")
+        # The preflight below applies finish-task's own rules (review, DISPOSABLE), so it
+        # runs with the merged scripts: a task that changes them finishes under them (#491).
+        # The fast-forward brings in only what master already holds, and the hand-over is
+        # the same single re-exec the cleanup below allows; the marker stops a second one.
+        before = query(primary, "rev-parse", "HEAD").decode().strip()
+        synchronize(primary)
+        reexec_if_scripts_changed(primary, before)
         previous = Path.cwd()
         try:
             os.chdir(root)
@@ -446,7 +453,8 @@ def finish_steps(primary, common, slot):
         commit = completed(primary, task, state["head"])
         before = query(primary, "rev-parse", "HEAD").decode().strip()
         synchronize(primary)
-        # The old scripts ran this far; a fix merged by this task applies from here on.
+        # A resumed checkpoint, or a merge since the preflight's fast-forward, ran older
+        # scripts this far; a fix merged on master applies from here on.
         reexec_if_scripts_changed(primary, before)
         run(primary, "merge-base", "--is-ancestor", commit, "HEAD")
         # Record task outcome and end timestamps before any disposable resources vanish.

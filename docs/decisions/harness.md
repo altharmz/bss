@@ -284,11 +284,19 @@ name per line or a JSON array.
 
 The primary checkout runs old scripts until `master` is fast-forwarded (a fix in #140 once
 broke the finish of the very task that merged it). `start-task` (after its fast-forward,
-before any claim) and `finish-task` (after its first synchronization) call
-`reexec_if_scripts_changed`: if `scripts/` or the `Makefile` changed they raise `Reexec`, the
-locks unwind, and the updated primary script runs once more with `BSS_SCRIPTS_REEXEC=1`.
-The aborted run records no telemetry result of its own; the rerun does. Safety checks are
-not skipped: the rerun repeats them from the checkpoint.
+before any claim) and `finish-task` call `reexec_if_scripts_changed`: if `scripts/` or the
+`Makefile` changed they raise `Reexec`, the locks unwind, and the updated primary script runs
+once more with `BSS_SCRIPTS_REEXEC=1`. The aborted run records no telemetry result of its
+own; the rerun does. Safety checks are not skipped: the rerun repeats them from the
+checkpoint.
+
+A fresh `finish-task` (no checkpoint) fast-forwards and hands over **before** its preflight
+(the review and the ignored-file check against `DISPOSABLE`), so a task that changes those
+rules finishes under them (#491: #488 widened `DISPOSABLE`, and its own finish stopped on the
+old list until primary was pulled by hand). Pulling that early adds nothing the hand-over did
+not already allow: the fast-forward takes only what `master` holds, the preflight reads no
+primary state but its cleanliness, and the marker still limits it to one re-exec. The
+resumed path keeps its own fast-forward and hand-over after the checkpoint.
 
 ## Approval last, master's gates, the full-suite record (2026-11-18, #395)
 
