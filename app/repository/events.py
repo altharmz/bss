@@ -7,7 +7,7 @@ from uuid import UUID
 import psycopg
 from psycopg.types.json import Jsonb
 
-from app.repository._sql import Row, fetch_all, fetch_one, returning
+from app.repository._sql import Row, fetch_all, returning
 
 
 def wanted_by(conn: psycopg.Connection, api: str, event_types: list[str]) -> set[str]:
@@ -147,7 +147,3 @@ def attempt_failed(
         """,
         {"at": at, "error": error[:1000], "retry": retry_at, "id": delivery_id},
     )
-
-
-def get_delivery(conn: psycopg.Connection, delivery_id: UUID) -> Row | None:
-    return fetch_one(conn, "SELECT * FROM event_delivery WHERE id = %s", (delivery_id,))

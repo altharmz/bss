@@ -112,6 +112,9 @@ def test_assignment_lookup_release_and_requirement_guard(api, shop):
     assert api.get(n["href"]).json()["usageState"] == "busy"
     result = api.get(f"{PRODUCT}?realizingResource.id={n['id']}")
     assert [p["id"] for p in result.json()] == [product["id"]]
+    params = {"realizingResource.id": n["id"], "billingAccount.id": shop[1]["id"]}
+    assert [p["id"] for p in api.get(PRODUCT, params=params).json()] == [product["id"]]
+    assert api.get(PRODUCT, params={**params, "billingAccount.id": apidata.NIL}).json() == []
     assert (
         api.patch(
             shop[0]["productSpecification"]["href"], {"resourceSpecification": []}

@@ -5,10 +5,13 @@ spec (tests/contract.py), so a subscriber receives exactly what the spec says.
 """
 
 from datetime import date
+from uuid import UUID
 
+import psycopg
 import pytest
 
 from app.events.types import BASES
+from app.repository import events, hubs
 from app.worker import db as worker_db
 from app.worker.on_demand import process_demands
 from app.worker.process import bill_date
@@ -38,6 +41,26 @@ def worker(migrated_db_url):
 def test_no_hub_no_event(api, db_conn):
     apidata.individual(api)
     assert types(db_conn) == []
+
+
+def test_unsubscribe_before_the_outbox_write_leaves_no_event(
+    api, db_conn, migrated_db_url, monkeypatch
+):
+    subscription = subscribe(api, "TMF632", "IndividualCreateEvent")
+    subscription_id = UUID(subscription["id"])
+    store = events.store
+
+    def unsubscribe_then_store(conn, **event):
+        with psycopg.connect(migrated_db_url) as other:
+            hubs.mark_deleted(other, subscription_id, api.clock.now())
+        return store(conn, **event)
+
+    monkeypatch.setattr(events, "store", unsubscribe_then_store)
+    person = apidata.individual(api)
+    assert api.get(person["href"]).json() == person
+    assert hubs.get_live(db_conn, "TMF632", subscription_id) is None
+    assert types(db_conn, "TMF632") == []
+    assert db_conn.execute("SELECT count(*) FROM event_delivery").fetchone() == (0,)
 
 
 def test_party_events(api, db_conn):

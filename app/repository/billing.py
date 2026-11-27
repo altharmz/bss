@@ -188,18 +188,6 @@ def get_daily_run_by_id(conn: psycopg.Connection, run_id: UUID) -> Row | None:
     return fetch_one(conn, "SELECT * FROM billing_run WHERE kind = 'daily' AND id = %s", (run_id,))
 
 
-def run_payment_due_date(conn: psycopg.Connection, run_id: UUID) -> date | None:
-    """When the bills a run issued on its own date are due (one term per run), or None."""
-    row = fetch_one(
-        conn,
-        "SELECT max(b.payment_due_date) AS due FROM customer_bill b"
-        " JOIN billing_run r ON r.id = b.billing_run_id"
-        " WHERE b.billing_run_id = %s AND b.bill_date = r.run_date",
-        (run_id,),
-    )
-    return row["due"] if row else None
-
-
 def run_payment_due_dates(conn: psycopg.Connection, run_ids: list[UUID]) -> dict[UUID, date]:
     """Stored terms of the bills issued on each run's own date, for a page of cycles. The
     runs are named on both sides of the join: with the bills' side alone the planner hashed
@@ -1425,19 +1413,6 @@ def remaining_amount(bill: Row, allocated: Decimal) -> Decimal:
     return max(bill["amount_due"] - allocated, Decimal("0.00"))
 
 
-def applied_payments(conn: psycopg.Connection, bill_id: UUID) -> list[Row]:
-    """Per payment, what it paid on this bill (TMF678 appliedPayment), oldest first."""
-    return fetch_all(
-        conn,
-        """
-        SELECT payment_id, sum(amount) AS amount FROM bill_allocation
-        WHERE customer_bill_id = %s AND payment_id IS NOT NULL
-        GROUP BY payment_id ORDER BY min(allocated_at), payment_id
-        """,
-        (bill_id,),
-    )
-
-
 def bill_allocations_by_bill(
     conn: psycopg.Connection, bill_ids: list[UUID]
 ) -> tuple[dict[UUID, Decimal], dict[UUID, list[Row]]]:
@@ -1460,11 +1435,6 @@ def bill_allocations_by_bill(
         if row["payment_id"] is not None:
             payments[key].append(row)
     return totals, payments
-
-
-def payment_items(conn: psycopg.Connection, payment_id: UUID) -> list[Row]:
-    """Per bill, what this payment paid on it (TMF676 paymentItem), oldest bill first."""
-    return payment_items_by_payment(conn, [payment_id])[payment_id]
 
 
 def payment_items_by_payment(

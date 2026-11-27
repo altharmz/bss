@@ -9,15 +9,7 @@ from uuid import UUID
 
 import psycopg
 
-from app.repository._sql import Row, fetch_all, fetch_one, jsonb_list, returning
-
-
-def current(conn: psycopg.Connection, product_id: UUID) -> Row | None:
-    return fetch_one(
-        conn,
-        "SELECT * FROM product_device WHERE product_id = %s AND ended_at IS NULL",
-        (product_id,),
-    )
+from app.repository._sql import Row, fetch_all, jsonb_list, returning
 
 
 def history(conn: psycopg.Connection, product_id: UUID) -> list[Row]:

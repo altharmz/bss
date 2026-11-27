@@ -8,6 +8,7 @@ from decimal import Decimal as D
 import pytest
 
 from app.events.types import EVENT_TYPES
+from app.repository import balance_actions
 from tests import apidata
 from tests.apiclient import total
 from tests.builders.prepaid.api_adjust import ADJUST
@@ -148,3 +149,12 @@ def test_a_refund_of_prepaid_cash_is_limited_to_funds_left_after_holds(
     )
     assert response.status_code == status, response.text
     assert remaining(api, acc) == (D(20) - refund if status == 201 else D(20))
+
+
+def test_history_repository_with_no_status_choices_returns_no_results(api, db_conn):
+    _, account = prepaid(api, db_conn)
+    action = topup(api, account, 40).json()
+    rows, more = balance_actions.page(db_conn, {}, 0, 1, kind=None)
+    assert [str(row["id"]) for row in rows] == [action["id"]]
+    assert more is False
+    assert balance_actions.page(db_conn, {"status": ()}, 0, 1, kind=None) == ([], False)

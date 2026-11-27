@@ -32,12 +32,5 @@ def create(conn: psycopg.Connection, values: dict[str, Any]) -> Row:
     )
 
 
-def account_count(conn: psycopg.Connection, uid: UUID) -> int:
-    rows = fetch_all(
-        conn, "SELECT id FROM billing_account WHERE cycle_specification_id = %s", (uid,)
-    )
-    return len(rows)
-
-
 def update(conn: psycopg.Connection, uid: UUID, changes: dict[str, Any]) -> Row:
     return update_by_id(conn, TABLE, uid, with_details(changes))

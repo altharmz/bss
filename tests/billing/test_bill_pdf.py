@@ -8,7 +8,7 @@ import io
 import json
 import os
 import time
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from uuid import UUID, uuid4
 
@@ -20,6 +20,7 @@ from app.billing import bill_pdf
 from app.config import settings
 from app.integrations.notify import adapter as sender
 from app.main import app
+from app.repository import bill_documents, presentation
 from app.worker.notify import process_notifications
 from tests import apidata
 from tests.builders.billing.billing_completion import (  # noqa: F401
@@ -29,7 +30,7 @@ from tests.builders.billing.billing_completion import (  # noqa: F401
     run,
     worker,
 )
-from tests.builders.billing.billing_db import add, at
+from tests.builders.billing.billing_db import add, at, delete
 from tests.timeline import NOW, TZ
 
 DEC1, JAN1 = date(2026, 12, 1), date(2027, 1, 1)
@@ -136,7 +137,25 @@ def test_the_pdf_is_not_rewritten_by_later_changes(api, worker, db_conn):
     run(worker, api, DEC1)
     [bill] = bills_of(api, account)
     before = pdf_of(api, bill)
+    before_bill = api.get(bill["href"]).json()
+    before_row = db_conn.execute(
+        "SELECT sha256, rendered_at FROM customer_bill_document WHERE customer_bill_id = %s",
+        (bill["id"],),
+    ).fetchone()
     assert api.patch(account["href"], {"name": "Renamed account"}).status_code == 200
+    bill_id = UUID(bill["id"])
+    retry = at(DEC1) + timedelta(minutes=1)
+    presentation.snapshot_bill(db_conn, bill_id, now=retry)
+    bill_documents.store(db_conn, bill_id, now=retry)
+    db_conn.commit()
+    assert api.get(bill["href"]).json()["billDocument"] == before_bill["billDocument"]
+    assert (
+        db_conn.execute(
+            "SELECT sha256, rendered_at FROM customer_bill_document WHERE customer_bill_id = %s",
+            (bill_id,),
+        ).fetchone()
+        == before_row
+    )
     run(worker, api, JAN1)
     assert pdf_of(api, api.get(bill["href"]).json()) == before
     assert "Renamed account" in text(pdf_of(api, bills_of(api, account)[0]))  # the new bill
@@ -222,6 +241,100 @@ def test_the_pdf_needs_authentication(api, worker):
     [bill] = bills_of(api, account)
     with TestClient(app, raise_server_exceptions=False) as anonymous:
         assert anonymous.get(f"{bill['href']}/document.pdf").status_code == 401
+
+
+@pytest.mark.parametrize("explicit", [True, False], ids=["billing-address", "postal-fallback"])
+def test_bill_prints_the_first_usable_postal_medium_of_the_preferred_contact(
+    api, worker, db_conn, explicit
+):
+    account = billed_account(api)
+    geo = {"@type": "GeographicAddressContactMedium"}
+    contacts = [
+        {
+            "@type": "Contact",
+            "contactType": "primary",
+            "contactMedium": [
+                {"@type": "EmailContactMedium", "emailAddress": EMAIL},
+                geo,
+                geo | {"street1": "1 Main St", "city": "Albany"},
+                geo | {"street1": "12 Second St"},
+            ],
+        },
+    ]
+    if explicit:
+        contacts.append(
+            {
+                "@type": "Contact",
+                "contactType": "BillingAddress",
+                "contactMedium": [
+                    geo
+                    | {
+                        "street1": " 5 Elm St ",
+                        "street2": "Suite 2",
+                        "city": "Austin",
+                        "stateOrProvince": "TX",
+                        "postCode": "78702",
+                        "country": "US",
+                    }
+                ],
+            }
+        )
+    response = api.patch(account["href"], {"contact": contacts})
+    assert response.status_code == 200, response.text
+    if not explicit:
+        # Simulate a malformed entry in an existing stored contact document.
+        db_conn.execute(
+            "UPDATE billing_account SET details = jsonb_set(details, '{contact}', %s::jsonb)"
+            " WHERE id = %s",
+            (json.dumps([None, *response.json()["contact"]]), account["id"]),
+        )
+        db_conn.commit()
+    run(worker, api, DEC1)
+    [bill] = bills_of(api, account)
+    printed = " ".join(text(pdf_of(api, bill)).split())
+    if explicit:
+        assert "5 Elm St Suite 2 Austin, TX 78702 US" in printed
+        assert "1 Main St" not in printed
+    else:
+        assert "1 Main St Albany" in printed
+    assert "12 Second St" not in printed
+    assert EMAIL not in printed
+
+
+def test_bill_prints_the_credit_note_used_at_issue(api, worker):
+    api.clock.set(NOW)
+    plan = apidata.sellable_offering(api, value=310)
+    account = apidata.account(api)
+    product = add(api, account, plan, DEC1, on=at(date(2026, 11, 20)))
+    api.clock.set(at(date(2026, 11, 25)))
+    assert (
+        api.post(
+            "/tmf-api/payment/v4/payment", apidata.payment_body(account, value=310)
+        ).status_code
+        == 201
+    )
+    run(worker, api, DEC1)
+    end = date(2026, 12, 20)
+    delete(api, account, product, end, on=at(end - timedelta(days=1)))
+    run(worker, api, end)
+    run(worker, api, JAN1)
+    [note] = [b for b in bills_of(api, account) if b["category"] == "creditNote"]
+
+    feb = date(2027, 2, 1)
+    add(api, account, plan, feb, on=at(date(2027, 1, 15)))
+    run(worker, api, feb)
+    bill = bills_of(api, account)[0]
+    assert bill["category"] == "normal" and bill["remainingAmount"] == {"unit": "USD", "value": 190}
+    printed = text(pdf_of(api, bill))
+    assert f"Credit note {note['billNo']} of Jan 1, 2027" in printed
+    assert "-120.00 USD" in printed
+
+
+def test_rendering_an_unknown_bill_creates_no_document(db_conn):
+    uid = uuid4()
+    with pytest.raises(bill_pdf.RenderError, match=f"bill {uid} does not exist"):
+        bill_documents.store(db_conn, uid, now=at(DEC1))
+    assert bill_documents.pdf(db_conn, uid) is None
 
 
 # --- email delivery ---

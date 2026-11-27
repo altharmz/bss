@@ -1,6 +1,7 @@
 """Command identities coexist with daily runs without entering daily bookkeeping."""
 
 from datetime import timedelta
+from uuid import UUID, uuid4
 
 import psycopg
 import pytest
@@ -133,8 +134,6 @@ def test_newer_command_does_not_hide_daily_on_demand_readiness(api, migrated_db_
         assert worker_db.acquire_ownership(worker)
         run(worker, api, day)
         with worker.transaction():
-            from uuid import UUID, uuid4
-
             cmd = commands.enqueue(
                 worker,
                 uuid4(),
@@ -168,3 +167,13 @@ def test_migration_preserves_daily_history_and_refuses_command_loss(temp_db_url)
         command_run(conn, acc)
     with pytest.raises(Exception, match="prepaid command run history must be retained"):
         command.downgrade(cfg, "0038")
+
+
+@pytest.mark.parametrize("as_text", [False, True], ids=["unknown", "invalid-id"])
+def test_run_requires_a_known_command_identity(db_conn, as_text):
+    key = uuid4()
+    invalid = str(key) if as_text else key
+    error = "command identity must be a UUID" if as_text else "unknown prepaid command"
+    with pytest.raises(ValueError, match=error):
+        commands.ensure_run(db_conn, invalid, run_date=NOW.date(), now=NOW)
+    assert db_conn.execute("SELECT count(*) FROM billing_run").fetchone() == (0,)

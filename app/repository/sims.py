@@ -91,14 +91,6 @@ def release_hold(conn: psycopg.Connection, sim_id: UUID, now) -> None:
     )
 
 
-def retire(conn: psycopg.Connection, sim_id: UUID, now) -> None:
-    conn.execute(
-        "UPDATE subscriber_number SET sim_state = 'retired', updated_at = %s"
-        " WHERE id = %s AND sim_state <> 'retired'",
-        (now, sim_id),
-    )
-
-
 def reserved_of(conn: psycopg.Connection, product_id: UUID) -> Row | None:
     return fetch_one(
         conn,

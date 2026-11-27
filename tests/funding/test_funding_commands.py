@@ -137,3 +137,24 @@ def test_command_ownership_migration_round_trip_and_retention(temp_db_url):
         funding.release(conn, acc["id"], hold, released_at=NOW, command_id=key)
     with pytest.raises(Exception, match="funding command ownership must be retained"):
         command.downgrade(cfg, "0035")
+
+
+@pytest.mark.parametrize(
+    ("key", "amount", "message"),
+    [
+        ("external-id", D(1), "command identity must be a UUID"),
+        (None, 1, "funding amount must be a finite nonnegative Decimal"),
+        (None, D("NaN"), "funding amount must be a finite nonnegative Decimal"),
+        (None, D(-1), "funding amount must be a finite nonnegative Decimal"),
+    ],
+)
+def test_invalid_reservation_writes_no_hold(db_conn, key, amount, message):
+    acc = account(db_conn)
+    make_payment(db_conn, acc, "20")
+    with pytest.raises(ValueError, match=message):
+        funding.reserve_for_command(
+            db_conn, acc["id"], amount, command_id=key or uuid4(), held_at=NOW
+        )
+    assert db_conn.execute("SELECT count(*) FROM funding_hold").fetchone() == (0,)
+    assert db_conn.execute("SELECT count(*) FROM funding_command_hold").fetchone() == (0,)
+    assert funding.load(db_conn, acc["id"]).spendable == D(20)

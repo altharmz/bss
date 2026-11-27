@@ -5,11 +5,13 @@ Every response is checked against the vendored schemas by the `api` client, ever
 event against its listener schema (`stored`)."""
 
 from datetime import UTC, timedelta
+from uuid import UUID
 
 import psycopg
 import pytest
 
 from app.notify import events as notify_events
+from app.repository import care as care_repo
 from tests import apidata, timeline
 from tests.apiclient import total
 from tests.builders.tmf.events import stored, subscribe, types
@@ -918,3 +920,13 @@ def test_the_ticket_specification_is_not_implemented(api):
     base = "/tmf-api/troubleTicket/v5/troubleTicketSpecification"
     assert api.client.get(base).status_code == 404
     assert api.client.post(base, json={}).status_code == 404
+
+
+def test_repository_ticket_page_with_no_known_status_returns_no_results(api, db_conn):
+    case = ticket(api, apidata.customer(api))
+    rows, more = care_repo.page(
+        db_conn, care_repo.TICKET, {"status": ("open", "acknowledged")}, 0, 1
+    )
+    assert [row["id"] for row in rows] == [UUID(case["id"])]
+    assert more is False
+    assert care_repo.page(db_conn, care_repo.TICKET, {"status": ("open",)}, 0, 1) == ([], False)
