@@ -67,7 +67,9 @@ def sub_month(day: date) -> date:
 def cycle_period(day: date, cycle_day: int) -> DateRange:
     """The billing period [cycle day of month M, cycle day of month M+1) containing `day`."""
     if not 1 <= cycle_day <= 28:
-        raise ValueError(f"bill cycle day {cycle_day} not in 1..28")
+        raise ValueError(  # pragma: no cover - billing_account enforces cycle days 1 through 28
+            f"bill cycle day {cycle_day} not in 1..28"
+        )
     start = day.replace(day=cycle_day)
     if day.day < cycle_day:
         start = sub_month(start)
@@ -93,7 +95,9 @@ def charge_period(day: date, anchor: date, price: Price, cycle_day: int) -> Date
     all new cadences use anniversaries of anchor, clamped independently at month ends."""
     unit, length = price.recurring_period, price.recurring_period_length
     if unit not in {"daily", "weekly", "monthly", "yearly"} or not 1 <= length <= 1000:
-        raise InconsistentState(f"price {price.id}: invalid charge interval {unit}/{length}")
+        raise InconsistentState(  # pragma: no cover - catalog CHECKs enforce unit and length
+            f"price {price.id}: invalid charge interval {unit}/{length}"
+        )
     if unit == "monthly" and length == 1:
         return cycle_period(day, cycle_day)
     if unit in {"daily", "weekly"}:
@@ -193,7 +197,9 @@ def price_at(
     if not found:
         raise MissingPrice(product.id, day, currency)
     if len(found) > 1:
-        raise InconsistentState(f"product {product.id}: {len(found)} prices valid on {day}")
+        raise InconsistentState(  # pragma: no cover - recurring price validity exclusion constraint
+            f"product {product.id}: {len(found)} prices valid on {day}"
+        )
     return found[0]
 
 
@@ -214,7 +220,7 @@ def _check_stored(state: BillingState, as_of: date) -> None:
     known = {p.id for p in state.products}
     for abr in state.abrs:
         if abr.currency != account.currency:
-            raise InconsistentState(
+            raise InconsistentState(  # pragma: no cover - composite account/currency foreign key
                 f"ABR {abr.id} in {abr.currency}, account in {account.currency}"
             )
         if abr.product_id not in known:
@@ -395,7 +401,9 @@ def _segment_diff(
     account = state.account
     offering_id = product.offering_on(start)
     if len(refunds) > 1:
-        raise InconsistentState(f"product {product.id}: ABRs of period {period} are {refunds}")
+        raise InconsistentState(  # pragma: no cover - refunds_rate_id is unique
+            f"product {product.id}: ABRs of period {period} are {refunds}"
+        )
 
     if charge is None:
         if rng.is_empty or rng.start > as_of:
@@ -443,7 +451,10 @@ def _segment_diff(
         raise InconsistentState(f"charge {charge.id} already refunded; one refund per charge")
     unbilled = charge.period if rng.is_empty else DateRange(rng.end, charge.period.end)
     if unbilled.is_empty or not unbilled.within(charge.period):
-        raise InconsistentState(f"product {product.id}: refund range {unbilled} for {charge.id}")
+        # Both ranges start on the same day. A negative diff then requires fewer used days.
+        raise InconsistentState(  # pragma: no cover - the negative diff guarantees a paid tail
+            f"product {product.id}: refund range {unbilled} for {charge.id}"
+        )
     return _new_abr(
         product,
         "refund",
