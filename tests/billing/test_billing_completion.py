@@ -448,3 +448,28 @@ def test_account_creation_preferences_and_partial_merge_patch(api):
         ).status_code
         == 422
     )
+
+
+def test_an_unknown_presentation_medium_leaves_the_account_preferences_intact(api):
+    portal = api.post(MEDIA, {"name": "Portal"}).json()
+    account = apidata.account(api)
+    before = api.patch(
+        account["href"], {"billStructure": {"presentationMedia": [{"id": portal["id"]}]}}
+    )
+    assert before.status_code == 200, before.text
+    refused = api.patch(
+        account["href"],
+        {
+            "name": "Uncommitted rename",
+            "billStructure": {"presentationMedia": [{"id": portal["id"]}, {"id": apidata.NIL}]},
+        },
+    )
+    assert refused.status_code == 422, refused.text
+    assert refused.json() == {
+        "@type": "Error",
+        "code": "422",
+        "reason": "Unprocessable Entity",
+        "message": "presentationMedia does not exist",
+        "status": "422",
+    }
+    assert api.get(account["href"]).json() == before.json()

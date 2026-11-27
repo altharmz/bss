@@ -205,3 +205,20 @@ def test_batch_migration_preserves_legacy_results_and_refuses_loss(temp_db_url):
         convert(conn, batch_world, batch_key, bills)
     with pytest.raises(Exception, match="multi-bill conversion history must be retained"):
         command.downgrade(cfg, "0040")
+
+
+def test_conversion_requires_a_uuid_and_the_held_command(db_conn):
+    w, key, hold, bills = prepared(db_conn)
+    with pytest.raises(ValueError, match="command identity must be a UUID"):
+        funding.convert_for_command(
+            db_conn, w.account["id"], bills[0], command_id=str(key), converted_at=NOW
+        )
+    with pytest.raises(ValueError, match="command identity must be a UUID"):
+        convert(db_conn, w, str(key), bills)
+    with pytest.raises(ValueError, match="unknown funding command for account"):
+        convert(db_conn, w, uuid4(), bills)
+    assert db_conn.execute(
+        "SELECT released_at FROM funding_hold WHERE id = %s", (hold,)
+    ).fetchone() == (None,)
+    assert db_conn.execute("SELECT count(*) FROM bill_allocation").fetchone() == (0,)
+    assert db_conn.execute("SELECT count(*) FROM funding_hold_conversion").fetchone() == (0,)

@@ -57,6 +57,8 @@ def test_add_list_default_and_delete_a_card(api, db_conn):
     assert second["isPreferred"] is False
     listed = api.get(f"{METHODS}?account.id={acc['id']}").json()
     assert {m["id"] for m in listed} == {first["id"], second["id"]}
+    assert api.get(METHODS, params={"id": first["id"]}).json() == [first]
+    assert api.get(METHODS, params={"id": first["id"], "isPreferred": "false"}).json() == []
     made = api.patch(f"{METHODS}/{second['id']}", {"isPreferred": True})
     assert made.status_code == 200 and made.json()["isPreferred"] is True
     assert api.get(f"{METHODS}/{first['id']}").json()["isPreferred"] is False
@@ -64,6 +66,7 @@ def test_add_list_default_and_delete_a_card(api, db_conn):
     assert [m["id"] for m in only] == [second["id"]]
     assert api.delete(f"{METHODS}/{second['id']}").status_code == 204
     assert api.get(f"{METHODS}/{second['id']}").status_code == 404
+    assert api.get(METHODS, params={"id": second["id"]}).json() == []
     assert [m["id"] for m in api.get(f"{METHODS}?account.id={acc['id']}").json()] == [first["id"]]
     # the default was removed: the account has none, nothing is promoted
     assert api.get(f"{METHODS}/{first['id']}").json()["isPreferred"] is False

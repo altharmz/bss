@@ -256,3 +256,28 @@ def test_migration_preserves_legacy_funding_and_refuses_history_loss(temp_db_url
         enqueue(conn, acc)
     with pytest.raises(Exception, match="prepaid command history must be retained"):
         command.downgrade(cfg, "0037")
+
+
+def test_invalid_funding_shortfall_or_empty_failure_leaves_the_command_pending(db_conn):
+    row = enqueue(db_conn, account(db_conn))
+    key = row["id"]
+    with pytest.raises(ValueError, match="invalid funding shortfall"):
+        commands.record_shortfall(db_conn, key, required=D(10), available=D(10), now=NOW)
+    with pytest.raises(ValueError, match="technical failure requires a reason"):
+        commands.fail(db_conn, key, "", now=NOW)
+    assert commands.get(db_conn, key) == row
+    assert commands.needs_topup(db_conn, key) is None
+
+
+def test_a_late_shortfall_cannot_change_a_completed_command(db_conn):
+    row = enqueue(db_conn, account(db_conn))
+    key = row["id"]
+    completed = commands.complete(db_conn, key, {"ok": True}, now=NOW)
+    db_conn.commit()
+    commands.record_shortfall(
+        db_conn, key, required=D(10), available=D(5), now=NOW + timedelta(minutes=1)
+    )
+    assert commands.get(db_conn, key) == completed
+    assert db_conn.execute(
+        "SELECT count(*) FROM prepaid_funding_shortfall WHERE command_id = %s", (key,)
+    ).fetchone() == (0,)

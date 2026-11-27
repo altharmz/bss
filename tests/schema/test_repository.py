@@ -10,11 +10,14 @@ reached is reached by an API or billing test).
 
 from datetime import date, timedelta
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
 from psycopg.types.range import Range
 
-from app.repository import billing, catalog, orders, products
+from app.repository import billing, catalog, cycles, orders, products
+from app.repository._sql import select_page
+from tests.builders.billing.settlement_db import make_bill
 from tests.factories import NOW, T0, account, charge, days, offering, product, world
 
 
@@ -48,6 +51,8 @@ def test_price_at(db_conn):
     assert at(switch - timedelta(microseconds=1))["id"] == old["id"]
     assert at(switch)["id"] == new["id"]  # upper bound exclusive
     assert at(T0 - timedelta(days=1)) is None
+    with pytest.raises(ValueError, match="timezone-aware"):
+        at(T0.replace(tzinfo=None))
     assert (
         catalog.price_at(
             db_conn, product_offering_id=off["id"], price_type="recurring", currency="GBP", at=T0
@@ -136,3 +141,63 @@ def test_list_abrs(db_conn):
         )
     ]
     assert feb_ids == [feb["id"], refund["id"]]  # [jan) ends where feb starts: no overlap
+
+
+@pytest.mark.parametrize("changes", [{}, {"name": "Updated"}], ids=["empty", "write"])
+def test_updating_an_absent_cycle_specification_fails(db_conn, changes):
+    with pytest.raises(LookupError, match="statement returned no row"):
+        cycles.update(db_conn, uuid4(), changes)
+    assert cycles.all_rows(db_conn) == []
+
+
+def test_a_late_failure_report_leaves_a_completed_run_unchanged(db_conn):
+    run = new_run(db_conn)
+    completed = billing.finish_run(db_conn, run["id"], now=NOW)
+    with pytest.raises(LookupError, match=f"no running billing run {run['id']}"):
+        billing.fail_run(db_conn, run["id"], now=NOW + timedelta(minutes=1), error="late failure")
+    assert billing.get_run_by_id(db_conn, run["id"]) == completed
+    assert completed["status"] == "completed"
+
+
+@pytest.mark.parametrize("load", [billing.load_account, billing.load_account_row])
+def test_loading_an_absent_billing_account_fails(db_conn, load):
+    uid = uuid4()
+    with pytest.raises(LookupError, match=f"billing account {uid} does not exist"):
+        load(db_conn, uid)
+
+
+def test_attach_abrs_to_a_bill_rejects_a_rate_already_billed(db_conn):
+    w = world(db_conn)
+    jan, feb, mar = date(2026, 1, 1), date(2026, 2, 1), date(2026, 3, 1)
+    first = make_bill(db_conn, w, jan, "100", state="new")
+    second = make_bill(db_conn, w, feb, "100", state="new")
+    billed = charge(db_conn, w, days(jan, feb))
+    unbilled = charge(db_conn, w, days(feb, mar))
+    billing.attach_abrs_to_bill(db_conn, first["id"], w.account["id"], [billed["id"]])
+    with pytest.raises(LookupError, match="1 ABRs not attachable"), db_conn.transaction():
+        billing.attach_abrs_to_bill(
+            db_conn, second["id"], w.account["id"], [unbilled["id"], billed["id"]]
+        )
+    assert [r["id"] for r in billing.bill_charges(db_conn, first["id"])] == [billed["id"]]
+    assert billing.bill_charges(db_conn, second["id"]) == []
+    assert [
+        r["customer_bill_id"] for r in billing.list_abrs(db_conn, product_id=w.product["id"])
+    ] == [first["id"], None]
+
+
+def test_page_matches_any_of_text_and_uuid_filters(db_conn):
+    first = account(db_conn, name="First")
+    second = account(db_conn, name="Second")
+    third = account(db_conn, name="Third")
+    rows, more = select_page(
+        db_conn,
+        "billing_account",
+        where={
+            "name": (first["name"], second["name"]),
+            "id": (str(second["id"]), str(third["id"])),
+        },
+        offset=0,
+        limit=1,
+    )
+    assert [r["id"] for r in rows] == [second["id"]]
+    assert more is False

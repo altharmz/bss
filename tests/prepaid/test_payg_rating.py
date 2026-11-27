@@ -12,6 +12,7 @@ from app.clock import FixedClock
 from app.integrations.network import adapter as network
 from app.repository import housekeeping as housekeeping_repo
 from app.repository import usage as usage_repo
+from app.repository import usage_bars
 from app.worker import db as worker_db
 from app.worker.housekeeping import housekeep
 from tests import contract, timeline
@@ -314,6 +315,20 @@ def test_a_late_record_of_a_rated_day_is_charged_by_its_own_pass(api, db_conn, p
     assert {d for _, _, _, d, _ in charged} == {day.date()}
     assert balance(db_conn, world.acc) == D("10") - D("0.24")
     assert db_conn.execute("SELECT count(DISTINCT command_id) FROM usage_charge").fetchone() == (2,)
+
+
+def test_cancelling_a_pending_bar_removes_it_from_the_send_queue(api, db_conn, payg):
+    world = payg()
+    line = UUID(world.product["id"])
+    now = api.clock.now()
+    bar = usage_bars.create(db_conn, line, "suspend", now)
+    assert [row["id"] for row in usage_bars.due(db_conn, now)] == [bar["id"]]
+    usage_bars.cancel(db_conn, bar["id"])
+    db_conn.commit()
+    cancelled = usage_bars.get(db_conn, bar["id"])
+    assert cancelled["state"] == "cancelled" and cancelled["attempts"] == 0
+    assert usage_bars.due(db_conn, now) == []
+    assert usage_bars.latest(db_conn, line) is None
 
 
 def test_a_barring_the_network_refuses_is_recorded_and_not_repeated(api, db_conn, payg):

@@ -457,11 +457,6 @@ def insert_charge(
     )
 
 
-def charges_of(conn: psycopg.Connection, record_id: UUID) -> Row | None:
-    """How a rated record was charged: the price applied and its ABR."""
-    return charges_by_record(conn, [record_id]).get(record_id)
-
-
 def charges_by_record(conn: psycopg.Connection, record_ids: list[UUID]) -> dict[UUID, Row]:
     """Applied prices of all rated records in a response page, in one query."""
     if not record_ids:

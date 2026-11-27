@@ -39,20 +39,6 @@ def mark_deleted(conn: psycopg.Connection, uid: UUID, at: datetime) -> Row:
     )
 
 
-def matching(conn: psycopg.Connection, api: str, event_type: str) -> list[Row]:
-    """The live subscriptions of `api` that want `event_type` (or every event)."""
-    return fetch_all(
-        conn,
-        """
-        SELECT * FROM event_subscription
-         WHERE api = %s AND deleted_at IS NULL
-           AND (event_types IS NULL OR %s = ANY(event_types))
-         ORDER BY created_at, id
-        """,
-        (api, event_type),
-    )
-
-
 def page(
     conn: psycopg.Connection, *, api: str | None, offset: int, limit: int
 ) -> tuple[list[Row], bool]:

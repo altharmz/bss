@@ -159,7 +159,7 @@ def test_an_exempt_account_gets_the_line_at_rate_zero(api, db_conn, taxed):
     assert without_type(b["taxItem"]) == [vat(0, "0.00")]
 
 
-def test_an_exemption_of_another_type_or_not_yet_valid_does_not_apply(api, db_conn, taxed):
+def test_an_exemption_needs_a_matching_type_and_a_current_period(api, db_conn, taxed):
     other = {
         "@type": "TaxExemptionCertificate",
         "taxDefinition": [{"@type": "TaxDefinition", "taxType": "city"}],
@@ -169,7 +169,11 @@ def test_an_exemption_of_another_type_or_not_yet_valid_does_not_apply(api, db_co
         "validFor": {"startDateTime": "2027-01-01T00:00:00+03:00"},
         "taxDefinition": [{"@type": "TaxDefinition", "taxType": "VAT"}],
     }
-    account = account_billed(api, db_conn, taxed, taxExemption=[other, later])
+    untyped = {
+        "@type": "TaxExemptionCertificate",
+        "taxDefinition": [{"@type": "TaxDefinition", "name": "VAT"}],
+    }
+    account = account_billed(api, db_conn, taxed, taxExemption=[other, later, untyped])
     [rate] = rates(api, account)
     assert without_type(rate["appliedTax"]) == [vat(20, "60.00")]
     bill(db_conn, account, date(2027, 1, 1))
