@@ -10,9 +10,17 @@ from uuid import UUID
 
 import pytest
 
+from app.care import api as care_api
+from app.config import settings
 from app.integrations.network import adapter as network
-from tests import apidata
+from app.integrations.payment import adapter as gateway
+from app.integrations.payment.interface import Card
+from app.integrations.tax.stub import FAILING_ZIP
+from app.ordering import process
+from app.repository import payment_methods
+from tests import apidata, timeline
 from tests.builders.billing.settlement_db import make_payment
+from tests.builders.billing.tax_engine import CA, set_address
 from tests.builders.care.self_care import (  # noqa: F401 - fixtures
     BASE,
     PASSWORD,
@@ -27,14 +35,18 @@ from tests.builders.care.self_care import (  # noqa: F401 - fixtures
     signed_in,
 )
 from tests.builders.prepaid.prepaid_plans import (  # noqa: F401 - fixtures
+    ADDON_PROFILE,
     add_on_item,
     balance,
     build,
     charges,
+    create,
     line,
+    offering,
     stubs,
 )
 from tests.builders.prepaid.prepaid_renewal_producer import tick
+from tests.builders.resources.network_provisioning import PROFILE
 
 EMAIL = "ada@example.org"
 
@@ -336,3 +348,181 @@ def test_a_refused_add_on_answers_its_tmf622_code(api, care, db_conn, build):
         BASE + "/addOn", {"lineId": bought.product["id"], "offeringId": world.plan["id"]}
     )
     assert plan.status_code == 404
+
+
+def second_account(api, db_conn, acc, prepaid=False):
+    """Another billing account of the same customer."""
+    customer = api.get(f"{apidata.CUSTOMER}/{customer_of(db_conn, acc)}").json()
+    other = apidata.account(api, customer, name="Second account")
+    if prepaid:
+        db_conn.execute(
+            "UPDATE billing_account SET rating_type = 'prepaid' WHERE id = %s", (other["id"],)
+        )
+        db_conn.commit()
+    return other
+
+
+@pytest.fixture
+def rival(db_conn):
+    """Another session; it fails rather than waits on a lock the request holds."""
+    db_conn.execute("SET lock_timeout = '5s'")
+    db_conn.commit()
+    return db_conn
+
+
+def test_a_customer_with_a_postpaid_account_too_sees_prepaid_lines_and_saves_cards_there(
+    api, care, db_conn, build
+):
+    world = build("60", fee=False)
+    bought = line(api, db_conn, world)
+    postpaid = second_account(api, db_conn, world.acc)
+    signed_in(api, care, db_conn, world.acc)
+    assert {a["id"] for a in care.get(BASE + "/account").json()} == {
+        world.acc["id"],
+        postpaid["id"],
+    }
+    assert [found["id"] for found in care.get(BASE + "/line").json()] == [bought.product["id"]]
+    refused = care.post(
+        BASE + "/paymentMethod", {"token": "tok_visa", "billingAccountId": postpaid["id"]}
+    )
+    assert refused.status_code == 409, refused.text
+    assert refused.json()["message"] == "cards are saved on prepaid accounts only"
+    assert care.get(BASE + "/paymentMethod").json() == []
+
+
+def test_two_prepaid_accounts_need_the_account_named(api, care, db_conn, build):
+    world = build("60", fee=False)
+    second_account(api, db_conn, world.acc, prepaid=True)
+    signed_in(api, care, db_conn, world.acc)
+    unnamed = care.get(BASE + "/history")
+    assert unnamed.status_code == 422, unnamed.text
+    assert unnamed.json()["message"] == (
+        "billingAccountId is required: the customer has 2 prepaid accounts"
+    )
+    named = care.get(f"{BASE}/history?billingAccountId={world.acc['id']}")
+    assert named.status_code == 200, named.text
+    twice = care.get(
+        f"{BASE}/history?billingAccountId={world.acc['id']}&billingAccountId={world.acc['id']}"
+    )
+    assert twice.status_code == 400 and twice.json()["message"] == (
+        "billingAccountId given more than once"
+    )
+    unknown = care.get(f"{BASE}/offering?kind=addOn&billingAccountId={world.acc['id']}&sort=name")
+    assert unknown.status_code == 400
+    assert unknown.json()["message"] == "unknown query parameter sort"
+
+
+def test_a_plan_without_a_price_today_is_not_on_sale_to_the_account(api, care, db_conn, build):
+    """The operator's quote says why (422); self-care leaves the plan out."""
+    world = build("60", fee=False)
+    later = timeline.START + timedelta(days=40)
+    monthly = create(
+        api,
+        "productOfferingPrice",
+        {
+            "@type": "ProductOfferingPrice",
+            "name": "Monthly from later",
+            "lifecycleStatus": "Active",
+            "priceType": "recurring",
+            "price": {"unit": "USD", "value": 7},
+            "validFor": {"startDateTime": timeline.iso(later)},
+            "recurringChargePeriodType": "monthly",
+            "recurringChargePeriodLength": 1,
+        },
+    )
+    soon = offering(api, "Plan 7", [monthly], kind="plan", profile=PROFILE)
+    signed_in(api, care, db_conn, world.acc)
+    today = api.clock.now().astimezone(timeline.TZ).date()
+    quote = api.get(
+        f"/internal/v1/billingAccount/{world.acc['id']}/firstCharge"
+        f"?productOffering.id={soon['id']}&startDate={today}"
+    )
+    assert quote.status_code == 422, quote.text
+    assert quote.json()["message"] == (
+        f"productOffering Plan 7 has no recurring price in USD valid on {today}"
+    )
+    plans = care.get(BASE + "/offering?kind=plan").json()
+    assert [p["id"] for p in plans] == [world.plan["id"]]
+
+
+def test_offerings_behind_an_unavailable_tax_engine_are_a_503_not_left_out(
+    api, care, db_conn, build, monkeypatch
+):
+    world = build("60", fee=False)
+    signed_in(api, care, db_conn, world.acc)
+    monkeypatch.setattr(settings, "tax_require_service_address", True)
+    assert set_address(api, world.acc, CA | {"postCode": FAILING_ZIP}).status_code == 200
+    response = care.get(BASE + "/offering?kind=addOn")
+    assert response.status_code == 503, response.text
+    assert response.json()["message"].startswith("tax engine unavailable")
+
+
+def test_an_expired_card_is_not_saved_and_a_repeated_save_answers_the_first(
+    api, care, db_conn, build, monkeypatch
+):
+    world = build("0", fee=False)
+    signed_in(api, care, db_conn, world.acc)
+    real = gateway().card
+    expired = Card("visa", "4242", expires=api.clock.now())
+    monkeypatch.setattr(gateway(), "card", lambda token: expired)
+    refused = care.post(BASE + "/paymentMethod", {"token": "tok_visa"})
+    assert refused.status_code == 422 and refused.json()["message"] == "the card has expired"
+    monkeypatch.setattr(gateway(), "card", real)
+    first = care.post(
+        BASE + "/paymentMethod", {"token": "tok_visa"}, headers={"Idempotency-Key": "c1"}
+    )
+    assert first.status_code == 201, first.text
+    again = care.post(
+        BASE + "/paymentMethod", {"token": "tok_visa"}, headers={"Idempotency-Key": "c1"}
+    )
+    assert again.status_code == 201 and again.json() == first.json()
+    assert [m["id"] for m in care.get(BASE + "/paymentMethod").json()] == [first.json()["id"]]
+
+
+def test_a_card_removed_before_its_lock_is_not_found(api, care, db_conn, rival, build, monkeypatch):
+    """The operator removes the card between the request's look and its lock."""
+    world = build("0", fee=False)
+    signed_in(api, care, db_conn, world.acc)
+    card = save_card(care)
+    real = care_api.scope.account
+
+    def raced(conn, customer_id, account_id, lock=False):
+        if lock:
+            payment_methods.remove(rival, card["id"], now=api.clock.now())
+            rival.commit()
+        return real(conn, customer_id, account_id, lock=lock)
+
+    monkeypatch.setattr(care_api.scope, "account", raced)
+    gone = care.delete(f"{BASE}/paymentMethod/{card['id']}")
+    assert gone.status_code == 404, gone.text
+    assert gone.json()["message"] == f"paymentMethod {card['id']} not found"
+    assert audit(db_conn, "care_card_removed") == []
+
+
+def test_an_add_on_deleted_from_the_catalog_before_its_lock_is_refused(
+    api, care, db_conn, rival, build, monkeypatch
+):
+    """The operator deletes a pack nobody has ordered yet while the customer buys it: the
+    order's lock no longer finds the offering."""
+    world = build("60", fee=False)
+    bought = line(api, db_conn, world)
+    signed_in(api, care, db_conn, world.acc)
+    pack = offering(api, "Bare pack", [], kind="addOn", profile=ADDON_PROFILE)
+    before = balance(db_conn, world.acc)
+    real = process.parties.get_billing_account
+
+    def raced(conn, uid, lock=None):
+        if lock is not None:
+            rival.execute("DELETE FROM product_offering WHERE id = %s", (pack["id"],))
+            rival.commit()
+        return real(conn, uid, lock)
+
+    monkeypatch.setattr(process.parties, "get_billing_account", raced)
+    body = {"lineId": bought.product["id"], "offeringId": pack["id"]}
+    refused = care.post(BASE + "/addOn", body)
+    assert refused.status_code == 422, refused.text
+    assert refused.json()["message"] == f"item 1: productOffering {pack['id']} does not exist"
+    assert balance(db_conn, world.acc) == before
+    assert db_conn.execute(
+        "SELECT count(*) FROM product WHERE parent_product_id IS NOT NULL"
+    ).fetchone() == (0,)

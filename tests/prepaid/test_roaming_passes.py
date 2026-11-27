@@ -526,3 +526,17 @@ def test_the_add_on_profile_used_to_be_plan_plus_pack_only(api, db_conn, passes)
     last = max(sent(), key=lambda r: r["profile"].get("internationalMinutes", 0))["profile"]
     assert last["dataAllowanceMb"] == PROFILE["dataAllowanceMb"] + ADDON_PROFILE["dataAllowanceMb"]
     assert last["internationalMinutes"] == 100
+
+
+def test_an_add_on_quote_needs_the_plans_paid_period(api, db_conn, passes):
+    acc, plan = passes.acc, passes.line.product
+    base = f"/internal/v1/billingAccount/{acc['id']}/firstCharge"
+    after = passes.line.due  # the first day not paid for
+    response = api.get(
+        f"{base}?productOffering.id={passes.roaming['id']}&startDate={after}"
+        f"&parentProduct.id={plan['id']}"
+    )
+    assert response.status_code == 422, response.text
+    assert response.json()["message"] == (
+        f"product {plan['id']} is not a plan with a paid period on {after}"
+    )

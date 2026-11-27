@@ -590,7 +590,7 @@ def open_products(account_id: str, request: Request, tx: Tx, clock: ClockDep) ->
                     today,
                     tz,
                 )
-            except MissingPrice:
+            except MissingPrice:  # pragma: no cover - orders and api.catalog._no_gap keep it priced
                 pass  # a missing future price must not hide today's price
         items.append(
             {

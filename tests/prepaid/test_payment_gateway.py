@@ -360,3 +360,24 @@ def test_payment_commands_can_be_listed_and_read(api, db_conn):
     assert api.get(f"{COMMANDS}/{made['id']}").json()["amount"]["value"] == D("25")
     assert api.get(f"{COMMANDS}/{UUID(int=5)}").status_code == 404
     assert api.post(f"{COMMANDS}/{made['id']}/retry", None).status_code == 409
+
+
+def test_a_top_up_needs_the_accounts_currency_a_live_card_and_an_open_account(api, db_conn):
+    _, acc = prepaid(api, db_conn)
+    card = save(api, acc)
+    euro = topup(api, acc, key="eur", amount={"unit": "EUR", "value": 25})
+    assert euro.status_code == 422
+    assert euro.json()["message"] == "amount.unit must be the account's currency USD"
+    db_conn.execute(
+        "UPDATE payment_method SET expiration_date = %s WHERE id = %s",
+        (api.clock.now() - timedelta(days=1), card["id"]),
+    )
+    db_conn.commit()
+    expired = topup(api, acc, key="expired")
+    assert expired.status_code == 409 and expired.json()["message"] == "the card has expired"
+    db_conn.execute("UPDATE billing_account SET state = 'Closed' WHERE id = %s", (acc["id"],))
+    db_conn.commit()
+    closed = topup(api, acc, key="closed")
+    assert closed.status_code == 409
+    assert closed.json()["message"] == "the billing account is closed"
+    assert commands_of(db_conn) == []
