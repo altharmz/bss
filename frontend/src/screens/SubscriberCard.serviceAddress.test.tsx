@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { json, tmfCodeError, type Handler } from '../test/fetch';
+import { json, tmfCodeError, tmfError, type Handler } from '../test/fetch';
 import { expectUi } from '../test/expectUi';
 import { accountBody } from '../test/fixtures';
 import {
@@ -316,5 +316,41 @@ describe('serviceAddressRequired refusal', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Set service address…' }));
     expect(screen.getByRole('dialog', { name: 'Set service address' })).toBeTruthy();
     expect(screen.queryByRole('dialog', { name: 'Add product' })).toBeNull();
+  });
+});
+
+// #498: an unanswered change or removal offers Refresh, which reads the account again
+describe('service address with an unknown outcome', () => {
+  it.each([
+    ['Edit service address', 'Save'],
+    ['Remove service address', 'Remove'],
+  ])('%s: Refresh after no answer reads the account again', async (title, action) => {
+    let reads = 0;
+    const { fetchMock } = card([CA, BILLING_CONTACT], {
+      [`GET /tmf-api/accountManagement/v5/billingAccount/${A}`]: () => {
+        reads += 1;
+        return json(prepaid([CA, BILLING_CONTACT]));
+      },
+      [PATCH]: () => tmfError(504, 'gateway timeout'),
+    });
+    await open();
+    selectTab('Account');
+    const panel = expectUi('ui.subscriber.serviceAddress');
+    fireEvent.click(
+      within(panel).getByRole('button', {
+        name: title === 'Edit service address' ? 'Edit service address' : 'Remove',
+      }),
+    );
+    const dialog = screen.getByRole('dialog', { name: title });
+    if (action === 'Save') type(dialog, 'Street, line 2', 'Suite 200');
+    fireEvent.click(within(dialog).getByRole('button', { name: action }));
+    expect(await within(dialog).findByText('Unsure whether it was saved.')).toBeTruthy();
+    expect(within(dialog).queryByRole('button', { name: action })).toBeNull();
+    const before = reads;
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Refresh' }));
+    expect(await screen.findByText('Refreshed')).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => expect(reads).toBeGreaterThan(before));
+    expect(patches(fetchMock)).toHaveLength(1);
   });
 });

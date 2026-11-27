@@ -132,14 +132,18 @@ describe('self-care signup', () => {
     const pay = screen.getByRole('button', { name: 'Pay and activate' }) as HTMLButtonElement;
     expect(pay.disabled).toBe(true);
     const gateway = screen.getByTitle('Test payment gateway') as HTMLIFrameElement;
-    window.dispatchEvent(
-      new MessageEvent('message', {
-        data: { type: 'stub-card-token', token: 'tok_ok' },
-        origin: location.origin,
-        source: gateway.contentWindow,
-      }),
-    );
-    await waitFor(() => expect(pay.disabled).toBe(false));
+    // jsdom may replace the frame's window when the gateway page loads, so the message
+    // goes again from the frame's current window until it is taken (#498)
+    await waitFor(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { type: 'stub-card-token', token: 'tok_ok' },
+          origin: location.origin,
+          source: gateway.contentWindow,
+        }),
+      );
+      expect(pay.disabled).toBe(false);
+    });
     fill('Create password', 'a long password');
     fireEvent.click(pay);
 

@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { json, pending, type Handler } from '../test/fetch';
+import { json, pending, tmfError, type Handler } from '../test/fetch';
 import { expectUi } from '../test/expectUi';
 import { accountBody } from '../test/fixtures';
 import {
@@ -508,5 +508,86 @@ describe('E911 address on the subscriber card', () => {
     const row = await waitFor(() => productRow('Wi-Fi pack'));
     expect(within(row).queryByText(/^E911:/)).toBeNull();
     expect(() => productAction(row, 'Edit E911 address…')).toThrow();
+  });
+});
+
+// #498: a completed change, a plain refusal, an unknown outcome and Escape
+describe('E911 address change outcomes', () => {
+  async function editDialog() {
+    await open();
+    fireEvent.click(
+      productAction(await waitFor(() => productRow('Wi-Fi Talk')), 'Edit E911 address…'),
+    );
+    return screen.getByRole('dialog', { name: 'Edit E911 address: Wi-Fi Talk' });
+  }
+
+  it('closes on a completed change and says so', async () => {
+    const { fetchMock } = cardBackend([LINE], { [`POST ${ORDERS}`]: COMPLETED });
+    const dialog = await editDialog();
+    type(dialog, 'City', 'Eugene');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save E911 address' }));
+    expect(await screen.findByText('Wi-Fi Talk: E911 address changed')).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    const [sent] = posts(fetchMock);
+    const item = sent?.body.productOrderItem[0] as {
+      product: { place: { place: { city: string } }[] };
+    };
+    expect(item.product.place[0]?.place.city).toBe('Eugene');
+    expect(sent?.pin).toBeUndefined();
+  });
+
+  it('shows a refusal that names no field and keeps the typed address', async () => {
+    cardBackend([LINE], {
+      [`POST ${ORDERS}`]: () => tmfError(409, 'another order already changes this product'),
+    });
+    const dialog = await editDialog();
+    type(dialog, 'City', 'Eugene');
+    const save = within(dialog).getByRole('button', { name: 'Save E911 address' });
+    fireEvent.click(save);
+    const refusal = await within(dialog).findByText(/another order already changes this product/);
+    expect(refusal.closest('.bss-note')?.textContent).toContain('Refused.');
+    expect((within(dialog).getByLabelText('City') as HTMLInputElement).value).toBe('Eugene');
+    expect((save as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('says an unanswered change may have happened and Refresh reads the card again', async () => {
+    let reads = 0;
+    const { fetchMock } = cardBackend([LINE], {
+      [`GET ${INTERNAL}/products`]: () => {
+        reads += 1;
+        return json([LINE], { total: 1 });
+      },
+      [`POST ${ORDERS}`]: () => tmfError(502, 'bad gateway'),
+    });
+    const dialog = await editDialog();
+    const before = reads;
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save E911 address' }));
+    expect(await within(dialog).findByText('Unsure whether it was saved.')).toBeTruthy();
+    // no second Save while the outcome is unknown
+    expect(within(dialog).queryByRole('button', { name: 'Save E911 address' })).toBeNull();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Refresh' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => expect(reads).toBeGreaterThan(before));
+    expect(posts(fetchMock)).toHaveLength(1);
+  });
+
+  it('closes on Escape, but not while the change is being sent', async () => {
+    let answer: (response: Response) => void = () => {};
+    cardBackend([LINE], {
+      [`POST ${ORDERS}`]: () =>
+        new Promise<Response>((resolve) => {
+          answer = resolve;
+        }),
+    });
+    await editDialog();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.click(productAction(productRow('Wi-Fi Talk'), 'Edit E911 address…'));
+    const dialog = screen.getByRole('dialog', { name: 'Edit E911 address: Wi-Fi Talk' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save E911 address' }));
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.getByRole('dialog', { name: 'Edit E911 address: Wi-Fi Talk' })).toBe(dialog);
+    answer(COMPLETED());
+    expect(await screen.findByText('Wi-Fi Talk: E911 address changed')).toBeTruthy();
   });
 });

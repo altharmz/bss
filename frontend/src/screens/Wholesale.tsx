@@ -425,6 +425,7 @@ function WholesaleTable<T>({
         empty={empty}
         count={(page) => page.items.length}
         rows={(page) => page.items}
+        /* v8 ignore next -- @preserve unreachable: rows are the whole page, so a page with rows always shows them */
         onResetFilters={() => onOffset(0)}
       >
         {(items, page) => (

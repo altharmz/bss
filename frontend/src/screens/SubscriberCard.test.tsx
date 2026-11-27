@@ -924,4 +924,66 @@ describe('add product', () => {
       (within(dialog).getByRole('button', { name: 'Add Fiber 100' }) as HTMLButtonElement).disabled,
     ).toBe(true);
   });
+
+  // #498: refused and unanswered writes, and an empty filter
+  it('keeps a refused draft save with a hint to check Orders, and offers it again', async () => {
+    let posts = 0;
+    backend({
+      ...catalog,
+      [preview('2026-10-01')]: () => json(FIRST_CHARGE),
+      [`POST ${ORDERS}`]: () => {
+        posts += 1;
+        return tmfError(409, 'an open draft already adds Fiber 100');
+      },
+    });
+    const dialog = await openModal();
+    fireEvent.click((await within(dialog).findAllByRole('radio'))[1] as HTMLElement);
+    const save = within(dialog).getByRole('button', { name: 'Save as draft' }) as HTMLButtonElement;
+    await waitFor(() => expect(save.disabled).toBe(false));
+    fireEvent.click(save);
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert.textContent).toContain('an open draft already adds Fiber 100');
+    expect(alert.textContent).toContain('Close and check Orders before saving again.');
+    // a 4xx stored nothing: Save as draft stays offered
+    await waitFor(() => expect(save.disabled).toBe(false));
+    expect(posts).toBe(1);
+  });
+
+  it.each([
+    ['Save as draft', 'a draft'],
+    ['Add Fiber 100', 'an order'],
+  ])('offers only Refresh after %s gets no answer (%s)', async (action) => {
+    const { fetchMock } = backend({
+      ...catalog,
+      [preview('2026-10-01')]: () => json(FIRST_CHARGE),
+      [`POST ${ORDERS}`]: () => tmfError(502, 'bad gateway'),
+    });
+    const dialog = await openModal();
+    fireEvent.click((await within(dialog).findAllByRole('radio'))[1] as HTMLElement);
+    await within(dialog).findByTestId('first-charge');
+    const button = within(dialog).getByRole('button', { name: action }) as HTMLButtonElement;
+    await waitFor(() => expect(button.disabled).toBe(false));
+    fireEvent.click(button);
+    expect(await within(dialog).findByText('Unsure whether it was saved.')).toBeTruthy();
+    expect(within(dialog).queryByRole('button', { name: 'Add Fiber 100' })).toBeNull();
+    expect(within(dialog).queryByRole('button', { name: 'Save as draft' })).toBeNull();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Refresh' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
+  });
+
+  it('says when no offering matches the filter and picks one from the keyboard', async () => {
+    backend({ ...catalog, [preview('2026-10-01')]: () => json(FIRST_CHARGE) });
+    const dialog = await openModal();
+    await within(dialog).findAllByRole('radio');
+    const filter = within(dialog).getByLabelText('Filter offerings');
+    fireEvent.change(filter, { target: { value: 'satellite' } });
+    expect(within(dialog).getByText('No active offerings match.')).toBeTruthy();
+    expect(within(dialog).queryAllByRole('radio')).toHaveLength(0);
+    fireEvent.change(filter, { target: { value: 'net-100' } });
+    const fiber = within(dialog).getByRole('radio', { name: /Fiber 100/ });
+    fireEvent.keyDown(fiber, { key: 'Enter' });
+    expect(fiber.getAttribute('aria-checked')).toBe('true');
+    expect(await within(dialog).findByTestId('first-charge')).toBeTruthy();
+  });
 });

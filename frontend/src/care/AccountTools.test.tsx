@@ -83,14 +83,18 @@ describe('self-care account tools', () => {
     const save = screen.getByRole('button', { name: 'Save card' }) as HTMLButtonElement;
     expect(save.disabled).toBe(true);
     const gateway = screen.getByTitle('Test payment gateway') as HTMLIFrameElement;
-    window.dispatchEvent(
-      new MessageEvent('message', {
-        data: { type: 'stub-card-token', token: 'tok_visa' },
-        origin: location.origin,
-        source: gateway.contentWindow,
-      }),
-    );
-    await waitFor(() => expect(save.disabled).toBe(false));
+    // jsdom may replace the frame's window when the gateway page loads, so the message
+    // goes again from the frame's current window until it is taken (#498)
+    await waitFor(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { type: 'stub-card-token', token: 'tok_visa' },
+          origin: location.origin,
+          source: gateway.contentWindow,
+        }),
+      );
+      expect(save.disabled).toBe(false);
+    });
     fireEvent.click(save);
     expect((await screen.findByRole('status')).textContent).toBe('Card saved.');
     // the token is spent: saving again needs a new one

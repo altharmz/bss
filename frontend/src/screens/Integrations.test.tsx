@@ -205,3 +205,66 @@ describe('Integrations', () => {
     expect(HUB_APIS.map((a) => a.id)).toEqual(Object.keys(EVENT_TYPES));
   });
 });
+
+// #498: cancelled dialogs, an unanswered delete and the System panel's Refresh
+describe('Integrations around a write', () => {
+  it('cancels a new subscription and a delete without sending anything', async () => {
+    const { fetchMock } = backend();
+    open();
+    await screen.findByText('https://example.org/pay');
+    fireEvent.click(screen.getByRole('button', { name: 'New subscription' }));
+    let dialog = screen.getByRole('dialog', { name: 'New subscription' });
+    fireEvent.change(within(dialog).getByLabelText('Callback URL'), {
+      target: { value: 'https://example.org/x' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: `Delete subscription ${H1}` }));
+    dialog = screen.getByRole('dialog', { name: 'Delete subscription' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(writes(fetchMock)).toEqual([]);
+  });
+
+  it('says an unanswered delete may have happened and Refresh reads the list again', async () => {
+    let reads = 0;
+    const { fetchMock } = backend({
+      [LIST]: () => {
+        reads += 1;
+        return reads === 1 ? json([HUB_PAY, HUB_CAT], { total: 2 }) : json([HUB_CAT], { total: 1 });
+      },
+      [`DELETE ${PAYMENT}/hub/${H1}`]: () => tmfError(502, 'bad gateway'),
+    });
+    open();
+    await screen.findByText('https://example.org/pay');
+    fireEvent.click(screen.getByRole('button', { name: `Delete subscription ${H1}` }));
+    const dialog = screen.getByRole('dialog', { name: 'Delete subscription' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    expect(await within(dialog).findByText('Unsure whether it was saved.')).toBeTruthy();
+    expect(within(dialog).queryByRole('button', { name: 'Delete' })).toBeNull();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Refresh' }));
+    expect(await screen.findByText('Refreshed')).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => expect(screen.queryByText('https://example.org/pay')).toBeNull());
+    expect(writes(fetchMock)).toEqual([['DELETE', `${PAYMENT}/hub/${H1}`, null]]);
+  });
+
+  it('reads the health and the billing status again on Refresh', async () => {
+    let healthy = false;
+    const { calls } = backend({
+      'GET /healthz': () =>
+        healthy
+          ? json({ status: 'ok', db: 'up' })
+          : json({ status: 'degraded', db: 'down' }, { status: 503 }),
+    });
+    open();
+    await screen.findByText(/HTTP 503 \{"status":"degraded","db":"down"\}/);
+    const before = calls.filter((c) => c === 'GET /billing-status').length;
+    healthy = true;
+    // the System panel's Refresh: the only one on the screen without a dialog
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await waitFor(() => expect(screen.queryByText(/HTTP 503/)).toBeNull());
+    expect(screen.getAllByText('OK')).toHaveLength(2);
+    expect(calls.filter((c) => c === 'GET /billing-status').length).toBe(before + 1);
+  });
+});

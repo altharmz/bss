@@ -785,3 +785,65 @@ describe('subscriber Overview orders', () => {
     ).toEqual(['{"state":"acknowledged"}']);
   });
 });
+
+// #498: a draft price that fails to load retries in place; the order dialog closes
+describe('subscriber Overview draft price', () => {
+  const DRAFT_ID = 'a0000000-0000-4000-8000-000000000002';
+  const draft = {
+    id: DRAFT_ID,
+    state: 'draft',
+    billingAccount: { id: A },
+    requestedStartDate: '2026-10-06T09:00:00Z',
+    productOrderItem: [
+      { id: '1', action: 'add', productOffering: { id: O2, name: 'Draft Fiber' } },
+    ],
+  };
+
+  it('shows a failed draft price with Retry, then the price', async () => {
+    let fail = true;
+    backend({
+      [`GET ${ORDERS}?billingAccount.id=${A}&state=draft&offset=0&limit=50`]: () =>
+        json([draft], { total: 1 }),
+      [`GET /tmf-api/productCatalogManagement/v5/productOffering/${O2}`]: () =>
+        fail
+          ? tmfError(503, 'catalog unavailable')
+          : json({
+              id: O2,
+              name: 'Draft Fiber',
+              lifecycleStatus: 'Active',
+              productOfferingPrice: [{ id: 'draft-price' }],
+            }),
+      'GET /tmf-api/productCatalogManagement/v5/productOfferingPrice/draft-price': () =>
+        json({
+          id: 'draft-price',
+          name: 'Draft rate',
+          priceType: 'recurring',
+          price: usd(777),
+          validFor: { startDateTime: '2026-10-05T21:00:00Z' },
+        }),
+    });
+    await open();
+    const box = expectUi('ui.subscriber.unfinishedOrders');
+    expect(await within(box).findByText('Failed to load draft price')).toBeTruthy();
+    fail = false;
+    fireEvent.click(within(box).getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(within(box).queryByText('Failed to load draft price')).toBeNull());
+    expect(await within(box).findByText('777.00')).toBeTruthy();
+  });
+
+  it('closes an order opened from the Overview', async () => {
+    backend({
+      [`GET ${ORDERS}?billingAccount.id=${A}&state=draft&offset=0&limit=50`]: () =>
+        json([draft], { total: 1 }),
+      [`GET ${ORDERS}/${DRAFT_ID}`]: () => json(draft),
+      'GET /*': pending,
+    });
+    await open();
+    const box = expectUi('ui.subscriber.unfinishedOrders');
+    fireEvent.click(await within(box).findByRole('button', { name: 'Open' }));
+    const dialog = await screen.findByRole('dialog', { name: /Order/ });
+    // the footer's Close (the header has a close icon of the same name)
+    fireEvent.click(within(dialog).getByText('Close'));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});

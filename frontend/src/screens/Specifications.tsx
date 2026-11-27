@@ -50,10 +50,13 @@ export function usedBy(catalog: Catalog, spec: Specification): number {
 export function SpecificationsTab({
   resource,
   query,
+  onResetQuery,
   onChanged,
 }: {
   resource: ResourceWithRetry<Catalog>;
   query: string;
+  /** clears the search, from the "No matches" state */
+  onResetQuery: () => void;
   onChanged: (message: string) => void;
 }) {
   const context = useSystemContext();
@@ -78,7 +81,7 @@ export function SpecificationsTab({
                 !q || s.name.toLowerCase().includes(q) || (s.brand ?? '').toLowerCase().includes(q),
             )
           }
-          onResetFilters={() => undefined}
+          onResetFilters={onResetQuery}
         >
           {(rows, data) => (
             <>

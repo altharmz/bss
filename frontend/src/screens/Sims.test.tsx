@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { describe, expect, it } from 'vitest';
 import { SimsScreen } from './Sims';
 import { CrumbsProvider } from '../app/context';
-import { RouterProvider } from '../app/router';
+import { hrefOf, RouterProvider } from '../app/router';
 import { json, stubFetch, tmfError } from '../test/fetch';
 import { NUMBERS } from '../api/numbers';
 import { PATHS, orderAdd } from '../api/bss';
@@ -219,6 +219,133 @@ describe('SIM stock', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     const call = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
     expect(JSON.parse(String(call?.[1]?.body))).toEqual({ batch: 'G1', count: 5 });
+  });
+});
+
+describe('SIM stock recovery', () => {
+  it('resets every filter from an empty filtered page back to the unfiltered list', async () => {
+    const { calls } = stubFetch({
+      [LIST]: () => json([esim], { total: 1 }),
+      [`GET ${NUMBERS}?resourceSpecification.id=imsi&simState=retired&offset=0&limit=50`]: () =>
+        json([], { total: 0 }),
+      [BATCHES]: () => json([batch]),
+    });
+    stock();
+    expect(await screen.findByText('001010000000001')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('State'), { target: { value: 'retired' } });
+    // filtered on the server: an empty page is "no matches", not the "No SIMs yet" state
+    expect(await screen.findByText('No matches')).toBeTruthy();
+    expect(screen.queryByText('No SIMs yet')).toBeNull();
+    const before = calls.filter((c) => c === LIST).length;
+    fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }));
+    expect(await screen.findByText('001010000000001')).toBeTruthy();
+    expect((screen.getByLabelText('State') as HTMLSelectElement).value).toBe('');
+    expect((screen.getByLabelText('Type') as HTMLSelectElement).value).toBe('');
+    expect((screen.getByLabelText('Batch') as HTMLSelectElement).value).toBe('');
+    expect((screen.getByLabelText('Search SIMs') as HTMLInputElement).value).toBe('');
+    expect(calls.filter((c) => c === LIST).length).toBe(before + 1);
+  });
+
+  it('cancels the import and generate dialogs without sending anything', async () => {
+    const { calls } = stubFetch({
+      [LIST]: () => json([], { total: 0 }),
+      [BATCHES]: () => json([]),
+    });
+    stock();
+    fireEvent.click(await screen.findByText('Import CSV'));
+    let dialog = screen.getByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Batch name'), { target: { value: 'B2' } });
+    fireEvent.click(within(dialog).getByText('Cancel'));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.click(screen.getByText('Generate eSIMs'));
+    dialog = screen.getByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Batch name'), { target: { value: 'G1' } });
+    fireEvent.click(within(dialog).getByText('Cancel'));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(calls.filter((c) => c.startsWith('POST'))).toEqual([]);
+  });
+
+  it('keeps a refused generation open with the server text and allows a corrected retry', async () => {
+    let posts = 0;
+    stubFetch({
+      [LIST]: () => json([], { total: 0 }),
+      [BATCHES]: () => json([]),
+      'POST /internal/v1/sim/esim-generate': () =>
+        ++posts === 1
+          ? tmfError(409, 'batch G1 exists')
+          : json({ ...batch, name: 'G2', source: 'generated', total: 3 }, { status: 201 }),
+    });
+    stock();
+    fireEvent.click(await screen.findByText('Generate eSIMs'));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Batch name'), { target: { value: 'G1' } });
+    fireEvent.change(within(dialog).getByLabelText('Number of profiles'), {
+      target: { value: '3' },
+    });
+    const primary = within(dialog).getByText('Generate');
+    fireEvent.click(primary);
+    const note = await within(dialog).findByText(/batch G1 exists/);
+    // a 4xx generated nothing: no "check the batches" hint, and the input stays to correct
+    expect(note.textContent).not.toMatch(/Check the batches/);
+    expect((within(dialog).getByLabelText('Batch name') as HTMLInputElement).value).toBe('G1');
+    expect((within(dialog).getByLabelText('Number of profiles') as HTMLInputElement).value).toBe(
+      '3',
+    );
+    expect(primary.hasAttribute('disabled')).toBe(false);
+    fireEvent.change(within(dialog).getByLabelText('Batch name'), { target: { value: 'G2' } });
+    fireEvent.click(primary);
+    expect(await screen.findByText('Batch G2 generated: 3 eSIMs')).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('blocks a second generation after an uncertain outcome and tells the operator to check', async () => {
+    const { calls } = stubFetch({
+      [LIST]: () => json([], { total: 0 }),
+      [BATCHES]: () => json([]),
+      'POST /internal/v1/sim/esim-generate': () => tmfError(503, 'adapter timed out'),
+    });
+    stock();
+    fireEvent.click(await screen.findByText('Generate eSIMs'));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Batch name'), { target: { value: 'G1' } });
+    const primary = within(dialog).getByText('Generate');
+    fireEvent.click(primary);
+    expect(
+      await within(dialog).findByText(
+        /adapter timed out\. Check the batches before generating again\./,
+      ),
+    ).toBeTruthy();
+    expect(primary.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(primary);
+    expect(calls.filter((c) => c.startsWith('POST'))).toEqual([
+      'POST /internal/v1/sim/esim-generate',
+    ]);
+  });
+
+  it('lists the products a SIM is assigned to, with a link to the billing account', async () => {
+    stubFetch({
+      [LIST]: () => json([esim], { total: 1 }),
+      [BATCHES]: () => json([batch]),
+      [`GET ${NUMBERS}/${E1}`]: () => json(esim),
+      [`GET ${PATHS.products}?realizingResource.id=${E1}&offset=0&limit=100`]: () =>
+        json(
+          [
+            { id: 'pr1', name: 'Mobile 10', status: 'active', billingAccount: { id: 'acc1' } },
+            { id: 'pr2', status: 'terminated' },
+          ],
+          { total: 2 },
+        ),
+    });
+    stock();
+    fireEvent.click(await screen.findByRole('button', { name: '001010000000001' }));
+    const detail = screen.getByRole('dialog');
+    const line = (await within(detail).findByText(/Mobile 10/)).closest('p') as HTMLElement;
+    expect(
+      within(line).getByRole('link', { name: 'Open billing account' }).getAttribute('href'),
+    ).toBe(hrefOf({ name: 'subscriber', accountId: 'acc1' }));
+    // a product without a name shows its id, and without an account no link
+    const bare = within(detail).getByText(/pr2/).closest('p') as HTMLElement;
+    expect(within(bare).queryByRole('link')).toBeNull();
   });
 });
 

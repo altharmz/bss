@@ -255,6 +255,7 @@ export function CatalogScreen() {
             <SpecificationsTab
               resource={catalog}
               query={query}
+              onResetQuery={() => setQuery('')}
               onChanged={(message) => {
                 toast(message);
                 setVersion((v) => v + 1);
@@ -266,10 +267,13 @@ export function CatalogScreen() {
           <CategoriesTab
             offerings={catalog.status === 'ok' ? catalog.data : null}
             query={query}
+            onResetQuery={() => setQuery('')}
             newRequests={newRequests}
           />
         )}
-        {tab === 'catalogs' && <CatalogsTab query={query} newRequests={newRequests} />}
+        {tab === 'catalogs' && (
+          <CatalogsTab query={query} onResetQuery={() => setQuery('')} newRequests={newRequests} />
+        )}
         {tab === 'jobs' && <JobsTab />}
         {offeringsTab && (
           <div className="bss-with-inspector">
