@@ -4,7 +4,7 @@ import { DeviceDialog } from './ProductDevice';
 import { SystemContextProvider } from '../app/context';
 import { PATHS } from '../api/bss';
 import { imeiProblem } from '../api/devices';
-import { CONTEXT, json, stubFetch } from '../test/fetch';
+import { CONTEXT, json, stubFetch, tmfError } from '../test/fetch';
 import { ToastProvider } from '../ui/kit';
 import { expectUi } from '../test/expectUi';
 
@@ -191,5 +191,59 @@ describe('Device dialog', () => {
         'Device changed through an order · The network could not confirm the device works: not in the device database.',
       ),
     );
+  });
+});
+
+// #498: a failed check, an accepted change and an unknown outcome
+describe('Device dialog outcomes', () => {
+  it('shows a failed check and keeps the typed IMEI', async () => {
+    stubFetch({
+      [HISTORY]: () => json([]),
+      [`GET /internal/v1/device/check?imei=${NEW}`]: () => tmfError(503, 'device database down'),
+    });
+    dialog();
+    await screen.findByText('No device is recorded for this line.');
+    fireEvent.change(screen.getByLabelText('IMEI'), { target: { value: NEW } });
+    fireEvent.click(expectUi('ui.subscriber.checkDevice'));
+    expect(await screen.findByText(/device database down/)).toBeTruthy();
+    expect((screen.getByLabelText('IMEI') as HTMLInputElement).value).toBe(NEW);
+    expect((expectUi('ui.subscriber.checkDevice') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('reports an accepted change with the order to follow', async () => {
+    stubFetch({
+      [HISTORY]: () => json([device(OLD)]),
+      [`POST ${PATHS.orders}`]: () =>
+        json({ id: 'o4', state: 'inProgress', productOrderItem: [] }, { status: 201 }),
+    });
+    const onDone = vi.fn();
+    dialog({ onDone });
+    await screen.findByText(/since 2026-10-01/);
+    fireEvent.change(screen.getByLabelText('IMEI'), { target: { value: NEW } });
+    fireEvent.click(screen.getByRole('button', { name: 'Change device' }));
+    await waitFor(() =>
+      expect(onDone).toHaveBeenCalledWith(
+        'Device change accepted, the billing worker completes it shortly',
+        { id: 'o4', label: 'Device change' },
+      ),
+    );
+  });
+
+  it('offers only Refresh after an unanswered change', async () => {
+    const { fetchMock } = stubFetch({
+      [HISTORY]: () => json([device(OLD)]),
+      [`POST ${PATHS.orders}`]: () => tmfError(502, 'bad gateway'),
+    });
+    const onDone = vi.fn();
+    dialog({ onDone });
+    await screen.findByText(/since 2026-10-01/);
+    fireEvent.change(screen.getByLabelText('IMEI'), { target: { value: NEW } });
+    fireEvent.click(screen.getByRole('button', { name: 'Change device' }));
+    expect(await screen.findByText('Unsure whether it was saved.')).toBeTruthy();
+    // no second change goes out blind: Refresh (which closes) is the way on
+    expect(screen.queryByRole('button', { name: 'Change device' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeTruthy();
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
+    expect(onDone).not.toHaveBeenCalled();
   });
 });

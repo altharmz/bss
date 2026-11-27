@@ -68,6 +68,7 @@ export function PortRequestsScreen() {
   const ports = useResource(`ports:${direction}:${state}:${number.trim()}`, (signal) =>
     loadPorts({ direction, state, number: number.trim() }, signal),
   );
+  const filtered = direction !== '' || state !== '' || number.trim() !== '';
   return (
     <div className="bss-screen" data-ui="ui.ports.list">
       <PageHeader
@@ -115,7 +116,8 @@ export function PortRequestsScreen() {
             title: 'No port requests yet',
             text: 'A port-in is created from Add product; a port-out arrives from the carrier.',
           }}
-          count={(data) => data.length}
+          // filtered on the server: an empty filtered page is "no matches", not "no requests"
+          count={(data) => (filtered ? 1 : data.length)}
           rows={(data) => data}
           onResetFilters={() => {
             setNumber('');

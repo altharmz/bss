@@ -73,10 +73,13 @@ function useNewRequest(requests: number, open: () => void) {
 export function CategoriesTab({
   offerings,
   query,
+  onResetQuery,
   newRequests,
 }: {
   offerings: Catalog | null;
   query: string;
+  /** clears the search, from the "No matches" state */
+  onResetQuery: () => void;
   newRequests: number;
 }) {
   const toast = useToast();
@@ -98,7 +101,7 @@ export function CategoriesTab({
           rows={(data) =>
             categoryTree(data).filter((r) => !q || r.category.name.toLowerCase().includes(q))
           }
-          onResetFilters={() => undefined}
+          onResetFilters={onResetQuery}
         >
           {(rows, data) => (
             <>
@@ -148,7 +151,16 @@ export function CategoriesTab({
   );
 }
 
-export function CatalogsTab({ query, newRequests }: { query: string; newRequests: number }) {
+export function CatalogsTab({
+  query,
+  onResetQuery,
+  newRequests,
+}: {
+  query: string;
+  /** clears the search, from the "No matches" state */
+  onResetQuery: () => void;
+  newRequests: number;
+}) {
   const toast = useToast();
   const [version, setVersion] = useState(0);
   const [open, setOpen] = useState<ProductCatalog | 'new' | null>(null);
@@ -166,7 +178,7 @@ export function CatalogsTab({ query, newRequests }: { query: string; newRequests
           empty={{ title: 'No catalogs yet', text: 'Create the first product catalog.' }}
           count={(data) => data.catalogs.length}
           rows={(data) => data.catalogs.filter((c) => !q || c.name.toLowerCase().includes(q))}
-          onResetFilters={() => undefined}
+          onResetFilters={onResetQuery}
         >
           {(rows, data) => (
             <>

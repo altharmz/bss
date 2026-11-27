@@ -233,3 +233,37 @@ describe('products screen', () => {
     expect((screen.getByRole('button', { name: 'Next' }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
+
+// #498: Reset filters from an empty filtered page, and a row's account link
+describe('products screen recovery', () => {
+  it('resets the status, number and account filters from No matches', async () => {
+    backend({
+      [`GET ${PRODUCTS}?${PAGE}`]: () => json([first, second], { total: 2 }),
+      [`GET ${PRODUCTS}?billingAccount.id=${A1}&status=suspended&${PAGE}`]: () =>
+        json([], { total: 0 }),
+      [`GET ${PRODUCTS}?billingAccount.id=${A1}&${PAGE}`]: () => json([first], { total: 1 }),
+    });
+    open(`/products?account=${A1}`);
+    await screen.findByText('Basic 10');
+    fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'suspended' } });
+    expect(await screen.findByText('No matches')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }));
+    expect(await screen.findByText('Plus 20')).toBeTruthy();
+    expect((screen.getByLabelText('Status') as HTMLSelectElement).value).toBe('');
+    expect((screen.getByLabelText('Filter by number') as HTMLInputElement).value).toBe('');
+    expect(screen.queryByLabelText('Remove the account filter')).toBeNull();
+    expect(window.location.search).toBe('');
+  });
+
+  it('opens the billing account from a row link without opening the product', async () => {
+    backend({
+      [`GET ${PRODUCTS}?${PAGE}`]: () => json([first], { total: 1 }),
+      'GET /*': pending,
+    });
+    open('/products');
+    const link = (await screen.findAllByRole('link', { name: 'Olga Kuznetsova' }))[0];
+    fireEvent.click(link as HTMLElement);
+    await waitFor(() => expect(window.location.pathname).toBe(`/billing-accounts/${A1}`));
+    expect(window.location.pathname).not.toContain(P1);
+  });
+});

@@ -983,6 +983,96 @@ describe('order writes', () => {
   });
 });
 
+// #498: an edited draft the server rejects or refuses keeps the dialog and what was chosen
+describe('draft edit refusals', () => {
+  it('shows a rejected and then a refused draft change, keeping the dialog', async () => {
+    const OFFERINGS = [
+      {
+        id: 'o1',
+        name: 'Basic 10',
+        productSpecification: { name: 'Home Internet' },
+        productOfferingPrice: [{ id: 'pr1' }],
+      },
+    ];
+    const FIRST = {
+      billingAccount: { id: A1 },
+      productOffering: { id: 'o1' },
+      startDate: '2026-10-05',
+      period: { start: '2026-10-05', end: '2026-11-01' },
+      cyclePeriod: { start: '2026-10-05', end: '2026-11-01' },
+      billableDays: 27,
+      periodDays: 30,
+      prorated: false,
+      price: { unit: 'USD', value: 12 },
+      amount: { unit: 'USD', value: 12 },
+      chargeRunDate: '2026-10-05',
+      billDate: '2026-11-01',
+      next: null,
+      balance: { unit: 'USD', value: 0 },
+      balanceAfter: { unit: 'USD', value: -12 },
+      creditLimit: null,
+      exceedsCreditLimit: false,
+    };
+    let patches = 0;
+    const { fetchMock } = writes(DRAFT, {
+      [`GET /tmf-api/accountManagement/v5/billingAccount/${A1}`]: () =>
+        json(accountBody(A1, { id: 'cust1', name: 'Ivan Ivanov' })),
+      'GET /tmf-api/productCatalogManagement/v5/productOffering?lifecycleStatus=Active&isSellable=true&offset=0&limit=100':
+        () => json(OFFERINGS, { total: 1 }),
+      'GET /tmf-api/productCatalogManagement/v5/productOfferingPrice?priceType=recurring&offset=0&limit=100':
+        () =>
+          json(
+            [
+              {
+                id: 'pr1',
+                price: { unit: 'USD', value: 12 },
+                validFor: { startDateTime: '2026-06-01T21:00:00Z' },
+              },
+            ],
+            { total: 1 },
+          ),
+      [`GET /internal/v1/billingAccount/${A1}/firstCharge?productOffering.id=o1&startDate=2026-10-05`]:
+        () => json(FIRST),
+      [`GET /internal/v1/billingAccount/${A1}/settlement`]: () => json(NO_SETTLEMENT),
+      [`PATCH ${ORDERS}/${O1}`]: () =>
+        ++patches === 1
+          ? json({
+              id: O1,
+              state: 'rejected',
+              productOrderErrorMessage: [
+                { code: 'offeringNotSellable', reason: 'productOffering Basic 10 is not for sale' },
+              ],
+            })
+          : tmfError(409, 'the order is no longer a draft'),
+    });
+    Element.prototype.scrollIntoView = vi.fn();
+    open();
+    const dialog = await openOrder('C0000001');
+    press(dialog, 'Edit draft');
+    const options = await screen.findAllByRole('radio');
+    const edit = screen.getByRole('dialog', { name: 'Edit draft' });
+    await within(edit).findByTestId('first-charge');
+    press(edit, 'Save draft');
+    const rejected = await within(edit).findByRole('alert');
+    expect(rejected.textContent).toContain('This offering is no longer available for sale.');
+    expect(rejected.textContent).toContain('offeringNotSellable');
+    press(edit, 'Save draft');
+    await waitFor(() =>
+      expect(within(edit).getByRole('alert').textContent).toContain(
+        'the order is no longer a draft',
+      ),
+    );
+    // an edit refused by the server is not "unsure": no "check Orders" hint, Save draft stays
+    expect(within(edit).getByRole('alert').textContent).not.toContain('Close and check Orders');
+    expect(
+      (within(edit).getByRole('button', { name: 'Save draft' }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+    expect(options[0]?.getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('dialog', { name: 'Edit draft' })).toBe(edit);
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'PATCH')).toHaveLength(2);
+  });
+});
+
 // #487: what the list does around a write, a followed order and the paging edge
 describe('orders around a write', () => {
   it('names a modify item that changes nothing it can name as a change of the product', () => {

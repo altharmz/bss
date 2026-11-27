@@ -83,6 +83,7 @@ export function JobsTab() {
           empty={{ title: 'No jobs yet', text: 'Export the catalog or import a document.' }}
           count={(data) => data.length}
           rows={(data) => data}
+          /* v8 ignore next -- @preserve unreachable: the job list has no filters, so a loaded list is never "no matches" */
           onResetFilters={() => undefined}
         >
           {(rows) => (

@@ -984,3 +984,49 @@ describe('prepaid plans (#212)', () => {
     ).toEqual([]);
   });
 });
+
+// #498: a resume preview the server cannot price says why and orders nothing
+describe('prepaid Resume preview failure', () => {
+  it('shows why there is no preview and keeps Resume disabled', async () => {
+    const { fetchMock } = backend(
+      {
+        [`GET ${INTERNAL}/products`]: () =>
+          json(
+            [
+              product(P1, {
+                status: 'suspended',
+                suspensionCause: 'manual',
+                paidThrough: '2026-10-01',
+              }),
+            ],
+            { total: 1 },
+          ),
+        [`GET /tmf-api/prepayBalanceManagement/v4/bucket?partyAccount.id=${A}&offset=0&limit=100`]:
+          () =>
+            json(
+              [
+                {
+                  id: BUCKET,
+                  remainingValue: { amount: 5, units: 'USD' },
+                  reservedValue: { amount: 0, units: 'USD' },
+                },
+              ],
+              { total: 1 },
+            ),
+        [`GET ${INTERNAL}/firstCharge?productOffering.id=${O1}&startDate=2026-10-01`]: () =>
+          tmfError(422, 'productOffering Mobile L has no recurring price in USD'),
+      },
+      accountBody(A, { id: C, name: 'Olga Kuznetsova' }, { ratingType: 'prepaid' }),
+    );
+    await open();
+    const row = await waitFor(() => productRow('Mobile L'));
+    fireEvent.click(productAction(row, 'Resume…'));
+    const dialog = screen.getByRole('dialog', { name: 'Resume: Mobile L' });
+    const preview = await waitFor(() => expectUi('ui.subscriber.resumePreview'));
+    expect(await within(preview).findByText(/has no recurring price in USD/)).toBeTruthy();
+    const resume = within(dialog).getByRole('button', { name: 'Resume' }) as HTMLButtonElement;
+    expect(resume.disabled).toBe(true);
+    fireEvent.click(resume);
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+  });
+});

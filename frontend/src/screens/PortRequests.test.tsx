@@ -251,3 +251,119 @@ describe('Number Transfer PIN', () => {
     expect(screen.getByText('Generate PIN').hasAttribute('disabled')).toBe(false);
   });
 });
+
+// #498: an empty filtered page and a correction of every field
+describe('port requests filters and corrections', () => {
+  it('says nothing matches a typed number and resets every filter', async () => {
+    const { calls } = stubFetch({
+      [LIST]: () => json([rejected, out], { total: 2 }),
+      'GET /internal/v1/port?direction=out&offset=0&limit=100': () => json([out], { total: 1 }),
+      'GET /internal/v1/port?direction=out&state=pending&offset=0&limit=100': () =>
+        json([], { total: 0 }),
+      'GET /internal/v1/port?direction=out&state=pending&number=15559999999&offset=0&limit=100':
+        () => json([], { total: 0 }),
+    });
+    screenOf();
+    await screen.findByRole('button', { name: '15551230001' });
+    fireEvent.change(screen.getByLabelText('Direction'), { target: { value: 'out' } });
+    fireEvent.change(screen.getByLabelText('State'), { target: { value: 'pending' } });
+    fireEvent.change(screen.getByLabelText('Number'), { target: { value: ' 15559999999 ' } });
+    // filtered on the server: an empty page is "no matches", not "no port requests"
+    expect(await screen.findByText('No matches')).toBeTruthy();
+    expect(screen.queryByText('No port requests yet')).toBeNull();
+    expect(calls).toContain(
+      'GET /internal/v1/port?direction=out&state=pending&number=15559999999&offset=0&limit=100',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }));
+    expect(await screen.findByRole('button', { name: '15551230001' })).toBeTruthy();
+    expect((screen.getByLabelText('Number') as HTMLInputElement).value).toBe('');
+    expect((screen.getByLabelText('Direction') as HTMLSelectElement).value).toBe('');
+    expect((screen.getByLabelText('State') as HTMLSelectElement).value).toBe('');
+  });
+
+  it('still says there are no port requests when nothing is filtered', async () => {
+    stubFetch({ [LIST]: () => json([], { total: 0 }) });
+    screenOf();
+    expect(await screen.findByText('No port requests yet')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Reset filters' })).toBeNull();
+  });
+
+  it('resubmits a correction of the account, the names and the ZIP, trimmed', async () => {
+    const { fetchMock } = stubFetch({
+      [LIST]: () => json([rejected], { total: 1 }),
+      [`GET /internal/v1/port/${PR}`]: () => json(rejected),
+      [`POST /internal/v1/port/${PR}/resubmit`]: () =>
+        json({ ...rejected, state: 'submitted' }, { status: 202 }),
+    });
+    screenOf();
+    fireEvent.click(await screen.findByRole('button', { name: '15551230001' }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.click(await within(dialog).findByText('Correct and resubmit'));
+    const type = (label: string, value: string) =>
+      fireEvent.change(within(dialog).getByLabelText(label), { target: { value } });
+    expect((within(dialog).getByLabelText('First name') as HTMLInputElement).value).toBe('Ada');
+    type('Number Transfer PIN', '654321');
+    type('Carrier account number', ' ACC-2 ');
+    type('First name', 'Augusta ');
+    type('Last name', ' King');
+    // typed back to the loaded value: not a change
+    type('Billing ZIP', '12345');
+    fireEvent.click(within(dialog).getByText('Resubmit'));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    const call = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({
+      transferPin: '654321',
+      carrierAccountNumber: 'ACC-2',
+      firstName: 'Augusta',
+      lastName: 'King',
+    });
+  });
+});
+
+// #498: the PIN list and a copy the browser refuses
+describe('Number Transfer PIN list and copy', () => {
+  function pinDialog() {
+    render(
+      <SystemContextProvider value={CONTEXT}>
+        <ToastProvider>
+          <TransferPinDialog productId={PRODUCT} onClose={vi.fn()} />
+        </ToastProvider>
+      </SystemContextProvider>,
+    );
+  }
+  const PINS = `GET /internal/v1/port/pin?product.id=${PRODUCT}&offset=0&limit=100`;
+  const issued = {
+    id: 'p0',
+    state: 'revoked',
+    number: '15551230001',
+    createdAt: '2026-11-01T10:00:00Z',
+    expiresAt: '2026-11-08T10:00:00Z',
+  };
+
+  it('lists the earlier PINs with their state and dates, never the PIN itself', async () => {
+    stubFetch({ [PINS]: () => json([issued], { total: 1 }) });
+    pinDialog();
+    expect(
+      await screen.findByText('15551230001 · revoked · issued 2026-11-01 · expires 2026-11-08'),
+    ).toBeTruthy();
+    expect(screen.queryByTestId('transfer-pin')).toBeNull();
+  });
+
+  it('says to copy the PIN by hand when the clipboard refuses', async () => {
+    vi.stubGlobal('navigator', {
+      clipboard: { writeText: vi.fn().mockRejectedValue(new Error('denied')) },
+    });
+    stubFetch({
+      [PINS]: () => json([], { total: 0 }),
+      'POST /internal/v1/port/pin': () =>
+        json({ ...issued, id: 'p1', state: 'active', pin: '482913' }, { status: 201 }),
+    });
+    pinDialog();
+    fireEvent.click(screen.getByText('Generate PIN'));
+    expect((await screen.findByTestId('transfer-pin')).textContent).toBe('482913');
+    fireEvent.click(screen.getByText('Copy'));
+    expect(await screen.findByText('Copy failed: select the PIN and copy it by hand')).toBeTruthy();
+    // the PIN stays on screen to copy by hand
+    expect(screen.getByTestId('transfer-pin').textContent).toBe('482913');
+  });
+});

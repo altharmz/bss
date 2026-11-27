@@ -29,6 +29,7 @@ describe('New offering validation', () => {
     [{ price: '-5' }, 'Price must be a positive number'],
     [{ price: '12.345' }, 'Price must be a positive number'],
     [{ price: 'abc' }, 'Price must be a positive number'],
+    [{ recurringPeriodType: 'hourly' }, 'Choose a supported charge period'],
     [{ recurringPeriodLength: '0' }, 'Charge period length must be a whole number from 1 to 1000'],
     [
       { recurringPeriodLength: '1.5' },

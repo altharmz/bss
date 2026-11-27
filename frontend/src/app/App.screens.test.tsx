@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { expectUi } from '../test/expectUi';
 import { CONTEXT, json, NAV_RUNS, pending, stubFetch } from '../test/fetch';
@@ -41,5 +41,40 @@ describe('App screens', () => {
     start('/ui-kit');
     await screen.findByRole('navigation', { name: 'Main' });
     expectUi('ui.kit');
+  });
+});
+
+// #498: the gallery's toast actions and its controlled money field work, not only render
+describe('UI kit gallery', () => {
+  async function gallery() {
+    start('/ui-kit');
+    await screen.findByRole('navigation', { name: 'Main' });
+    return expectUi('ui.kit');
+  }
+  const toastText = () =>
+    screen
+      .getAllByRole('status')
+      .filter((s) => !s.classList.contains('bss-toast-preview'))
+      .map((s) => s.querySelector('.toast-title')?.textContent);
+
+  it('runs the action of the preview toast and of a shown toast', async () => {
+    const kit = await gallery();
+    const preview = kit.querySelector('.bss-toast-preview') as HTMLElement;
+    fireEvent.click(within(preview).getByRole('button', { name: 'View' }));
+    await waitFor(() => expect(toastText()).toEqual(['Payment opened']));
+    fireEvent.click(within(kit).getByRole('button', { name: 'Show toast' }));
+    await waitFor(() => expect(toastText()).toEqual(['Payment recorded · 120.00 EUR']));
+    const shown = screen
+      .getAllByRole('status')
+      .find((s) => !s.classList.contains('bss-toast-preview')) as HTMLElement;
+    fireEvent.click(within(shown).getByRole('button', { name: 'View' }));
+    await waitFor(() => expect(toastText()).toEqual(['Payment opened']));
+  });
+
+  it('keeps what is typed in the controlled money field', async () => {
+    const kit = await gallery();
+    const amount = within(kit).getByLabelText(/^Amount\s*EUR$/) as HTMLInputElement;
+    fireEvent.change(amount, { target: { value: '99.95' } });
+    expect(amount.value).toBe('99.95');
   });
 });

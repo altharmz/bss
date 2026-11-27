@@ -608,3 +608,166 @@ describe('number inventory', () => {
     expect((screen.getByRole('button', { name: 'Next' }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
+
+describe('number inventory recovery', () => {
+  const posts = (fetchMock: ReturnType<typeof stubFetch>['fetchMock']) =>
+    fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST').map(([url]) => url);
+
+  it('requests carrier numbers from the screen and reads the inventory again', async () => {
+    const pooled = { ...stock, id: 'n9', value: '14155550100', name: 'MSISDN 14155550100' };
+    let after = false;
+    const { fetchMock } = stubFetch({
+      [`GET ${NUMBERS}?offset=0&limit=50`]: () => json(after ? [stock, pooled] : [stock]),
+      'POST /internal/v1/number/pool': () => {
+        after = true;
+        return json({ areaCode: '415', requested: 1, numbers: [pooled] }, { status: 201 });
+      },
+    });
+    inventory();
+    await screen.findByRole('button', { name: stock.value });
+    // Cancel sends nothing
+    fireEvent.click(screen.getByRole('button', { name: 'Request numbers' }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByText('Cancel'));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(posts(fetchMock)).toEqual([]);
+    fireEvent.click(screen.getByRole('button', { name: 'Request numbers' }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Area code'), { target: { value: '415' } });
+    fireEvent.change(within(dialog).getByLabelText('How many'), { target: { value: '1' } });
+    fireEvent.click(within(dialog).getByText('Request'));
+    expect(await screen.findByText('1 number added for area code 415')).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(await screen.findByRole('button', { name: pooled.value })).toBeTruthy();
+    expect(posts(fetchMock)).toEqual(['/internal/v1/number/pool']);
+  });
+
+  it('cancels a new number without sending it', async () => {
+    const { fetchMock } = stubFetch(inventoryOf([stock]));
+    inventory();
+    await screen.findByRole('button', { name: stock.value });
+    fireEvent.click(screen.getByText('New number'));
+    const create = screen.getByRole('dialog');
+    fireEvent.change(within(create).getByLabelText('Number'), { target: { value: '12025550999' } });
+    fireEvent.click(within(create).getByText('Cancel'));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(posts(fetchMock)).toEqual([]);
+  });
+
+  it('keeps a failed create open with the typed number and blocks a blind resubmit', async () => {
+    const { fetchMock } = stubFetch({
+      ...inventoryOf([stock]),
+      [`POST ${NUMBERS}`]: () => tmfError(409, 'number 12025550999 exists'),
+    });
+    inventory();
+    await screen.findByRole('button', { name: stock.value });
+    fireEvent.click(screen.getByText('New number'));
+    const create = screen.getByRole('dialog');
+    fireEvent.change(within(create).getByLabelText('Number'), { target: { value: '12025550999' } });
+    const primary = within(create).getByText('Create number');
+    fireEvent.click(primary);
+    expect(
+      await within(create).findByText(
+        /→ 409 number 12025550999 exists\. Close and check inventory before submitting again\.$/,
+      ),
+    ).toBeTruthy();
+    expect((within(create).getByLabelText('Number') as HTMLInputElement).value).toBe('12025550999');
+    expect(primary.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(primary);
+    expect(posts(fetchMock)).toEqual([NUMBERS]);
+  });
+
+  it('tells the operator to reopen a number whose lock failed, and blocks the toggle', async () => {
+    const { fetchMock } = stubFetch({
+      ...inventoryOf([stock]),
+      [`GET ${PATHS.products}?realizingResource.id=${N1}&offset=0&limit=100`]: () =>
+        json([], { total: 0 }),
+      [`PATCH ${NUMBERS}/${N1}`]: () => tmfError(503, 'Unavailable'),
+    });
+    inventory();
+    fireEvent.click(await screen.findByRole('button', { name: stock.value }));
+    const detail = screen.getByRole('dialog');
+    const lock = await within(detail).findByRole('button', { name: 'Lock' });
+    fireEvent.click(lock);
+    expect(
+      await within(detail).findByText(
+        /→ 503 Unavailable\. Reopen this number to check its state\.$/,
+      ),
+    ).toBeTruthy();
+    // the state shown is the last one read, and a second toggle cannot go out blind
+    expect(within(detail).getByText('unlocked')).toBeTruthy();
+    expect(lock.hasAttribute('disabled')).toBe(true);
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'PATCH')).toHaveLength(1);
+  });
+
+  it('shows a failed number picker read with Retry, which loads the options', async () => {
+    let failed = true;
+    stubFetch({
+      [`GET ${NUMBERS}?${AVAILABLE}&offset=0&limit=50`]: () =>
+        failed ? tmfError(503, 'Unavailable') : json([stock]),
+    });
+    render(<NumberPicker value="" onChange={() => {}} />);
+    expect(await screen.findByText('Failed to load numbers')).toBeTruthy();
+    expect(screen.queryByRole('combobox')).toBeNull();
+    failed = false;
+    fireEvent.click(screen.getByText('Retry'));
+    const input = await screen.findByRole('combobox', { name: 'Subscriber number' });
+    await waitFor(() => expect(input.hasAttribute('disabled')).toBe(false));
+    fireEvent.focus(input);
+    expect(screen.getByRole('option', { name: stock.value })).toBeTruthy();
+  });
+});
+
+describe('product number change outcomes', () => {
+  const productRoutes = (post: Handler) => ({
+    [`GET ${PATHS.products}/product`]: () =>
+      json({
+        id: 'product',
+        status: 'active',
+        productSpecification: { id: 'spec' },
+        realizingResource: [{ id: 'old', name: '12025550122' }],
+      }),
+    ['GET /tmf-api/productCatalogManagement/v5/productSpecification/spec']: () =>
+      json({ resourceSpecification: [{ id: 'msisdn' }] }),
+    ...inventoryOf([
+      stock,
+      { ...stock, id: 'old', value: '12025550122', allocationStatus: 'allocated' },
+    ]),
+    [`POST ${PATHS.orders}`]: post,
+  });
+  async function changeTo(onDone: () => void = () => {}) {
+    render(<ProductNumber accountId="account" productId="product" onDone={onDone} />);
+    fireEvent.click(screen.getByText('Subscriber number'));
+    const picker = await screen.findByRole('combobox', { name: 'Subscriber number' });
+    await waitFor(() => expect(picker.hasAttribute('disabled')).toBe(false));
+    pickOption(picker, stock.value);
+    fireEvent.click(screen.getByText('Change number'));
+  }
+
+  it('reports an accepted number change with the order to follow', async () => {
+    stubFetch(
+      productRoutes(() => json({ id: 'o7', state: 'inProgress', '@type': 'ProductOrder' })),
+    );
+    const done: unknown[][] = [];
+    await changeTo((...args: unknown[]) => done.push(args));
+    await waitFor(() =>
+      expect(done).toEqual([
+        [
+          'Subscriber number change accepted, the billing worker completes it shortly',
+          { id: 'o7', label: 'Subscriber number change' },
+        ],
+      ]),
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('offers only Refresh after an unanswered number change', async () => {
+    const { fetchMock } = stubFetch(productRoutes(() => tmfError(504, 'gateway timeout')));
+    await changeTo();
+    const dialog = screen.getByRole('dialog', { name: 'Subscriber number' });
+    expect(await within(dialog).findByText('Unsure whether it was saved.')).toBeTruthy();
+    expect(within(dialog).queryByText('Change number')).toBeNull();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Refresh' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
+  });
+});
