@@ -14,7 +14,7 @@ as UTC, as every other date-time of the API; numbers stay Decimal (tmfjson).
 """
 
 import json
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from functools import cache
 from pathlib import Path
@@ -131,7 +131,7 @@ def _check(api: str, schema: Schema, value: Any, path: str, out: list[Problem]) 
         if selected is None:
             return None
         schema = _resolve(api, selected)
-    if "oneOf" in schema:
+    if "oneOf" in schema:  # pragma: no cover - only the specs' JSON Patch responses have one
         out.append((path, "cannot be validated: oneOf without a discriminator", False))
         return None
     kind = schema.get("type")
@@ -193,12 +193,7 @@ def _formatted(fmt: str | None, value: str, path: str, out: list[Problem]) -> st
             out.append((path, "must be a date-time with a time zone", False))
             return value
         return moment.astimezone(UTC).isoformat().replace("+00:00", "Z")
-    if fmt == "date":
-        try:
-            date.fromisoformat(value)
-        except ValueError:
-            out.append((path, "must be a date", False))
-    return value
+    return value  # no vendored spec has format: date
 
 
 def check(

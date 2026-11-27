@@ -6,16 +6,19 @@ is the `log` adapter, which records what it was given."""
 
 from datetime import datetime, timedelta
 from decimal import Decimal as D
-from uuid import UUID
+from uuid import UUID, uuid4
 
+import psycopg
 import pytest
 from pydantic import ValidationError
 
 from app.config import Settings, settings
 from app.integrations import notify as notify_module
 from app.integrations.notify import adapter as sender
+from app.notify import events as notify_events
 from app.notify import service as notify_service
 from app.notify import templates
+from tests import timeline
 from tests.apiclient import total
 from tests.builders.care.notifications import (
     MSG,
@@ -144,6 +147,23 @@ def test_a_told_event_is_not_looked_up_again_on_the_next_tick(api, db_conn, numb
     go(api, db_conn, api.clock.today() + timedelta(days=1))
     assert counts(api)["low_balance"] == 1  # found again, told once
     assert told and not told & set(asked)
+
+
+def test_an_event_another_worker_told_first_is_not_told_again(
+    api, db_conn, numbered, migrated_db_url
+):
+    """Another worker commits the message between this pass's detection and its notify."""
+    assert counts(api)["low_balance"] == 1
+    top_up(api, db_conn, numbered.acc, "1", api.clock.today(), ticks=0)  # still low: 3.00
+    now = api.clock.now()
+    run = dict(notify_events.detectors(now, timeline.TZ))["accounts"]
+    (event,) = [e for e in run(db_conn) if e.type == "low_balance"]
+    db_conn.commit()  # the payment and the detector's reads: nothing held for the other worker
+    with psycopg.connect(migrated_db_url, options="-c lock_timeout=5s") as other:
+        assert notify_service.notify(other, event, now=now, tz=timeline.TZ)
+    assert notify_service.notify(db_conn, event, now=now, tz=timeline.TZ) == []
+    db_conn.commit()
+    assert counts(api)["low_balance"] == 2  # this episode's message, the other worker's
 
 
 def test_a_failed_renewal_and_the_renewal_after_a_top_up_are_each_told_once(api, db_conn, numbered):
@@ -591,6 +611,40 @@ def test_a_bad_message_is_refused(api, db_conn, change, status):
     response = api.post(MSG, body)
     assert response.status_code == status, response.text
     assert db_conn.execute("SELECT count(*) FROM notification_message").fetchone() == (0,)
+
+
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        (
+            {"messageType": "Email", "subject": "Hi"},
+            "an Email needs receiver.email (or a customer with an email contact)",
+        ),
+        (
+            {"characteristic": [{"name": "category", "value": "transactional"}] * 2},
+            "characteristic category is given twice",
+        ),
+    ],
+    ids=["email-without-address", "category-twice"],
+)
+def test_a_bad_message_names_its_problem(api, db_conn, change, message):
+    body = {
+        "messageType": "SMS",
+        "content": "x",
+        "receiver": [{"phoneNumber": PHONE}],
+        "sender": {"name": "ops"},
+    } | change
+    response = api.post(MSG, body)
+    assert response.status_code == 422, response.text
+    assert response.json()["message"] == message
+    assert db_conn.execute("SELECT count(*) FROM notification_message").fetchone() == (0,)
+
+
+def test_cancelling_an_unknown_message_is_not_found(api):
+    nobody = str(uuid4())
+    response = api.patch(f"{MSG}/{nobody}", {"state": "cancelled"})
+    assert response.status_code == 404, response.text
+    assert response.json()["message"] == f"communicationMessage {nobody} not found"
 
 
 def test_a_missing_required_attribute_is_refused(api):

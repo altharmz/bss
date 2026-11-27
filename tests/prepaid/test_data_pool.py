@@ -152,6 +152,19 @@ def test_three_lines_share_one_allowance_and_mark_80_and_100_once(api, db_conn, 
     db_conn.rollback()
 
 
+def test_a_pool_of_no_data_marks_no_threshold(api, db_conn, world, stub):
+    make_line(api, world.off, dataPool=1, dataAllowanceMb=0)
+    a = line_on(api, db_conn, world.off, world.acc, A)
+    at = timeline.midnight(api.clock.today()) + timedelta(hours=12)
+    batch = [Incoming("z-1", "data", 5 * MIB, at, msisdn=A)]
+    assert ingest_batch(db_conn, batch, now=api.clock.now(), tz=timeline.TZ) == 1
+    db_conn.commit()
+    assert pool_marks(db_conn) == [] and line_marks(db_conn) == []
+    data = data_entry(summary(api, a))
+    assert data["pooled"] is True and data["used"] == 5 * MIB
+    assert data["included"] == 0 and data["percent"] is None
+
+
 def test_a_line_outside_the_pool_is_tracked_alone(api, db_conn, pooled, stub):
     a = line_on(api, db_conn, pooled.off, pooled.acc, A)
     alone = line_on(api, db_conn, pooled.cheaper, pooled.acc, B)  # 1000 MB, not pooled

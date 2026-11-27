@@ -18,7 +18,7 @@ import io
 import re
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
 HEADER = [
     "msisdn",
@@ -82,10 +82,7 @@ class InvoiceLines:
 def _decimal(raw: str, where: str, *, places: int | None, negative: bool) -> Decimal:
     if not DECIMAL.match(raw):
         raise InvoiceError(f"{where}: {raw!r} is not a decimal number")
-    try:
-        value = Decimal(raw)
-    except InvalidOperation:
-        raise InvoiceError(f"{where}: {raw!r} is not a decimal number") from None
+    value = Decimal(raw)  # DECIMAL matched: a finite decimal literal
     if not negative and value < 0:
         raise InvoiceError(f"{where}: must not be negative")
     if places is not None and -value.as_tuple().exponent > places:

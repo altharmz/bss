@@ -33,6 +33,16 @@ def test_every_route_inherits_authentication():
     }
 
 
+def test_a_route_of_an_unknown_type_is_not_silently_skipped():
+    from fastapi import FastAPI
+    from starlette.routing import Mount
+
+    other = FastAPI(openapi_url=None, docs_url=None, redoc_url=None)
+    other.router.routes.append(Mount("/static", app=lambda scope, receive, send: None))
+    with pytest.raises(TypeError, match="unaccounted route type: Mount"):
+        list(routes(other))
+
+
 def test_metrics_is_token_protected_not_open(client, monkeypatch):
     # never in OPEN: authenticate() answers it with the bearer-token rule, not a session
     assert ("GET", "/metrics") not in OPEN
@@ -683,6 +693,21 @@ def test_the_bootstrap_cli_creates_an_mcp_user_without_a_forced_change(api, db_c
         "SELECT role, must_change_password FROM app_user WHERE username = 'robot'"
     ).fetchone()
     assert row == ("mcp", False)
+
+
+def test_the_bootstrap_cli_refuses_an_invalid_username(db_conn, monkeypatch, capsys):
+    import sys
+
+    from app import users
+
+    monkeypatch.setattr(sys, "argv", ["app.users", "create", "has space"])
+    with pytest.raises(SystemExit) as exited:
+        users.main()
+    assert exited.value.code == 2
+    assert "error: invalid username" in capsys.readouterr().err
+    assert db_conn.execute(
+        "SELECT count(*) FROM app_user WHERE username = 'has space'"
+    ).fetchone() == (0,)
 
 
 # --- the CLI's disable, which retires the smoke users (issue #174) ---

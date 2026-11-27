@@ -49,3 +49,13 @@ def test_a_connection_the_server_ended_is_replaced(pooled):
     with db.connection() as conn:
         assert _backend(conn) != first
     assert db.ping()
+
+
+def test_a_connection_ended_inside_a_transaction_is_given_back_and_replaced(pooled):
+    """The rollback on the way out fails on the broken connection; the pool discards it."""
+    with db.connection() as conn:
+        first = _backend(conn)  # a transaction is open
+        with psycopg.connect(pooled, autocommit=True) as admin:
+            admin.execute("SELECT pg_terminate_backend(%s)", (first,))
+    with db.connection() as conn:
+        assert _backend(conn) != first

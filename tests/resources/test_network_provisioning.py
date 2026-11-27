@@ -369,6 +369,43 @@ def test_profile_characteristics_take_their_own_types(api, world):
     assert other.status_code == 200, other.text
 
 
+def test_profile_refusals_name_the_characteristic(api, world):
+    href = world.off["productSpecification"]["href"]
+    valueless = characteristics()
+    del valueless[0]["characteristicValueSpecification"][0]["value"]
+    missing = api.patch(href, {"productSpecCharacteristic": valueless})
+    assert missing.status_code == 400, missing.text
+    assert missing.json()["message"] == (
+        "productSpecCharacteristic: dataAllowanceMb: the network profile takes integers of"
+        " zero or more"
+    )
+    empty = characteristics()
+    empty[0]["characteristicValueSpecification"] = []
+    none = api.patch(href, {"productSpecCharacteristic": empty})
+    assert none.status_code == 400, none.text
+    assert none.json()["message"] == (
+        "productSpecCharacteristic: dataAllowanceMb: at least one"
+        " characteristicValueSpecification is needed"
+    )
+    make_line(api, world.off)
+    use = {
+        "@type": "ProductSpecCharacteristicValueUse",
+        "name": "roamingDataMb",
+        "valueType": "integer",
+        "productSpecCharacteristicValue": [
+            {"@type": "IntegerCharacteristicValueSpecification", "valueType": "integer",
+             "value": 500}
+        ],
+    }  # fmt: skip
+    undeclared = api.patch(world.off["href"], {"prodSpecCharValueUse": [use]})
+    assert undeclared.status_code == 400, undeclared.text
+    assert undeclared.json()["message"] == (
+        "prodSpecCharValueUse: roamingDataMb: the productSpecification declares no such"
+        " characteristic"
+    )
+    assert "prodSpecCharValueUse" not in api.get(world.off["href"]).json()
+
+
 def test_a_send_is_idempotent_across_a_worker_restart(api, db_conn, world, stub, monkeypatch):
     from app.worker import db as worker_db
 

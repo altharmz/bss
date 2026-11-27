@@ -59,12 +59,6 @@ def error_response(
     return TmfJSONResponse(body, status_code=status, headers=headers)
 
 
-def describe_validation(errors: list[dict]) -> tuple[int, str]:
-    """Status and message for Pydantic errors: an unknown attribute is a 400, anything
-    else (missing, wrong type, bad value) a 422."""
-    return _describe(validation_problems(errors))
-
-
 # (where, message, unknown): one problem of a request body
 Problem = tuple[str, str, bool]
 

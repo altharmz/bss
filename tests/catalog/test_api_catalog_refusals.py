@@ -89,6 +89,11 @@ def test_a_usage_zone_is_one_known_zone_on_a_usage_price(api):
         (zone_use("mars"), "prodSpecCharValueUse usageZone: one value of domestic"),
         (zone_use("roaming", "domestic"), "prodSpecCharValueUse usageZone: one value of"),
         (zone_use("roaming"), "usageZone is only for a usage price"),
+        # another characteristic before it is passed over
+        (
+            [{**zone_use("5G")[0], "name": "network"}, *zone_use("roaming")],
+            "usageZone is only for a usage price",
+        ),
     ]:
         refused(api.patch(monthly["href"], {"prodSpecCharValueUse": use}), 422, message)
     assert api.get(monthly["href"]).json() == monthly

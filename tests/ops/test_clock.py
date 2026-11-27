@@ -41,3 +41,10 @@ def test_fixed_clock_rejects_naive_datetimes():
 
 def test_system_clock_is_timezone_aware():
     assert SystemClock().now().tzinfo is not None
+
+
+def test_a_fixed_clock_cannot_be_set_to_a_naive_datetime():
+    clock = FixedClock(datetime(2026, 1, 1, tzinfo=UTC))
+    with pytest.raises(ValueError, match="timezone-aware"):
+        clock.set(datetime(2026, 1, 2))
+    assert clock.now() == datetime(2026, 1, 1, tzinfo=UTC)

@@ -4,7 +4,7 @@ references, and the helpers that turn database rows into response bodies."""
 import re
 from collections.abc import Callable
 from datetime import UTC, date, datetime, time
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any, ClassVar, Literal
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -143,10 +143,7 @@ class Money(TmfModel):
         amount = Decimal(value)
         if not amount.is_finite() or abs(amount) >= MONEY_LIMIT:
             raise ValueError("out of range for an amount")
-        try:
-            cents = amount.quantize(CENT)
-        except InvalidOperation as exc:
-            raise ValueError("out of range for an amount") from exc
+        cents = amount.quantize(CENT)  # below MONEY_LIMIT: 12 digits, within the precision
         if cents != amount:
             raise ValueError("must have at most 2 decimal places (amounts are never rounded)")
         return cents
@@ -469,6 +466,6 @@ def same(sent: Any, actual: Any) -> bool:
             and not isinstance(sent, bool)
             and Decimal(sent) == Decimal(actual)
         )
-    if isinstance(actual, UUID):
+    if isinstance(actual, UUID):  # pragma: no cover - the body builders put ids in as strings
         return sent == str(actual)
     return sent == actual

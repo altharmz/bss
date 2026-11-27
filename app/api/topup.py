@@ -454,7 +454,7 @@ def patch_topup_balance(
             row = repo.cancel_topup(conn, row, operator=operator, now=now)
             try:
                 repo.check_bounds(conn)
-            except pg_errors.CheckViolation:
+            except pg_errors.CheckViolation:  # pragma: no cover - payment_in_use found it first
                 raise conflict("the top-up's money is in use: it cannot be reversed") from None
         new = topup_body(conn, row)
         if data.status != before["status"]:

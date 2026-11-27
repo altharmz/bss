@@ -420,6 +420,19 @@ def test_the_offering_kind_is_validated_and_only_a_plan_has_a_recurring_price(ap
     assert switched.status_code == 422
 
 
+def test_an_unknown_offering_kind_is_a_400_naming_the_kinds(api):
+    plain = offering(api, "Plain", [])
+    response = api.patch(
+        plain["href"], {"productOfferingCharacteristic": [kind_characteristic("bundle")]}
+    )
+    assert response.status_code == 400, response.text
+    assert response.json()["message"] == (
+        "productOfferingCharacteristic: offeringKind: one value of"
+        " ['plan', 'addOn', 'payAsYouGo'] is expected"
+    )
+    assert "productOfferingCharacteristic" not in api.get(plain["href"]).json()
+
+
 # --- the quote before ordering (issue #212) ---
 
 

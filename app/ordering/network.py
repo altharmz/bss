@@ -27,9 +27,8 @@ class Planned:
 
 
 def offering_profile(conn, offering_id: UUID | None) -> dict[str, Any] | None:
-    """The effective profile of a network line's offering; None for any other."""
-    if offering_id is None:
-        return None
+    """The effective profile of a network line's offering; None for any other (and for no
+    offering: the lookup of None finds none)."""
     offering = catalog_repo.get_product_offering(conn, offering_id)
     if offering is None or offering["product_specification_id"] is None:
         return None

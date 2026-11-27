@@ -210,3 +210,12 @@ def test_json_patch_query_matches_booleans_as_true_and_false(api):
     # a JSON true is never the number 1
     one = [{"op": "test", "path": "/contactMedium/0/preferred", "value": 1}]
     assert patch(api, href, one).status_code == 409
+
+
+def test_malformed_json_in_a_json_patch_is_a_400(api, account):
+    response = api.request(
+        "PATCH", account["href"], content=b"[{", headers={"Content-Type": JSON_PATCH}
+    )
+    assert response.status_code == 400, response.text
+    assert response.json()["message"].startswith("malformed JSON: ")
+    assert api.get(account["href"]).json() == account

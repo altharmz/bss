@@ -288,3 +288,13 @@ def test_event_ids_are_unique_and_payloads_are_exact_json(api, db_conn, everythi
         "SELECT payload::text FROM event WHERE event_type = 'PaymentCreateEvent'"
     ).fetchone()[0]
     assert '"value": 19.90' in text  # an exact decimal, as the API sends it
+
+
+def test_an_event_type_the_api_does_not_define_is_a_programming_error(api, db_conn):
+    from app.events import emit
+
+    subscribe(api, "TMF632")
+    with pytest.raises(ValueError, match="TMF632 has no IndividualExplodeEvent"):
+        emit.emit(db_conn, "TMF632", "individual", "Explode", {}, at=api.clock.now())
+    db_conn.rollback()
+    assert stored(db_conn) == []

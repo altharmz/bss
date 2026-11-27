@@ -8,6 +8,7 @@ import time
 from datetime import UTC, datetime, timedelta
 
 import httpx2
+import psycopg
 import pytest
 from fastapi.testclient import TestClient
 from starlette.applications import Starlette
@@ -330,6 +331,19 @@ def test_no_poller_when_the_interval_is_zero(monkeypatch):
     assert logsetup.start_db_poller(lambda: AT) is None
 
 
+def test_the_app_stops_its_poller_on_shutdown(monkeypatch):
+    stopped = []
+
+    class Poller:
+        def stop(self):
+            stopped.append(True)
+
+    monkeypatch.setattr(logsetup, "start_db_poller", lambda now: Poller())
+    with TestClient(app):
+        assert stopped == []
+    assert stopped == [True]
+
+
 # --- the connector ---
 
 
@@ -411,3 +425,30 @@ def test_nothing_secret_is_logged_when_debug_comes_from_the_database(raw, db_con
     finally:
         source.close()
         root.removeHandler(handler)
+
+
+def test_the_db_source_reconnects_after_its_connection_is_lost(api, db_conn):
+    stored = db_conn.execute("SELECT base_level, debug_until FROM log_setting").fetchone()
+    db_conn.commit()
+    source = DbLevelSource(settings.database_url)
+    try:
+        assert source() == tuple(stored)
+        db_conn.execute("SELECT pg_terminate_backend(%s)", (source.conn.info.backend_pid,))
+        db_conn.commit()
+        with pytest.raises(psycopg.OperationalError):
+            source()
+        assert source.conn is None  # dropped: the next poll connects again
+        assert source() == tuple(stored)
+    finally:
+        source.close()
+
+
+def test_closing_a_broken_connection_never_raises():
+    class Broken:
+        def close(self):
+            raise OSError("connection already gone")
+
+    source = DbLevelSource("postgresql://unused")
+    source.conn = Broken()
+    source.close()
+    assert source.conn is None

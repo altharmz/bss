@@ -15,6 +15,7 @@ from app.config import Settings
 from app.integrations import network
 from app.integrations.network.stub import StubNetwork
 from app.integrations.network.usage_load import (
+    MAX_QUEUED,
     LoadRefused,
     UsageLoad,
     assigned_numbers,
@@ -93,6 +94,34 @@ def test_a_pinned_hour_keeps_that_hours_rate_at_any_time_of_day():
     assert len(gen.due(queued=0)) == 0
     with pytest.raises(ValueError, match="0-23"):
         UsageLoad(23.0, app_env="test", clock=clock, tz=MSK, numbers=lambda _day: [], hour=24)
+
+
+def test_a_rate_must_be_positive():
+    with pytest.raises(ValueError, match="the usage rate must be positive"):
+        load(FixedClock(local(12)), rate=0.0)
+
+
+def test_nothing_due_without_numbers_or_a_whole_record(caplog):
+    clock = FixedClock(local(12))
+    tiny = load(clock, rate=0.001)
+    clock.set(local(12, 0) + timedelta(seconds=1))
+    assert tiny.due(queued=0) == [] and tiny.carry > 0  # the fraction is carried
+    nobody = load(clock, numbers=())
+    clock.set(local(12, 10))
+    caplog.set_level("WARNING", "app.network.usage_load")
+    assert nobody.due(queued=0) == []
+    assert re.search(r"no assigned MSISDN, \d+ records not made", caplog.text)
+
+
+def test_a_full_queue_drops_what_does_not_fit_and_counts_it(caplog):
+    clock = FixedClock(local(12))
+    gen = load(clock, rate=1.0)
+    clock.set(local(12, 10))
+    count = int(expected(1.0, local(12), local(12, 10), MSK))
+    caplog.set_level("WARNING", "app.network.usage_load")
+    records = gen.due(queued=MAX_QUEUED - 5)
+    assert len(records) == 5 and gen.dropped == count - 5
+    assert f"{count - 5} records dropped (queue full)" in caplog.text
 
 
 def test_the_stub_serves_generated_records_until_acknowledged_and_logs_the_lag(caplog):

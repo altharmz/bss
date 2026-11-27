@@ -2,6 +2,7 @@
 an order or PATCH that would leave a bare reference on a product taking no numbers is refused,
 so the number never looks free while a product names it."""
 
+import json
 from datetime import timedelta
 from uuid import uuid4
 
@@ -116,3 +117,46 @@ def test_the_cleanup_command_leaves_claimed_numbers_alone(api, db_conn):
     item["product"] = {"@type": "ProductRefOrValue", "realizingResource": refs(number(api)["id"])}
     assert api.post(ORDER, apidata.order_body(account, item)).json()["state"] == "completed"
     assert number_refs.unbacked(db_conn) == []
+
+
+def unbacked_product(api, db_conn):
+    """A product whose only realizingResource names a number it holds no claim on."""
+    from psycopg.types.json import Jsonb
+
+    offering, account = plain_shop(api)
+    product = apidata.product_of(
+        api, api.post(ORDER, apidata.order_body(account, apidata.add_item(offering))).json()
+    )
+    uid = number(api)["id"]
+    db_conn.execute(
+        "UPDATE product SET details = details || %s WHERE id = %s",
+        (Jsonb({"realizingResource": refs(uid)}), product["id"]),
+    )
+    db_conn.commit()
+    return product, uid
+
+
+def run_cli(monkeypatch, *argv):
+    import runpy
+    import sys
+
+    monkeypatch.setattr(sys, "argv", ["app.number_refs", *argv])
+    monkeypatch.delitem(sys.modules, "app.number_refs", raising=False)  # no runpy warning
+    runpy.run_module("app.number_refs", run_name="__main__", alter_sys=False)
+
+
+def test_the_cleanup_command_reports_then_applies(api, db_conn, monkeypatch, capsys):
+    product, uid = unbacked_product(api, db_conn)
+    run_cli(monkeypatch)
+    report = capsys.readouterr().out.splitlines()
+    assert json.loads(report[0])["product_id"] == product["id"]
+    assert json.loads(report[0])["number_id"] == uid
+    assert report[1:] == ["1 unbacked reference(s); run with --apply to remove them"]
+    assert api.get(product["href"]).json()["realizingResource"][0]["id"] == uid
+
+    run_cli(monkeypatch, "--apply")
+    assert capsys.readouterr().out.splitlines()[-1] == "removed 1 reference(s) from 1 product(s)"
+    assert "realizingResource" not in api.get(product["href"]).json()
+
+    run_cli(monkeypatch, "--apply")
+    assert capsys.readouterr().out == "no unbacked number references\n"

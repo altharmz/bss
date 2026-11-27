@@ -9,7 +9,7 @@ import pytest
 
 from app.config import settings
 from app.integrations.notify import adapter as sender
-from tests import apidata
+from tests import apidata, factories
 from tests.apiclient import total
 from tests.apidata import ACCOUNT, CUSTOMER, ORDER, PARTY
 from tests.builders.care.account_security import PIN, SEC, audit, head, set_pin
@@ -289,6 +289,52 @@ def test_a_contact_change_needs_a_valid_pin_on_a_party_a_customer_and_an_account
     assert sorted((e["outcome"], e["reason"]) for e in entries) == [
         *[("done", None)] * 3, *[("refused", "pinInvalid")] * 3, *[("refused", "pinRequired")] * 3,
     ]  # fmt: skip
+
+
+def test_an_organization_contact_change_needs_the_pin_and_is_audited(api, db_conn, line):
+    """A protected customer engaged by an organization: its contact change is gated too."""
+    org = api.post(f"{PARTY}/organization", {"@type": "Organization", "name": "Acme"}).json()
+    db_conn.execute("UPDATE customer SET party_id = %s WHERE id = %s", (org["id"], line.customer))
+    db_conn.commit()
+    url = f"{PARTY}/organization/{org['id']}"
+    refused = api.patch(url, {"contactMedium": MEDIUM})
+    assert refused.status_code == 403 and refused.json()["code"] == "pinRequired", refused.text
+    ok = api.patch(url, {"contactMedium": MEDIUM}, headers=head(PIN))
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["contactMedium"][0]["emailAddress"] == "new@example.org"
+    entries = audit(api, action="contact_change")
+    assert sorted((e["outcome"], e["reason"]) for e in entries) == [
+        ("done", None), ("refused", "pinRequired"),
+    ]  # fmt: skip
+
+
+def test_a_party_of_two_protected_customers_is_audited_without_telling_either(api, db_conn, line):
+    """The PIN of either customer verifies; the entry names neither customer nor account,
+    so the security alert has nobody to go to and is not made."""
+    other = apidata.account(api)
+    db_conn.execute(
+        "UPDATE billing_account SET rating_type = 'prepaid' WHERE id = %s", (other["id"],)
+    )
+    factories.product(db_conn, other["id"], line.world.off["id"], api.clock.today())
+    party = party_of(db_conn, line.customer)
+    db_conn.execute(
+        "UPDATE customer SET party_id = %s WHERE id = %s", (party, customer_of(db_conn, other))
+    )
+    db_conn.commit()
+    url = f"{PARTY}/individual/{party}"
+    assert api.patch(url, {"contactMedium": MEDIUM}, headers=head(PIN)).status_code == 200
+    (entry,) = audit(api, action="contact_change")
+    assert entry["outcome"] == "done"
+    assert entry.get("customer") is None and entry.get("billingAccount") is None, entry
+    assert not [key for key in fetched(db_conn, api.clock.now(), "security")
+                if key == f"security:{entry['id']}"]  # fmt: skip
+
+
+def test_a_malformed_party_id_is_not_found_before_any_pin_check(api, line):
+    response = api.patch(f"{PARTY}/individual/not-a-uuid", {"contactMedium": MEDIUM})
+    assert response.status_code == 404, response.text
+    assert response.json()["message"] == "individual not-a-uuid not found"
+    assert audit(api, action="contact_change") == []
 
 
 def test_a_change_that_leaves_the_contact_as_it_is_needs_no_pin(api, db_conn, line):

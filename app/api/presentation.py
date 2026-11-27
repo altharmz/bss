@@ -96,10 +96,6 @@ def resource_body(row, resource):
     ) | meta_body(row)
 
 
-def structure_body(conn, uid):
-    return structure_from(repo.preferences(conn, uid))
-
-
 def structure_from(pref):
     """A bill structure from an account's preferences (repo.preferences / preferences_of)."""
     body = {}

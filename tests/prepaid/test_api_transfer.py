@@ -147,6 +147,23 @@ def test_refusals_are_stored_failed_without_a_hold_or_a_command(api, db_conn):
     assert types(db_conn, "TMF654") == ["TransferBalanceFailureEvent"] * len(cases)
 
 
+def test_a_receiver_product_of_the_sender_is_refused(api, db_conn):
+    tx, rx = pair(api, db_conn)
+    (product,) = db_conn.execute(
+        "SELECT id FROM product WHERE billing_account_id = %s AND parent_product_id IS NULL",
+        (tx.id,),
+    ).fetchone()
+    db_conn.commit()
+    response = post(api, tx, rx, 5, receiverProduct={"id": str(product)})
+    assert response.status_code == 201, response.text
+    refused = response.json()
+    assert refused["status"] == "failed"
+    assert (
+        "receiverProduct is not a live product of the receiving account" in (refused["description"])
+    )
+    assert stored(db_conn)[:2] == (1, 0) and reserved(api, tx) == 0
+
+
 @pytest.mark.parametrize("state, who", [("Closed", "tx"), ("Suspended", "tx"), ("Closed", "rx")])
 def test_account_states_refuse_a_transfer(api, db_conn, state, who):
     tx, rx = pair(api, db_conn)

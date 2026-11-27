@@ -6,6 +6,8 @@ from datetime import timedelta
 from decimal import Decimal as D
 from uuid import UUID, uuid4
 
+import pytest
+
 from app.repository import funding
 from tests import apidata
 from tests.apidata import ORDER
@@ -123,6 +125,19 @@ def test_malformed_holds_store_nothing(api, db_conn):
         response = post(api, acc, 1, **over)
         assert response.status_code in (400, 422), (over, response.text)
     assert db_conn.execute("SELECT count(*) FROM balance_action").fetchone()[0] == 1  # the top-up
+
+
+@pytest.mark.parametrize(
+    "period, where",
+    [({"endDateTime": "tomorrow"}, "validFor.endDateTime"),
+     ({"startDateTime": "2026-01-01T09:00:00"}, "validFor.startDateTime")],
+)  # fmt: skip
+def test_a_period_needs_date_times_with_a_zone(api, db_conn, period, where):
+    _, acc = prepaid(api, db_conn)
+    response = post(api, acc, 1, validFor=period)
+    assert response.status_code == 422, response.text
+    assert response.json()["message"] == f"{where}: must be a date-time with a time zone"
+    assert db_conn.execute("SELECT count(*) FROM balance_action").fetchone() == (0,)
 
 
 def test_a_hold_stops_a_debit_until_it_is_cancelled(api, db_conn):
