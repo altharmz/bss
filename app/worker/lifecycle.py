@@ -178,7 +178,9 @@ def _due(product: Row, funded: bool, since: date | None, settings, today: date) 
     if funded:
         return "resume" if suspended else None
     if since is None:
-        return None
+        # Unfunded is only a plan past its grant (since = the grant's end) or a pay-as-you-go
+        # line at zero, whose balance_zero_since `_account` set before this call.
+        return None  # pragma: no cover - an unfunded line always has its first unfunded day
     due = plan.schedule(since, settings)
     if today >= due.deactivate_on:
         return "deactivate"

@@ -452,3 +452,30 @@ def test_partitions_older_than_13_months_are_dropped(db_conn, worker):
     assert result.dropped == ["usage_record_y2025m09"]
     names = partition_names(db_conn)
     assert "usage_record_y2025m09" not in names and "usage_record_y2025m10" in names
+
+
+def test_each_batch_gets_one_heartbeat(db_conn, worker):
+    """#511: the liveness file is touched after every batch, deleting or not."""
+    beats = []
+    result = housekeep(
+        worker, clock=FixedClock(NOW), tz=TZ, pause=no_pause, heartbeat=lambda: beats.append(1)
+    )
+    assert result.finished and len(beats) == len(repo.RULES)  # one short batch per rule
+
+
+def test_a_busy_usage_record_leaves_the_partitions_for_the_next_wake_up(
+    db_conn, worker, monkeypatch
+):
+    """#511: a lock not granted in time is no failure: the retention rules still run and the
+    next wake-up makes the partitions."""
+    monkeypatch.setattr(housekeeping, "DDL_LOCK_TIMEOUT", "100ms")
+    clock = FixedClock(datetime(2033, 2, 11, 4, 10, tzinfo=TZ))
+    db_conn.execute("LOCK TABLE usage_record IN ACCESS EXCLUSIVE MODE")  # held until commit
+    try:
+        busy = housekeep(worker, clock=clock, tz=TZ, pause=no_pause)
+    finally:
+        db_conn.rollback()
+    assert busy.created == [] and busy.dropped == [] and busy.finished
+    assert "usage_record_y2033m02" not in partition_names(db_conn)
+    free = housekeep(worker, clock=clock, tz=TZ, pause=no_pause)
+    assert free.created == [date(2033, 2, 1), date(2033, 3, 1), date(2033, 4, 1)]
