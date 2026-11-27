@@ -319,7 +319,8 @@ Delivering #197 took two human approvals, an extra full-suite run and an extra h
   keeps its copy: never an older one than the task's own; `make sync-task` brings master's in.
 - **The full-suite record** (`scripts/full_suite.py`). A passing `make test` on a clean tree
   writes `{head, tree, passed_at}` to `.testmon/full-suite-passed.json`; a failing run, a
-  dirty tree or a tree that changed during the run writes nothing. `check-pr` reports
+  dirty tree or a tree that changed during the run writes nothing. (Since #476 any content
+  on disk is recorded, and the hook reads the record: see the next section.) `check-pr` reports
   `full_suite`. "Required" reuses the hook's selection: a PR with a path a backend test may
   depend on (`hook_selection.backend`), so docs, harness, UI and CI PRs are `not-required`.
   That is wider than "billing, migrations or the API", but nearly every `app/` path is one of
@@ -330,6 +331,47 @@ Delivering #197 took two human approvals, an extra full-suite run and an extra h
 - **The flaky worker test.** `wait_until_blocked` in `tests/worker/test_worker_signals.py` polled a
   fixed 10 s; a hook run beside another slot's tests took longer. It now waits up to 60 s and
   returns as soon as the worker blocks.
+
+## One full run per change, and an import check first (2026-11-27, #476)
+
+#467 (PR #475) ran the backend suite twice on the same code. A change to `app/auth.py` made
+testmon select 2,065 of 2,986 tests, so the hook was close to a full run (13 minutes); it
+failed on an import cycle, the retry passed (about 10 minutes), and the `make test` the PR
+then required ran all of it again on the commit the hook had just tested (10 minutes). The
+cycle showed only when `app.auth` was imported first, as the worker does: all 6 failures
+were worker processes crashing at startup, found at the end of the run.
+
+- **`make test` counts for the commit that holds exactly what it tested.** The record now
+  names the tree of the content on disk (HEAD plus every tracked and untracked file, not
+  ignored, written through a throwaway index), not HEAD's tree, so `make test` can run
+  before `make commit`. The hook asks `full_suite.py covers`: when the record's tree is the
+  staged tree, it plans no smoke, affected, data-reader or whole-suite run and skips the
+  harness, deploy and hook-case suites (`make test` ran all of them). Only the marked tests
+  the staged paths bring back (`make test-marked`) still run, since `make test` leaves them
+  out. `check-pr` finds the tested commit as the newest one on the branch with the recorded
+  tree; merges from `master` after it keep the #390 rule. A commit of part of the tested
+  work, or anything changed after, has another tree: the usual plan runs, and `check-pr`
+  says `stale`.
+- **The hook's own whole-suite run is recorded too.** When the hook runs `make test-recorded`
+  (a `FULL` path) and it passes, `full_suite.py record-index` writes the record for the staged
+  tree, so `check-pr` reports `passed` with no `make test` on the same content. A retry of
+  the commit after a later check failed gets the covered plan.
+- **`make test` does not record testmon.** A covered commit leaves testmon's record where the
+  previous commit left it, so the next commit's `make test-changed` also selects the tests
+  the covered commit affected: more tests, never fewer. Recording (`--testmon-noselect`)
+  would add testmon's tracing to every `make test` and to the nightly CI run, for a commit
+  that usually comes last before the PR.
+- **Option (a) was not taken**: a whole-suite run in the hook for every commit that touches
+  billing, migrations or the API would cost a full run per commit of a multi-commit task, where
+  only the last one needs it. With the record, the agent runs `make test` once, on the
+  finished work, and earlier commits keep the affected-tests plan.
+- **The import check** (`make import-check`): `app.auth`, `app.main`, `app.worker.__main__`
+  and `bss_mcp.main`, each imported first in a fresh interpreter in the dev image, without
+  the database (about 15 s, most of it the container start). The hook runs it before lint
+  and every suite when an `app/`, `bss_mcp/` or `FULL` path is staged
+  (`hook_selection.imports`), and stops on a failure with its traceback. It was preferred to
+  `pytest --maxfail`, which stops at an arbitrary test and leaves testmon's retry with a
+  partial picture.
 
 ## Tests in the hook: smoke plus affected
 
@@ -373,7 +415,8 @@ it had not touched, and a retry after its one failure paid all of it again. Now:
   usual plan, and testmon selects the tests that failed and the ones the fix affects. Any
   other content of those files, or a missing stamp, is the whole suite again.
 - `make test-recorded` has no `runtime-check` or `deploy-check`: the hook runs those by its
-  own path rules, once. `make test` (by hand, nightly) is unchanged.
+  own path rules, once. `make test` (by hand, nightly) is unchanged. (Since #476 a passing
+  `make test-recorded` in the hook is also the full-suite record of the staged tree.)
 
 **A merge commit chooses from the task's side** (2026-11-15, #366). `make sync-task` merges
 `origin/master` into the task branch, and the hook of that merge commit used to choose its

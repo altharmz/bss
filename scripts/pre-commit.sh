@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Invoked by the shared worktree dispatcher installed by `make hooks`.
 # The one local test run of a development cycle: lint + tests before every
-# commit (the guard blocks --no-verify): lint, the smoke tests and the tests the change
-# affects, not the full suite. Deploying does not test again.
+# commit (the guard blocks --no-verify): an import check, lint, the smoke tests and the tests
+# the change affects, not the full suite - none of the suites when a passing full run is
+# recorded for exactly the staged content (#476). Deploying does not test again.
 set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
@@ -63,6 +64,7 @@ check_tree() {
     fail "scripts/hook_selection.py paths: ${selected}"
 }
 selection="$(dirname "${BASH_SOURCE[0]}")/hook_selection.py"
+full_suite="$(dirname "${BASH_SOURCE[0]}")/full_suite.py"
 check_tree
 if merging="$(git rev-parse -q --verify --short MERGE_HEAD)"; then
   printf 'selection: merge with %s, %s incoming paths left out\n' "$merging" \
@@ -100,6 +102,15 @@ if ! flock -n 9; then
 fi
 export BSS_TEST_LOCK_HELD=1
 
+# First, in seconds: each entry point (and app.auth) imported first in a fresh interpreter
+# (#476). An import cycle that shows only in one import order once surfaced 13 minutes into
+# the suite, as worker processes crashing at startup; this stops on it with the traceback.
+imports="$(python3 -B "$selection" imports 2>&1)" ||
+  fail "scripts/hook_selection.py imports: ${imports}"
+if [[ "$imports" == run ]]; then
+  run make import-check || fail "make import-check: the traceback above names the import that failed"
+fi
+
 # run gives every check </dev/null: docker compose run only allocates a pty when stdin is
 # actually a tty, so this keeps the hook from ever blocking on stdin in a non-interactive
 # context (GUI clients, editors) as well as a plain terminal commit.
@@ -114,6 +125,10 @@ run make lint || fail "make lint"
 # partial run records nothing, and `all` is the whole of make runtime-check.
 suite() {
   local state chosen
+  if [[ -n "$covered" ]]; then
+    echo "$1: passed in the full run on this content; skipped" | tee -a "$log"
+    return 0
+  fi
   state="$(python3 -B "$selection" suite "$1" 2>&1)" ||
     fail "scripts/hook_selection.py suite $1: ${state}"
   case "$state" in
@@ -147,9 +162,23 @@ suite() {
 # `make test` is nightly in CI and by hand (2026-10-28).
 # No backend test at all for a commit no backend test can depend on - the harness, the
 # docs, the UI, CI (#369) - and no second smoke run on backend content it passed on.
-plan="$(python3 -B "$selection" plan 2>&1)" ||
+# A passing full run recorded for exactly the staged tree (`make test` on the content being
+# committed, or this hook's own whole-suite run on an earlier attempt; scripts/full_suite.py,
+# #476) leaves only the marked tests it left out: no smoke, affected, whole-suite or script
+# suite run again. A whole-suite run this hook makes and passes is recorded the same way,
+# so `make check-pr` accepts it without `make test` on the same content.
+covered=""
+if found="$(python3 -B "$full_suite" covers 2>&1)"; then
+  covered=1
+  echo "$found" | tee -a "$log"
+elif [[ -n "$found" ]]; then
+  fail "scripts/full_suite.py covers: ${found}"
+fi
+plan="$(python3 -B "$selection" plan ${covered:+covered} 2>&1)" ||
   fail "scripts/hook_selection.py plan: ${plan}"
-[[ -n "$plan" ]] || echo "backend tests: no selected path can affect them; skipped" | tee -a "$log"
+if [[ -z "$plan" && -z "$covered" ]]; then
+  echo "backend tests: no selected path can affect them; skipped" | tee -a "$log"
+fi
 while IFS= read -r step; do
   [[ -n "$step" ]] || continue
   if [[ "$step" == test-smoke ]]; then
@@ -158,6 +187,9 @@ while IFS= read -r step; do
   fi
   # shellcheck disable=SC2086 # a step is a make target and its variables
   run make $step || fail "make ${step}"
+  if [[ "$step" == test-recorded* ]]; then
+    run python3 -B "$full_suite" record-index || fail "scripts/full_suite.py record-index"
+  fi
 done <<<"$plan"
 
 # The generated docs/api and docs/db (~7 s), when their sources change: regenerated here,
