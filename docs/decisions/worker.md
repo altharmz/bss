@@ -16,7 +16,9 @@ recorded below). What exists so far (slice b: b1, b2, b3; slices c, h, d, e):
 
 - **Ownership** (`db.py`): one connection per worker (W1: autocommit, `connect_timeout`
   10, keepalives 30/10/3, `lock_timeout` 30s); the session advisory lock on it says who
-  owns billing - the lock and the work fail together.
+  owns billing - the lock and the work fail together. The worker and API pool share a JSON
+  loader that reads fractions as Decimal, preserving stored tax amounts and rates when a
+  later run validates earlier charges (#510).
 - **`start_run`** (`runs.py`): ownership first (`RunInProgress` otherwise); then new /
   `AlreadyCompleted` / reopened (failed, attempt + 1) / taken over (running, owner gone).
 - **One date, account by account** (`process.py`, `DateRun.step()`): members = accounts
