@@ -305,8 +305,10 @@ unconfirmed merge is reported and left for inspection; an already-merged matchin
 succeeds again.
 
 `make finish-task SLOT=<slot>` runs from clean primary `master` under the startup and slot
-locks. It verifies the merged PR and head, the closed issue with Done board state, a clean
-worktree and matching Compose ownership; synchronizes `master`; stops the task's containers
+locks. It synchronizes `master` first (and hands over to updated scripts, below), so its
+own checks are the merged ones; verifies the merged PR and head, the closed issue with Done
+board state, a clean worktree and matching Compose ownership; synchronizes `master` again;
+stops the task's containers
 (the load-test `lt-*` containers too, through `scripts/task-compose --loadtest`, so no
 `make loadtest-down` is needed first);
 removes the worktree without force; removes the task's own external `.env` only if
