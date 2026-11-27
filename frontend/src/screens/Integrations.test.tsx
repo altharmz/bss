@@ -249,6 +249,33 @@ describe('Integrations around a write', () => {
     expect(writes(fetchMock)).toEqual([['DELETE', `${PAYMENT}/hub/${H1}`, null]]);
   });
 
+  it('says an unanswered new subscription may exist and Refresh reads the list again', async () => {
+    let reads = 0;
+    const { fetchMock } = backend({
+      [LIST]: () => {
+        reads += 1;
+        return json([HUB_PAY, HUB_CAT], { total: 2 });
+      },
+      [`POST ${CATALOG}/hub`]: () => tmfError(504, 'gateway timeout'),
+    });
+    open();
+    await screen.findByText('https://example.org/pay');
+    fireEvent.click(screen.getByRole('button', { name: 'New subscription' }));
+    const dialog = screen.getByRole('dialog', { name: 'New subscription' });
+    fireEvent.change(within(dialog).getByLabelText('Callback URL'), {
+      target: { value: 'https://example.org/new' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
+    expect(await within(dialog).findByText('Unsure whether it was saved.')).toBeTruthy();
+    expect(within(dialog).queryByRole('button', { name: 'Create' })).toBeNull();
+    const before = reads;
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Refresh' }));
+    expect(await screen.findByText('Refreshed')).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => expect(reads).toBe(before + 1));
+    expect(writes(fetchMock)).toHaveLength(1);
+  });
+
   it('reads the health and the billing status again on Refresh', async () => {
     let healthy = false;
     const { calls } = backend({
