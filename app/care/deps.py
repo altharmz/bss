@@ -26,7 +26,7 @@ class CareSession:
 
 def care_actor(request: Request) -> CareSession:
     session = getattr(request.state, "care", None)
-    if session is None:
+    if session is None:  # pragma: no cover - the self-care middleware answers 401 first
         raise TmfError(401, "sign in required")
     return session
 

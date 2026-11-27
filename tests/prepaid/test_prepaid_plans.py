@@ -521,6 +521,36 @@ def test_an_add_on_waits_for_an_unavailable_tax_engine(api, db_conn, build, monk
     ).fetchone() == (0,)
 
 
+def test_quotes_behind_an_unavailable_tax_engine_are_a_503(api, db_conn, build, monkeypatch):
+    world = build("60", fee=False)
+    bought = line(api, db_conn, world)
+    monkeypatch.setattr(settings, "tax_require_service_address", True)
+    assert set_address(api, world.acc, CA | {"postCode": FAILING_ZIP}).status_code == 200
+    plan = quote(api, world, world.plan)  # the recurring price's tax
+    assert plan.status_code == 503, plan.text
+    assert plan.json()["message"].startswith("tax engine unavailable")
+    pack = api.get(
+        f"{ACCOUNTS}/{world.acc['id']}/firstCharge?productOffering.id={world.addon['id']}"
+        f"&startDate={api.clock.now().date()}&parentProduct.id={bought.product['id']}"
+    )  # an add-on's fee
+    assert pack.status_code == 503, pack.text
+    assert pack.json()["message"].startswith("tax engine unavailable")
+
+
+def test_a_free_plan_credits_nothing_when_changed(api, db_conn, build):
+    free = offering(api, "Free", [price(api, "recurring", 0, "Monthly", "monthly", 1)],
+                    profile=PROFILE)  # fmt: skip
+    world = build("30", fee=False)
+    bought = buy(api, db_conn, world, free)
+    today = api.clock.now().date()
+    preview = api.get(
+        f"{ACCOUNTS}/{world.acc['id']}/firstCharge?productOffering.id={world.plan['id']}"
+        f"&startDate={today}&product.id={bought.product['id']}"
+    )
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["credit"]["value"] == 0
+
+
 def test_an_add_on_parent_that_is_no_uuid_names_no_plan(api, db_conn, build):
     world = build("60", fee=False)
     line(api, db_conn, world)

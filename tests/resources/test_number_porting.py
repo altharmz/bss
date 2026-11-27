@@ -1,13 +1,14 @@
 """Carrier number pools, port-in and port-out (issue #189)."""
 # ruff: noqa: F811
 
-from datetime import timedelta
+from datetime import date, timedelta
 
 import pytest
 
 from app.config import settings
 from tests import apidata
 from tests.apidata import ORDER
+from tests.builders.billing.billing_db import add, at
 from tests.builders.orders.api_order_cancel import CANCEL, cancel_body
 from tests.builders.prepaid.prepaid_orders import shop
 from tests.builders.prepaid.prepaid_renewal_producer import tick
@@ -320,6 +321,7 @@ def test_port_out_with_a_valid_pin_completes_and_ends_the_product(api, db_conn, 
     ).fetchone() == (0,)
     # the PIN is spent, and the same reference is not decided twice
     assert db_conn.execute("SELECT count(*) FROM port_request").fetchone() == (1,)
+    assert [p["state"] for p in api.get(f"{PIN}?product.id={product['id']}").json()] == ["used"]
     stub.inject_port_out("OUT-1", value, pin)
     tick(db_conn, api.clock.now())
     assert db_conn.execute("SELECT count(*) FROM port_request").fetchone() == (1,)
@@ -461,3 +463,13 @@ def test_a_ported_in_number_is_like_any_other_once_its_port_completed(api, db_co
     again = buy_number(api, world, resource_id)
     assert again["state"] == "inProgress", again.get("productOrderErrorMessage")
     assert api.get(f"{RESOURCE}/{resource_id}").json()["allocationStatus"] != "available"
+
+
+def test_a_transfer_pin_is_for_a_line_with_a_number(api):
+    offering = apidata.sellable_offering(api)
+    today = date(2026, 10, 15)
+    product = add(api, apidata.account(api), offering, today, on=at(today))
+    refused = api.post(PIN, {"productId": product["id"]})
+    assert refused.status_code == 409, refused.text
+    assert refused.json()["message"] == "the product is not an active line with a subscriber number"
+    assert api.get(f"{PIN}?product.id={product['id']}").json() == []
