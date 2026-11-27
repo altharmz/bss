@@ -62,10 +62,12 @@ make telemetry-collect / telemetry-report / telemetry-summary
 
 ## Rules
 
-- **Tests:** one local run per cycle - the pre-commit hook (lint, smoke tests, the tests the
-  change affects). Run `make test` (the full suite but the `migration_history` and `slow`
-  tests, which the hook and the nightly run cover) before a PR that touches billing,
-  migrations or the API. Every new feature or fix comes with a test that fails without it;
+- **Tests:** one local run per cycle - the pre-commit hook (an import check, lint, smoke
+  tests, the tests the change affects). A PR that touches billing, migrations or the API
+  needs one passing `make test` (the full suite but the `migration_history` and `slow` tests,
+  which the hook and the nightly run cover): run it on the finished work before `make commit`,
+  and the hook runs no suite again on exactly that content. A whole-suite run in the hook
+  counts too. Every new feature or fix comes with a test that fails without it;
   never delete, skip or weaken a test to make the suite pass. If a test is wrong because
   the requirements changed, change it and add `TEST-CHANGE: <reason>` to the commit message.
 - **Git:** work on the task branch and a PR with `Fixes #N`; never push to `master`, force-push

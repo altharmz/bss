@@ -147,6 +147,16 @@ mcp-token-revoke: ## [mcp] Revoke a local MCP static token (ID=<id>) or OAuth gr
 # (lint, format, docs, builds) never take the lock; aggregates lock stage by stage.
 LOCKED := ./scripts/with-test-lock
 
+# Each entry point, and app.auth, imported first in a fresh interpreter (#476): an import
+# cycle that shows only in one import order fails here in seconds, with its traceback,
+# instead of as worker processes crashing at startup minutes into the suite. No database:
+# importing connects to nothing. The commit hook runs it first when app/, bss_mcp/ or a
+# FULL path is staged (scripts/hook_selection.py, IMPORTS).
+IMPORT_CHECK := app.auth app.main app.worker.__main__ bss_mcp.main
+.PHONY: import-check
+import-check: ## [test] Import each entry point (and app.auth) first in a fresh interpreter, in seconds: the hook runs it before any suite
+	./scripts/task-compose run --rm --no-deps oneoff sh -c 'for module in $(IMPORT_CHECK); do out="$$(python -W ignore -c "import $$module" 2>&1)" || { printf "import-check: importing %s first failed:\n%s\n" "$$module" "$$out"; exit 1; }; echo "import-check: $$module imports"; done'
+
 .PHONY: hook-cases
 hook-cases: ## [test] The shell cases of the hook's own scripts (the hook's lock and plan, the billing status check); the commit hook runs them when scripts/ changes
 	./scripts/test-billing-status-check.sh
@@ -166,10 +176,12 @@ MARK_LIST = $(subst $(comma), ,$(MARKS))
 DESELECTED = $(if $(filter all,$(MARK_LIST)),,$(filter-out $(MARK_LIST),$(LEFT_OUT)))
 MARK_ARGS = $(if $(DESELECTED),-m "not ($(subst $(space), or ,$(strip $(DESELECTED))))")
 
-# A pass on a clean tree is recorded (scripts/full_suite.py, .testmon/full-suite-passed.json):
-# make check-pr reports it as full_suite, so a resumed session need not run the suite again.
+# A pass is recorded for the content on disk, committed or not (scripts/full_suite.py,
+# .testmon/full-suite-passed.json): make check-pr reports it as full_suite, so a resumed
+# session need not run the suite again, and the commit hook runs no suite again for a
+# commit of exactly that content (#476).
 .PHONY: full-suite-snapshot
-test: full-suite-snapshot runtime-check deploy-check hook-cases ## [test] The FULL suite in the container (parallel; HYPOTHESIS_PROFILE=dev|ci) without the tests marked migration_history or slow (make test-all), plus the harness and deploy script tests (runtime-check, deploy-check, hook-cases): by hand before a PR (a pass on a clean tree is recorded for make check-pr)
+test: full-suite-snapshot runtime-check deploy-check hook-cases ## [test] The FULL suite in the container (parallel; HYPOTHESIS_PROFILE=dev|ci) without the tests marked migration_history or slow (make test-all), plus the harness and deploy script tests (runtime-check, deploy-check, hook-cases): by hand before a PR or a commit (a pass is recorded for the content on disk: make check-pr accepts it, and the hook runs no suite again on it)
 	$(LOCKED) ./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) $(if $(PLAN_CAPTURE_DIR),-e BSS_PLAN_CAPTURE_DIR=$(PLAN_CAPTURE_DIR)) oneoff pytest -n auto $(MARK_ARGS)
 	@python3 -B scripts/full_suite.py record
 

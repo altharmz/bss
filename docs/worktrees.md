@@ -63,9 +63,12 @@ does not know and lists the ones it accepts.
 3. **Commit** with `make commit`. It stages only the listed files and runs the normal
    pre-commit hook, which is the one local verification run (see Hooks and checks). Run
    `make test` (the full suite but the `migration_history` and `slow` tests; `make test-all`
-   runs everything) before a PR touching billing, migrations or the API. A pass
-   on a clean tree is recorded, and `check-pr` reports it as `full_suite`: a resumed session
-   reads it there instead of running the suite again. Before `make commit`, run `make format`
+   runs everything) before a PR touching billing, migrations or the API: on the finished
+   work, before `make commit`. A pass is recorded for the content on disk; the hook runs no
+   suite again on a commit of exactly that content, and `check-pr` reports it as
+   `full_suite`, so a resumed session reads it there instead of running the suite again. A
+   whole-suite run the hook makes itself (a migration, a spec) counts the same way
+   ([why](decisions/harness.md#one-full-run-per-change-and-an-import-check-first-2026-11-27-476)). Before `make commit`, run `make format`
    again after any edit, including a fix made after a hook failure. If the change touches a
    shared test builder or factory (`tests/builders/**`, `tests/factories.py`), find every test
    file that imports it (`grep -rl`) and run them with `make test-files TESTS=...`: migration
@@ -216,12 +219,14 @@ worktree's `scripts/pre-commit.sh` and `scripts/pre-push.sh`. Details of the gat
 [decisions/harness.md](decisions/harness.md). In short:
 
 - **pre-commit** refuses a commit unless the tree is exactly what is committed, then runs
-  lint and the tests the change needs; Markdown-only commits skip the tests. One run at a
+  an import check of the entry points (`make import-check`, when `app/` or `bss_mcp/`
+  changes), lint and the tests the change needs; Markdown-only commits skip the tests. One run at a
   time per repository. What runs when, and how long it takes:
   [harness.md](decisions/harness.md#development-cycle-and-gates).
 - **Tests while developing: only the suites of the change.** The hook is the one full
   local run, so do not run the whole `make runtime-check` or `make test` by hand before a
-  commit. Run the suites that cover what you changed:
+  commit - except `make test` on the finished work of a change that needs it anyway (billing,
+  migrations, the API): the hook then runs no suite again. Run the suites that cover what you changed:
   `make runtime-check RUNTIME_SUITES="scripts/test_task.py scripts/test_task_git.py"` for harness
   scripts (include a suite whose fixtures copy the script), `make test-files
   TESTS=tests/a.py,tests/b.py` for backend tests. The hook does not repeat work either: the

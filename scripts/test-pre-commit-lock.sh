@@ -28,6 +28,8 @@ export PATH="${tmp}/bin:${PATH}"
 git init -q "${tmp}/primary"
 git -C "${tmp}/primary" -c user.name=t -c user.email=t@t commit -q --allow-empty -m init
 git -C "${tmp}/primary" worktree add -q -b issue-1-lock "${repo}"
+# The hook's state stays out of the content a full run records, as .gitignore does in bss.
+echo .testmon/ >>"${tmp}/primary/.git/info/exclude"
 echo one >"${repo}/tracked.txt"
 git -C "${repo}" add tracked.txt
 lock="${tmp}/primary/.git/pre-commit.lock"
@@ -57,6 +59,16 @@ expect() {
     failed=$((failed + 1))
   fi
   rm -f "${calls}"
+}
+
+commit() { git -C "${repo}" -c user.name=t -c user.email=t@t commit -q "$@"; }
+# said <text> <case>: the last hook run printed the text
+said() {
+  grep -qF -- "$1" "${tmp}/out" || {
+    printf 'FAIL %s: the hook did not print [%s]\n' "$2" "$1" >&2
+    sed 's/^/  | /' "${tmp}/out" >&2
+    failed=$((failed + 1))
+  }
 }
 
 expect 0 "lint test-smoke test-changed" "a free lock runs the checks at once"
@@ -96,30 +108,50 @@ grep -qF 'test-smoke: passed on this content already; skipped' "${tmp}/out" || {
 
 echo m >"${repo}/alembic/m.py"
 git -C "${repo}" add alembic
-expect 0 "lint test-recorded docs-check web-lint web-test" \
-  "a migration runs the whole suite, recorded, without the harness and deploy suites"
+FAKE_MAKE_FAIL=test-recorded expect 1 "import-check lint test-recorded" \
+  "a migration runs the import check, then the whole suite, recorded, without the harness and deploy suites"
+[[ ! -e "${repo}/.testmon/full-suite-passed.json" ]] || {
+  echo 'FAIL a failing whole-suite run in the hook wrote a full-suite record' >&2
+  failed=$((failed + 1))
+}
 
+# The suite ran to its end (and failed): its testmon stamp, as make test-recorded writes it.
 mkdir -p "${repo}/.testmon"
 (cd "${repo}" && python3 -B "$(dirname "${hook}")/hook_selection.py" digest) >"${repo}/.testmon/full-suite"
-expect 0 "lint test-smoke test-changed test-files docs-check web-lint web-test" \
+expect 0 "import-check lint test-smoke test-changed test-files docs-check web-lint web-test" \
   "a retry on the content the whole suite ran on runs the failed and affected tests"
 
 echo fixed >"${repo}/alembic/m.py"
 git -C "${repo}" add alembic
-expect 0 "lint test-recorded docs-check web-lint web-test" \
+FAKE_MAKE_FAIL=docs-check expect 1 "import-check lint test-recorded docs-check" \
   "a changed migration runs the whole suite again"
 
-# A script suite is not repeated on content it already passed on (#366).
-commit() { git -C "${repo}" -c user.name=t -c user.email=t@t commit -q "$@"; }
-# said <text> <case>: the last hook run printed the text
-said() {
-  grep -qF -- "$1" "${tmp}/out" || {
-    printf 'FAIL %s: the hook did not print [%s]\n' "$2" "$1" >&2
-    sed 's/^/  | /' "${tmp}/out" >&2
-    failed=$((failed + 1))
-  }
-}
+# #476: a whole-suite run the hook passed is recorded for the staged tree (make check-pr
+# accepts it), and a retry on that content runs no suite again: only the marked tests the
+# run left out (the fake make does not see MARKS).
+expect 0 "import-check lint test-marked docs-check web-lint web-test" \
+  "a retry on the content the hook's whole suite passed on runs no suite again"
+said 'full suite: passed on exactly the staged content already' "a covered retry"
+
 commit -m base
+# #476: make test passed on the work before it was staged; a commit of exactly that content
+# runs the import check, lint and the generated docs, and no suite again.
+mkdir -p "${repo}/app" "${repo}/scripts"
+echo x >"${repo}/app/x.py"
+echo b >"${repo}/scripts/b.py"
+(cd "${repo}" && python3 -B "$(dirname "${hook}")/full_suite.py" snapshot &&
+  python3 -B "$(dirname "${hook}")/full_suite.py" record) >"${tmp}/out" 2>&1
+said 'full suite: passed, recorded' "make test on work not yet staged"
+git -C "${repo}" add app scripts
+expect 0 "import-check lint docs-check" "make test on exactly the staged content: no suite runs again"
+said 'runtime-check: passed in the full run on this content; skipped' "a covered harness suite"
+echo y >"${repo}/app/x.py"
+git -C "${repo}" add app
+expect 0 "import-check lint test-smoke test-changed docs-check runtime-check hook-cases" \
+  "a change after make test runs the usual checks"
+commit -m covered
+
+# A script suite is not repeated on content it already passed on (#366).
 mkdir -p "${repo}/scripts"
 echo a >"${repo}/scripts/a.py"
 git -C "${repo}" add scripts
@@ -197,7 +229,7 @@ echo task >"${repo}/scripts/task.py"
 git -C "${repo}" add app scripts
 commit -m task
 git -C "${repo}" -c user.name=t -c user.email=t@t merge -q --no-ff --no-commit "${trunk}" >/dev/null 2>&1
-expect 0 "lint test-recorded docs-check runtime-check hook-cases" \
+expect 0 "import-check lint test-recorded docs-check runtime-check hook-cases" \
   "a merge runs the suites the task's own side calls for"
 commit -m merge
 

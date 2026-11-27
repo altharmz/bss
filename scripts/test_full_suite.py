@@ -1,5 +1,6 @@
-"""The full-suite record (#395): written only for a passing run on a clean, unchanged tree,
-and what it says about a PR head, with real disposable Git."""
+"""The full-suite record (#395, #476): written only for a passing run on content that did
+not change during it, what it says about a PR head, and what it tells the commit hook,
+with real disposable Git."""
 
 import contextlib
 import io
@@ -59,6 +60,21 @@ class FullSuiteTests(unittest.TestCase):
     def state(self, head="HEAD"):
         return full_suite.state(self.root, self.git("rev-parse", head), self.own)
 
+    @contextlib.contextmanager
+    def in_repo(self):
+        """As the commit hook runs it: in the worktree, with no inherited repository
+        selector (this suite itself runs in a commit hook, with GIT_DIR set)."""
+        before = os.getcwd()
+        selectors = {k: v for k, v in os.environ.items() if k.startswith("GIT_")}
+        try:
+            for key in selectors:
+                del os.environ[key]
+            os.chdir(self.root)
+            yield
+        finally:
+            os.chdir(before)
+            os.environ.update(selectors)
+
     def merge_master(self, path, text):
         self.git("checkout", "-q", "master")
         self.commit(path, text, "master change")
@@ -116,14 +132,52 @@ class FullSuiteTests(unittest.TestCase):
         self.own = ["docs/x.md", "alembic/versions/0001_x.py"]
         self.assertEqual(self.state(), "missing")
 
-    def test_a_dirty_tree_writes_no_record(self):
+    def test_a_run_on_work_not_yet_committed_counts_for_the_commit_of_that_content(self):
+        # #476: `make test` before the commit, so the hook and check-pr need no second run.
         (self.root / "app/api/a.py").write_text("a = 5\n")
-        self.assertIn("not clean", self.run_suite())
-        self.assertFalse((self.root / full_suite.RECORD).exists())
-        (self.root / "app/api/a.py").write_text("a = 2\n")
-        (self.root / "untracked.py").write_text("")
+        (self.root / "app/api/b.py").write_text("b = 1\n")
+        self.assertIn("recorded for", self.run_suite())
+        self.own = ["app/api/a.py", "app/api/b.py"]
+        self.assertEqual(self.state(), "stale")  # HEAD does not hold the tested content
+        self.git("add", "-A")
+        self.git("commit", "-q", "-m", "the tested work")
+        self.assertEqual(self.state(), "passed")
+        self.merge_master("app/api/m.py", "m = 1\n")
+        self.assertEqual(self.state(), "passed")
+
+    def test_a_commit_of_part_of_the_tested_work_is_stale(self):
+        (self.root / "app/api/a.py").write_text("a = 5\n")
+        (self.root / "app/api/b.py").write_text("b = 1\n")
         self.run_suite()
-        self.assertFalse((self.root / full_suite.RECORD).exists())
+        self.git("commit", "-q", "-am", "a without b")
+        self.assertEqual(self.state(), "stale")
+
+    def test_the_hook_runs_no_suite_again_on_exactly_the_tested_content(self):
+        (self.root / "app/api/a.py").write_text("a = 5\n")
+        (self.root / "app/api/b.py").write_text("b = 1\n")
+        self.run_suite()
+        with self.in_repo():
+            self.git("add", "app/api/a.py")
+            self.assertFalse(full_suite.covers(self.root))  # b.py was tested, not staged
+            self.git("add", "app/api/b.py")
+            self.assertTrue(full_suite.covers(self.root))
+            (self.root / "app/api/a.py").write_text("a = 6\n")
+            self.git("add", "app/api/a.py")
+            self.assertFalse(full_suite.covers(self.root))
+
+    def test_the_hooks_own_whole_suite_run_is_recorded_for_the_staged_tree(self):
+        (self.root / "app/api/a.py").write_text("a = 7\n")
+        (self.root / "notes.txt").write_text("not staged\n")
+        with self.in_repo(), contextlib.redirect_stdout(io.StringIO()):
+            self.git("add", "app/api/a.py")
+            self.assertFalse(full_suite.covers(self.root))
+            full_suite.record_index(self.root, now=datetime(2026, 11, 18, 12, tzinfo=UTC))
+            self.assertTrue(full_suite.covers(self.root))
+        data = json.loads((self.root / full_suite.RECORD).read_text())
+        self.assertEqual(data["head"], self.git("rev-parse", "HEAD"))
+        self.git("commit", "-q", "-m", "committed by the hook's run")
+        self.assertEqual(data["tree"], self.git("rev-parse", "HEAD^{tree}"))
+        self.assertEqual(self.state(), "passed")
 
     def test_a_tree_that_changed_during_the_run_writes_no_record(self):
         self.assertIn(
@@ -166,6 +220,14 @@ class FullSuiteTests(unittest.TestCase):
                 self.assertEqual(full_suite.main(["other"]), 2)
         finally:
             os.chdir(before)
+        with self.in_repo(), contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(full_suite.main(["covers"]), 0)
+            (self.root / "app/api/a.py").write_text("a = 8\n")
+            self.git("add", "app/api/a.py")
+            self.assertEqual(full_suite.main(["covers"]), 1)
+            self.assertEqual(full_suite.main(["record-index"]), 0)
+            self.assertEqual(full_suite.main(["covers"]), 0)
+        self.assertIn("passed on exactly the staged content", output.getvalue())
 
 
 if __name__ == "__main__":

@@ -29,6 +29,11 @@ passed the hook and CI there; `make test-changed` still runs the tests the merge
 affects. On a merge commit the task's own FULL files do not call for the whole suite again
 when it already ran on them and the merge left them as they were (merge_full_tested, #390).
 
+`plan covered` is the plan when a passing full run is recorded for exactly the staged tree
+(full_suite.py covers, #476): only the marked tests the staged paths bring back, which that
+run left out. `imports` says whether the hook runs `make import-check` first: `run` when a
+selected path can change what the entry points import (IMPORTS), else `none`.
+
 `suite TARGET` says whether the hook runs a harness or deploy suite (SUITES): `none` when
 no selected path is one of its trigger paths, `passed` when it already passed on exactly
 this content of all its trigger paths (its stamp), else `run`. `stamp TARGET` records that
@@ -66,6 +71,10 @@ MARKED = {
         r"|app/integrations/network/usage_load\.py)$"
     ),
 }
+
+# What can change what the entry points import (make import-check, #476): the code, and
+# the image, pins and specs the FULL paths name.
+IMPORTS = re.compile(r"^(app|bss_mcp)/")
 
 # A path, or a directory with a trailing slash, and the test files that read it.
 DATA = {
@@ -184,11 +193,15 @@ def marked(paths):
     return [mark for mark, pattern in MARKED.items() if any(pattern.search(p) for p in paths)]
 
 
-def plan(staged, digest, stamp, merge_tested=False):
+def plan(staged, digest, stamp, merge_tested=False, covered=False):
     """The make invocations for the staged paths. `digest` names the FULL files as they
     are now, `stamp` the content the whole suite last ran to its end on (or None).
     `merge_tested`: a merge commit whose own FULL files the suite already ran on
-    (merge_full_tested)."""
+    (merge_full_tested). `covered`: a passing full run is recorded for exactly the staged
+    tree, so only the marked tests it left out remain."""
+    if covered:
+        marks = marked(staged)
+        return ["test-marked MARKS=" + ",".join(marks)] if marks else []
     if any(FULL.search(path) for path in staged) and stamp != digest and not merge_tested:
         marks = marked(staged)
         return ["test-recorded" + (" MARKS=" + ",".join(marks) if marks else "")]
@@ -201,6 +214,10 @@ def plan(staged, digest, stamp, merge_tested=False):
     if tests:
         steps.append("test-files TESTS=" + ",".join(tests))
     return steps
+
+
+def imports(selected):
+    return any(IMPORTS.search(path) or FULL.search(path) for path in selected)
 
 
 def git(*args):
@@ -372,10 +389,14 @@ def main(argv):
         sys.stdout.write("".join(path + "\n" for path in selected_paths()))
         return 0
     root = git("rev-parse", "--show-toplevel").strip()
-    if argv == ["plan"]:
+    if argv == ["imports"]:
+        print("run" if imports(selected_paths()) else "none")
+        return 0
+    if argv in (["plan"], ["plan", "covered"]):
         selected, stamp = selected_paths(), read_stamp(root)
         tested = merge_full_tested(selected, stamp)
-        print("\n".join(plan(selected, full_digest(), stamp, tested)))
+        steps = plan(selected, full_digest(), stamp, tested, covered=argv == ["plan", "covered"])
+        print("\n".join(steps))
         return 0
     if argv == ["suites"]:
         suites = harness_suites(selected_paths(), root)
@@ -388,7 +409,8 @@ def main(argv):
             write_suite_stamp(argv[1], root)
         return 0
     print(
-        "usage: hook_selection.py plan|digest|paths|suites|ci-check|suite TARGET|stamp TARGET"
+        "usage: hook_selection.py plan [covered]|digest|paths|imports|suites|ci-check|suite TARGET"
+        "|stamp TARGET"
         f" (TARGET: {', '.join(FOLLOWS)})",
         file=sys.stderr,
     )

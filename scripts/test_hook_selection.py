@@ -180,6 +180,32 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(self.plan("alembic/versions/0001.py", stamp="d0"), [RECORDED_HISTORY])
         self.assertEqual(self.plan("alembic/versions/0001.py", stamp=None), [RECORDED_HISTORY])
 
+    def test_a_full_run_on_the_staged_tree_leaves_only_the_marks_it_left_out(self):
+        # #476: `make test` (or the hook's own whole-suite run) passed on exactly this
+        # content, so no smoke, affected, data-reader or whole-suite run is planned.
+        def covered(*staged, stamp=None):
+            return hook_selection.plan(list(staged), "d1", stamp, covered=True)
+
+        for staged in (
+            ("app/api/bills.py", "tests/test_x.py"),
+            ("frontend/src/a.ts", "scripts/hook_selection.py"),
+            ("spec/TMF620.json", "app/worker/loop.py"),
+        ):
+            with self.subTest(staged=staged):
+                self.assertEqual(covered(*staged), [])
+        self.assertEqual(
+            covered("alembic/versions/0001.py", "tests/seed.py", stamp="d1"),
+            ["test-marked MARKS=migration_history,slow"],
+        )
+
+    def test_the_import_check_follows_the_code_and_what_any_import_may_depend_on(self):
+        for path in ("app/auth.py", "bss_mcp/main.py", "app/worker/loop.py", "requirements.txt"):
+            with self.subTest(path=path):
+                self.assertTrue(hook_selection.imports(["docs/a.md", path]))
+        for path in ("tests/test_x.py", "docs/a.md", "scripts/task.py", "frontend/src/a.ts"):
+            with self.subTest(path=path):
+                self.assertFalse(hook_selection.imports([path]))
+
     def test_data_key(self):
         self.assertEqual(hook_selection.data_key("frontend/src/a/b.ts"), "frontend/src/")
         self.assertEqual(hook_selection.data_key("frontend/src"), "frontend/src/")
@@ -207,8 +233,8 @@ class RepositoryTests(unittest.TestCase):
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(text)
 
-    def script(self, command):
-        return run(self.repo, sys.executable, "-B", str(SCRIPT), command)
+    def script(self, *command):
+        return run(self.repo, sys.executable, "-B", str(SCRIPT), *command)
 
     def test_the_digest_follows_only_the_full_suite_files_in_the_index(self):
         first = self.script("digest")
@@ -235,6 +261,19 @@ class RepositoryTests(unittest.TestCase):
         self.write("alembic/versions/0001.py", "fixed\n")
         run(self.repo, "git", "add", "-A")
         self.assertEqual(self.script("plan"), RECORDED_HISTORY)
+        self.assertEqual(self.script("plan", "covered"), "test-marked MARKS=migration_history")
+
+    def test_imports_reads_the_staged_files(self):
+        self.assertEqual(self.script("imports"), "run")
+        run(self.repo, "git", *IDENTITY, "commit", "-q", "-m", "base")
+        self.assertEqual(self.script("imports"), "none")
+        self.write("frontend/src/a.ts", "b\n")
+        run(self.repo, "git", "add", "-A")
+        self.assertEqual(self.script("imports"), "none")
+        self.write("app/main.py", "changed\n")
+        self.assertEqual(self.script("imports"), "none")  # not staged
+        run(self.repo, "git", "add", "-A")
+        self.assertEqual(self.script("imports"), "run")
 
 
 class MergeTests(unittest.TestCase):
