@@ -109,6 +109,7 @@ export function ReportsScreen() {
           empty={empty}
           count={(data) => data.months.length}
           rows={newest}
+          /* v8 ignore next -- @preserve unreachable: the rows are every month of the report, so a report with months always shows them */
           onResetFilters={() => setRange('12')}
         >
           {(rows) =>
@@ -141,6 +142,7 @@ export function ReportsScreen() {
           empty={empty}
           count={(data) => data.months.length}
           rows={newest}
+          /* v8 ignore next -- @preserve unreachable: the rows are every month of the report, so a report with months always shows them */
           onResetFilters={() => setRange('12')}
         >
           {(rows) =>

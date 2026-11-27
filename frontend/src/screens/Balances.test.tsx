@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { App } from '../app/App';
 import { accountSearchRoute, searchAccount } from '../test/accountSearch';
 import { expectUi } from '../test/expectUi';
-import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, type Handler } from '../test/fetch';
+import { CONTEXT, json, NAV_RUNS, noRuns, pending, stubFetch, type Handler } from '../test/fetch';
 
 // The global Balances screen (slice 22). Reads only, plus the Balance action dialog's writes
 // (pinned in SubscriberCard.test.tsx). The query strings asserted here are replayed against the
@@ -324,5 +324,82 @@ describe('balances screen', () => {
     expect(await within(dialog).findByText('Transfer cost')).toBeTruthy();
     expect(within(dialog).queryByRole('button', { name: 'Cancel top-up' })).toBeNull();
     expect(calls).toContain(`GET ${PREPAY}/transferBalance/${X1}`);
+  });
+
+  // #499: Reset filters on every kind of list, the account link, and closing the dialogs
+  it('says no matches for a filtered empty top-up page, and Reset filters shows them all', async () => {
+    const { calls } = backend({
+      [`GET ${BUCKETS}?${LIST}`]: () => json([B_OLGA], { total: 1 }),
+      [`GET ${ACC}?${LIST}`]: () => json([AB_OLGA], { total: 1 }),
+      [`GET ${PREPAY}/topupBalance?${LIST}`]: () => json([topup], { total: 1 }),
+      [`GET ${PREPAY}/topupBalance?status=failed&${LIST}`]: () => json([], { total: 0 }),
+    });
+    open('/balances');
+    await screen.findByText('Olga Kuznetsova');
+    tab('Top-ups');
+    await screen.findByText('Top-up');
+    fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'failed' } });
+
+    expect(await screen.findByText('No matches')).toBeTruthy();
+    expect(screen.queryByText('Nothing here')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }));
+    expect(await screen.findByText('Top-up')).toBeTruthy();
+    expect(screen.getByLabelText('Status')).toHaveProperty('value', '');
+    expect(calls.filter((c) => c === `GET ${PREPAY}/topupBalance?${LIST}`)).toHaveLength(2);
+  });
+
+  it('resets the status and the account chip that hide every bucket', async () => {
+    const { calls } = backend({
+      [`GET ${BUCKETS}?${LIST}`]: () => json([B_OLGA, B_JAN], { total: 2 }),
+      [`GET ${BUCKETS}?partyAccount.id=${A1}&${LIST}`]: () => json([B_OLGA], { total: 1 }),
+      [`GET ${BUCKETS}?partyAccount.id=${A1}&status=suspended&${LIST}`]: () =>
+        json([], { total: 0 }),
+    });
+    open(`/balances?account=${A1}`);
+    await screen.findByText('120.00');
+    fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'suspended' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Reset filters' }));
+
+    expect(await screen.findByText('Jan Petrov')).toBeTruthy();
+    expect(calls.at(-1)).not.toContain('status=');
+    expect(window.location.search).toBe('');
+    expect(screen.getByLabelText('Status')).toHaveProperty('value', '');
+  });
+
+  it('opens the card from the account link of a row without opening the bucket', async () => {
+    backend({
+      [`GET ${BUCKETS}?${LIST}`]: () => json([B_OLGA], { total: 1 }),
+      'GET /*': pending,
+    });
+    open('/balances');
+    fireEvent.click(await screen.findByRole('link', { name: 'Olga Kuznetsova' }));
+    expect(window.location.pathname).toBe(`/billing-accounts/${A1}`);
+    expect(screen.queryByRole('dialog', { name: 'Bucket' })).toBeNull();
+  });
+
+  it('closes a bucket and a balance action without a write', async () => {
+    const { fetchMock } = backend({
+      [`GET ${BUCKETS}?${LIST}`]: () => json([B_OLGA], { total: 1 }),
+      [`GET ${BUCKETS}/${B1}`]: () => json(B_OLGA),
+      [`GET ${ACC}/${AB1}`]: () => json(AB_OLGA),
+      [`GET ${PREPAY}/topupBalance?${LIST}`]: () => json([topup], { total: 1 }),
+      [`GET ${PREPAY}/topupBalance/${T1}`]: () => json(topup),
+    });
+    open('/balances');
+    fireEvent.click(await screen.findByText('120.00'));
+    const bucketDialog = await screen.findByRole('dialog', { name: 'Bucket' });
+    await within(bucketDialog).findByText('125.00');
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Bucket' })).toBeNull();
+
+    tab('Top-ups');
+    fireEvent.click(await screen.findByText('Top-up'));
+    const action = await screen.findByRole('dialog', { name: 'Balance action' });
+    await within(action).findByText('Cash at the desk', { exact: false });
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Balance action' })).toBeNull();
+    expect(fetchMock.mock.calls.filter(([, init]) => (init?.method ?? 'GET') !== 'GET')).toEqual(
+      [],
+    );
   });
 });

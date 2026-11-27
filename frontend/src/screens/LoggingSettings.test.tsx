@@ -111,6 +111,28 @@ describe('logging settings', () => {
 
   // TEST-CHANGE (#467): a System screen opened by a user says "not allowed" before any request
   // (it showed the API's 403 before); the API still refuses
+  // #499: an unanswered change offers only Refresh, which reads the settings again
+  it('offers only Refresh after an unanswered change, which reads the settings again', async () => {
+    let reads = 0;
+    const { fetchMock } = backend('admin', {
+      [`GET ${PATH}`]: () => {
+        reads += 1;
+        return json(base);
+      },
+      [`PUT ${PATH}`]: () => tmfError(503, 'Service Unavailable'),
+    });
+    await open();
+    await screen.findByText('Default (INFO)', { selector: 'dd' });
+    fireEvent.click(screen.getByRole('button', { name: 'Debug 30 min' }));
+    expect(await screen.findByText('Unsure whether it was saved.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Debug 15 min' })).toBeNull();
+    const before = reads;
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    expect(await screen.findByText('Log level refreshed')).toBeTruthy();
+    await waitFor(() => expect(reads).toBe(before + 1));
+    expect(writes(fetchMock)).toEqual([['PUT', PATH, '{"debugMinutes":30}']]);
+  });
+
   it('tells a user it is not allowed, without asking the API', async () => {
     const { calls } = backend('user', {});
     window.history.replaceState(null, '', '/settings/logging');

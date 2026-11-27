@@ -58,3 +58,55 @@ it('invites a customer with no login and shows a refused disable', async () => {
   fireEvent.click(expectUi('ui.subscriber.careLogin.disable'));
   await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('409'));
 });
+// #499: a failed load with Retry, a refused decision, and Reject with its exact body
+it('shows a failed login load with Retry, then the login', async () => {
+  let fail = true;
+  stubFetch({
+    'GET /internal/v1/customer/c1/careLogin': () =>
+      fail ? tmfError(500, 'Internal Server Error') : json({ status: 'active', email: 'a@x.test' }),
+  });
+  render(<LoginPanel customerId="c1" />);
+  fireEvent.click(screen.getByText('Self-care login'));
+  const alert = await screen.findByRole('alert');
+  expect(alert.textContent).toContain('500 Internal Server Error');
+  expect(screen.queryByLabelText('Invitation email')).toBeNull();
+  fail = false;
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  expect(await screen.findByText('a@x.test · active')).toBeTruthy();
+  expect(screen.queryByRole('alert')).toBeNull();
+});
+it('retries a failed signup, shows a refused decision, and rejects with the exact body', async () => {
+  const item = {
+    id: 'signup1',
+    email: 'customer@example.test',
+    state: 'identityReview',
+    offering: { name: 'Basic' },
+    identity: { reason: 'Manual review' },
+  };
+  let detail = 0;
+  let decisions = 0;
+  const { fetchMock } = stubFetch({
+    'GET /internal/v1/careSignup?offset=0&limit=100': () => json([item]),
+    'GET /internal/v1/careSignup/signup1': () =>
+      ++detail === 1 ? tmfError(503, 'Service Unavailable') : json(item),
+    'POST /internal/v1/careSignup/signup1/decision': () =>
+      ++decisions === 1 ? tmfError(409, 'signup already decided') : json({}),
+  });
+  render(<Signups />);
+  fireEvent.click(await screen.findByRole('button', { name: item.email }));
+  const alert = await screen.findByRole('alert');
+  expect(alert.textContent).toContain('503 Service Unavailable');
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Reject' }));
+  await waitFor(() =>
+    expect(screen.getByRole('alert').textContent).toContain('409 signup already decided'),
+  );
+  expect(screen.getByRole('button', { name: 'Reject' })).toHaveProperty('disabled', false);
+  fireEvent.click(screen.getByRole('button', { name: 'Reject' }));
+  await waitFor(() => expect(decisions).toBe(2));
+  await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+  const bodies = fetchMock.mock.calls
+    .filter(([, init]) => init?.method === 'POST')
+    .map(([, init]) => String(init?.body));
+  expect(bodies).toEqual(['{"decision":"reject"}', '{"decision":"reject"}']);
+});

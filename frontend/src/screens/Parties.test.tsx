@@ -290,6 +290,26 @@ describe('parties list', () => {
     );
   });
 
+  // #499: Reset filters on Customers clears the search and the status
+  it('resets a customer search and status that hide every customer', async () => {
+    const { calls } = backend();
+    await open();
+    await customers();
+    await screen.findByText('Ivan Second');
+    fireEvent.click(screen.getByRole('button', { name: 'Inactive' }));
+    fireEvent.change(screen.getByLabelText('Search customers'), { target: { value: 'zz' } });
+    await waitFor(() =>
+      expect(calls).toContain(`GET ${SEARCH_CUSTOMERS}?q=zz&status=Inactive&${PAGE}`),
+    );
+    expect(await screen.findByText('Nothing matches “zz”')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }));
+
+    expect(await screen.findByText('Ivan Second')).toBeTruthy();
+    expect(screen.getByLabelText('Search customers')).toHaveProperty('value', '');
+    expect(screen.getByRole('button', { name: 'All' }).getAttribute('aria-pressed')).toBe('true');
+    expect(calls.at(-1)).toBe(`GET ${SEARCH_CUSTOMERS}?${PAGE}`);
+  });
+
   it('is in the sidebar under Customers and shows a load failure', async () => {
     backend({ [`GET ${PARTIES}?kind=Individual*`]: () => tmfError(503, 'Unavailable') });
     await open();

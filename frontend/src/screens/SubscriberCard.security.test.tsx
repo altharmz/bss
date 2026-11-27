@@ -252,4 +252,52 @@ describe('security tab', () => {
     await screen.findByText('No matches');
     expect(within(audit).queryByRole('button', { name: /delete|edit/i })).toBeNull();
   });
+
+  // #499: Previous pages back, Reset filters clears both filters, and the PIN and lock
+  // dialogs close without a write
+  it('pages the audit log back and resets filters that hide every entry', async () => {
+    const page1 = `GET ${SEC}/audit?customer.id=${C}&outcome=done&offset=0&limit=25`;
+    const page2 = `GET ${SEC}/audit?customer.id=${C}&outcome=done&offset=25&limit=25`;
+    const none = `GET ${SEC}/audit?customer.id=${C}&action=sim_swap&outcome=done&offset=0&limit=25`;
+    const { calls } = tab({
+      [page1]: () => json([E1], { more: true }),
+      [page2]: () => json([E1]),
+      [none]: () => json([]),
+    });
+    await open('#security');
+    const audit = await waitFor(() => expectUi('ui.security.audit'));
+    await within(audit).findByText('pinInvalid');
+    fireEvent.change(expectUi('ui.security.audit.outcome'), { target: { value: 'done' } });
+    await within(audit).findByText('Showing 1–1');
+    fireEvent.click(expectUi('ui.security.audit.next'));
+    await within(audit).findByText('Showing 26–26');
+    fireEvent.click(expectUi('ui.security.audit.previous'));
+    await within(audit).findByText('Showing 1–1');
+    expect(calls.filter((c) => c === page1)).toHaveLength(2);
+
+    fireEvent.change(expectUi('ui.security.audit.action'), { target: { value: 'sim_swap' } });
+    fireEvent.click(await within(audit).findByRole('button', { name: 'Reset filters' }));
+    await within(audit).findByText('pinInvalid');
+    expect(calls.at(-1)).toBe(AUDIT);
+    expect(expectUi('ui.security.audit.action')).toHaveProperty('value', '');
+    expect(expectUi('ui.security.audit.outcome')).toHaveProperty('value', '');
+  });
+
+  it('closes the PIN and lock dialogs without a write', async () => {
+    const { fetchMock } = tab();
+    await open('#security');
+    const pin = await waitFor(() => expectUi('ui.subscriber.security.pin'));
+    await within(pin).findByText('Set');
+    fireEvent.click(expectUi('ui.subscriber.security.setPin'));
+    const pinDialog = await waitFor(() => expectUi('ui.subscriber.security.pinDialog'));
+    fireEvent.click(within(pinDialog).getByRole('button', { name: 'Cancel' }));
+    expect(document.querySelector('[data-ui="ui.subscriber.security.pinDialog"]')).toBeNull();
+
+    const locks = await waitFor(() => expectUi('ui.subscriber.security.locks'));
+    fireEvent.click(await waitFor(() => changeLocks(locks, 0)));
+    const lockDialog = await waitFor(() => expectUi('ui.subscriber.security.lockDialog'));
+    fireEvent.click(within(lockDialog).getByRole('button', { name: 'Cancel' }));
+    expect(document.querySelector('[data-ui="ui.subscriber.security.lockDialog"]')).toBeNull();
+    expect(puts(fetchMock)).toEqual([]);
+  });
 });

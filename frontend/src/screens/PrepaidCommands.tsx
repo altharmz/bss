@@ -75,6 +75,7 @@ export function PrepaidCommandsScreen() {
     loadCommandPage(filter, offset, signal),
   );
   const refreshNav = useRefreshNav();
+  const filtered = state !== 'all' || account !== null;
 
   const change = (next: StateFilter) => {
     setState(next);
@@ -120,7 +121,8 @@ export function PrepaidCommandsScreen() {
             title: 'No prepaid commands',
             text: 'Prepaid orders, renewals and transfers appear here once they are accepted.',
           }}
-          count={(data) => data.items.length}
+          // filtered on the server: an empty filtered page is "no matches", not "no commands"
+          count={(data) => (filtered ? 1 : data.items.length)}
           rows={(data) => data.items}
           onResetFilters={reset}
         >

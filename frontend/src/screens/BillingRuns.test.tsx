@@ -382,6 +382,47 @@ describe('billing runs: a failed run and retry (Q3: any failed run)', () => {
     expect(post?.[0]).toBe(`${RUNS}/${id(3)}/retry`);
   });
 
+  // #499: a retry from the second page shows the first page, where the queued run appears
+  it('goes back to the first page after a retry queued from a later one', async () => {
+    const runs = Array.from({ length: 23 }, (_, index) => ({
+      ...RUN,
+      id: id(index + 1),
+      runDate: new Date(Date.UTC(2026, 9, 1 - index)).toISOString().slice(0, 10),
+      isLatest: index === 0,
+      ...(index === 21 ? { status: 'failed', failureKind: 'accounts', error: '1 failed' } : {}),
+    }));
+    const secondPage = `GET ${RUNS}?offset=20&limit=20`;
+    const { calls } = backend(() => page(runs.slice(0, 20), 23), {
+      [secondPage]: () => page(runs.slice(20), 3),
+      [`POST ${RUNS}/${id(22)}/retry`]: () =>
+        json(
+          {
+            request: {
+              id: 'r3',
+              kind: 'retry',
+              upTo: null,
+              run: { id: id(22), runDate: '2026-09-10' },
+              requestedAt: '2026-10-01T09:00:00Z',
+              requestedBy: null,
+              pickedAt: null,
+              doneAt: null,
+            },
+          },
+          { status: 202 },
+        ),
+    });
+    await open();
+    await screen.findByText('Showing 1–20');
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    await screen.findByText('Showing 21–23');
+    fireEvent.click(
+      within(rowOf('2026-09-10') as HTMLElement).getByRole('button', { name: 'Retry' }),
+    );
+    expect(await screen.findByText('Retry of the run of 2026-09-10 queued')).toBeTruthy();
+    expect(await screen.findByText('Showing 1–20')).toBeTruthy();
+    expect(count(calls, LIST)).toBeGreaterThanOrEqual(2);
+  });
+
   it('shows the server reason when a retry is refused', async () => {
     backend(() => page([FAILED_LATEST]), {
       [`POST ${RUNS}/${RUN.id}/retry`]: () =>
@@ -649,6 +690,9 @@ describe('billing runs: polling', () => {
     expect(polls).toBe(2 + PENDING_MAX_MS / POLL_MS); // first load, after the POST, then polls
     await advance(POLL_MS * 4);
     expect(count(calls, LIST)).toBe(polls); // stopped
+    // #499: Reload reads the runs once more
+    fireEvent.click(screen.getByRole('button', { name: 'Reload' }));
+    await until(() => expect(count(calls, LIST)).toBe(polls + 1));
   });
 
   it('keeps the data when a refresh fails, and says so with Retry', async () => {

@@ -728,6 +728,7 @@ function RunOutcomes({
             }}
             count={(data) => data.items.length}
             rows={(data) => data.items}
+            /* v8 ignore next -- @preserve unreachable: the outcome filter is asked of the server, and its empty page says "No <outcome> accounts" */
             onResetFilters={() => setFilter('all')}
           >
             {(rows, data) => (

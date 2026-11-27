@@ -278,6 +278,19 @@ describe('bills on the subscriber card', () => {
     expect(screen.queryByRole('status')).toBeNull();
   });
 
+  // #499: No steps back from the confirmation without a write
+  it('steps back from putting a bill on hold with No', async () => {
+    const { fetchMock } = backend();
+    await open();
+    fireEvent.click(await waitFor(() => billRow('BL-B2000002')));
+    const dialog = await screen.findByRole('dialog', { name: 'Bill BL-B2000002' });
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Put on hold' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'No' }));
+    expect(within(dialog).queryByRole('button', { name: 'Yes' })).toBeNull();
+    expect(within(dialog).getByRole('button', { name: 'Put on hold' })).toBeTruthy();
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'PATCH')).toBe(false);
+  });
+
   it('offers no action on a settled bill', async () => {
     backend({
       [`GET /internal/v1/customerBill/${B2}`]: () =>
@@ -494,6 +507,32 @@ describe('dunning panel', () => {
       'Dunning exemption ended',
     );
     expect(sentBody(fetchMock, 'PATCH').body).toBe('{"exempt":false}');
+  });
+
+  // #499: an unanswered change offers only Refresh, which reads the dunning state again
+  it('offers only Refresh after an unanswered exemption, which reloads the panel', async () => {
+    let reads = 0;
+    const { fetchMock } = backend({
+      [`GET ${DUNNING}`]: () => {
+        reads += 1;
+        return json(IN_DUNNING);
+      },
+      [`PATCH ${DUNNING}`]: () => tmfError(504, 'Gateway Timeout'),
+    });
+    await open();
+    const section = await waitFor(() => expectUi('ui.subscriber.dunning'));
+    fireEvent.click(await within(section).findByRole('checkbox', { name: 'Exempt from dunning' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Exempt from dunning?' });
+    fireEvent.change(within(dialog).getByLabelText('Reason'), { target: { value: 'Hardship' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Exempt' }));
+    expect(await within(dialog).findByText('Unsure whether it was saved.')).toBeTruthy();
+    expect(within(dialog).queryByRole('button', { name: 'Exempt' })).toBeNull();
+    const before = reads;
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Refresh' }));
+    expect(await screen.findByText('Dunning state refreshed')).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => expect(reads).toBeGreaterThan(before));
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'PATCH')).toHaveLength(1);
   });
 
   it('shows a refused exemption in the dialog', async () => {

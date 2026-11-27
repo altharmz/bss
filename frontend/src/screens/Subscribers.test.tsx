@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { App } from '../app/App';
 import {
@@ -484,6 +484,42 @@ describe('new subscriber', () => {
     fireEvent.click(within(next).getByText('Open billing account'));
     expect(await screen.findByRole('status')).toHaveProperty('textContent', 'Olga K created');
     expect(window.location.pathname).toBe(`/billing-accounts/${NEW_ACCOUNT}`);
+    expect(bodies(fetchMock)).toHaveLength(3);
+  });
+
+  // #499: Cancel sends nothing; the created account opens Add product for its initial
+  // product, and closing it opens the card
+  it('cancels a new billing account without a request', async () => {
+    const { fetchMock } = backend();
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: 'New billing account' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New billing account' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(bodies(fetchMock)).toEqual([]);
+  });
+
+  it('opens Add product for the initial product, and its Cancel opens the card', async () => {
+    const { fetchMock } = backend(undefined, {
+      [`POST ${PARTY}/individual`]: () => json({ id: NEW_PARTY }, { status: 201 }),
+      [`POST ${CUSTOMERS}`]: () => json({ id: NEW_CUSTOMER }, { status: 201 }),
+      [`POST ${ACCOUNTS}`]: () => json({ id: NEW_ACCOUNT }, { status: 201 }),
+      [`GET ${ACCOUNTS}/${NEW_ACCOUNT}`]: () =>
+        json(accountBody(NEW_ACCOUNT, { id: NEW_CUSTOMER, name: 'Olga K' })),
+      'GET /*': pending,
+    });
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: 'New billing account' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New billing account' });
+    fireEvent.change(within(dialog).getByLabelText('Given name'), { target: { value: 'Olga' } });
+    fireEvent.change(within(dialog).getByLabelText('Family name'), { target: { value: 'K' } });
+    fireEvent.click(within(dialog).getByRole('checkbox'));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create billing account' }));
+    const add = await screen.findByRole('dialog', { name: 'Add product' });
+    expect(bodies(fetchMock)).toHaveLength(3);
+    fireEvent.click(within(add).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(window.location.pathname).toBe(`/billing-accounts/${NEW_ACCOUNT}`));
+    expect(await screen.findByText('Olga K created')).toBeTruthy();
     expect(bodies(fetchMock)).toHaveLength(3);
   });
 

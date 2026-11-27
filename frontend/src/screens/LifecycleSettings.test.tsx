@@ -72,6 +72,19 @@ describe('prepaid lifecycle', () => {
     ]);
   });
 
+  // #499: Cancel closes the edit without a write
+  it('cancels the edit without a write', async () => {
+    const { fetchMock } = backend({ [`GET ${lifecyclePath}`]: () => json(lifecycle) });
+    await open();
+    await screen.findByText('90 days');
+    fireEvent.click(screen.getByRole('button', { name: 'Edit lifecycle settings' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit lifecycle settings' });
+    fireEvent.change(within(dialog).getByLabelText('Grace days'), { target: { value: '5' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(writes(fetchMock)).toEqual([]);
+  });
+
   it('retries a failed lifecycle read', async () => {
     let reads = 0;
     backend({

@@ -3,7 +3,16 @@ import { describe, expect, it } from 'vitest';
 import { App } from '../app/App';
 import { accountSearchRoute, searchAccount } from '../test/accountSearch';
 import { expectUi } from '../test/expectUi';
-import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, type Handler } from '../test/fetch';
+import {
+  CONTEXT,
+  json,
+  NAV_RUNS,
+  noRuns,
+  pending,
+  stubFetch,
+  tmfError,
+  type Handler,
+} from '../test/fetch';
 
 const COMMANDS = '/internal/v1/prepaid/command';
 const COMMAND_ID = 'c0000001-0000-4000-8000-000000000001';
@@ -158,5 +167,134 @@ describe('prepaid commands', () => {
     expect(dialog.contains(note)).toBe(true);
     expect(note.textContent).toContain('requires 650.00, available 100.00, short 550.00');
     expect(within(note).getByRole('link', { name: 'Open the card to top up' })).toBeTruthy();
+  });
+
+  // #499: the paths the first tests leave out - what the operator sees and what is sent.
+  it('shows an outcome with its reason, and an outcome alone, as the row result', async () => {
+    const rejected = command('completed', { outcome: 'rejected', reason: 'insufficientFunds' });
+    const done = command('completed', {
+      id: 'c0000002-0000-4000-8000-000000000002',
+      outcome: 'applied',
+    });
+    backend({ [`GET ${COMMANDS}?offset=0&limit=50`]: () => json([rejected, done], { total: 2 }) });
+    window.history.replaceState(null, '', '/prepaid-commands');
+    render(<App />);
+
+    expect(await screen.findByText('rejected: insufficientFunds')).toBeTruthy();
+    expect(screen.getByText('applied')).toBeTruthy();
+  });
+
+  it('asks for a state from the first page again, and pages back with Previous', async () => {
+    const { calls } = backend({
+      [`GET ${COMMANDS}?offset=0&limit=50`]: () => json([command('pending')], { more: true }),
+      [`GET ${COMMANDS}?offset=50&limit=50`]: () => json([command('pending')]),
+      [`GET ${COMMANDS}?state=failedTechnical&offset=0&limit=50`]: () =>
+        json([command()], { more: true }),
+      [`GET ${COMMANDS}?state=failedTechnical&offset=50&limit=50`]: () => json([command()]),
+    });
+    window.history.replaceState(null, '', '/prepaid-commands');
+    render(<App />);
+    await screen.findByText('Showing 1–1');
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    await screen.findByText('Showing 51–51');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Failed technically' }));
+    expect(await screen.findByText('Showing 1–1')).toBeTruthy();
+    expect(calls).toContain(`GET ${COMMANDS}?state=failedTechnical&offset=0&limit=50`);
+    expect(calls).not.toContain(`GET ${COMMANDS}?state=failedTechnical&offset=50&limit=50`);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    await screen.findByText('Showing 51–51');
+    fireEvent.click(screen.getByRole('button', { name: 'Previous' }));
+    expect(await screen.findByText('Showing 1–1')).toBeTruthy();
+    expect(
+      calls.filter((c) => c === `GET ${COMMANDS}?state=failedTechnical&offset=0&limit=50`),
+    ).toHaveLength(2);
+  });
+
+  it('opens the card from the account link of a row without opening the command', async () => {
+    backend({
+      [`GET ${COMMANDS}?offset=0&limit=50`]: () => json([command('pending')], { total: 1 }),
+      'GET /*': pending,
+    });
+    window.history.replaceState(null, '', '/prepaid-commands');
+    render(<App />);
+    fireEvent.click(await screen.findByRole('link', { name: 'Olga Kuznetsova main' }));
+
+    expect(window.location.pathname).toBe(`/billing-accounts/${ACCOUNT_ID}`);
+    expect(screen.queryByRole('dialog', { name: 'Command C0000001' })).toBeNull();
+  });
+
+  it('shows a refused retry in the dialog and keeps Retry offered; Close sends nothing', async () => {
+    const { fetchMock } = backend({
+      [`GET ${COMMANDS}?offset=0&limit=50`]: () => json([command()], { total: 1 }),
+      [`GET ${COMMANDS}/${COMMAND_ID}`]: () => json(command()),
+      [`POST ${COMMANDS}/${COMMAND_ID}/retry`]: () => tmfError(409, 'command is not retryable'),
+    });
+    window.history.replaceState(null, '', '/prepaid-commands');
+    render(<App />);
+    fireEvent.click(await screen.findByText('order'));
+    const dialog = await screen.findByRole('dialog', { name: 'Command C0000001' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Retry' }));
+
+    expect(
+      await within(dialog).findByText(
+        `POST ${COMMANDS}/${COMMAND_ID}/retry → 409 command is not retryable`,
+      ),
+    ).toBeTruthy();
+    const retry = within(dialog).getByRole('button', { name: 'Retry' });
+    await waitFor(() => expect(retry).toHaveProperty('disabled', false));
+    const posts = () => fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST');
+    expect(posts()).toHaveLength(1);
+
+    // the footer's Close (the header's × has the same name)
+    fireEvent.click(within(dialog).getByText('Close', { selector: 'button' }));
+    expect(screen.queryByRole('dialog', { name: 'Command C0000001' })).toBeNull();
+    expect(posts()).toHaveLength(1);
+  });
+
+  it('lists the products and bills a command touched', async () => {
+    const renewed = command('completed', {
+      kind: 'renewal',
+      outcome: 'applied',
+      products: [{ id: 'd0000001-0000-4000-8000-000000000001' }],
+      bills: [{ id: 'b0000001-0000-4000-8000-000000000001' }],
+    });
+    backend({
+      [`GET ${COMMANDS}?offset=0&limit=50`]: () => json([renewed], { total: 1 }),
+      [`GET ${COMMANDS}/${COMMAND_ID}`]: () => json(renewed),
+    });
+    window.history.replaceState(null, '', '/prepaid-commands');
+    render(<App />);
+    fireEvent.click(await screen.findByText('renewal'));
+    const dialog = await screen.findByRole('dialog', { name: 'Command C0000001' });
+
+    expect(within(dialog).getByText('PRD-')).toBeTruthy();
+    expect(within(dialog).getByText('D0000001')).toBeTruthy();
+    expect(within(dialog).getByText('BL-')).toBeTruthy();
+    expect(within(dialog).getByText('B0000001')).toBeTruthy();
+  });
+
+  it('says no matches for a filtered empty page, and Reset filters shows them all', async () => {
+    const { calls } = backend({
+      [`GET ${COMMANDS}?billingAccount.id=${ACCOUNT_ID}&offset=0&limit=50`]: () =>
+        json([command('pending')], { total: 1 }),
+      [`GET ${COMMANDS}?billingAccount.id=${ACCOUNT_ID}&state=failedTechnical&offset=0&limit=50`]:
+        () => json([], { total: 0 }),
+      [`GET ${COMMANDS}?offset=0&limit=50`]: () => json([command('pending')], { total: 1 }),
+    });
+    window.history.replaceState(null, '', `/prepaid-commands?account=${ACCOUNT_ID}`);
+    render(<App />);
+    await screen.findByText('C0000001');
+    fireEvent.click(screen.getByRole('button', { name: 'Failed technically' }));
+
+    expect(await screen.findByText('No matches')).toBeTruthy();
+    expect(screen.queryByText('No prepaid commands')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }));
+
+    await waitFor(() => expect(calls).toContain(`GET ${COMMANDS}?offset=0&limit=50`));
+    expect(await screen.findByText('C0000001')).toBeTruthy();
+    expect(window.location.search).toBe('');
+    expect(screen.getByRole('button', { name: 'All' }).getAttribute('aria-pressed')).toBe('true');
   });
 });

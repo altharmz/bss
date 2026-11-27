@@ -4,7 +4,16 @@ import { App } from '../app/App';
 import { expectUi } from '../test/expectUi';
 import { accountSearchRoute, searchAccount } from '../test/accountSearch';
 import { billBody } from '../test/fixtures';
-import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } from '../test/fetch';
+import {
+  CONTEXT,
+  json,
+  NAV_RUNS,
+  noRuns,
+  pending,
+  stubFetch,
+  tmfError,
+  type Handler,
+} from '../test/fetch';
 
 // Global bills, bill cycles and rates (docs/ui.md). Reads only:
 // the query strings asserted here are replayed against the real API by
@@ -253,6 +262,10 @@ describe('bills screen', () => {
     await screen.findByRole('dialog', { name: 'Bill cycle C1000001' });
     expectUi('ui.bills.cycleDetail');
     expect(calls).toContain(`GET ${CYCLE}/${K1}`);
+    // #499: closing the cycle returns to the bill
+    fireEvent.click(screen.getAllByRole('button', { name: 'Close' }).at(-1) as HTMLElement);
+    expect(screen.queryByRole('dialog', { name: 'Bill cycle C1000001' })).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'Bill BL-B1000001' })).toBe(dialog);
   });
 
   it('shows the multi-line discount of a rate on its line and in its detail (#380)', async () => {
@@ -325,5 +338,112 @@ describe('bills screen', () => {
     fail = false;
     fireEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
     await screen.findByText('No bills');
+  });
+
+  // #499: Reset filters, the cycle order, the account link and closing or changing a bill
+  it('resets the state and account filters that hide every bill', async () => {
+    const { calls } = backend({
+      [`GET ${BILL}?billingAccount.id=${A1}&${LIST}`]: () => json([BILL1], { total: 1 }),
+      [`GET ${BILL}?billingAccount.id=${A1}&state=settled&${LIST}`]: () => json([], { total: 0 }),
+      [`GET ${BILL}?${LIST}`]: () => json([BILL2, BILL1], { total: 2 }),
+    });
+    open(`/bills?account=${A1}`);
+    await screen.findByRole('link', { name: 'Ivan Ivanov' });
+    fireEvent.click(screen.getByRole('button', { name: 'Settled' }));
+    expect(await screen.findByText('No matches')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }));
+
+    expect(await screen.findByRole('link', { name: 'Olga Kuznetsova' })).toBeTruthy();
+    expect(calls.at(-1)).toBe(`GET ${BILL}?${LIST}`);
+    expect(window.location.search).toBe('');
+    expect(screen.getByRole('button', { name: 'All' }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('lists the bill cycles newest first, and resets a date that hides them all', async () => {
+    const CYCLE2 = {
+      ...CYCLE1,
+      id: 'c2000002-0000-4000-8000-000000000002',
+      name: 'Daily billing 2026-10-01',
+      billingDate: '2026-09-30T21:00:00Z',
+      paymentDueDate: undefined,
+    };
+    backend({
+      [`GET ${BILL}?${LIST}`]: () => json([], { total: 0 }),
+      [`GET ${CYCLE}?${PAGE}`]: () => json([CYCLE1, CYCLE2], { total: 2 }),
+    });
+    open('/bills');
+    fireEvent.click(await screen.findByRole('button', { name: 'Bill cycles' }));
+    await screen.findByText('Daily billing 2026-10-01');
+    const names = () =>
+      screen
+        .getAllByRole('row')
+        .slice(1)
+        .map((r) => within(r).queryByText(/^Daily billing/)?.textContent)
+        .filter(Boolean);
+    expect(names()).toEqual(['Daily billing 2026-10-01', 'Daily billing 2026-09-01']);
+    expect(screen.getByText('Showing 2')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Billing date'), { target: { value: '2026-10-01' } });
+    expect(await screen.findByText('Showing 1 of 2')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Billing date'), { target: { value: '2026-07-01' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Reset filters' }));
+
+    expect(await screen.findByText('Showing 2')).toBeTruthy();
+    expect(screen.getByLabelText('Billing date')).toHaveProperty('value', '');
+  });
+
+  it('opens the card from the account link of a row without opening the bill', async () => {
+    backend({ [`GET ${BILL}?${LIST}`]: () => json([BILL1], { total: 1 }), 'GET /*': pending });
+    open('/bills');
+    fireEvent.click(await screen.findByRole('link', { name: 'Ivan Ivanov' }));
+    expect(window.location.pathname).toBe(`/billing-accounts/${A1}`);
+    expect(screen.queryByRole('dialog', { name: 'Bill BL-B1000001' })).toBeNull();
+  });
+
+  it('closes a bill and a cycle without a write', async () => {
+    const { fetchMock } = backend({
+      [`GET ${BILL}?${LIST}`]: () => json([BILL1], { total: 1 }),
+      [`GET /internal/v1/customerBill/${B1}`]: () => json(DETAIL),
+      [`GET ${CYCLE}/${K1}`]: () => json(CYCLE1),
+    });
+    open('/bills');
+    fireEvent.click(await screen.findByText('BL-B1000001'));
+    const dialog = await screen.findByRole('dialog', { name: 'Bill BL-B1000001' });
+    await within(dialog).findByText('Related');
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Bill BL-B1000001' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Bill cycles' }));
+    fireEvent.click(await screen.findByText('Daily billing 2026-09-01'));
+    await screen.findByRole('dialog', { name: 'Bill cycle C1000001' });
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Bill cycle C1000001' })).toBeNull();
+    expect(fetchMock.mock.calls.filter(([, init]) => (init?.method ?? 'GET') !== 'GET')).toEqual(
+      [],
+    );
+  });
+
+  it('closes the bill put on hold and reads the list again', async () => {
+    let held = false;
+    const { fetchMock, calls } = backend({
+      [`GET ${BILL}?${LIST}`]: () =>
+        json([held ? { ...BILL1, state: 'onHold' } : BILL1], { total: 1 }),
+      [`GET /internal/v1/customerBill/${B1}`]: () => json({ ...DETAIL, allowedStates: ['onHold'] }),
+      [`PATCH ${BILL}/${B1}`]: () => {
+        held = true;
+        return json({ ...BILL1, state: 'onHold' });
+      },
+    });
+    open('/bills');
+    fireEvent.click(await screen.findByText('BL-B1000001'));
+    const dialog = await screen.findByRole('dialog', { name: 'Bill BL-B1000001' });
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Put on hold' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Yes' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(calls.filter((c) => c === `GET ${BILL}?${LIST}`)).toHaveLength(2));
+    const row = (await screen.findByText('BL-B1000001')).closest('[role=row]') as HTMLElement;
+    expect(await within(row).findByText('On hold')).toBeTruthy();
+    const patch = fetchMock.mock.calls.find(([, init]) => init?.method === 'PATCH');
+    expect(JSON.parse(String(patch?.[1]?.body))).toEqual({ state: 'onHold' });
   });
 });
