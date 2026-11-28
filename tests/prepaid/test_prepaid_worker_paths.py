@@ -2,12 +2,14 @@
 real test database: each ends in the checked commands, attempts and product statuses."""
 
 from datetime import datetime, time, timedelta
+from decimal import Decimal
 from types import SimpleNamespace
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 
 from app.clock import FixedClock
+from app.repository import funding
 from app.repository import prepaid_commands as commands
 from app.worker import loop
 from app.worker import prepaid as worker
@@ -108,6 +110,66 @@ def test_a_renewal_another_worker_attempted_after_the_scan_is_not_attempted_agai
         "the other worker's attempt",
     )
     assert row["next_retry_at"] > due.at
+
+
+def test_a_renewal_with_no_previous_interval_records_a_technical_failure(db_conn, due):
+    missing = uuid4()
+    cid = worker.renewal_id(missing)
+    account_id = UUID(due.acc["id"])
+    before = funding.load(db_conn, account_id).spendable
+    commands.enqueue(
+        db_conn,
+        cid,
+        account_id,
+        kind="renewal",
+        due_date=due.at.date(),
+        request={"previous_interval_id": str(missing)},
+        now=due.at,
+    )
+    db_conn.commit()
+    assert worker.process_commands(db_conn, clock=FixedClock(due.at), tz=TZ) == [cid]
+    db_conn.commit()
+    row = commands.get(db_conn, cid)
+    assert (row["state"], row["attempts"], row["error"]) == (
+        "failedTechnical",
+        1,
+        "renewal requires an owned previous interval",
+    )
+    assert funding.load(db_conn, account_id).spendable == before
+    assert db_conn.execute(
+        "SELECT count(*) FROM funded_interval WHERE command_id = %s", (cid,)
+    ).fetchone() == (0,)
+
+
+def test_ending_a_product_retires_its_renewal_and_releases_the_owned_hold(db_conn, due):
+    produce(db_conn, due.at)
+    cid = due.renewals[0]
+    account_id = UUID(due.acc["id"])
+    held = Decimal("12.00")
+    before = funding.load(db_conn, account_id).spendable
+    db_conn.commit()
+    hold = funding.reserve_for_command(db_conn, account_id, held, command_id=cid, held_at=due.at)
+    db_conn.execute("UPDATE product SET status = 'terminated' WHERE id = %s", (due.products[0],))
+    db_conn.commit()
+    assert funding.load(db_conn, account_id).spendable == before - held
+    # Finish the other renewal first, leaving only the ended product's retirement in this pass.
+    commands.complete(db_conn, due.renewals[1], {"outcome": "cancelled"}, now=due.at)
+    db_conn.commit()
+    now = due.at + timedelta(minutes=1)
+    assert worker.process_commands(db_conn, clock=FixedClock(now), tz=TZ) == [cid]
+    db_conn.commit()
+    row = commands.get(db_conn, cid)
+    assert (row["state"], row["result"]) == (
+        "completed",
+        {"outcome": "cancelled", "reason": "productEnded"},
+    )
+    assert db_conn.execute(
+        "SELECT released_at FROM funding_hold WHERE id = %s", (hold,)
+    ).fetchone() == (now,)
+    assert funding.load(db_conn, account_id).spendable == before
+    assert db_conn.execute(
+        "SELECT count(*) FROM funded_interval WHERE command_id = %s", (cid,)
+    ).fetchone() == (0,)
 
 
 def test_a_checkpoint_stops_the_entitlement_pass_and_each_account_gets_one_heartbeat(db_conn, due):

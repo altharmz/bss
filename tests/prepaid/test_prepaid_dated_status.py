@@ -3,11 +3,13 @@
 
 from datetime import datetime, time, timedelta
 from types import SimpleNamespace
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 
+from app.billing.status_change import post_status_change
 from app.repository import prepaid_commands as commands
+from app.worker import db as worker_db
 from tests import apidata, timeline
 from tests.apidata import ORDER
 from tests.builders.orders.api_order_cancel import CANCEL, cancel_body
@@ -84,6 +86,53 @@ def test_dated_suspend_waits_for_its_day_and_keeps_the_paid_interval(api, db_con
     assert count(db_conn, "applied_customer_billing_rate") == charges
     assert command_of(db_conn, order)["result"] == {"outcome": "statusChanged"}
     assert [e["event"]["product"]["status"] for _, e in stored(db_conn, "TMF637")] == ["suspended"]
+
+    assert post_status_change(db_conn, cmd["id"], now=at_dawn(day), tz=TZ) == {
+        "outcome": "statusChanged"
+    }
+    db_conn.commit()
+    assert command_of(db_conn, order)["attempts"] == 1
+    assert [e["event"]["product"]["status"] for _, e in stored(db_conn, "TMF637")] == ["suspended"]
+
+
+def test_a_dated_status_order_cannot_be_posted_without_billing_ownership(api, db_conn, granted):
+    acc, (first, _) = granted
+    day = today(api) + timedelta(days=2)
+    order = dated(api, acc, first, "suspended", day)
+    worker_db.release_ownership(db_conn)
+    with pytest.raises(ValueError, match="prepaid posting requires billing ownership"):
+        post_status_change(db_conn, UUID(order["id"]), now=at_dawn(day), tz=TZ)
+    assert api.get(order["href"]).json()["state"] == "inProgress"
+    assert command_of(db_conn, order)["attempts"] == 0
+
+
+@pytest.mark.parametrize(
+    ("kind", "message"),
+    [
+        ("renewal", "status change requires a prepaid order command"),
+        ("order", "status command must match its entire pending order"),
+    ],
+)
+def test_a_command_cannot_apply_another_orders_status_change(api, db_conn, granted, kind, message):
+    acc, (first, _) = granted
+    day = today(api) + timedelta(days=2)
+    order = dated(api, acc, first, "suspended", day)
+    cid = uuid4()
+    commands.enqueue(
+        db_conn,
+        cid,
+        UUID(acc["id"]),
+        kind=kind,
+        due_date=day,
+        request=command_of(db_conn, order)["request"],
+        now=api.clock.now(),
+    )
+    db_conn.commit()
+    with pytest.raises(ValueError, match=message):
+        post_status_change(db_conn, cid, now=at_dawn(day), tz=TZ)
+    assert api.get(order["href"]).json()["state"] == "inProgress"
+    assert view(api, acc, first)["status"] == "active"
+    assert commands.get(db_conn, cid)["attempts"] == 0
 
 
 def test_dated_resume_after_expiry_queues_the_renewal(api, db_conn, granted):

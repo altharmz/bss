@@ -11,6 +11,8 @@ import pytest
 from app.billing import lifecycle as rules
 from app.integrations.network import adapter as network
 from app.integrations.payment import adapter as gateway
+from app.repository import billing, products
+from app.repository import lifecycle as lifecycle_repo
 from tests import apidata, timeline
 from tests.apidata import ORDER
 from tests.builders.billing.settlement_db import make_payment
@@ -177,6 +179,10 @@ def test_a_top_up_on_the_day_of_the_suspension_resumes_the_next_business_date(
     top_up(api, db_conn, numbered.acc, "12", day, ticks=4)
     assert db_conn.execute("SELECT count(*) FROM funded_interval").fetchone() == (2,)
     assert kinds() == ["suspend"]  # one status change per product and day
+    assert shown(api, numbered.acc, numbered.product)["lifecycle"] == {
+        "state": "suspended",
+        "nextTransition": None,
+    }
     go(api, db_conn, day + timedelta(days=1))
     assert kinds() == ["suspend", "restore"]
     assert row(db_conn, numbered.product)[:3] == ("active", False, False)
@@ -214,6 +220,17 @@ def test_deactivation_ends_the_product_and_ages_the_number(api, db_conn, numbere
     end = numbered.due + timedelta(days=33)
     go(api, db_conn, end)
     assert row(db_conn, numbered.product)[0] == "terminated"
+    assert (
+        rules.view(
+            db_conn,
+            products.get_product(db_conn, numbered.product),
+            billing.load_account_row(db_conn, UUID(numbered.acc["id"])),
+            lifecycle_repo.settings(db_conn),
+            end,
+        )
+        is None
+    )
+    db_conn.commit()
     assert db_conn.execute(
         "SELECT aging_days FROM number_assignment WHERE released_on IS NOT NULL"
         " AND resource_specification_id = 'msisdn'"

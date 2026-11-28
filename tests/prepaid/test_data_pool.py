@@ -12,8 +12,11 @@ from app.billing import data_pool
 from app.billing.core import cycle_period
 from app.network.usage import Incoming, ingest, ingest_batch
 from app.notify import events
+from app.repository import data_pool as pool_repo
+from app.worker import network
 from tests import timeline
 from tests.apidata import CATALOG
+from tests.builders.prepaid.prepaid_offering_changes import switch
 from tests.builders.prepaid.prepaid_renewal_producer import tick
 from tests.builders.prepaid.prepaid_terminations import terminate
 from tests.builders.prepaid.usage import line_on, summary
@@ -275,6 +278,41 @@ def test_an_unsent_pool_size_is_replaced_by_the_next_one(api, db_conn, pooled, s
     tick(db_conn, api.clock.now() + timedelta(hours=2))
     told = [row for row in pool_commands(db_conn) if row[0] == a["id"] and row[2] == "dataPool"]
     assert told[-1] == (a["id"], "change_profile", "dataPool", 3000, "confirmed")
+
+
+def test_a_candidate_account_has_no_pool_before_its_scheduled_change(api, db_conn, pooled, stub):
+    product = line_on(api, db_conn, pooled.cheaper, pooled.acc, A)
+    end = db_conn.execute(
+        "SELECT upper(period) FROM funded_interval WHERE product_id = %s", (product["id"],)
+    ).fetchone()[0]
+    change = switch(api, pooled.acc, product, pooled.off, end)
+    assert change["state"] == "inProgress"
+    now = api.clock.now()
+    account_id = UUID(pooled.acc["id"])
+    assert pool_repo.accounts_with_lines(db_conn, [UUID(pooled.off["id"])], api.clock.today()) == [
+        account_id
+    ]
+    assert network.sync_pools(db_conn, api.clock.today(), now) == []
+    assert pool_commands(db_conn) == []
+    assert [kind for kind, _ in stub.received.values()] == ["activate"]
+
+
+def test_a_member_whose_purchase_had_no_activation_is_not_sent_a_pool_update(
+    api, db_conn, world, stub
+):
+    spec = world.off["productSpecification"]["href"]
+    response = api.patch(spec, {"productSpecCharacteristic": []})
+    assert response.status_code == 200, response.text
+    first = line_on(api, db_conn, world.off, world.acc, A)
+    assert stub.received == {}
+
+    make_line(api, world.off, dataPool=1, dataAllowanceMb=1000)
+    second = line_on(api, db_conn, world.off, world.acc, B)
+    assert pool_commands(db_conn) == [(second["id"], "activate", "order", 2000, "confirmed")]
+    assert [(kind, request["msisdn"]) for kind, request in stub.received.values()] == [
+        ("activate", B)
+    ]
+    assert data_entry(summary(api, first))["pool"]["members"] == 2
 
 
 def test_a_daily_price_on_a_pooled_offering_is_refused(api, db_conn, pooled):
