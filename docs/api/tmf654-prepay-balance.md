@@ -50,7 +50,7 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF654-P
 
 ## Behaviour and deviations
 
-- A `bucket` is a view of a prepaid account's funding ledger: one `monetary` bucket per
+- A monetary `bucket` is a view of a prepaid account's funding ledger: one `monetary` bucket per
   prepaid billing account and currency, with a stable id. `remainingValue` is the
   spendable amount L - H and `reservedValue` the outstanding holds H, both
   `{amount, units}` in the account currency (exact cents); `remainingValueName` is the
@@ -74,6 +74,10 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF654-P
 - POST/DELETE `/hub` subscribe to the twelve balance-action events (v4
   EventSubscription: no href, no `@type`). `balanceActionHistory` is not implemented yet; its
   endpoints answer 404 (`tests/tmf-gaps.txt`).
+
+Funded plan allowances appear as read-only data, voice and SMS buckets, with separate
+zones for passes. A shared data bucket lists the member products. Its remaining quantity
+is the pool total. Monetary balance actions accept only monetary buckets.
 
 ### topupBalance
 

@@ -100,3 +100,16 @@ def numbers(conn: psycopg.Connection, product_ids: list[UUID], today: date) -> l
         ORDER BY a.product_id, a.effective_from""",
         {"ids": product_ids, "today": today},
     )
+
+
+def offset_after_monetary(conn, where, offset):
+    """The page starts beyond the monetary rows. Find their end with single-row probes."""
+    low, high = 0, offset
+    while low < high:
+        middle = (low + high) // 2
+        rows, _ = page(conn, where, middle, 1)
+        if rows:
+            low = middle + 1
+        else:
+            high = middle
+    return offset - low

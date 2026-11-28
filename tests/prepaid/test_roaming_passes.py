@@ -262,6 +262,9 @@ def test_roaming_and_international_usage_count_only_against_their_zone(api, db_c
     pools = {(a["zone"], a["kind"]): a for a in summary["allowances"]}
     assert pools[("roaming", "data")]["used"] == 850 * MIB
     assert pools[("roaming", "data")]["included"] == 1000 * MIB
+    buckets = api.get("/tmf-api/prepayBalanceManagement/v4/bucket?usageType=data").json()
+    roaming = next(b for b in buckets if b["name"] == "roaming data")
+    assert roaming["remainingValue"] == {"units": "MB", "amount": 150}
     assert pools[("roaming", "data")]["thresholds"] == [80]
     assert pools[("domestic", "data")]["used"] == 100 * MIB  # the roaming 850 MB is not here
     assert pools[("domestic", "data")]["thresholds"] == []

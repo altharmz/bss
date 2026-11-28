@@ -15,6 +15,9 @@
 # Status (implemented / tested / deployed) is never written here - it is derived.
 
 items:
+  - {id: db.usage_consumption_report, area: db, stage: 5, table: usage_consumption_report, title: "Usage consumption report snapshots"}
+  - {id: api.tmf677.report.create, area: api, stage: 5, method: POST, path: "/tmf-api/usageConsumption/v5/usageConsumptionReport", title: "Create usage consumption report"}
+  - {id: api.tmf677.report.get, area: api, stage: 5, method: GET, path: "/tmf-api/usageConsumption/v5/usageConsumptionReport/{report_id}", title: "Retrieve usage consumption report"}
   - {id: db.prepaid_bucket, area: db, stage: 5, table: prepaid_bucket, title: "Stable prepaid bucket and accumulated-balance identities"}
   - {id: db.funding_hold, area: db, stage: 5, table: funding_hold, title: "Retained funding holds"}
   - {id: db.funding_hold_source, area: db, stage: 5, table: funding_hold_source, title: "Pinned hold sources and combined usage bounds"}

@@ -293,6 +293,33 @@ def test_period_totals_and_remaining_allowance_include_an_add_on(api, db_conn, w
     data = allowance(before, "data")
     assert data["used"] == 600 * MIB and data["included"] == 1000 * MIB
     assert data["remaining"] == 400 * MIB and data["percent"] == 60
+    bucket_url = "/tmf-api/prepayBalanceManagement/v4/bucket"
+    buckets = api.get(f"{bucket_url}?usageType=data").json()
+    bucket = next(b for b in buckets if b["product"][0]["id"] == product["id"])
+    contract.assert_valid("TMF654", "Bucket", bucket)
+    assert bucket["remainingValue"] == {"amount": 400, "units": "MB"}
+    assert api.get(bucket["href"]).json() == bucket
+    assert bucket["validFor"]["endDateTime"] > bucket["validFor"]["startDateTime"]
+    page = api.get(f"{bucket_url}?offset=1&limit=1").json()
+    assert page == api.get(bucket_url).json()[1:2]
+    report = api.post(
+        "/tmf-api/usageConsumption/v5/usageConsumptionReport",
+        {
+            "@type": "UsageConsumptionReport",
+            "product": [{"@type": "UsageConsumptionProductRef", "id": product["id"]}],
+        },
+    )
+    assert report.status_code == 201, report.text
+    snapshot = report.json()
+    contract.assert_valid("TMF677", "UsageConsumptionReport", snapshot)
+    assert any(b["id"] == bucket["id"] for b in snapshot["bucket"])
+    for key, reference in (
+        ("partyAccount", bucket["partyAccount"]),
+        ("logicalResource", bucket["logicalResource"][0]),
+    ):
+        scoped = api.post("/tmf-api/usageConsumption/v5/usageConsumptionReport", {key: [reference]})
+        assert scoped.status_code == 201, scoped.text
+        assert scoped.json()["bucket"] == snapshot["bucket"]
     assert allowance(before, "voice")["included"] == 60 * 60
     assert before["throttled"] is False
 
@@ -303,6 +330,8 @@ def test_period_totals_and_remaining_allowance_include_an_add_on(api, db_conn, w
     data = allowance(after, "data")
     assert data["used"] == 600 * MIB and data["included"] == 5000 * MIB  # the raised allowance
     assert data["remaining"] == 4400 * MIB and data["percent"] == 12
+    assert api.get(f"{bucket_url}?usageType=data").json()[0]["remainingValue"]["amount"] == 4400
+    assert api.get(snapshot["href"]).json() == snapshot
     assert allowance(after, "voice")["included"] == 300 * 60
     assert allowance(after, "sms")["included"] == 100
 
@@ -374,6 +403,8 @@ def test_a_product_without_a_plan_period_has_usage_but_no_allowance(api, db_conn
     product = line_on(api, db_conn, world.off, world.acc)
     body = summary(api, product, date=(api.clock.today() - timedelta(days=30)).isoformat())
     assert body["period"] is None and body["allowances"] == [] and body["throttled"] is False
+    api.clock.set(api.clock.now() - timedelta(days=30))
+    assert api.get("/tmf-api/prepayBalanceManagement/v4/bucket?usageType=data").json() == []
     assert api.get(f"{SUMMARY}?product.id=00000000-0000-4000-8000-000000000000").status_code == 404
     assert api.get(SUMMARY).status_code == 400
     assert api.get(f"{SUMMARY}?product.id={product['id']}&x=1").status_code == 400

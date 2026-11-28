@@ -86,6 +86,10 @@ def test_three_lines_share_one_allowance_and_mark_80_and_100_once(api, db_conn, 
     a = line_on(api, db_conn, pooled.off, pooled.acc, A)
     b = line_on(api, db_conn, pooled.off, pooled.acc, B)
     c = line_on(api, db_conn, pooled.off, pooled.acc, C)
+    (shared,) = api.get("/tmf-api/prepayBalanceManagement/v4/bucket?usageType=data").json()
+    assert shared["isShared"]
+    assert {p["id"] for p in shared["product"]} == {p["id"] for p in (a, b, c)}
+    assert shared["remainingValue"] == {"units": "MB", "amount": 3000}
     at, hour = timeline.midnight(api.clock.today()) + timedelta(hours=12), timedelta(hours=1)
     batch = [
         Incoming("p-1", "data", 1500 * MIB, at, msisdn=A),  # over A's own 1000 MB: no line mark

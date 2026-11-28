@@ -264,3 +264,14 @@ Approved by the human on 2026-11-09 for the load-test programme: at 2M records a
   keys and indexes (built once per partition after the copy), the drop of the old table.
   Measured on the 100k dataset (6.8M records, `lt-db` on cpuset `4-7`): upgrade 493 s,
   downgrade 921 s. Production holds far fewer records today.
+## Allowance buckets and consumption reports
+
+A funded line exposes one bucket per zone and usage kind with a positive included allowance.
+Its UUID identifies the product, funded period start, zone and kind. A domestic data pool
+uses its account and pool period in that identity, so all member lines reference one bucket.
+The network-confirmed profile supplies the allowance, including confirmed add-ons and passes.
+Remaining data uses the plan's MB (1,048,576 bytes), voice uses minutes and SMS uses messages.
+The funded interval is half-open in the billing timezone. At its end the bucket leaves the
+current view. A new funded period has its own ID. A line without a grant contributes no buckets.
+
+A TMF677 report captures those quantities at creation and retains them for retrieval by ID.
