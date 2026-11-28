@@ -1,4 +1,4 @@
-"""Product offering qualifications (TMF679), stored as answered (migration 0091,
+"""Product offering qualifications (TMF679), stored as answered (migration 0092,
 docs/decisions/qualification.md). A row is written once by POST; PATCH changes only its
 details (what the client sent that has no behaviour); DELETE removes it, and so does the
 worker's housekeeping 30 days after its creation (app/repository/housekeeping.py)."""

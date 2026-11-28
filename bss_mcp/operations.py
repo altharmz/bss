@@ -37,6 +37,7 @@ from app.api.catalog import (
 from app.api.catalog_jobs import ExportJobCreate, ImportJobCreate
 from app.api.classification import CatalogCreate, CatalogPatch, CategoryCreate, CategoryPatch
 from app.api.communication import MessageCreate, MessagePatch
+from app.api.consumption import ReportQuery
 from app.api.customer import CustomerCreate, CustomerPatch
 from app.api.hub import HUB_APIS, HubIn
 from app.api.interaction import InteractionCreate, InteractionPatch
@@ -213,9 +214,13 @@ OPERATIONS: dict[str, Op] = {
         "Delete a never-assigned number; any retained assignment history gives 409."
     ),
     # --- TMF654 prepaid balances ---
+    "create_usage_consumption_report": Op(
+        "Capture remaining allowances for a product, billing account or subscriber number.",
+        body=ReportQuery,
+    ),
+    "get_usage_consumption_report": Op("Retrieve a usage consumption snapshot.", query=FIELDS),
     "list_buckets": Op(
-        "Prepaid monetary buckets, one per prepaid account and currency: remainingValue"
-        " (spendable), reservedValue (held); filter by partyAccount.id, status or usageType.",
+        "Prepaid monetary and allowance buckets. Filter by partyAccount.id, status or usageType.",
         query=LIST,
     ),
     "get_bucket": Op(

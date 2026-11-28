@@ -53,6 +53,8 @@ get_trouble_ticket: the Cases tab and screen are the UI half of issue 199
 create_trouble_ticket: opening a case; the UI action is the UI half of issue 199
 patch_trouble_ticket: working a case; the UI action is the UI half of issue 199
 get_hub_ticket: the internal eventSubscription list covers every hub
+create_usage_consumption_report: the usage tab displays the live allowance summary and does not create snapshots
+get_usage_consumption_report: the usage tab displays current usage rather than saved reports
 
 # TMF679 qualification (#429): the backend came first; the Add product dialog follows in #527.
 get_hub_qualification: the internal eventSubscription list covers every hub

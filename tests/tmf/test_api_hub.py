@@ -21,7 +21,7 @@ from tests.builders.tmf.api_hub import CALLBACK, hub
 APIS = sorted(BASES)
 
 
-NO_HUB = ("TMF635", "TMF681")  # no listener events: no /hub (usage.md, notifications.md)
+NO_HUB = ("TMF635", "TMF677", "TMF681")  # these slices expose no event subscriptions
 
 
 def spec_events() -> dict[str, set[str]]:

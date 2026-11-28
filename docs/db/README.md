@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0091**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0092**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -70,6 +70,7 @@ PostgreSQL schema at Alembic head **0091**, read from `pg_catalog` of a throwawa
 | [`funding_source`](funding_source.md) | billing | Credit sources beside payments and credit notes: positive adjustments, received transfers and restored debit sources. Bounded with allocations, payouts, holds and consumption. |
 | [`funding_consumption`](funding_consumption.md) | billing | Exact source amounts consumed by debits, outgoing transfer principal and credit reversals. |
 | [`usage_record`](usage_record.md) | billing | One usage record from the network feed (TMF635 ProductUsage): data, voice or SMS used on a line, stored once per network record id and matched to the product that held the number on the event date. Partitioned by month of event_date; partitions older than 13 months are dropped by the worker's housekeeping (rated amounts stay in usage_charge and the ABRs). |
+| [`usage_consumption_report`](usage_consumption_report.md) | billing | Usage allowance snapshots returned by TMF677, keyed by report ID. |
 | [`usage_threshold`](usage_threshold.md) | billing | An allowance threshold (80% or 100%) reached by a line in a plan period: one row is one event, once per product, period and allowance. The notifications slice reads it. |
 | [`usage_pool_threshold`](usage_pool_threshold.md) | billing | A data pool threshold (80% or 100%) reached by an account in a pool period: one row is one event, once per account, period and threshold. The notifications slice reads it. |
 | [`usage_charge`](usage_charge.md) | billing | The rating of one usage record of a pay-as-you-go line: the pass that rated it (a usage command), the usage price applied and the ABR that charged its line, kind and day. The primary key is what keeps a record from ever being charged twice. Without a price (the offering has none for the kind) or with a zero price there is no charge (abr_id null). |
@@ -188,6 +189,7 @@ flowchart LR
     funding_source[funding_source]
     funding_consumption[funding_consumption]
     usage_record[usage_record]
+    usage_consumption_report[usage_consumption_report]
     usage_threshold[usage_threshold]
     usage_pool_threshold[usage_pool_threshold]
     usage_charge[usage_charge]
@@ -1398,6 +1400,10 @@ erDiagram
     text rejection_reason
     timestamptz created_at
     boolean international
+  }
+  usage_consumption_report {
+    uuid id PK
+    jsonb body
   }
   usage_threshold {
     uuid product_id PK,FK

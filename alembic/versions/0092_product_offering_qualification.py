@@ -1,7 +1,7 @@
 """Product offering qualification (TMF679): one eligibility check before an order (#429).
 
-Revision ID: 0091
-Revises: 0090
+Revision ID: 0092
+Revises: 0091
 
 docs/decisions/qualification.md. One table for both TMF679 tasks, checkProductOfferingQualification
 and queryProductOfferingQualification: each is answered synchronously (state `done`) by a dry run
@@ -12,8 +12,8 @@ never holds up deleting an account created by mistake.
 
 from alembic import op
 
-revision = "0091"
-down_revision = "0090"
+revision = "0092"
+down_revision = "0091"
 branch_labels = None
 depends_on = None
 

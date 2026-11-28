@@ -114,7 +114,7 @@ export async function loadBucketRows(
   offset: number,
   signal: AbortSignal,
 ): Promise<Paged<BucketRow>> {
-  const query = new URLSearchParams();
+  const query = new URLSearchParams({ usageType: 'monetary' });
   if (filter.account !== null) query.set('partyAccount.id', filter.account);
   if (filter.status !== null) query.set('status', filter.status);
   query.set('offset', String(offset));

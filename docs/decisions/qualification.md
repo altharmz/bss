@@ -93,7 +93,7 @@ is listed when nothing stands against it except a missing input that a query can
   `instantSyncQualification` true (a false is a 422, "set by the server"). `StateChange`
   events are never sent. Nothing in the engine is slow enough to need the asynchronous
   form.
-- **Stored as answered** in `product_offering_qualification` (migration 0091), one table for
+- **Stored as answered** in `product_offering_qualification` (migration 0092), one table for
   both kinds. The answer items are jsonb as answered; `details` holds what the client sent
   that has no behaviour (description, channel, note, relatedParty,
   requestedQualificationCompletionDate, the flags, a query's searchCriteria). PATCH changes

@@ -36,6 +36,7 @@ SPEC_FILES = {
     "TMF632": "TMF632-Party_Management-v5.0.0.oas.yaml",
     "TMF637": "TMF637-ProductInventory-v5.0.0.oas.yaml",
     "TMF635": "TMF635-Product_Usage_Management-v5.0.0.oas.yaml",
+    "TMF677": "TMF677-Usage_Consumption-v5.0.0.oas.yaml",
     "TMF639": "TMF639-Resource_Inventory_Management-v5.0.0.oas.yaml",
     "TMF654": "TMF654-PrepayBalance-v4.0.0.swagger.json",
     "TMF666": "TMF666-Account_Management-v5.0.0.oas.yaml",
