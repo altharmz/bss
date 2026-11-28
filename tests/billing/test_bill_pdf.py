@@ -165,18 +165,28 @@ def test_the_pdf_is_not_rewritten_by_later_changes(api, worker, db_conn):
 
 
 @pytest.mark.capability("worker.billPdf")
-def test_a_render_failure_fails_the_account_and_writes_nothing(api, worker, db_conn, monkeypatch):
+@pytest.mark.parametrize(
+    ("failure", "detail"),
+    [
+        (bill_pdf.RenderError("font missing"), "font missing"),
+        (OSError("font missing"), "OSError: font missing"),
+    ],
+)
+def test_a_render_failure_fails_the_account_and_writes_nothing(
+    api, worker, db_conn, monkeypatch, failure, detail
+):
     broken = billed_account(api)
     fine = billed_account(api)
-    real = bill_pdf.render
+    real = bill_pdf._render
 
     def render(bill):
         if str(bill.account_id) == broken["id"]:
-            raise bill_pdf.RenderError("font missing")
+            raise failure
         return real(bill)
 
-    monkeypatch.setattr(bill_pdf, "render", render)
-    run(worker, api, DEC1)
+    with monkeypatch.context() as patch:
+        patch.setattr(bill_pdf, "_render", render)
+        run(worker, api, DEC1)
     assert bills_of(api, broken) == []
     assert len(bills_of(api, fine)) == 1
     status, error = db_conn.execute(
@@ -185,6 +195,7 @@ def test_a_render_failure_fails_the_account_and_writes_nothing(api, worker, db_c
     ).fetchone()
     db_conn.commit()
     assert status == "failed" and error.startswith("DocumentFailed")
+    assert error.endswith(detail)
     assert total_abrs(api, broken) == 0  # nothing of the account was written
 
 

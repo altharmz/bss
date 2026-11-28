@@ -10,6 +10,7 @@ from uuid import UUID
 
 import pytest
 
+from app.billing.prepaid import post_interval
 from app.clock import FixedClock
 from app.integrations.identity import adapter as identity
 from app.integrations.network import adapter as network
@@ -17,6 +18,7 @@ from app.integrations.notify import NotifyError
 from app.integrations.notify import adapter as sender
 from app.ordering.process import OrderRefused
 from app.worker import signup as worker
+from tests import timeline
 from tests.builders.care.care_signup import (  # noqa: F401
     identity_stub,
     last_code,
@@ -31,7 +33,12 @@ from tests.builders.care.self_care import (  # noqa: F401 - fixtures
     enabled,
     log_sender,
 )
-from tests.builders.prepaid.prepaid_plans import balance, stubs  # noqa: F401 - fixtures
+from tests.builders.prepaid.prepaid_plans import (  # noqa: F401 - fixtures
+    balance,
+    offering,
+    price,
+    stubs,
+)
 from tests.builders.prepaid.prepaid_posting import TZ
 
 SIGNUP = BASE + "/signup"
@@ -162,6 +169,38 @@ def test_a_refused_order_fails_the_signup_and_keeps_the_top_up(
     }
     assert balance(db_conn, failed["billingAccount"]) > D(0)  # the top-up stays as balance
     assert esim_mails(db_conn) == []
+
+
+def test_an_order_completed_at_placement_activates_signup_without_an_esim_email(
+    api, care, db_conn, stubs, monkeypatch
+):
+    plan = offering(
+        api,
+        "Plan without a SIM",
+        [price(api, "recurring", 10, "Monthly", "monthly", 1)],
+        kind="plan",
+    )
+    api.clock.set(timeline.START + timedelta(hours=9))
+    signup = paid(api, care, db_conn, plan)
+    real = worker.place_order
+
+    def place_and_complete(conn, request, *, now, today):
+        order_id = real(conn, request, now=now, today=today)
+        post_interval(conn, order_id, now=now, tz=TZ)
+        return order_id
+
+    with monkeypatch.context() as patch:
+        patch.setattr(worker, "place_order", place_and_complete)
+        wake(api, db_conn)
+
+    shown = operator_view(api, signup)
+    assert shown["state"] == "active" and shown["order"]["state"] == "completed"
+    public = care.get(f"{SIGNUP}/{signup['id']}")
+    assert public.status_code == 200, public.text
+    assert public.json()["state"] == "active" and public.json()["esim"] is None
+    assert run(api, db_conn) == []
+    assert esim_mails(db_conn) == []
+    assert all(message.subject != worker.SUBJECT for message in sender().sent)
 
 
 def test_an_activation_the_network_refuses_fails_the_signup_with_its_reason(

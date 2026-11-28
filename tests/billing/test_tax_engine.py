@@ -156,6 +156,24 @@ def test_the_service_address_is_validated(api, db_conn, bad):
     assert response.status_code == 422, response.text
 
 
+def test_email_is_skipped_when_finding_the_service_address(api, db_conn):
+    _, acc = shop(api, db_conn, numbers=False)
+    [contact] = service_address_contact(NY)
+    [address] = contact["contactMedium"]
+    email = {"@type": "EmailContactMedium", "emailAddress": "billing@example.org"}
+    url = f"{ACCOUNT}/{acc['id']}"
+    rejected = api.patch(url, {"contact": [contact | {"contactMedium": [email]}]})
+    assert rejected.status_code == 422, rejected.text
+    assert rejected.json()["message"] == (
+        "contact.0: a serviceAddress contact needs a GeographicAddressContactMedium"
+    )
+    accepted = api.patch(url, {"contact": [contact | {"contactMedium": [email, address]}]})
+    assert accepted.status_code == 200, accepted.text
+    assert db_conn.execute(
+        "SELECT service_address FROM billing_account WHERE id = %s", (acc["id"],)
+    ).fetchone() == (NY | {"country": "US"},)
+
+
 def test_the_service_address_is_stored_and_removed_with_the_contact(api, db_conn):
     _, acc = shop(api, db_conn, numbers=False)
     assert set_address(api, acc, NY).status_code == 200

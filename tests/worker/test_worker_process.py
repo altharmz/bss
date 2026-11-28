@@ -197,6 +197,33 @@ def test_only_a_failed_run_can_be_retried(api, worker):
         retry_run(worker, s["runs"][DEC1]["id"], clock=api.clock, tz=TZ)
 
 
+def test_retry_reports_a_run_that_already_completed_after_discovery(api, worker, monkeypatch):
+    s = scenario(api, worker, broken=True)
+    run_id = s["runs"][DEC1]["id"]
+    account_id = s["ids"]["x"]
+    set_currency(worker, s["fragile"]["id"], "USD")
+    real = billing.failed_accounts
+    completed = []
+
+    def finish_before_reopen(conn, uid):
+        failed = real(conn, uid)
+        assert failed == [account_id]
+        completed.append(bill_date(conn, DEC1, clock=api.clock, tz=TZ, trigger="retry"))
+        return failed
+
+    with monkeypatch.context() as patch:
+        patch.setattr(billing, "failed_accounts", finish_before_reopen)
+        with pytest.raises(LookupError, match=f"billing run {DEC1} is not failed"):
+            retry_run(worker, run_id, clock=api.clock, tz=TZ)
+
+    [done] = completed
+    assert billing.get_run(worker, DEC1) == done
+    assert (done["status"], done["attempt"]) == ("completed", 2)
+    assert outcome(worker, DEC1, account_id)["status"] == "ok"
+    charges, bills = ledger(worker, account_id)
+    assert len(charges) == len(bills) == 1
+
+
 # --- per-account atomicity ---
 
 

@@ -78,3 +78,12 @@ def test_reconciliation_does_not_subtract_allocations_twice():
 def test_zero_and_negative_ledger_balances():
     assert select_sources([], D("0")) == ()
     assert reconcile([], D("-5"), D("5")) == D("-5")
+
+
+@pytest.mark.parametrize(
+    ("ledger", "obligations", "message"),
+    [(D("NaN"), D("0"), "invalid ledger balance"), (D("0"), D("-1"), "invalid unpaid obligations")],
+)
+def test_reconciliation_rejects_invalid_account_totals(ledger, obligations, message):
+    with pytest.raises(InconsistentState, match=message):
+        reconcile([], ledger, obligations)

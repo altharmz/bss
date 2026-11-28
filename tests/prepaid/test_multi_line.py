@@ -116,6 +116,22 @@ def test_each_purchase_counts_the_live_lines_and_itself(api, db_conn, world):
     assert balance(db_conn, world.acc) == D("1000") - D("36") - D("30") - D("24") - D("24")
 
 
+def test_a_free_plan_records_no_discount_even_when_it_qualifies_for_a_tier(api, db_conn, build):
+    discount = tier(api, 2, 5)
+    assert discount.status_code == 201, discount.text
+    plan = offering(
+        api, "Free plan", [price(api, "recurring", 0, "Monthly", "monthly", 1), discount.json()]
+    )
+    world = build("10", fee=False)
+    world.plan = plan
+    buy_lines(api, db_conn, world, 2)
+    assert recurring(db_conn) == [(D("0"), D("0"), D("0"))] * 2
+    assert db_conn.execute(
+        "SELECT count(*) FROM applied_customer_billing_rate WHERE discount_price_id IS NOT NULL"
+    ).fetchone() == (0,)
+    assert balance(db_conn, world.acc) == D("10")
+
+
 @pytest.mark.parametrize("lines", [1, 2, 3, 4])
 def test_renewals_charge_the_net_and_tax_of_the_line_count(api, db_conn, world, lines):
     buy_lines(api, db_conn, world, lines)

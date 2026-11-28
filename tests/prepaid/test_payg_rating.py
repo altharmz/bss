@@ -8,6 +8,7 @@ from uuid import UUID
 import psycopg
 import pytest
 
+from app.billing import usage_rating
 from app.clock import FixedClock
 from app.integrations.network import adapter as network
 from app.repository import housekeeping as housekeeping_repo
@@ -15,7 +16,7 @@ from app.repository import usage as usage_repo
 from app.repository import usage_bars
 from app.worker import db as worker_db
 from app.worker.housekeeping import housekeep
-from tests import contract, timeline
+from tests import apidata, contract, timeline
 from tests.apidata import CATALOG
 from tests.builders.prepaid.payg_rating import (  # noqa: F401 - fixtures
     USAGE,
@@ -148,6 +149,35 @@ def test_a_plan_line_ignores_usage_prices_its_usage_is_included(api, db_conn, bu
     assert api.get(record["href"]).json()["status"] == "notRated"
     assert rates(db_conn) == [] and balance(db_conn, world.acc) <= before
     assert db_conn.execute("SELECT count(*) FROM usage_charge").fetchone() == (0,)
+
+
+def test_rating_requires_billing_ownership_and_skips_postpaid_accounts(api, db_conn):
+    account_id = UUID(apidata.account(api)["id"])
+    now = api.clock.now()
+    with pytest.raises(ValueError, match="rating requires billing ownership"):
+        usage_rating.rate_account(db_conn, account_id, now=now, tz=timeline.TZ)
+    assert worker_db.acquire_ownership(db_conn)
+    with db_conn.transaction():
+        assert usage_rating.rate_account(db_conn, account_id, now=now, tz=timeline.TZ) is None
+    assert db_conn.execute(
+        "SELECT count(*) FROM prepaid_command WHERE billing_account_id = %s", (account_id,)
+    ).fetchone() == (0,)
+
+
+def test_usage_and_balance_barring_skip_a_grantless_line_whose_offer_is_now_a_plan(
+    api, db_conn, payg
+):
+    world = payg("10", kinds=())
+    record = report(api, world.product, "sms", 1, api.clock.now())
+    summary_url = f"{SUMMARY}?product.id={world.product['id']}"
+    assert api.get(summary_url).json()["payAsYouGo"]["unratedRecords"] == 1
+    response = api.patch(world.offering["href"], {"productOfferingCharacteristic": []})
+    assert response.status_code == 200, response.text
+    next_day(api, db_conn)
+    assert api.get(record["href"]).json()["status"] == "notRated"
+    assert api.get(summary_url).json()["payAsYouGo"] is None
+    assert rates(db_conn) == [] and balance(db_conn, world.acc) == D("10")
+    assert db_conn.execute("SELECT count(*) FROM usage_bar").fetchone() == (0,)
 
 
 def test_the_tax_engine_taxes_the_usage_charge_and_an_outage_leaves_it_unrated(api, db_conn, payg):

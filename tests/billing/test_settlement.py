@@ -164,6 +164,12 @@ def test_nothing_to_do_is_empty():
 # --- explicit items (TMF676 paymentItem) ---
 
 
+def test_explicit_items_require_their_payment_to_be_present():
+    open_bill = bill("10.00")
+    with pytest.raises(ValueError, match="explicit items need the payment they come from"):
+        settle([open_bill], [], [ExplicitItem(open_bill.id, D("5.00"))])
+
+
 def test_explicit_items_go_first_and_the_rest_oldest_first():
     old, mid, new = bill("100.00", day=1), bill("100.00", day=31), bill("100.00", day=61)
     p = pay("150.00")
