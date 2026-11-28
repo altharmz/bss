@@ -80,6 +80,7 @@ IMPORTS = re.compile(r"^(app|bss_mcp)/")
 DATA = {
     "frontend/src/": (
         "tests/orders/test_order_error_codes.py",
+        "tests/orders/test_qualification.py",
         "tests/internal/test_ui_mcp_parity.py",
         "tests/internal/test_ui_requests.py",
     ),

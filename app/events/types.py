@@ -20,6 +20,7 @@ BASES: dict[str, str] = {
     "TMF654": "/tmf-api/prepayBalanceManagement/v4",
     "TMF683": "/tmf-api/partyInteractionManagement/v5",
     "TMF621": "/tmf-api/troubleTicket/v5",
+    "TMF679": "/tmf-api/productOfferingQualification/v5",
 }
 
 _CRUD = ("AttributeValueChange", "Create", "Delete", "StateChange")
@@ -140,6 +141,10 @@ EVENT_TYPES: dict[str, frozenset[str]] = {
             "TroubleTicketSpecificationStatusChangeEvent",
             "TroubleTicketStatusChangeEvent",
         }
+    ),
+    # A qualification is answered at once (always done): its StateChange is never sent.
+    "TMF679": frozenset(
+        _crud("CheckProductOfferingQualification", "QueryProductOfferingQualification")
     ),
 }
 

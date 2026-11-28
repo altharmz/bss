@@ -128,6 +128,52 @@ TMF678 GET /appliedCustomerBillingRate/{id} missing appliedTax.id
 # its url; neither has an href or a validity period.
 TMF678 GET /customerBill/{id} missing billDocument.href
 TMF678 GET /customerBill/{id} missing billDocument.validFor
+# TMF679 qualification (docs/decisions/qualification.md): answered synchronously by a dry run
+# of the order engine, so the answer (state, result, dates, items, reasons) and the question
+# (items, flags, searchCriteria) are the server's and read-only on PATCH; a check needs its
+# items and a query its searchCriteria. An item is a TMF622 order item: category, promotion,
+# notes, termination errors and nested items are not taken; no alternates are proposed. A
+# query lists offerings only (no product, relationship, category or promotion per item).
+TMF679 GET /checkProductOfferingQualification/{id} missing checkProductOfferingQualificationItem.CheckProductOfferingQualificationItem
+TMF679 GET /checkProductOfferingQualification/{id} missing checkProductOfferingQualificationItem.alternateProductOfferingProposal
+TMF679 GET /checkProductOfferingQualification/{id} missing checkProductOfferingQualificationItem.category
+TMF679 GET /checkProductOfferingQualification/{id} missing checkProductOfferingQualificationItem.note
+TMF679 GET /checkProductOfferingQualification/{id} missing checkProductOfferingQualificationItem.promotion
+TMF679 GET /checkProductOfferingQualification/{id} missing checkProductOfferingQualificationItem.terminationError
+TMF679 GET /queryProductOfferingQualification/{id} missing qualifiedProductOfferingItem.category
+TMF679 GET /queryProductOfferingQualification/{id} missing qualifiedProductOfferingItem.product
+TMF679 GET /queryProductOfferingQualification/{id} missing qualifiedProductOfferingItem.promotion
+TMF679 GET /queryProductOfferingQualification/{id} missing qualifiedProductOfferingItem.qualificationItemRelationship
+TMF679 GET /queryProductOfferingQualification/{id} missing searchCriteria.category
+TMF679 GET /queryProductOfferingQualification/{id} missing searchCriteria.promotion
+TMF679 GET /queryProductOfferingQualification/{id} missing searchCriteria.qualificationItemRelationship
+TMF679 PATCH /checkProductOfferingQualification/{id} read-only checkProductOfferingQualificationItem
+TMF679 PATCH /checkProductOfferingQualification/{id} read-only effectiveQualificationDate
+TMF679 PATCH /checkProductOfferingQualification/{id} read-only expectedQualificationCompletionDate
+TMF679 PATCH /checkProductOfferingQualification/{id} read-only expirationDate
+TMF679 PATCH /checkProductOfferingQualification/{id} read-only instantSyncQualification
+TMF679 PATCH /checkProductOfferingQualification/{id} read-only provideAlternative
+TMF679 PATCH /checkProductOfferingQualification/{id} read-only provideOnlyAvailable
+TMF679 PATCH /checkProductOfferingQualification/{id} read-only provideResultReason
+TMF679 PATCH /checkProductOfferingQualification/{id} read-only qualificationResult
+TMF679 PATCH /checkProductOfferingQualification/{id} read-only state
+TMF679 PATCH /queryProductOfferingQualification/{id} read-only effectiveQualificationDate
+TMF679 PATCH /queryProductOfferingQualification/{id} read-only expectedQualificationCompletionDate
+TMF679 PATCH /queryProductOfferingQualification/{id} read-only expirationDate
+TMF679 PATCH /queryProductOfferingQualification/{id} read-only instantSyncQualification
+TMF679 PATCH /queryProductOfferingQualification/{id} read-only qualifiedProductOfferingItem
+TMF679 PATCH /queryProductOfferingQualification/{id} read-only searchCriteria
+TMF679 PATCH /queryProductOfferingQualification/{id} read-only state
+TMF679 POST /checkProductOfferingQualification refused checkProductOfferingQualificationItem.CheckProductOfferingQualificationItem
+TMF679 POST /checkProductOfferingQualification refused checkProductOfferingQualificationItem.category
+TMF679 POST /checkProductOfferingQualification refused checkProductOfferingQualificationItem.note
+TMF679 POST /checkProductOfferingQualification refused checkProductOfferingQualificationItem.promotion
+TMF679 POST /checkProductOfferingQualification refused checkProductOfferingQualificationItem.terminationError
+TMF679 POST /checkProductOfferingQualification requires checkProductOfferingQualificationItem
+TMF679 POST /queryProductOfferingQualification refused searchCriteria.category
+TMF679 POST /queryProductOfferingQualification refused searchCriteria.promotion
+TMF679 POST /queryProductOfferingQualification refused searchCriteria.qualificationItemRelationship
+TMF679 POST /queryProductOfferingQualification requires searchCriteria
 # TMF683 interactions (docs/decisions/care.md): attachments, interaction relationships and
 # external identifiers are not built (422 when sent, never returned). An interaction records
 # a contact that happened: its customer, channel, items and date do not change on PATCH. An

@@ -80,6 +80,12 @@ export const HUB_APIS: [HubApi, ...HubApi[]] = [
     version: 'v5',
     base: '/tmf-api/troubleTicket/v5',
   },
+  {
+    id: 'TMF679',
+    name: 'Product Offering Qualification',
+    version: 'v5',
+    base: '/tmf-api/productOfferingQualification/v5',
+  },
 ];
 
 // The listener events of each API (every one a hub may name in its query).
@@ -235,6 +241,16 @@ export const EVENT_TYPES: Record<string, string[]> = {
     'TroubleTicketSpecificationDeleteEvent',
     'TroubleTicketSpecificationStatusChangeEvent',
     'TroubleTicketStatusChangeEvent',
+  ],
+  TMF679: [
+    'CheckProductOfferingQualificationAttributeValueChangeEvent',
+    'CheckProductOfferingQualificationCreateEvent',
+    'CheckProductOfferingQualificationDeleteEvent',
+    'CheckProductOfferingQualificationStateChangeEvent',
+    'QueryProductOfferingQualificationAttributeValueChangeEvent',
+    'QueryProductOfferingQualificationCreateEvent',
+    'QueryProductOfferingQualificationDeleteEvent',
+    'QueryProductOfferingQualificationStateChangeEvent',
   ],
 };
 

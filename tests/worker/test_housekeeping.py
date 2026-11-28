@@ -200,6 +200,20 @@ def notifications(conn) -> None:
         )
 
 
+def qualifications(conn) -> None:
+    """TMF679 answers created 31 and 29 days ago (#429)."""
+    for name, days in (("q31", 31), ("q29", 29)):
+        created = NOW - timedelta(days=days)
+        conn.execute(
+            "INSERT INTO product_offering_qualification (id, kind, billing_account_id, state,"
+            " qualification_result, qualification_date, created_at, expires_at, updated_at,"
+            " items, details) VALUES (%s, 'check', %s, 'done', 'qualified', %s, %s, %s, %s,"
+            " '[]', jsonb_build_object('description', %s::text))",
+            (uuid4(), uuid4(), created.date(), created, created + timedelta(hours=1), created,
+             name),
+        )  # fmt: skip
+
+
 def test_each_rule_deletes_exactly_its_rows_and_nothing_kept_forever(db_conn, worker):
     world = factories.world(db_conn)
     db_conn.execute(  # the factory's run (which wrote the old charge below) has finished
@@ -214,6 +228,7 @@ def test_each_rule_deletes_exactly_its_rows_and_nothing_kept_forever(db_conn, wo
     events(db_conn)
     worker_requests(db_conn)
     notifications(db_conn)
+    qualifications(db_conn)
     db_conn.commit()
     kept = counts(db_conn)
 
@@ -266,7 +281,14 @@ def test_each_rule_deletes_exactly_its_rows_and_nothing_kept_forever(db_conn, wo
         "event": 2,
         "worker_request": 1,
         "notification_message": 1,
+        "product_offering_qualification": 1,
     }
+    assert [
+        r[0]
+        for r in db_conn.execute(
+            "SELECT details->>'description' FROM product_offering_qualification"
+        )
+    ] == ["q29"]
     # a second pass finds nothing more
     again = housekeep(worker, clock=FixedClock(NOW), tz=TZ, pause=no_pause)
     assert again.finished and again.deleted == {}

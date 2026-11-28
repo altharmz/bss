@@ -53,3 +53,16 @@ get_trouble_ticket: the Cases tab and screen are the UI half of issue 199
 create_trouble_ticket: opening a case; the UI action is the UI half of issue 199
 patch_trouble_ticket: working a case; the UI action is the UI half of issue 199
 get_hub_ticket: the internal eventSubscription list covers every hub
+
+# TMF679 qualification (#429): the backend came first; the Add product dialog follows in #527.
+get_hub_qualification: the internal eventSubscription list covers every hub
+list_qualification_checks: Add product shows a check's answer from the POST (#527)
+get_qualification_check: Add product shows a check's answer from the POST (#527)
+create_qualification_check: the Add product dialog calls it in #527
+patch_qualification_check: a check is asked and read, never described, in the UI
+delete_qualification_check: stored checks expire by housekeeping; no UI delete
+list_qualification_queries: the offering picker reads the POST answer (#527)
+get_qualification_query: the offering picker reads the POST answer (#527)
+create_qualification_query: the offering picker calls it in #527
+patch_qualification_query: a query is asked and read, never described, in the UI
+delete_qualification_query: stored queries expire by housekeeping; no UI delete

@@ -63,6 +63,20 @@ items:
   - {id: api.tmf621.hub.create, area: api, stage: 5, method: POST, path: "/tmf-api/troubleTicket/v5/hub", title: "Subscribe to TMF621 events"}
   - {id: api.tmf621.hub.get, area: api, stage: 5, method: GET, path: "/tmf-api/troubleTicket/v5/hub/{hub_id}", title: "Get a TMF621 subscription"}
   - {id: api.tmf621.hub.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/troubleTicket/v5/hub/{hub_id}", title: "Unsubscribe from TMF621 events"}
+  - {id: db.product_offering_qualification, area: db, stage: 5, table: product_offering_qualification, title: "TMF679 qualifications as answered: a check or a query, a dry run of the order engine, kept 30 days"}
+  - {id: api.tmf679.check.list, area: api, stage: 5, method: GET, path: "/tmf-api/productOfferingQualification/v5/checkProductOfferingQualification", title: "TMF679 GET /checkProductOfferingQualification"}
+  - {id: api.tmf679.check.create, area: api, stage: 5, method: POST, path: "/tmf-api/productOfferingQualification/v5/checkProductOfferingQualification", title: "TMF679 POST /checkProductOfferingQualification: check (a dry run of the order: the order's reasons)"}
+  - {id: api.tmf679.check.get, area: api, stage: 5, method: GET, path: "/tmf-api/productOfferingQualification/v5/checkProductOfferingQualification/{qualification_id}", title: "TMF679 GET /checkProductOfferingQualification/{id}"}
+  - {id: api.tmf679.check.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/productOfferingQualification/v5/checkProductOfferingQualification/{qualification_id}", title: "TMF679 PATCH /checkProductOfferingQualification/{id} (what describes it)"}
+  - {id: api.tmf679.check.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/productOfferingQualification/v5/checkProductOfferingQualification/{qualification_id}", title: "TMF679 DELETE /checkProductOfferingQualification/{id}"}
+  - {id: api.tmf679.query.list, area: api, stage: 5, method: GET, path: "/tmf-api/productOfferingQualification/v5/queryProductOfferingQualification", title: "TMF679 GET /queryProductOfferingQualification"}
+  - {id: api.tmf679.query.create, area: api, stage: 5, method: POST, path: "/tmf-api/productOfferingQualification/v5/queryProductOfferingQualification", title: "TMF679 POST /queryProductOfferingQualification: query (the offerings an account can get)"}
+  - {id: api.tmf679.query.get, area: api, stage: 5, method: GET, path: "/tmf-api/productOfferingQualification/v5/queryProductOfferingQualification/{qualification_id}", title: "TMF679 GET /queryProductOfferingQualification/{id}"}
+  - {id: api.tmf679.query.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/productOfferingQualification/v5/queryProductOfferingQualification/{qualification_id}", title: "TMF679 PATCH /queryProductOfferingQualification/{id} (what describes it)"}
+  - {id: api.tmf679.query.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/productOfferingQualification/v5/queryProductOfferingQualification/{qualification_id}", title: "TMF679 DELETE /queryProductOfferingQualification/{id}"}
+  - {id: api.tmf679.hub.create, area: api, stage: 5, method: POST, path: "/tmf-api/productOfferingQualification/v5/hub", title: "Subscribe to TMF679 events"}
+  - {id: api.tmf679.hub.get, area: api, stage: 5, method: GET, path: "/tmf-api/productOfferingQualification/v5/hub/{hub_id}", title: "Get a TMF679 subscription"}
+  - {id: api.tmf679.hub.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/productOfferingQualification/v5/hub/{hub_id}", title: "Unsubscribe from TMF679 events"}
   - {id: db.notification_message, area: db, stage: 5, table: notification_message, title: "Customer messages (TMF681 CommunicationMessage): channel, template, receiver, state, attempts, once per event"}
   - {id: db.notification_consent, area: db, stage: 5, table: notification_consent, title: "Append-only marketing consent history per customer and channel"}
   - {id: api.tmf681.communicationMessage.list, area: api, stage: 5, method: GET, path: "/tmf-api/communicationManagement/v4/communicationMessage", title: "TMF681 GET /communicationMessage"}

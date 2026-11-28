@@ -146,6 +146,13 @@ APIS = (
         "TMF621",
         "v5",
     ),
+    Api(
+        "tmf679-product-offering-qualification",
+        "TMF679 Product Offering Qualification",
+        "/tmf-api/productOfferingQualification/v5",
+        "TMF679",
+        "v5",
+    ),
     Api("self-care", "Self-care API (customers)", "/self-care/v1", "SELF_CARE", "v1"),
     Api("service", "Service endpoints", "", None, "-"),
 )
@@ -202,6 +209,7 @@ HANDLERS = {
     "/tmf-api/communicationManagement/v4": "app/api/communication.py",
     "/tmf-api/partyInteractionManagement/v5": "app/api/interaction.py",
     "/tmf-api/troubleTicket/v5": "app/api/trouble_ticket.py",
+    "/tmf-api/productOfferingQualification/v5": "app/api/qualification.py",
     "/internal/v1/notification": "app/internal/notifications.py",
     "/internal/v1/security": "app/internal/security.py",
     "/internal/v1/payment/command": "app/internal/payments.py",
@@ -247,6 +255,7 @@ AREAS = {
         "product_order_item",
         "product_order_error_message",
         "cancel_product_order",
+        "product_offering_qualification",
     ),
     "inventory": (
         "product",

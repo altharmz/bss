@@ -59,6 +59,7 @@ SPECS = (
     "TMF678",
     "TMF683",
     "TMF621",
+    "TMF679",
 )
 # Resources (first path segment) whose operations are not implemented yet: each is one
 # "endpoint absent" line, and the attribute probes skip it. Remove a resource here when
@@ -362,6 +363,7 @@ def populate(api: Any) -> None:
     ):
         _created(api, url, body)
     _care(api, cust, acc)
+    _qualification(api, acc)
 
 
 def _care(api: Any, cust: dict[str, Any], acc: dict[str, Any]) -> None:
@@ -426,6 +428,44 @@ def _care(api: Any, cust: dict[str, Any], acc: dict[str, Any]) -> None:
     assert moved.status_code == 200, moved.text
     held = api.patch(ticket["href"], {"status": "held", "statusChangeReason": "Probe"})
     assert held.status_code == 200, held.text
+
+
+def _qualification(api: Any, acc: dict[str, Any]) -> None:
+    """A check of two related items of one offering and a query of it (TMF679 reads)."""
+    (offering, *_) = api.get(f"{BASES['TMF620']}/productOffering?limit=1").json()
+    product = {"@type": "Product", "billingAccount": {"id": acc["id"]}}
+    item = {
+        "productOffering": {"id": offering["id"]},
+        "product": product,
+        "expectedActivationDate": timeline.iso(timeline.START),
+    }
+    _created(
+        api,
+        f"{BASES['TMF679']}/checkProductOfferingQualification",
+        {
+            "description": "Probe check",
+            "checkProductOfferingQualificationItem": [
+                {"id": "1", **item},
+                {
+                    "id": "2",
+                    **item,
+                    "qualificationItemRelationship": [{"id": "1", "relationshipType": "with"}],
+                },
+            ],
+        },
+    )
+    _created(
+        api,
+        f"{BASES['TMF679']}/queryProductOfferingQualification",
+        {
+            "description": "Probe query",
+            "searchCriteria": {
+                "id": "1",
+                "productOffering": {"id": offering["id"]},
+                "product": product,
+            },
+        },
+    )
 
 
 _BILL_API = "/tmf-api/customerBillManagement/v5"

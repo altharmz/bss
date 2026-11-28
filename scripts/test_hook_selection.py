@@ -13,7 +13,7 @@ import hook_selection
 SCRIPT = Path(__file__).with_name("hook_selection.py")
 UI_TESTS = (
     "tests/internal/test_ui_mcp_parity.py,tests/internal/test_ui_requests.py,"
-    "tests/orders/test_order_error_codes.py"
+    "tests/orders/test_order_error_codes.py,tests/orders/test_qualification.py"
 )
 USUAL = ["test-smoke", "test-changed"]
 RECORDED_HISTORY = "test-recorded MARKS=migration_history"

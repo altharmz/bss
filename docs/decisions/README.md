@@ -19,6 +19,7 @@ changing it, and record a new decision in it.
 | [sim.md](sim.md) | SIM and eSIM inventory on the IMSI resource, activation pick, SIM swap (2026-11-05, issue #186) |
 | [numbers.md](numbers.md) | Carrier number pools, port-in and port-out, Number Transfer PIN (2026-11-06, issue #189) |
 | [usage.md](usage.md) | Usage records (TMF635), the network usage feed, allowance tracking and 80/100% thresholds (2026-11-06, issue #190); pooled data per account (issue #379) |
+| [qualification.md](qualification.md) | TMF679 product offering qualification: a check is a dry run of the order engine (the order's reasons, nothing kept), the offering query, sync only, 30-day retention; the device check stays (2026-11-28, issue #429) |
 | [care.md](care.md) | Customer care: interaction notes (TMF683) and cases (TMF621), linked to the audit log (2026-11-15, issue #199) |
 | [self-care.md](self-care.md) | Customer self-care: logins, emailed one-time codes, customer sessions under /self-care/v1, the scope rule (2026-11-16, issue #195); the self-care API (#376); online signup with the identity check adapter (#377); moving to its own app `altharmz/selfcare` (2026-11-28, #428) |
 | [wholesale.md](wholesale.md) | Wholesale reconciliation with the partner's invoices: CSV import, matching, discrepancies, cost and margin per line (2026-11-16, issue #197) |

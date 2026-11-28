@@ -44,6 +44,7 @@ SPEC_FILES = {
     "TMF681": "TMF681-Communication-v4.0.0.swagger.json",
     "TMF683": "TMF683-Party_Interaction-v5.0.0.oas.yaml",
     "TMF621": "TMF621-Trouble_Ticket-v5.0.1.oas.yaml",
+    "TMF679": "TMF679-Product_Offering_Qualification-v5.0.0.oas.yaml",
     "TMF678": "TMF678-CustomerBill-v5.0.0.oas.yaml",
     # ours: the internal API for the admin UI (not vendored, not TMF)
     "INTERNAL": "internal/bss-internal.oas.yaml",
