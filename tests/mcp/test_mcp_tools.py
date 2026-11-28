@@ -672,6 +672,14 @@ def test_every_get_tool_answers_against_the_app(api, mcp, world, db_conn):
     )
     db_conn.commit()
     arguments = get_arguments(world)
+    report = api.post(
+        "/tmf-api/usageConsumption/v5/usageConsumptionReport",
+        {
+            "@type": "UsageConsumptionReport",
+            "partyAccount": [{"@type": "PartyAccountRef", "id": world["account"]["id"]}],
+        },
+    ).json()
+    arguments["get_usage_consumption_report"] = {"report_id": report["id"]}
     for name in ("get_wholesale_invoice", "list_wholesale_discrepancies", "list_wholesale_lines"):
         arguments[name] = {"invoice_id": invoice_id}
     arguments["get_care_signup"] = {"signup_id": str(signup_in_review(db_conn, world))}
@@ -978,6 +986,16 @@ def test_every_write_tool_reaches_the_app(api, mcp, world, monkeypatch, db_conn)
         },
     )
     assert usage["usageType"] == "sms"
+    report = call(
+        "create_usage_consumption_report",
+        {
+            "body": {
+                "@type": "UsageConsumptionReport",
+                "product": [{"@type": "UsageConsumptionProductRef", "id": world["product"]["id"]}],
+            }
+        },
+    )
+    assert report["@type"] == "UsageConsumptionReport"
     message = call(
         "create_communication_message",
         {

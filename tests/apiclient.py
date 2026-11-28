@@ -86,6 +86,10 @@ for _base, (_spec, _resources) in APIS.items():
 # APIs whose responses are checked but that have no /hub (and so no generic hub tests)
 NO_HUB = {
     "/tmf-api/productUsageManagement/v5": ("TMF635", {"productUsage": "ProductUsage"}),
+    "/tmf-api/usageConsumption/v5": (
+        "TMF677",
+        {"usageConsumptionReport": "UsageConsumptionReport"},
+    ),
     "/tmf-api/communicationManagement/v4": (
         "TMF681",
         {"communicationMessage": "CommunicationMessage"},

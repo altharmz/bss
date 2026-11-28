@@ -23,6 +23,7 @@ Three checks, which prove different things:
 
 | File | API | Version | Source repo | Upstream commit |
 |------|-----|---------|-------------|-----------------|
+| `TMF677-Usage_Consumption-v5.0.0.oas.yaml` | Usage Consumption | 5.0.0 | [TMF677_UsageConsumption](https://github.com/tmforum-apis/TMF677_UsageConsumption/blob/16b10533fab5329a711032f0acd6901d1e827c10/TMF677-Usage_Consumption-v5.0.0.oas.yaml) | `16b10533fab5329a711032f0acd6901d1e827c10` |
 | `TMF620-Product_Catalog_Management-v5.0.0.oas.yaml` | Product Catalog | 5.0.0 | [TMF620_ProductCatalog](https://github.com/tmforum-apis/TMF620_ProductCatalog/blob/24e69f3026f2b514baa27d7206540fc7b55bcb45/TMF620-Product_Catalog_Management-v5.0.0.oas.yaml) | `24e69f3026f2b514baa27d7206540fc7b55bcb45` |
 | `TMF622-ProductOrdering-v5.0.0.oas.yaml` | Product Ordering | 5.0.0 | [TMF622_ProductOrder](https://github.com/tmforum-apis/TMF622_ProductOrder/blob/a3825f95248eb04fb1c7e2321305bc99631168a4/TMF622-ProductOrdering-v5.0.0.oas.yaml) | `a3825f95248eb04fb1c7e2321305bc99631168a4` |
 | `TMF629-Customer_Management-v5.0.1.oas.yaml` | Customer | 5.0.1 ¹ | [TMF629_CustomerManagement](https://github.com/tmforum-apis/TMF629_CustomerManagement/blob/f60fa840989b88d27fdd0a397c7923f19c9d8168/TMF629-Customer_Management-v5.0.1.oas.yaml) | `f60fa840989b88d27fdd0a397c7923f19c9d8168` |
@@ -74,6 +75,7 @@ run `make spec-verify-upstream`.
 | `TMF678-CustomerBill-v5.0.0.oas.yaml` | `9425d310fda1e739b21595d2b445b7bc6ca6d5cb` |
 | `TMF676-Payment-v4.0.0.swagger.json` | `b3fcf10ad03954ddd2619df48bb6907ac96390f7` |
 | `TMF670-PaymentMethod-v4.0.0.swagger.json` | `02ac9876a575d7da56afa30ce31c58e0c952c5ae` |
+| `TMF677-Usage_Consumption-v5.0.0.oas.yaml` | `955ac614610ba473814af6297cda403265deac50` |
 
 ## Known upstream typos
 

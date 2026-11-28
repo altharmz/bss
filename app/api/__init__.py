@@ -17,6 +17,7 @@ from app.api import (
     catalog_jobs,
     classification,
     communication,
+    consumption,
     customer,
     errors,
     history,
@@ -66,6 +67,7 @@ def install(app: FastAPI) -> None:
         history,
         usage,
         communication,
+        consumption,
         interaction,
         trouble_ticket,
     ):

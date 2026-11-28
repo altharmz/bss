@@ -18,6 +18,7 @@ One page per API, generated from `app.openapi()` (what the app really serves) an
 | [Internal API (admin UI)](internal.md) | v1 | `/internal/v1` | 83 | [`spec/internal/bss-internal.oas.yaml`](../../spec/internal/bss-internal.oas.yaml) |
 | [TMF639 Resource Inventory](tmf639-resource-inventory.md) | v5 | `/tmf-api/resourceInventory/v5` | 8 | [`spec/TMF639-Resource_Inventory_Management-v5.0.0.oas.yaml`](../../spec/TMF639-Resource_Inventory_Management-v5.0.0.oas.yaml) |
 | [TMF654 Prepay Balance Management](tmf654-prepay-balance.md) | v4 | `/tmf-api/prepayBalanceManagement/v4` | 28 | [`spec/TMF654-PrepayBalance-v4.0.0.swagger.json`](../../spec/TMF654-PrepayBalance-v4.0.0.swagger.json) |
+| [TMF677 Usage Consumption](tmf677-usage-consumption.md) | v5 | `/tmf-api/usageConsumption/v5` | 2 | [`spec/TMF677-Usage_Consumption-v5.0.0.oas.yaml`](../../spec/TMF677-Usage_Consumption-v5.0.0.oas.yaml) |
 | [TMF635 Product Usage Management](tmf635-product-usage.md) | v5 | `/tmf-api/productUsageManagement/v5` | 3 | [`spec/TMF635-Product_Usage_Management-v5.0.0.oas.yaml`](../../spec/TMF635-Product_Usage_Management-v5.0.0.oas.yaml) |
 | [TMF681 Communication Management](tmf681-communication.md) | v4 | `/tmf-api/communicationManagement/v4` | 4 | [`spec/TMF681-Communication-v4.0.0.swagger.json`](../../spec/TMF681-Communication-v4.0.0.swagger.json) |
 | [TMF683 Party Interaction Management](tmf683-party-interaction.md) | v5 | `/tmf-api/partyInteractionManagement/v5` | 6 | [`spec/TMF683-Party_Interaction-v5.0.0.oas.yaml`](../../spec/TMF683-Party_Interaction-v5.0.0.oas.yaml) |
@@ -25,7 +26,7 @@ One page per API, generated from `app.openapi()` (what the app really serves) an
 | [Self-care API (customers)](self-care.md) | v1 | `/self-care/v1` | 25 | [`spec/self-care/bss-self-care.oas.yaml`](../../spec/self-care/bss-self-care.oas.yaml) |
 | [Service endpoints](service.md) | - | - | 3 | - |
 
-305 operations in total.
+307 operations in total.
 
 ## Conventions
 

@@ -7,11 +7,12 @@ The accumulatedBalance totals the account's buckets (one today). Balance actions
 (top-up, adjustment, reservation, transfer, history) follow in later slices.
 """
 
+from itertools import islice
 from typing import Any
 
 from fastapi import APIRouter, Request
 
-from app.api import listing
+from app.api import allowance_buckets, listing
 from app.api.account import account_href
 from app.api.common import CENT, parse_id, ref, utc, without_nulls
 from app.api.customer import customer_href
@@ -175,6 +176,33 @@ def list_buckets(request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     with tx() as conn:
         rows, more = repo.page(conn, query.where, query.offset, query.limit)
         bodies = [bucket_body(conn, row, today) for row in rows]
+        kind = query.where.get("usage_type")
+        if (
+            not more
+            and kind in (None, "data", "voice", "sms")
+            and query.where.get("status", "active") == "active"
+        ):
+            derived = allowance_buckets.current(
+                conn, today, BASE, query.where.get("billing_account_id")
+            )
+            matches = (
+                body
+                for body in derived
+                if (kind is None or kind == body["usageType"])
+                and ("id" not in query.where or str(query.where["id"]) == body["id"])
+            )
+            # Monetary rows precede allowances. Recover the remaining offset if the
+            # requested page starts after the final monetary bucket.
+            skip = 0
+            if query.offset and not rows:
+                skip = (
+                    query.offset
+                    if kind
+                    else repo.offset_after_monetary(conn, query.where, query.offset)
+                )
+            take = query.limit + 1 - len(bodies)
+            bodies.extend(islice(matches, skip, min(skip + take, 2**63 - 1)))
+            bodies, more = listing.split_page(bodies, query.limit)
     return listing.list_response(bodies, more, query)
 
 
@@ -182,10 +210,25 @@ def list_buckets(request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
 def get_bucket(bucket_id: str, request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, BUCKET_ATTRIBUTES)
     with tx() as conn:
-        row = repo.get(conn, "id", parse_id("bucket", bucket_id))
+        uid = parse_id("bucket", bucket_id)
+        row = repo.get(conn, "id", uid)
         if row is None:
-            raise not_found("bucket", bucket_id)
-        body = bucket_body(conn, row, clock.today())
+            body = (
+                next(
+                    (
+                        b
+                        for b in allowance_buckets.current(conn, clock.today(), BASE)
+                        if b["id"] == str(uid)
+                    ),
+                    None,
+                )
+                if uid.version == 5
+                else None
+            )
+            if body is None:
+                raise not_found("bucket", bucket_id)
+        else:
+            body = bucket_body(conn, row, clock.today())
     return TmfJSONResponse(listing.select_fields(body, fields))
 
 

@@ -8,7 +8,8 @@
 # TMF639: LogicalResource/msisdn only; other subclasses and non-number states are
 # excluded from number inventory. Assigned numbers use busy; quarantine uses the
 # free-string allocationStatus, never a new usageState enum.
-# TMF654: monetary only; no usage rating, recurring adjustment, automatic top-up,
+# TMF654: funded allowance buckets are read-only. Monetary actions exclude recurring adjustment,
+# automatic top-up,
 # vouchers or future operator holds. Monetary Quantity requires explicit amount
 # and units; reserveBalance requires an explicit amount (no inferred all-funds hold).
 # Executed action financial/ownership fields are immutable; transfers are final.
@@ -103,6 +104,8 @@ TMF654 GET /balanceActionHistory/{id} missing recurringPeriod
 TMF654 GET /balanceActionHistory/{id} missing voucher
 TMF654 GET /bucket/{id} missing confirmationDate
 TMF654 GET /bucket/{id} missing requestedDate
+# The nested probe seeds monetary credit, which has no expiry. Funded allowance buckets
+# return both ends of validFor (covered by the prepaid usage tests).
 TMF654 GET /bucket/{id} missing validFor.endDateTime
 # TMF654 reserveBalance: the Create schema leaves amount optional, but a hold without an amount
 # holds nothing, so it is required (422); relatedParty is as for adjustBalance. P4f.
