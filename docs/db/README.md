@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0091**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0092**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -23,6 +23,7 @@ PostgreSQL schema at Alembic head **0091**, read from `pg_catalog` of a throwawa
 | [`product_order_item`](product_order_item.md) | ordering | SID ProductOrderItem (TMF622 productOrderItem): one add or delete of one product. At most one open delete item per product (partial unique index). |
 | [`product_order_error_message`](product_order_error_message.md) | ordering | TMF622 productOrderErrorMessage: why an order was rejected - one row per reason, for the order as a whole or for one item. |
 | [`cancel_product_order`](cancel_product_order.md) | ordering | TMF622 cancelProductOrder: done on insert (a refused one is not stored); one per order. |
+| [`product_offering_qualification`](product_offering_qualification.md) | ordering | A TMF679 product offering qualification as answered: a check (can this account get these offerings, with this device, number and address?) or a query (which offerings can it get?). Synchronous, a dry run of the order engine; deleted by housekeeping 30 days after creation. |
 | [`product`](product.md) | inventory | SID Product (TMF637 product): an instance of an offering on a billing account. Written only by orders; billable on start_date <= d < termination_date. |
 | [`product_offering_change`](product_offering_change.md) | inventory | TMF622 modify items: the product's offering from change_date on (billed prorated). The offering on day d is the latest change on or before d, else product.product_offering_id. |
 | [`product_status_change`](product_status_change.md) | inventory | TMF622 modify items with product.status: the product is suspended (or active again) from change_date on. Billing does not read it. |
@@ -137,6 +138,7 @@ flowchart LR
     product_order_item[product_order_item]
     product_order_error_message[product_order_error_message]
     cancel_product_order[cancel_product_order]
+    product_offering_qualification[product_offering_qualification]
   end
   subgraph area_inventory["Inventory (TMF637, TMF639)"]
     product[product]
@@ -717,6 +719,21 @@ erDiagram
     timestamptz creation_date
     timestamptz requested_cancellation_date
     text cancellation_reason
+    text base_type
+    text schema_location
+  }
+  product_offering_qualification {
+    uuid id PK
+    text kind
+    uuid billing_account_id
+    text state
+    text qualification_result
+    date qualification_date
+    timestamptz created_at
+    timestamptz expires_at
+    timestamptz updated_at
+    jsonb items
+    jsonb details
     text base_type
     text schema_location
   }

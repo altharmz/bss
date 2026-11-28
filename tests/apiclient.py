@@ -79,6 +79,13 @@ APIS: dict[str, tuple[str, dict[str, str]]] = {
     ),
     "/tmf-api/partyInteractionManagement/v5": ("TMF683", {"partyInteraction": "PartyInteraction"}),
     "/tmf-api/troubleTicket/v5": ("TMF621", {"troubleTicket": "TroubleTicket"}),
+    "/tmf-api/productOfferingQualification/v5": (
+        "TMF679",
+        {
+            "checkProductOfferingQualification": "CheckProductOfferingQualification",
+            "queryProductOfferingQualification": "QueryProductOfferingQualification",
+        },
+    ),
 }
 # every API has a hub: Hub in v5, EventSubscription in TMF676 v4
 for _base, (_spec, _resources) in APIS.items():

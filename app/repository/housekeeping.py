@@ -21,6 +21,7 @@ DELIVERY_DAYS = 30  # finished event deliveries
 EVENT_DAYS = 90  # events no delivery refers to any more
 WORKER_REQUEST_DAYS = 90  # done requests
 NOTIFICATION_MONTHS = 13
+QUALIFICATION_DAYS = 30  # TMF679 answers: they expire the day they are given (#429)
 USAGE_MONTHS = 13  # usage_record partitions
 USAGE_AHEAD_MONTHS = 2  # partitions made ahead of the current month
 
@@ -143,6 +144,20 @@ def delete_notifications(
     )
 
 
+def delete_qualifications(
+    conn: psycopg.Connection, *, now: datetime, batch: int, **_: object
+) -> int:
+    """Product offering qualifications created more than 30 days ago (each expired at the
+    end of its own day; docs/decisions/qualification.md)."""
+    return _count(
+        conn,
+        "DELETE FROM product_offering_qualification WHERE id IN"
+        " (SELECT id FROM product_offering_qualification WHERE created_at < %(cut)s"
+        "   ORDER BY created_at LIMIT %(batch)s)",
+        {"cut": now - timedelta(days=QUALIFICATION_DAYS), "batch": batch},
+    )
+
+
 # in this order: deliveries before events, so an event freed today goes today
 RULES: tuple[tuple[str, Callable[..., int]], ...] = (
     ("billing_run_account", delete_run_outcomes),
@@ -152,6 +167,7 @@ RULES: tuple[tuple[str, Callable[..., int]], ...] = (
     ("event", delete_events),
     ("worker_request", delete_worker_requests),
     ("notification_message", delete_notifications),
+    ("product_offering_qualification", delete_qualifications),
 )
 
 

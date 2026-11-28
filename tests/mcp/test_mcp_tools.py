@@ -38,6 +38,7 @@ from tests.builders.mcp.mcp_tools import api_operations, generated
 from tests.timeline import iso, midnight
 
 BALANCE = "/tmf-api/prepayBalanceManagement/v4"
+QUALIFICATION = "/tmf-api/productOfferingQualification/v5"
 SCOPE = Path("docs/progress/scope.yaml")
 
 
@@ -485,6 +486,22 @@ def world(api, db_conn) -> dict[str, Any]:
     world["ticket_hub"] = api.post(
         "/tmf-api/troubleTicket/v5/hub", {"callback": "http://listener.test/tickets"}
     ).json()
+    qualified = {"@type": "Product", "billingAccount": {"id": world["account"]["id"]}}
+    world["qualification_hub"] = api.post(
+        f"{QUALIFICATION}/hub", {"callback": "http://listener.test/qualifications"}
+    ).json()
+    world["check"] = api.post(
+        f"{QUALIFICATION}/checkProductOfferingQualification",
+        {
+            "checkProductOfferingQualificationItem": [
+                {"productOffering": {"id": world["offering"]["id"]}, "product": qualified}
+            ]
+        },
+    ).json()
+    world["query"] = api.post(
+        f"{QUALIFICATION}/queryProductOfferingQualification",
+        {"searchCriteria": {"product": qualified}},
+    ).json()
     order_id, item_id = db_conn.execute(
         "SELECT product_order_id, id FROM product_order_item ORDER BY created_at LIMIT 1"
     ).fetchone()
@@ -585,6 +602,9 @@ def get_arguments(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "get_accumulated_balance": {"balance_id": str(world["bucket"]["accumulated_balance_id"])},
         "get_hub_resource": {"hub_id": world["resource_hub"]["id"]},
         "get_hub_ticket": {"hub_id": world["ticket_hub"]["id"]},
+        "get_hub_qualification": {"hub_id": world["qualification_hub"]["id"]},
+        "get_qualification_check": {"qualification_id": world["check"]["id"]},
+        "get_qualification_query": {"qualification_id": world["query"]["id"]},
         "get_party_interaction": {"interaction_id": world["interaction"]["id"]},
         "get_trouble_ticket": {"ticket_id": world["ticket"]["id"]},
         "get_bill_format": {"format_id": world["format"]["id"]},
@@ -1063,6 +1083,33 @@ def test_every_write_tool_reaches_the_app(api, mcp, world, monkeypatch, db_conn)
         "patch_trouble_ticket", {"ticket_id": case["id"], "body": {"status": "inProgress"}}
     )
     assert moved["status"] == "inProgress"
+    # TMF679: ask, describe, forget - a check and a query
+    qualified = {"@type": "Product", "billingAccount": {"id": world["account"]["id"]}}
+    asked = call(
+        "create_qualification_check",
+        {
+            "body": {
+                "checkProductOfferingQualificationItem": [
+                    {"productOffering": {"id": world["offering"]["id"]}, "product": qualified}
+                ]
+            }
+        },
+    )
+    assert asked["state"] == "done"
+    described = call(
+        "patch_qualification_check",
+        {"qualification_id": asked["id"], "body": {"description": "via MCP"}},
+    )
+    assert described["description"] == "via MCP"
+    call("delete_qualification_check", {"qualification_id": asked["id"]}, (204,))
+    searched = call(
+        "create_qualification_query", {"body": {"searchCriteria": {"product": qualified}}}
+    )
+    call(
+        "patch_qualification_query",
+        {"qualification_id": searched["id"], "body": {"description": "via MCP"}},
+    )
+    call("delete_qualification_query", {"qualification_id": searched["id"]}, (204,))
     # the card tools: save a card, rename it, queue a top-up and an auto top-up rule, remove it
     paying = world["topup"]["partyAccount"]["id"]
     card = call(

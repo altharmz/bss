@@ -1,5 +1,5 @@
-"""TMF hub: event subscriptions of every API (POST /hub, DELETE /hub/{id}; TMF629, TMF639
-and TMF621 also GET /hub/{id}). docs/decisions/events.md.
+"""TMF hub: event subscriptions of every API (POST /hub, DELETE /hub/{id}; TMF629, TMF639,
+TMF621 and TMF679 also GET /hub/{id}). docs/decisions/events.md.
 
 A hub names a `callback` and, optionally, a `query` choosing event types:
 `eventType=A` or `eventType=A,B`, names of the API's own listener events (anything else
@@ -128,8 +128,8 @@ def _hub_id(raw: str) -> UUID:
     return parse_id("hub", raw)
 
 
-# (api, short name in the handler names); the specs of TMF629, TMF639 and TMF621 have
-# GET /hub/{id}
+# (api, short name in the handler names); the specs of TMF629, TMF639, TMF621 and TMF679
+# have GET /hub/{id}
 HUB_APIS = (
     ("TMF639", "resource"),
     ("TMF620", "catalog"),
@@ -144,6 +144,7 @@ HUB_APIS = (
     ("TMF654", "balance"),
     ("TMF683", "interaction"),
     ("TMF621", "ticket"),
+    ("TMF679", "qualification"),
 )
 # Registering a hub sends the API's events (customer data) to a callback of the caller's
 # choice: admin-only, like the Integrations screen (#467, docs/decisions/users.md U4)
@@ -316,3 +317,19 @@ def get_hub_ticket(hub_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
 @_routers["TMF621"].delete("/hub/{hub_id}", **GONE)
 def delete_hub_ticket(hub_id: str, request: Request, tx: Tx, clock: ClockDep) -> Response:
     return _delete("TMF621", hub_id, request, tx, clock)
+
+
+@_routers["TMF679"].post("/hub", **HUB)
+def create_hub_qualification(body: JsonBody, request: Request, tx: Tx, clock: ClockDep):
+    _checked(body, request)
+    return _create("TMF679", parse(HubIn, body, read_only=READ_ONLY), tx, clock)
+
+
+@_routers["TMF679"].get("/hub/{hub_id}")
+def get_hub_qualification(hub_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
+    return _get("TMF679", hub_id, request, tx)
+
+
+@_routers["TMF679"].delete("/hub/{hub_id}", **GONE)
+def delete_hub_qualification(hub_id: str, request: Request, tx: Tx, clock: ClockDep) -> Response:
+    return _delete("TMF679", hub_id, request, tx, clock)

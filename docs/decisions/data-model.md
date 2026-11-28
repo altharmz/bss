@@ -112,6 +112,7 @@ approved by the human on 2026-11-09; the growth inventory of the 100k dataset
   | `event` | `occurred_at` more than 90 days back and no delivery refers to it |
   | `worker_request` | done more than 90 days ago |
   | `notification_message` | created more than 13 months ago; one that a kept resend refers to (`resend_of`) stays until the resend goes |
+  | `product_offering_qualification` | created more than 30 days ago; each expired at the end of its own day ([qualification.md](qualification.md), #429) |
   | `sign_in_attempt` | already self-cleaning (#288) |
   | `usage_record` | partitions older than 13 months are dropped ([usage.md](usage.md#partitions-2026-11-11-282)) |
 

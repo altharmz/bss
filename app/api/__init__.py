@@ -30,6 +30,7 @@ from app.api import (
     payment,
     payment_method,
     presentation,
+    qualification,
     refunds,
     reserve,
     resource_inventory,
@@ -70,6 +71,7 @@ def install(app: FastAPI) -> None:
         consumption,
         interaction,
         trouble_ticket,
+        qualification,
     ):
         app.include_router(module.router)
     app.include_router(account.schema_router)

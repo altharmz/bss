@@ -142,7 +142,8 @@ approved by the human's standing delegation (decided following TMF). The UI is i
   BSS). `NetworkTemporary` counts as `unknown`. **Incompatible** rejects the order with
   `deviceIncompatible` and the reasons; nothing is created or sent. **Unknown** is allowed and
   stored as a warning (also echoed on the order item as `deviceCompatibility` / `deviceReasons`).
-  `GET /internal/v1/device/check?imei=` (and MCP `check_device`) asks without storing.
+  `GET /internal/v1/device/check?imei=` (and MCP `check_device`) asks without storing. It stays
+  next to TMF679, which runs the same check inside an order's dry run ([qualification.md](qualification.md#the-device-check-stays)).
 - **Stub fixture:** TAC (first 8 digits) `35000000`-`35999999` compatible, `99000000`-`99000099`
   incompatible (band 71, carrier lock, VoLTE), `98000000`-`98999999` temporary error (recorded
   unknown), anything else unknown.

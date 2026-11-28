@@ -37,6 +37,7 @@ Three checks, which prove different things:
 | `TMF678-CustomerBill-v5.0.0.oas.yaml` | Customer Bill | 5.0.0 | [TMF678_CustomerBill](https://github.com/tmforum-apis/TMF678_CustomerBill/blob/6d1628e7ac15f077083216f9bccd469e9f1af74f/TMF678-CustomerBill-v5.0.0.oas.yaml) | `6d1628e7ac15f077083216f9bccd469e9f1af74f` |
 | `TMF676-Payment-v4.0.0.swagger.json` | Payment | 4.0.0 ² | [TMF676_PaymentManagement](https://github.com/tmforum-apis/TMF676_PaymentManagement/blob/1de83fd2dc6d09e250c9d1ca7abf3b1b93688d9f/TMF676-Payment-v4.0.0.swagger.json) | `1de83fd2dc6d09e250c9d1ca7abf3b1b93688d9f` |
 | `TMF670-PaymentMethod-v4.0.0.swagger.json` | Payment Method | 4.0.0 | [TMF670_PaymentMethods](https://github.com/tmforum-apis/TMF670_PaymentMethods/blob/dc8dfeb39382736cb40e79704ee6ba25a588dc3b/TMF670-PaymentMethod-v4.0.0.swagger.json) | `dc8dfeb39382736cb40e79704ee6ba25a588dc3b` |
+| `TMF679-Product_Offering_Qualification-v5.0.0.oas.yaml` | Product Offering Qualification | 5.0.0 | [TMF679_ProductOfferingQualification](https://github.com/tmforum-apis/TMF679_ProductOfferingQualification/blob/8ab73abb50c5edd3a1ccdd0dc8cd16f0d33032af/TMF679-Product_Offering_Qualification-v5.0.0.oas.yaml) | `8ab73abb50c5edd3a1ccdd0dc8cd16f0d33032af` |
 
 ## Subscriber-number and prepaid contracts
 
@@ -75,6 +76,7 @@ run `make spec-verify-upstream`.
 | `TMF678-CustomerBill-v5.0.0.oas.yaml` | `9425d310fda1e739b21595d2b445b7bc6ca6d5cb` |
 | `TMF676-Payment-v4.0.0.swagger.json` | `b3fcf10ad03954ddd2619df48bb6907ac96390f7` |
 | `TMF670-PaymentMethod-v4.0.0.swagger.json` | `02ac9876a575d7da56afa30ce31c58e0c952c5ae` |
+| `TMF679-Product_Offering_Qualification-v5.0.0.oas.yaml` | `06a09c7541e1b26cb6a19b1f63e7fa593364d963` |
 | `TMF677-Usage_Consumption-v5.0.0.oas.yaml` | `955ac614610ba473814af6297cda403265deac50` |
 
 ## Known upstream typos

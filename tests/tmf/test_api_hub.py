@@ -61,7 +61,7 @@ def test_create_and_delete_a_hub(api, name):
         assert body["href"] == f"{base}/hub/{body['id']}" == created.headers["location"]
         assert body["@type"] == "Hub"
     href = f"{base}/hub/{body['id']}"
-    expected_get = 200 if name in {"TMF629", "TMF639", "TMF621"} else 405
+    expected_get = 200 if name in {"TMF629", "TMF639", "TMF621", "TMF679"} else 405
     assert api.request("GET", href).status_code == expected_get
     assert api.request("GET", f"{base}/hub").status_code == 405
     assert api.delete(f"{href}?x=1").status_code == 400

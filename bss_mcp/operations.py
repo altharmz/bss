@@ -48,6 +48,7 @@ from app.api.party import IndividualCreate, IndividualPatch, OrganizationCreate,
 from app.api.payment import PaymentCreate
 from app.api.payment_method import PaymentMethodCreate, PaymentMethodPatch
 from app.api.presentation import FormatCreate, FormatPatch, MediaCreate, MediaPatch
+from app.api.qualification import CheckCreate, CheckPatch, QueryCreate, QueryPatch
 from app.api.refunds import RefundCreate
 from app.api.reserve import ReserveCreate, ReservePatch
 from app.api.resource_inventory import ResourceCreate, ResourcePatch
@@ -165,6 +166,7 @@ FAMILIES = {
     "/tmf-api/communicationManagement/v4": "TMF681 Communication (v4)",
     "/tmf-api/partyInteractionManagement/v5": "TMF683 Party Interaction",
     "/tmf-api/troubleTicket/v5": "TMF621 Trouble Ticket",
+    "/tmf-api/productOfferingQualification/v5": "TMF679 Product Offering Qualification",
     "/tmf-api/productInventory/v5": "TMF637 Product Inventory",
     "/tmf-api/customerBillManagement/v5": "TMF678 Customer Bill",
     "/tmf-api/productOrderingManagement/v5": "TMF622 Product Ordering",
@@ -703,6 +705,58 @@ OPERATIONS: dict[str, Op] = {
     "get_hub_customer": Op("One TMF629 event subscription.", query=FIELDS),
     "get_hub_resource": Op("One TMF639 event subscription.", query=FIELDS),
     "get_hub_ticket": Op("One TMF621 event subscription.", query=FIELDS),
+    "get_hub_qualification": Op("One TMF679 event subscription.", query=FIELDS),
+    # --- TMF679 qualification: a dry run of the order engine before an order ---
+    "list_qualification_checks": Op(
+        "Stored eligibility checks, newest first (kept 30 days). Filter by billingAccount.id,"
+        " qualificationResult (qualified, unqualified), state or id.",
+        query=LIST,
+    ),
+    "get_qualification_check": Op(
+        "One eligibility check with each item's qualificationItemResult and"
+        " eligibilityResultReason [{code, label}].",
+        query=FIELDS,
+    ),
+    "create_qualification_check": Op(
+        "Ask whether an order would be accepted, without placing it: the order engine runs and"
+        " is rolled back, so the reasons are exactly the order's (productOrderErrorMessage"
+        " codes). checkProductOfferingQualificationItem [{id, action (default add),"
+        " productOffering {id}, product {billingAccount {id}, productCharacteristic imei or"
+        " simType, place (E911), realizingResource (number), productRelationship (an add-on's"
+        " plan), id (modify/delete)}, expectedActivationDate}]; at least one item names the"
+        " billing account. Answer: qualificationResult and per item qualified or unqualified"
+        " with reasons. Nothing is reserved; the answer expires at the end of the day.",
+        body=CheckCreate,
+    ),
+    "patch_qualification_check": Op(
+        "Change what describes a check (description, note, channel, relatedParty); its items"
+        " and answer are read-only.",
+        body=CheckPatch,
+    ),
+    "delete_qualification_check": Op("Delete a stored eligibility check."),
+    "list_qualification_queries": Op(
+        "Stored offering queries, newest first (kept 30 days). Filter by billingAccount.id,"
+        " state or id.",
+        query=LIST,
+    ),
+    "get_qualification_query": Op(
+        "One offering query with the offerings it found (qualifiedProductOfferingItem).",
+        query=FIELDS,
+    ),
+    "create_qualification_query": Op(
+        "Which offerings can this billing account get? searchCriteria {product {billingAccount"
+        " {id}, optional productCharacteristic imei, productRelationship (an add-on's plan)},"
+        " optional productOffering {id}}. Each Active, sellable offering is checked as an add"
+        " item; it is listed when only a missing input (number, SIM, address, a pack's plan)"
+        " stands against it - check it with those inputs before ordering.",
+        body=QueryCreate,
+    ),
+    "patch_qualification_query": Op(
+        "Change what describes a query (description, note, channel, relatedParty); its search"
+        " criteria and answer are read-only.",
+        body=QueryPatch,
+    ),
+    "delete_qualification_query": Op("Delete a stored offering query."),
     # --- customer care: TMF683 interactions (notes on a subscriber), TMF621 cases ---
     "list_party_interactions": Op(
         "Recorded contacts with customers (calls, chats, emails, store visits), newest first:"

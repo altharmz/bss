@@ -298,7 +298,7 @@ def _item_requests(items: list[OrderItemIn], sent: list[ItemSent]) -> tuple[Item
     flat = _flatten(items)
     assert len(flat) == len(sent)  # both walk the body in the same order
     return tuple(
-        _item_request(item, parent, extra.documents, path)
+        item_request(item, parent, extra.documents, path)
         for (item, parent), extra, path in zip(flat, sent, _flatten_paths(items), strict=True)
     )
 
@@ -377,7 +377,7 @@ def _check_place(item: OrderItemIn, index: str) -> None:
         raise problems_error([(where, message, False) for where, message in problems])
 
 
-def _item_request(
+def item_request(
     item: OrderItemIn, parent: str | None, documents: dict[str, Any], path: str = "productOrderItem"
 ) -> ItemRequest:
     if item.action == "add":
