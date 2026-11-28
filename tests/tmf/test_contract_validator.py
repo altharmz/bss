@@ -131,3 +131,15 @@ def test_history_exception_rejects_unknown_kinds_and_bad_nested_values():
     assert contract.balance_history_errors(
         "TopupBalance", {"status": "completed", "amount": {"amount": "50"}}
     )
+
+
+@pytest.mark.parametrize("value", ["aborted", "aborted "])
+def test_string_enum_values_are_compared_after_strip(value):
+    """Upstream ProductStatusType spells `'aborted '`; the service sends `aborted` (#426)."""
+    assert contract.errors("TMF637", "ProductStatusType", value) == []
+
+
+def test_stripping_enum_values_still_rejects_an_unknown_value():
+    assert contract.errors("TMF637", "ProductStatusType", "abort")
+    assert contract.errors("TMF637", "ProductStatusType", " aborted")
+    assert contract.errors("TMF637", "ProductStatusType", 5)

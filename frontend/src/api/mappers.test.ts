@@ -199,18 +199,21 @@ describe('lookups that find nothing', () => {
     expect(error).toMatchObject({ status: 500 });
   });
 
-  it('finds no transfer receiver for a number no live product uses', async () => {
-    stubFetch({
-      [`GET ${NUMBERS}?value=15125550100&offset=0&limit=100`]: () =>
-        json([{ id: 'n1', value: '15125550100' }]),
-      'GET /tmf-api/productInventory/v5/product?realizingResource.id=n1&offset=0&limit=100': () =>
-        json([{ id: 'p1', status: 'terminated', billingAccount: { id: 'a1' } }]),
-    });
-    expect(await findReceiver('15125550100', signal())).toEqual({
-      found: false,
-      why: '15125550100 is not used by any subscriber.',
-    });
-  });
+  it.each(['terminated', 'cancelled', 'aborted'])(
+    'finds no transfer receiver for a number only a %s product used',
+    async (status) => {
+      stubFetch({
+        [`GET ${NUMBERS}?value=15125550100&offset=0&limit=100`]: () =>
+          json([{ id: 'n1', value: '15125550100' }]),
+        'GET /tmf-api/productInventory/v5/product?realizingResource.id=n1&offset=0&limit=100': () =>
+          json([{ id: 'p1', status, billingAccount: { id: 'a1' } }]),
+      });
+      expect(await findReceiver('15125550100', signal())).toEqual({
+        found: false,
+        why: '15125550100 is not used by any subscriber.',
+      });
+    },
+  );
 
   describe('a sent transfer whose receiving bucket cannot be read', () => {
     const HISTORY = '/tmf-api/prepayBalanceManagement/v4/balanceActionHistory';

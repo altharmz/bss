@@ -34,6 +34,7 @@ from tests.builders.resources.network_provisioning import (  # noqa: F401 - fixt
     stub,
     world,
 )
+from tests.builders.tmf.events import stored, subscribe
 
 NET = "/internal/v1/network/command"
 
@@ -57,6 +58,33 @@ def test_add_sends_activate_with_the_profile_and_completes_after_the_confirmatio
     assert request["msisdn"] == "79991234500" and request["profile"] == PROFILE
     assert db_conn.execute("SELECT count(*) FROM funded_interval").fetchone() == (1,)
     assert db_conn.execute("SELECT status FROM product").fetchone() == ("active",)
+
+
+def _states(conn, api_name: str, resource: str) -> list[str]:
+    """The states the StateChange events of `api_name` carried, oldest first."""
+    key = "state" if resource == "productOrder" else "status"
+    return [
+        payload["event"][resource][key]
+        for event_type, payload in stored(conn, api_name)
+        if event_type.endswith("StateChangeEvent")
+    ]
+
+
+@pytest.mark.capability("worker.networkProvisioning")
+def test_a_confirmed_activate_moves_pending_active_to_active_with_the_state_events(
+    api, db_conn, world, stub
+):
+    subscribe(api, "TMF637", "ProductStateChangeEvent")
+    subscribe(api, "TMF622", "ProductOrderStateChangeEvent")
+    order = buy(api, world, "79991234500")
+    product = order["productOrderItem"][0]["product"]
+    assert api.get(f"{apidata.PRODUCT}/{product['id']}").json()["status"] == "pendingActive"
+    assert state(api, order) == "inProgress"  # waits for the network
+
+    tick(db_conn, api.clock.now())
+    assert api.get(f"{apidata.PRODUCT}/{product['id']}").json()["status"] == "active"
+    assert _states(db_conn, "TMF637", "product")[-1] == "active"
+    assert _states(db_conn, "TMF622", "productOrder")[-1] == "completed"
 
 
 def test_an_offering_that_is_not_a_line_sends_nothing(api, db_conn, stub):
@@ -116,6 +144,8 @@ def test_exhausted_commands_wait_for_an_operator_retry_that_resends_the_same_com
 
 
 def test_a_refused_activate_fails_the_order_and_leaves_nothing_charged(api, db_conn, world, stub):
+    subscribe(api, "TMF637", "ProductStateChangeEvent")
+    subscribe(api, "TMF622", "ProductOrderStateChangeEvent")
     before = funding.load(db_conn, UUID(world.acc["id"])).spendable
     db_conn.commit()
     order = buy(api, world, "79990000000")
@@ -128,13 +158,16 @@ def test_a_refused_activate_fails_the_order_and_leaves_nothing_charged(api, db_c
     assert "refused activate" in final["productOrderErrorMessage"][0]["reason"]
     assert final["productOrderItem"][0]["state"] == "failed"
     assert commands_of(db_conn, order) == [("activate", "refused", 1)]
-    # the product ends at its start date with zero billable days and nothing was charged
+    # the product is aborted (provisioning failed, TMF637; not cancelled, which is a
+    # withdrawal) at its start date with zero billable days, and nothing was charged
     assert db_conn.execute(
         "SELECT status, start_date = termination_date FROM product"
     ).fetchone() == (
-        "cancelled",
+        "aborted",
         True,
     )
+    assert _states(db_conn, "TMF637", "product") == ["aborted"]
+    assert _states(db_conn, "TMF622", "productOrder") == ["failed"]
     assert db_conn.execute(
         "SELECT (SELECT count(*) FROM funded_interval),"
         " (SELECT count(*) FROM applied_customer_billing_rate),"

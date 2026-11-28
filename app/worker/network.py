@@ -429,8 +429,10 @@ def refuse_order(
 
     The caller holds the command identity and the account lock. Nothing was posted yet
     (posting waits for the network), so only acceptance is undone: the hold is released,
-    an add's product ends at its start date (zero billable days) and its number claim is
-    cancelled, a termination, status or offering change is withdrawn.
+    an add's product ends `aborted` at its start date (zero billable days) and its number
+    claim is cancelled, a termination, status or offering change is withdrawn. A refused
+    line fails every item of the order: a multi-line order is all-or-nothing, never
+    `partial` (docs/decisions/network.md).
     """
     request = cmd["request"]
     order_id = UUID(request["order_id"])
@@ -468,7 +470,7 @@ def refuse_order(
                 products.undo_change(conn, item["id"])
                 emit.product(conn, item["product_id"], "AttributeValueChange", at=now, today=today)
             else:
-                products.cancel_unstarted(conn, item["product_id"])
+                products.cancel_unstarted(conn, item["product_id"], status="aborted")
                 emit.product(conn, item["product_id"], "StateChange", at=now, today=today)
     for item in items:
         if item["id"] == refused["product_order_item_id"]:

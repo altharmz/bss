@@ -31,6 +31,7 @@ const cases: [StatusKind, string, string, string][] = [
   ['product', 'suspended', 'paused', 'Suspended'],
   ['product', 'terminated', 'ended', 'Terminated'],
   ['product', 'cancelled', 'ended', 'Cancelled'],
+  ['product', 'aborted', 'failed', 'Aborted'],
   ['order', 'draft', 'draft', 'Draft'],
   ['order', 'acknowledged', 'queued', 'Acknowledged'],
   ['order', 'pending', 'queued', 'Pending'],

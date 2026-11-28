@@ -285,9 +285,10 @@ is ours, as below. `modify` items come in slice 8b (below, when done).
   processed, the account, items and start date may only be repeated (409 otherwise, was
   a 400 read-only); any other `state` in a PATCH is a 422.
 - **States never reached:** pending, held, partial, assessingCancellation,
-  pendingCancellation and inProgress.accepted describe asynchronous fulfilment. Orders
-  here are processed synchronously and all or nothing, which TMF allows, so they are
-  not reached (`app/ordering/states.py`). `failed` is reached only by a dated prepaid status
+  pendingCancellation and inProgress.accepted. An order that waits for the network stays
+  `inProgress` and a refusal makes it `failed`; a multi-line order is all or nothing, which
+  TMF allows, so it is never `partial` ([network.md](network.md#asynchronous-states-issue-426-2026-11-28),
+  `app/ordering/states.py`). `failed` is also reached by a dated prepaid status
   change that no longer applies on its date ([prepaid.md](prepaid.md#slice-8-dated-prepaid-status-changes-and-number-only-changes-2026-10-25)).
 - **MCP:** the recursive item model is inlined once in the tool schema; below that, a
   nested item is "an object of the same shape" (`bss_mcp/schema.py`).
@@ -463,9 +464,9 @@ lines) and say so before going on.
 - **C9**: a delete or a suspension/resumption order on a `Suspended`/`Closed` billing
   account is executed (TMF666's account states forbid nothing); add and offering
   changes still need an `Active` account (`accountNotActive`).
-- **`pendingActive`, `aborted`**: describe asynchronous provisioning; orders here
-  complete synchronously, so never reached - recorded, like the order states of slice
-  8a.
+- **`pendingActive`, `aborted`**: reached since network provisioning (#183, #426): a
+  prepaid line is `pendingActive` until its activation is confirmed, and `aborted` when the
+  network refuses it ([network.md](network.md#asynchronous-states-issue-426-2026-11-28)).
 
 **TMF676 (39 lines).** `name`, `description`, `authorizationCode`, `correlatorId`
 (text), `channel`, `payer` (payment), `requestor` (refund) as documents; `account` and
@@ -548,9 +549,9 @@ step. Tests: `tests/orders/test_api_suspension.py`.
 - **TMF637 PATCH `status`** `suspended`/`active` places such an order effective today
   (409 with the reasons if it would be rejected); any other status is a 422 (a product is
   created by an order, ended by terminationDate or DELETE).
-- `pendingActive` and `aborted` describe asynchronous provisioning: orders complete
-  synchronously here, so they are never reached (recorded, like the order states of
-  slice 8a).
+- `pendingActive` and `aborted` are reached through network provisioning: `pendingActive`
+  until the activation is confirmed, `aborted` when the network refuses it
+  ([network.md](network.md#asynchronous-states-issue-426-2026-11-28)).
 
 ### Product writes through orders (2026-10-17)
 

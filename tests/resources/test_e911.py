@@ -217,11 +217,11 @@ def test_a_refused_change_leaves_the_old_address(api, db_conn, wifi, stub):
     )
 
 
-def test_an_activation_with_the_refused_address_cancels_the_line(api, db_conn, wifi, stub):
+def test_an_activation_with_the_refused_address_aborts_the_line(api, db_conn, wifi, stub):
     order = add(api, wifi, address=REFUSED).json()
     tick(db_conn, api.clock.now())
     assert api.get(order["href"]).json()["state"] == "failed"
-    assert db_conn.execute("SELECT status FROM product").fetchone() == ("cancelled",)
+    assert db_conn.execute("SELECT status FROM product").fetchone() == ("aborted",)
 
 
 def test_a_change_on_a_line_without_wifi_calling_is_stored_at_once(api, db_conn, world, stub):

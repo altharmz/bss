@@ -55,7 +55,8 @@ no public API is added and TMF641/640 are not vendored.
   `POST /internal/v1/network/command/{id}/retry` (409 in any other state) returns it to
   `pending` with the same key and request.
 - **Refusal** is final: no retry, the fix is a new order. The item and the order become
-  `failed` with a `networkRefused` error (the network's reason, its code in `message`).
+  `failed` with a `networkRefused` error (the network's reason, its code in `message`);
+  a refused activation leaves the product `aborted`.
 
 ## Gating (how the order waits)
 
@@ -75,9 +76,30 @@ Nothing is posted before the confirmation, so a refusal only undoes acceptance
 cancelled; **suspend / restore** drop the retained status change; **change_profile** drops
 the retained offering change (and releases its hold); **deactivate** restores the product
 (no termination date, status and number release back) so billing is never ended; a refused
-**activate** ends the product at its start date (`cancelled`, zero billable days) with no
+**activate** ends the product at its start date (`aborted`, zero billable days) with no
 funded interval, charge or bill to reverse. The dated start is kept: the ordered date, never
 the confirmation date, is the product start, and billing follows dates.
+
+## Asynchronous states (issue #426, 2026-11-28)
+
+Decided following TMF under the standing delegation.
+
+- **Product `aborted`** (TMF637: provisioning failed) when the network refuses an
+  activation, with a ProductStateChangeEvent. `cancelled` stays for a withdrawal
+  (cancelProductOrder). Billing excludes both (data-model.md); the UI labels it Aborted.
+  The vendored spec spells the value `'aborted '`; the service sends `aborted`, and the
+  contract checker compares enum values after `strip()` as the enum lock does
+  (spec/README.md).
+- **`pendingActive`**: a prepaid line from acceptance until the network confirms its
+  activation, then `active` with a ProductStateChangeEvent; the order's `inProgress ->
+  completed` or `-> failed` raises a ProductOrderStateChangeEvent.
+- **No `partial`**: a multi-line order stays all or nothing, and one refused line fails
+  every item and the order. A purchase is reserved by one hold and posted by one prepaid
+  command for the whole order (prepaid.md), and the lines were ordered together; letting
+  the confirmed lines go live would split the hold and the posting per line and leave the
+  customer with half of what they asked for. TMF622 allows but does not require
+  `partial`. The refused line's item carries the `networkRefused` error; the fix is a new
+  order.
 
 ## Cancellation
 
