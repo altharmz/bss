@@ -430,6 +430,7 @@ web-fmt: ## [ui] Format the UI sources (prettier --write)
 E2E_USERS = ./scripts/task-compose run --rm -v $(CURDIR)/frontend/.e2e:/e2e app python -m tests.e2e_users
 
 web-e2e: ## [ui] e2e smoke (Playwright) on the built UI and the seeded local stack; billing data read-only
+	@$(MAKE) --no-print-directory migrate
 	@$(MAKE) --no-print-directory seed
 	@$(MAKE) --no-print-directory web-build
 	mkdir -p frontend/.e2e

@@ -57,10 +57,7 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
   await numberDialog.getByLabel('Number', { exact: true }).fill('12025550123');
   await expect(numberDialog.getByRole('button', { name: 'Create number' })).toBeEnabled();
   await numberDialog.getByRole('button', { name: 'Cancel' }).click();
-  await page
-    .getByRole('navigation', { name: 'Main' })
-    .getByRole('link', { name: /Subscribers/ })
-    .click();
+  await subscribersLink.click();
   await expect(page.getByRole('banner').getByText(context.businessDate)).toBeVisible();
 
   const sarah = page.getByRole('row').filter({ hasText: 'Sarah Johnson' });
