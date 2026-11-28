@@ -9,11 +9,28 @@ online signup (#377) and the web app (#378) build on it. Design decided on 2026-
 the human's delegation when the issue was prepared (data-model plan in the issue); this file
 records it as built. Migration `0081`.
 
+## Moving out of the BSS (2026-11-28, issue #428)
+
+**The human decided that customer self-care becomes a separate application**, in its own
+repository `altharmz/selfcare` (`~/projects/selfcare`). The BSS stays a TMF BSS. The app owns
+customer identity, signup and the customer web UI, and reaches the BSS only through its TMF
+APIs, never `/internal/v1`. It serves TMF910 (Self Care Component Suite v1.0.0, vendored
+there) plus its own API to its UI. Its brief, plan and decisions are in that repository.
+
+- What follows describes the self-care still built into the BSS. It stays as built (off by
+  default) until the app works end to end, and then #525 removes it. Add no new self-care
+  features here.
+- #428's first proposal, serving TMF910 from the BSS under a customer session, is dropped.
+- BSS work the app needs: a restricted principal (#521); card top-up, auto top-up,
+  first-charge quote and history without `/internal/v1` (#522); card details from a TMF670
+  token (#523); a pool number assigned on a TMF622 order (#524); allowance usage (#427).
+
 ## Separate from operators
 
 - Customers are never `app_user` rows. A customer session never reaches `/internal/v1` or the
   TMF APIs, and an operator session or service credential is never a customer session.
-- The API is ours, under **`/self-care/v1`**: TMF has no customer self-service API. Contract:
+- The API is ours, under **`/self-care/v1`**. It was designed before TMF910 (Self Care Component
+  Suite) was found; the self-care app now serves TMF910 (see above). Contract:
   `spec/self-care/bss-self-care.oas.yaml`; tests validate every response against it.
 - `app/auth.py` (the dependency on every route) hands every `/self-care/` path to
   `app/care/auth.py authenticate` and returns: the operator cookie and the service headers are

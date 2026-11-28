@@ -20,7 +20,7 @@ changing it, and record a new decision in it.
 | [numbers.md](numbers.md) | Carrier number pools, port-in and port-out, Number Transfer PIN (2026-11-06, issue #189) |
 | [usage.md](usage.md) | Usage records (TMF635), the network usage feed, allowance tracking and 80/100% thresholds (2026-11-06, issue #190); pooled data per account (issue #379) |
 | [care.md](care.md) | Customer care: interaction notes (TMF683) and cases (TMF621), linked to the audit log (2026-11-15, issue #199) |
-| [self-care.md](self-care.md) | Customer self-care: logins, emailed one-time codes, customer sessions under /self-care/v1, the scope rule (2026-11-16, issue #195); the self-care API (#376); online signup with the identity check adapter (#377) |
+| [self-care.md](self-care.md) | Customer self-care: logins, emailed one-time codes, customer sessions under /self-care/v1, the scope rule (2026-11-16, issue #195); the self-care API (#376); online signup with the identity check adapter (#377); moving to its own app `altharmz/selfcare` (2026-11-28, #428) |
 | [wholesale.md](wholesale.md) | Wholesale reconciliation with the partner's invoices: CSV import, matching, discrepancies, cost and margin per line (2026-11-16, issue #197) |
 | [notifications.md](notifications.md) | Customer SMS and email: TMF681 message log, triggers, consent, quiet hours, retries (2026-11-06, issue #192) |
 | [taxes.md](taxes.md) | Tax engine adapter (Avalara-style placeholder) and the service address of prepaid charges (2026-11-05, issue #184) |
