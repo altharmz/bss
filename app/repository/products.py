@@ -3,7 +3,7 @@ item - hence the mandatory `created_by_item_id` / `terminated_by_item_id`."""
 
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 import psycopg
@@ -122,14 +122,21 @@ def terminate_product(
     )
 
 
-def cancel_unstarted(conn: psycopg.Connection, product_id: UUID) -> Row:
+def cancel_unstarted(
+    conn: psycopg.Connection,
+    product_id: UUID,
+    *,
+    status: Literal["cancelled", "aborted"] = "cancelled",
+) -> Row:
     """Undo an add item: the product never starts (zero billable days, as a delete of a
-    product that has not started). No terminating item - its creating order is cancelled."""
+    product that has not started). No terminating item - its creating order is cancelled.
+
+    `cancelled` when the customer or operator withdrew it (cancelProductOrder); `aborted`
+    when the network refused its activation (TMF637: provisioning failed, #426)."""
     return returning(
         conn,
-        "UPDATE product SET status = 'cancelled', termination_date = start_date"
-        " WHERE id = %s RETURNING *",
-        (product_id,),
+        "UPDATE product SET status = %s, termination_date = start_date WHERE id = %s RETURNING *",
+        (status, product_id),
     )
 
 

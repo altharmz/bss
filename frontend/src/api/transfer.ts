@@ -39,6 +39,9 @@ export interface Receiver {
 
 export type ReceiverLookup = { found: true; receiver: Receiver } | { found: false; why: string };
 
+/** Product states that never use a number again; aborted: the network refused it (#426). */
+const ENDED = new Set(['terminated', 'cancelled', 'aborted']);
+
 export async function findReceiver(digits: string, signal: AbortSignal): Promise<ReceiverLookup> {
   const numbers = await getAll<SubscriberNumber>(
     `${NUMBERS}?value=${encodeURIComponent(digits)}`,
@@ -48,7 +51,7 @@ export async function findReceiver(digits: string, signal: AbortSignal): Promise
   if (number === undefined)
     return { found: false, why: `${digits} is not in the number inventory.` };
   const products = await loadNumberProducts(number.id, signal);
-  const used = products.find((p) => p.status !== 'terminated' && p.status !== 'cancelled');
+  const used = products.find((p) => !ENDED.has(p.status ?? ''));
   const accountId = used?.billingAccount?.id;
   if (accountId === undefined)
     return { found: false, why: `${digits} is not used by any subscriber.` };

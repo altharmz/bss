@@ -37,6 +37,7 @@ export const STATUS_MAP = {
     suspended: ['paused', 'Suspended'],
     terminated: ['ended', 'Terminated'],
     cancelled: ['ended', 'Cancelled'],
+    aborted: ['failed', 'Aborted'],
   },
   order: {
     draft: ['draft', 'Draft'],

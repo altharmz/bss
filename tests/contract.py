@@ -10,6 +10,8 @@ discriminator handling replaced:
 - Plain JSON Schema cannot validate the `...RefOrValue` schemas: they are a `oneOf` of two
   permissive schemas, so a plain reference matches both branches. Here a `oneOf` with a
   discriminator validates only the branch that `@type` selects.
+- String `enum` values are compared after `strip()` (docs/decisions/data-model.md): upstream
+  `ProductStatusType` spells `'aborted '`, the service sends `aborted` (spec/README.md).
 
 tests/tmf/test_contract_validator.py proves each of these statements.
 """
@@ -66,9 +68,18 @@ def _one_of(validator, one_of, instance, schema):
     yield from validator.descend(instance, {"$ref": ref})
 
 
+def _enum(validator, enums, instance, schema):
+    if isinstance(instance, str) and any(
+        isinstance(value, str) and value.strip() == instance for value in enums
+    ):
+        return
+    yield from OAS30Validator.VALIDATORS["enum"](validator, enums, instance, schema)
+
+
 TmfValidator = validators.extend(
     OAS30Validator,
     validators={
+        "enum": _enum,
         "oneOf": _one_of,
         "allOf": Draft4Validator.VALIDATORS["allOf"],
         "anyOf": Draft4Validator.VALIDATORS["anyOf"],

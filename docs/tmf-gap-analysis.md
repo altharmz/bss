@@ -14,11 +14,13 @@ The behaviour gaps below were closed or recorded as not defined by the specs on
 2026-10-19:
 
 - States: order item actions `modify`/`noChange` - executed (slices 8a/8b);
-  order `draft` - implemented (8a); `held`, `pending`, `failed`, `partial`,
-  `inProgress.accepted`, `assessingCancellation`, `pendingCancellation` - asynchronous
-  processing, never reached here (recorded, 8a); product `suspended` - reached
-  ([suspension](decisions/tmf-api.md#suspension-2026-10-19)), `pendingActive`, `aborted`
-  - asynchronous provisioning, never reached (recorded); C9 - closed (ends, suspensions
+  order `draft` - implemented (8a); `failed` - reached (a refused network command, a
+  dated status change that no longer applies); `partial` - not reached: a multi-line order
+  is all or nothing (#426); `held`, `pending`, `inProgress.accepted`,
+  `assessingCancellation`, `pendingCancellation` - never reached (recorded, 8a); product
+  `suspended` - reached ([suspension](decisions/tmf-api.md#suspension-2026-10-19));
+  `pendingActive`, `aborted` - reached through network provisioning
+  ([network.md](decisions/network.md#asynchronous-states-issue-426-2026-11-28)); C9 - closed (ends, suspensions
   and resumptions on any account); payment states other than `done` - TMF676 v4 defines
   none (free text, no transitions); party `status` - writable since slice 4 (the item was
   stale).
