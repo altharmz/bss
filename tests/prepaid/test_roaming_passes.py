@@ -182,6 +182,23 @@ def test_a_pass_bought_3_days_before_the_period_ends_ends_with_it_and_sends_no_r
     db_conn.commit()
 
 
+def test_an_ended_pass_sends_no_revert_if_its_plan_no_longer_has_a_profile(api, db_conn, passes):
+    roam = buy_add_on(api, db_conn, passes, passes.roaming)
+    end = termination(db_conn, roam)
+    assert end < passes.line.due and len(sent()) == 1
+    response = api.patch(
+        passes.plan["productSpecification"]["href"], {"productSpecCharacteristic": []}
+    )
+    assert response.status_code == 200, response.text
+    network().received.clear()
+
+    tick(db_conn, at(end))
+    assert sent() == []
+    assert db_conn.execute(
+        "SELECT count(*) FROM network_command WHERE purpose = 'passEnd'"
+    ).fetchone() == (0,)
+
+
 def test_the_add_on_quote_and_the_products_view_give_the_pass_length_and_end(api, db_conn, passes):
     """Issue 383: firstCharge with parentProduct.id gives the end the order sets, and the
     products view gives each add-on's passDays (the Buy add-on dialog and the passes list)."""

@@ -33,6 +33,15 @@ def amounts(result) -> list[tuple[str, Decimal, DateRange]]:
     return [(a.kind, a.amount, a.period) for a in result.abrs]
 
 
+def test_date_ranges_reject_reversed_bounds_and_exclude_the_end_date():
+    start, end = date(2026, 10, 1), date(2026, 11, 1)
+    with pytest.raises(ValueError, match="range end 2026-10-01 before start 2026-11-01"):
+        DateRange(end, start)
+    october = DateRange(start, end)
+    assert october.overlaps(DateRange(date(2026, 10, 31), date(2026, 11, 2)))
+    assert not october.overlaps(DateRange(end, date(2026, 12, 1)))
+
+
 # --- the eleven worked examples ---
 
 

@@ -17,6 +17,7 @@ from alembic.config import Config
 from psycopg import sql
 
 from alembic import command
+from app.billing.transfer_fee import post_fee
 from app.clock import FixedClock
 from app.repository import funding
 from app.repository import prepaid_commands as commands
@@ -130,6 +131,49 @@ def test_an_originator_fee_is_charged_and_settled_from_the_rest_of_the_hold(api,
     assert db_conn.execute(
         "SELECT count(*) FROM applied_customer_billing_rate WHERE charge_type::text = 'oneTime'"
     ).fetchone() == (1,)
+
+
+def test_fee_posting_rejects_invalid_attempts_without_changing_the_ledger(api, db_conn):
+    tx, rx = pair(api, db_conn)
+    moved = post(api, tx, rx, 10, transferCost={"unit": "USD", "value": 1}).json()
+    now = api.clock.now()
+    tick(db_conn, now)
+    action_id = UUID(moved["id"])
+    command_id, hold = db_conn.execute(
+        "SELECT command_id, hold_id FROM balance_action WHERE id = %s", (action_id,)
+    ).fetchone()
+    [(payment_id, credit_id, source_id)] = db_conn.execute(
+        "SELECT payment_id, credit_bill_id, funding_source_id"
+        " FROM funding_hold_source WHERE hold_id = %s",
+        (hold,),
+    ).fetchall()
+    original = fee_rows(db_conn, action_id)
+    db_conn.commit()
+    args = dict(
+        command_id=command_id,
+        action_id=action_id,
+        payer_id=UUID(tx.id),
+        currency="USD",
+        fee=D(1),
+        parts=[(payment_id, credit_id, source_id, D(1))],
+        now=now,
+        today=now.astimezone(TZ).date(),
+    )
+    worker_db.release_ownership(db_conn)
+    with pytest.raises(ValueError, match="fee posting requires billing ownership"):
+        post_fee(db_conn, **args)
+    assert worker_db.acquire_ownership(db_conn)
+    with pytest.raises(ValueError, match="the fee's sources must cover it exactly"):
+        post_fee(db_conn, **(args | {"fee": D(2)}))
+    with pytest.raises(ValueError, match="command run is not running"):
+        with db_conn.transaction():
+            post_fee(db_conn, **args)
+    assert fee_rows(db_conn, action_id) == original
+    assert db_conn.execute(
+        "SELECT count(*) FROM applied_customer_billing_rate WHERE balance_action_id = %s",
+        (action_id,),
+    ).fetchone() == (1,)
+    assert remaining(api, tx) == D(39) and remaining(api, rx) == D(18)
 
 
 def test_a_fee_splits_a_source_between_the_principal_and_the_fee(api, db_conn):

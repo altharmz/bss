@@ -13,16 +13,19 @@ from uuid import UUID, uuid4
 import pytest
 
 from app.clock import FixedClock
-from app.repository import network_commands
+from app.integrations.network import NetworkTemporary
+from app.repository import network_commands, products
 from app.repository import prepaid_commands as commands
 from app.worker import db as worker_db
-from app.worker import network
+from app.worker import network, prepaid
 from tests.apidata import ORDER
+from tests.builders.prepaid.prepaid_offering_changes import at, switch
 from tests.builders.prepaid.prepaid_posting import TZ
 from tests.builders.resources.network_provisioning import (  # noqa: F401 - fixtures
     buy,
     commands_of,
     line,
+    make_line,
     state,
     stub,
     world,
@@ -82,6 +85,59 @@ def test_a_command_another_worker_handled_after_the_scan_is_not_sent(
     monkeypatch.setattr(network_commands, "due", raced)
     assert send(db_conn, api) == []
     assert stub.attempts == []  # no longer pending under the lock: not sent twice
+
+
+def test_activation_without_its_product_lookup_sends_no_pool(
+    api, db_conn, world, stub, monkeypatch
+):
+    make_line(api, world.off, dataPool=1)
+    order = buy(api, world, "79991234500")
+    cmd = network_commands.of_order(db_conn, UUID(order["id"]))[0]
+    real = products.get_product
+
+    def missing(conn, product_id):
+        return None if product_id == cmd["product_id"] else real(conn, product_id)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(products, "get_product", missing)
+        assert send(db_conn, api) == [cmd["id"]]
+    kind, request = stub.received[str(cmd["id"])]
+    assert (kind, request["msisdn"]) == ("activate", "79991234500")
+    assert "dataPoolId" not in request and "dataPoolMb" not in request
+    stored = network_commands.get(db_conn, cmd["id"])
+    assert (stored["state"], stored["data_pool"], stored["request"]) == (
+        "confirmed",
+        None,
+        request,
+    )
+
+
+def test_a_renewal_waits_for_its_due_profile_change(api, db_conn, world, stub, monkeypatch):
+    product = line(api, db_conn, world)
+    order = switch(api, world.acc, product, world.cheaper, product["due"])
+    assert order["state"] == "inProgress"
+    now = at(product["due"], 0)
+    renewal = prepaid.renewal_id(product["grant"])
+    real = stub.send
+
+    def unavailable(key, kind, request):
+        if kind == "change_profile":
+            raise NetworkTemporary("profile unavailable")
+        return real(key, kind, request)
+
+    assert prepaid.produce_renewals(db_conn, clock=FixedClock(now), tz=TZ) == [renewal]
+    with monkeypatch.context() as patch:
+        patch.setattr(stub, "send", unavailable)
+        assert prepaid.process_commands(db_conn, clock=FixedClock(now), tz=TZ) == []
+    db_conn.commit()
+    waiting = commands.get(db_conn, renewal)
+    assert (waiting["state"], waiting["attempts"]) == ("pending", 0)
+    assert state(api, order) == "inProgress"
+
+    prepaid.process_commands(db_conn, clock=FixedClock(now + timedelta(hours=1)), tz=TZ)
+    db_conn.commit()
+    assert state(api, order) == "completed"
+    assert commands.get(db_conn, renewal)["state"] == "completed"
 
 
 def test_an_unexpected_send_error_is_logged_and_sent_again_with_the_same_key(
